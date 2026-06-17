@@ -1,0 +1,20 @@
+{
+  "name": "@ai-app/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./types": "./src/types/index.ts",
+    "./local-paths": "./src/local-paths/index.ts",
+    "./event-hub": "./src/event-hub/index.ts",
+    "./project-store": "./src/project-store/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,20 +1,25 @@
 # Dependencies
 node_modules/
 apps/*/node_modules/
+apps/*/*/node_modules/
 packages/*/node_modules/
 
 # Build output
 dist/
 build/
 apps/*/dist/
+apps/*/*/dist/
 packages/*/dist/
 *.tsbuildinfo
 
 # Generated runtime assets
-apps/web/public/office-preview/
+apps/doc/web/public/office-preview/
+apps/*/templates/
+apps/*/web/public/generated/
 
 # Local app data
-.ai-document-dev/
+.ai-doc-dev/
+.ai-slide-dev/
 .agent-chat/
 *.db
 *.db-shm

@@ -1,0 +1,16 @@
+{
+  "name": "@ai-slide/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @ai-slide/server --filter @ai-slide/web dev",
+    "dev:web": "pnpm --filter @ai-slide/web dev",
+    "dev:server": "pnpm --filter @ai-slide/server dev",
+    "build": "pnpm --filter @ai-slide/shared build && pnpm --filter @ai-slide/web build && pnpm --filter @ai-slide/server build",
+    "check": "pnpm --filter @ai-slide/shared check && pnpm --filter @ai-slide/web check && pnpm --filter @ai-slide/server check",
+    "package:nextop": "node ../../tooling/nextop/package-slide-nextop-app.mjs",
+    "sync:templates": "node scripts/sync-slide-templates.mjs"
+  },
+  "packageManager": "pnpm@10.11.0"
+}

@@ -181,7 +181,7 @@ This file defines cases only. Temporary execution notes, screenshots, traces, an
 
 | ID | Area | Case | Steps | Expected Result |
 | --- | --- | --- | --- | --- |
-| HTML-103 | Table | Insert default table | Click `Insert table`, keep default 3 rows and 3 columns, apply. | A 3x3 editable table appears with `data-ai-document-table="true"` and bordered cells. |
+| HTML-103 | Table | Insert default table | Click `Insert table`, keep default 3 rows and 3 columns, apply. | A 3x3 editable table appears with `data-ai-doc-table="true"` and bordered cells. |
 | HTML-104 | Table | Insert custom table dimensions | Insert a 2x4 table using `Table rows` and `Table columns`. | Table has 2 rows and 4 columns. |
 | HTML-105 | Table | Clamp invalid table dimensions | Try rows/columns of 0, negative, or very large values. | Inserted table dimensions are clamped to supported range, 1 to 12. |
 | HTML-106 | Table | Type into table cell | Click a cell and type text. | Text appears inside that cell only and autosaves. |

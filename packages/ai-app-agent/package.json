@@ -1,0 +1,27 @@
+{
+  "name": "@ai-app/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./runtime": "./src/runtime/index.ts",
+    "./local-agent-runtime": "./src/local-agent-runtime/index.ts",
+    "./conversation": "./src/conversation/index.ts",
+    "./conversation-ui": "./src/conversation-ui/index.tsx"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ai-app/shared": "workspace:*",
+    "@nextop-os/agent-acp-kit": "0.1.2",
+    "lucide-react": "^0.562.0",
+    "react": "^19.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.17",
+    "typescript": "^5.9.3"
+  }
+}

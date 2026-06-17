@@ -1,17 +1,22 @@
 {
-  "name": "ai-document",
+  "name": "ai-artifact-apps",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm --parallel --filter @ai-document/server --filter @ai-document/web dev",
-    "dev:web": "pnpm --filter @ai-document/web dev",
-    "dev:server": "pnpm --filter @ai-document/server dev",
-    "build": "pnpm -r build",
-    "check": "pnpm -r check",
-    "package:nextop": "node scripts/package-nextop-app.mjs"
+    "dev": "pnpm run dev:doc",
+    "dev:doc": "pnpm --filter @ai-doc/app dev",
+    "dev:doc:web": "pnpm --filter @ai-doc/web dev",
+    "dev:doc:server": "pnpm --filter @ai-doc/server dev",
+    "dev:slide": "pnpm --filter @ai-slide/app dev",
+    "build": "pnpm -r --filter \"./packages/*\" --if-present build && pnpm --filter @ai-doc/app build && pnpm --filter @ai-slide/app build",
+    "check": "pnpm -r --filter \"./packages/*\" --if-present check && pnpm --filter @ai-doc/app check && pnpm --filter @ai-slide/app check",
+    "package:nextop": "pnpm --filter @ai-doc/app package:nextop",
+    "package:doc-nextop": "pnpm --filter @ai-doc/app package:nextop",
+    "package:slide-nextop": "pnpm --filter @ai-slide/app package:nextop"
   },
   "devDependencies": {
+    "@ai-app/nextop-packager": "workspace:*",
     "@types/node": "^24.10.1",
     "esbuild": "^0.28.0",
     "typescript": "^5.9.3"

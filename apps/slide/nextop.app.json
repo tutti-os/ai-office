@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "nextop.app.manifest.v1",
+  "appId": "ai-slide",
+  "version": "0.1.0",
+  "name": "AI Slide",
+  "description": "Human and local agents editing presentation decks together.",
+  "icon": {
+    "type": "asset",
+    "src": "icon.svg"
+  },
+  "runtime": {
+    "bootstrap": "bootstrap.sh",
+    "healthcheckPath": "/api/health"
+  },
+  "window": {
+    "minimizeBehavior": "keep-mounted",
+    "minWidth": 1120,
+    "minHeight": 720
+  },
+  "localizationInfo": {
+    "defaultLocale": "en",
+    "additionalLocales": [
+      {
+        "locale": "zh-CN",
+        "file": "locales/zh-CN/manifest.json"
+      }
+    ]
+  },
+  "author": {
+    "name": "Nextop"
+  },
+  "tags": ["local-first", "agent", "slide", "deck", "editor"]
+}

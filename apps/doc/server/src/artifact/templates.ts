@@ -1,0 +1,121 @@
+import type { DocumentTemplate } from "@ai-doc/shared";
+
+export const documentTemplates: DocumentTemplate[] = [
+  {
+    id: "blank",
+    name: "Blank document",
+    category: "General",
+    description: "A clean editing canvas for free-form writing.",
+    previewTone: "Minimal",
+    prompt: "Create a clean blank rich text document with one empty opening paragraph.",
+  },
+  {
+    id: "resume-emily",
+    name: "Emily Anderson",
+    category: "Career",
+    description: "A refined resume template with profile, experience, education, and compact skill badges.",
+    previewTone: "Professional",
+    prompt: "Create a polished resume for Emily Anderson with a strong profile, work experience, education, skills, and contact details. Use refined green accents and export-friendly rich HTML.",
+  },
+  {
+    id: "resume-sarah",
+    name: "Sarah Johnson",
+    category: "Career",
+    description: "A clean single-page resume with bold name treatment and balanced sections.",
+    previewTone: "Minimal",
+    prompt: "Create a clean one-page resume for Sarah Johnson with bold name treatment, summary, experience, skills, and education. Use black and neutral styling.",
+  },
+  {
+    id: "resume-james",
+    name: "James Johnson",
+    category: "Career",
+    description: "A modern resume with subtle color hierarchy and project-focused layout.",
+    previewTone: "Modern",
+    prompt: "Create a modern resume for James Johnson with subtle accent color, profile, experience, selected projects, skills, and education.",
+  },
+  {
+    id: "resume-sarah-mitchell",
+    name: "Sarah Mitchell",
+    category: "Career",
+    description: "A professional resume template with strong section hierarchy and spacious typography.",
+    previewTone: "Executive",
+    prompt: "Create an executive-style resume for Sarah Mitchell with profile, leadership experience, achievements, skills, and education.",
+  },
+  {
+    id: "business-proposal",
+    name: "Business proposal",
+    category: "Business",
+    description: "A structured proposal with summary, goals, scope, timeline, and next steps.",
+    previewTone: "Structured",
+    prompt: "Create a polished business proposal with sections for executive summary, objectives, scope, timeline, budget notes, and next steps. Use semantic HTML headings and calm business styling.",
+  },
+  {
+    id: "business-letter",
+    name: "Client letter",
+    category: "Business",
+    description: "A polished business letter for clients, partners, and formal communication.",
+    previewTone: "Formal",
+    prompt: "Create a professional client letter with sender details, recipient details, subject, concise body, and closing signature. Use rich text HTML with refined spacing.",
+  },
+  {
+    id: "research-brief",
+    name: "Research brief",
+    category: "Research",
+    description: "A concise brief for findings, evidence, implications, and open questions.",
+    previewTone: "Analytical",
+    prompt: "Create a research brief document with sections for context, key findings, evidence, implications, open questions, and recommended next steps. Use readable typography and subtle section dividers.",
+  },
+  {
+    id: "resume",
+    name: "Resume",
+    category: "Career",
+    description: "A clean one-page resume layout with profile, experience, skills, and education.",
+    previewTone: "Editorial",
+    prompt: "Create a clean resume document with a strong name header, role summary, experience, selected projects, skills, and education. Use HTML/CSS suitable for rich text editing and export.",
+  },
+  {
+    id: "cover-letter",
+    name: "Cover letter",
+    category: "Career",
+    description: "A concise job application letter with role fit and closing call-to-action.",
+    previewTone: "Professional",
+    prompt: "Create a cover letter with applicant contact information, hiring manager greeting, role-specific motivation, evidence of fit, and professional closing.",
+  },
+  {
+    id: "contract",
+    name: "Service contract",
+    category: "Legal",
+    description: "A simple services agreement with parties, scope, payment, term, and signatures.",
+    previewTone: "Legal",
+    prompt: "Create a freelance services agreement with sections for parties, scope, deliverables, payment, term, confidentiality, termination, and signatures.",
+  },
+  {
+    id: "invoice",
+    name: "Invoice",
+    category: "Financial",
+    description: "A clean invoice with vendor, client, line items, totals, and payment notes.",
+    previewTone: "Clean",
+    prompt: "Create a professional invoice with vendor details, client details, invoice number, due date, itemized line items, subtotal, taxes, total, and payment instructions.",
+  },
+  {
+    id: "event-plan",
+    name: "Event plan",
+    category: "Creative",
+    description: "A timeline-style event plan with schedule, vendors, responsibilities, and notes.",
+    previewTone: "Organized",
+    prompt: "Create an event planning document with overview, schedule, venue notes, vendor checklist, responsibilities, risks, and next steps.",
+  },
+  {
+    id: "marketing-one-pager",
+    name: "Marketing one-pager",
+    category: "Creative",
+    description: "A concise marketing brief with positioning, audience, benefits, and CTA.",
+    previewTone: "Bold",
+    prompt: "Create a marketing one-pager with headline, audience, problem, solution, benefits, proof points, and call to action. Use visually structured rich HTML.",
+  },
+];
+
+export function getTemplate(templateId: string | null | undefined) {
+  if (!templateId) return documentTemplates[0]!;
+  return documentTemplates.find((template) => template.id === templateId) ?? documentTemplates[0]!;
+}

@@ -1,0 +1,652 @@
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { readFile, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { join, normalize, resolve, sep } from "node:path";
+import {
+  createBlankDeckManifest,
+  deckArtifactFileRef,
+  deckMimeType,
+  pptxArtifactFileRef,
+  pptxMimeType,
+  type CreateProjectRequest,
+  type DeckManifest,
+  type PptxManifest,
+  type SlideRun,
+  type SlideRunEvent,
+  type SlideArtifact,
+  type SlideArtifactType,
+  type SlideProject,
+  type UpdateProjectRequest,
+} from "@ai-slide/shared";
+import { getDb, json, parseJson, rowOrNull, rows } from "../db/database.js";
+import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
+
+const templateRoot = process.env.AI_SLIDE_TEMPLATE_ROOT ?? resolve(process.cwd(), "..", "templates", "source");
+
+export class ProjectRepository {
+  snapshot() {
+    const db = getDb();
+    return {
+      projects: rows<ProjectRow>(db.prepare(`SELECT * FROM projects ORDER BY updated_at DESC`).all()).map(rowToProject),
+      artifacts: rows<ArtifactRow>(db.prepare(`SELECT * FROM artifacts ORDER BY updated_at DESC`).all()).map(rowToArtifact),
+      activeRuns: rows<SlideRunRow>(
+        db.prepare(`SELECT * FROM slide_runs WHERE status IN ('accepted', 'running') ORDER BY created_at ASC`).all(),
+      ).map(rowToRun),
+      runEvents: rows<SlideRunEventRow>(
+        db.prepare(`SELECT * FROM slide_run_events ORDER BY created_at ASC LIMIT 300`).all(),
+      ).map(rowToRunEvent),
+    };
+  }
+
+  listProjects() {
+    return rows<ProjectRow>(getDb().prepare(`SELECT * FROM projects ORDER BY updated_at DESC`).all()).map(rowToProject);
+  }
+
+  getProject(projectId: string) {
+    const row = rowOrNull<ProjectRow>(getDb().prepare(`SELECT * FROM projects WHERE id = ?`).get(projectId));
+    return row ? rowToProject(row) : null;
+  }
+
+  getArtifact(artifactId: string) {
+    const row = rowOrNull<ArtifactRow>(getDb().prepare(`SELECT * FROM artifacts WHERE id = ?`).get(artifactId));
+    return row ? rowToArtifact(row) : null;
+  }
+
+  getActiveArtifact(projectId: string) {
+    const project = this.getProject(projectId);
+    if (!project) return null;
+    return this.getArtifact(project.activeArtifactId);
+  }
+
+  createProject(input: CreateProjectRequest) {
+    const id = randomUUID();
+    const artifactType = input.artifactType ?? "deck";
+    const now = new Date().toISOString();
+    const title = input.title?.trim() || input.templateName?.trim() || "Untitled Presentation";
+    const artifact = defaultArtifactInput({ projectId: id, type: artifactType, now });
+    const db = getDb();
+
+    ensureProjectDirs(id);
+    db.prepare(
+      `INSERT INTO projects (id, title, active_artifact_id, template_id, template_name, updated_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'system', ?, ?)`,
+    ).run(id, title, artifact.id, input.templateId ?? null, input.templateName ?? null, now, now);
+    db.prepare(
+      `INSERT INTO artifacts (id, project_id, type, file_ref, mime_type, revision, updated_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, 'system', ?, ?)`,
+    ).run(artifact.id, id, artifact.type, artifact.fileRef, artifact.mimeType, now, now);
+
+    const project = this.getProject(id);
+    const createdArtifact = this.getArtifact(artifact.id);
+    if (!project || !createdArtifact) throw new Error("Unable to create project");
+    this.materializeProject(project, createdArtifact);
+    return { project, artifact: createdArtifact };
+  }
+
+  updateProject(projectId: string, input: UpdateProjectRequest) {
+    const current = this.getProject(projectId);
+    if (!current) return null;
+    const now = new Date().toISOString();
+    const activeArtifactId = input.activeArtifactId ?? current.activeArtifactId;
+    if (activeArtifactId !== current.activeArtifactId && !this.getArtifact(activeArtifactId)) {
+      throw new Error("Artifact not found");
+    }
+    getDb()
+      .prepare(
+        `UPDATE projects
+         SET title = ?, active_artifact_id = ?, updated_by = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(input.title?.trim() || current.title, activeArtifactId, input.updatedBy ?? "human", now, projectId);
+    return this.getProject(projectId);
+  }
+
+  clearProjectHistory() {
+    getDb().exec(`
+      DELETE FROM slide_run_events;
+      DELETE FROM slide_runs;
+      DELETE FROM artifacts;
+      DELETE FROM projects;
+    `);
+    rmSync(appPaths.projectsDir, { force: true, recursive: true });
+    ensureBaseDirs();
+    return { projects: [] as SlideProject[] };
+  }
+
+  createRun(input: {
+    projectId: string;
+    runtime: string;
+    provider: string;
+    model: string;
+    mode: string;
+    instruction: string;
+    selectionType: string;
+    selectionPath: string;
+    selectedText: string;
+    selectedHtml: string;
+  }) {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    getDb()
+      .prepare(
+        `INSERT INTO slide_runs
+         (id, project_id, runtime, provider, model, status, mode, instruction, selection_type, selection_path, selected_text, selected_html, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'accepted', ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.projectId,
+        input.runtime,
+        input.provider,
+        input.model,
+        input.mode,
+        input.instruction,
+        input.selectionType,
+        input.selectionPath,
+        input.selectedText,
+        input.selectedHtml,
+        now,
+        now,
+      );
+    const run = this.getRun(id);
+    if (!run) throw new Error("Unable to create run");
+    return run;
+  }
+
+  getRun(runId: string) {
+    const row = rowOrNull<SlideRunRow>(getDb().prepare(`SELECT * FROM slide_runs WHERE id = ?`).get(runId));
+    return row ? rowToRun(row) : null;
+  }
+
+  listProjectRuns(projectId: string) {
+    return rows<SlideRunRow>(
+      getDb()
+        .prepare(`SELECT * FROM slide_runs WHERE project_id = ? ORDER BY created_at ASC, id ASC`)
+        .all(projectId),
+    ).map(rowToRun);
+  }
+
+  updateRun(runId: string, input: Partial<Pick<SlideRun, "status" | "error" | "resultPreview">>) {
+    const current = this.getRun(runId);
+    if (!current) return null;
+    const now = new Date().toISOString();
+    const completedAt = input.status && ["completed", "failed", "cancelled"].includes(input.status) ? now : current.completedAt;
+    getDb()
+      .prepare(
+        `UPDATE slide_runs
+         SET status = ?, error = ?, result_preview = ?, updated_at = ?, completed_at = ?
+         WHERE id = ?`,
+      )
+      .run(input.status ?? current.status, input.error ?? current.error, input.resultPreview ?? current.resultPreview, now, completedAt, runId);
+    return this.getRun(runId);
+  }
+
+  createRunEvent(input: {
+    runId: string;
+    projectId: string;
+    type: SlideRunEvent["type"];
+    content?: string;
+    status?: SlideRunEvent["status"];
+    metadata?: Record<string, unknown> | null;
+    sortOrder: number;
+  }) {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    getDb()
+      .prepare(
+        `INSERT INTO slide_run_events (id, run_id, project_id, type, content, status, metadata, sort_order, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.runId,
+        input.projectId,
+        input.type,
+        input.content ?? "",
+        input.status ?? "success",
+        input.metadata ? json(input.metadata) : null,
+        input.sortOrder,
+        now,
+      );
+    const row = rowOrNull<SlideRunEventRow>(getDb().prepare(`SELECT * FROM slide_run_events WHERE id = ?`).get(id));
+    if (!row) throw new Error("Unable to create run event");
+    return rowToRunEvent(row);
+  }
+
+  listRunEvents(runId: string) {
+    return rows<SlideRunEventRow>(
+      getDb()
+        .prepare(`SELECT * FROM slide_run_events WHERE run_id = ? ORDER BY sort_order ASC, created_at ASC`)
+        .all(runId),
+    ).map(rowToRunEvent);
+  }
+
+  async readDeckManifest(projectId: string, artifact: SlideArtifact): Promise<DeckManifest | null> {
+    if (artifact.type !== "deck") return null;
+    const manifestPath = join(projectWorkspaceRoot(projectId), artifact.fileRef, "manifest.json");
+    try {
+      return JSON.parse(await readFile(manifestPath, "utf8")) as DeckManifest;
+    } catch {
+      return null;
+    }
+  }
+
+  async readDeckSlideHtml(projectId: string, slideId: string) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    const artifact = this.getArtifact(project.activeArtifactId);
+    if (!artifact || artifact.type !== "deck") throw new Error("Deck artifact not found");
+    this.ensureTemplateDeckMaterialized(project, artifact);
+    const manifest = await this.readDeckManifest(projectId, artifact);
+    const slide = manifest?.slides.find((item) => item.id === slideId);
+    if (!slide) throw new Error("Slide not found");
+    const html = await readFile(resolveDeckSlidePath(projectId, artifact, slide.file), "utf8");
+    return { slide, html, artifact };
+  }
+
+  async writeDeckSlideHtml(projectId: string, slideId: string, html: string) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    const artifact = this.getArtifact(project.activeArtifactId);
+    if (!artifact || artifact.type !== "deck") throw new Error("Deck artifact not found");
+    this.ensureTemplateDeckMaterialized(project, artifact);
+    const manifest = await this.readDeckManifest(projectId, artifact);
+    const slide = manifest?.slides.find((item) => item.id === slideId);
+    if (!slide) throw new Error("Slide not found");
+    await writeFile(resolveDeckSlidePath(projectId, artifact, slide.file), html, "utf8");
+    const updatedArtifact = this.bumpArtifactRevision(artifact.id, "human") ?? artifact;
+    return { slide, html, artifact: updatedArtifact };
+  }
+
+  bumpArtifactRevision(artifactId: string, updatedBy: SlideProject["updatedBy"]) {
+    const current = this.getArtifact(artifactId);
+    if (!current) return null;
+    const now = new Date().toISOString();
+    getDb()
+      .prepare(
+        `UPDATE artifacts
+         SET revision = revision + 1, updated_by = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(updatedBy, now, artifactId);
+    getDb().prepare(`UPDATE projects SET updated_by = ?, updated_at = ? WHERE id = ?`).run(updatedBy, now, current.projectId);
+    return this.getArtifact(artifactId);
+  }
+
+  ensureTemplateDeckMaterialized(project: SlideProject, artifact: SlideArtifact) {
+    if (artifact.type !== "deck" || !project.templateId) return;
+    const deckRoot = join(projectWorkspaceRoot(project.id), artifact.fileRef);
+    const manifestPath = join(deckRoot, "manifest.json");
+    if (!isBlankDeckManifest(manifestPath)) return;
+    materializeTemplateDeckProject(deckRoot, project);
+  }
+
+  async readPptxManifest(projectId: string, artifact: SlideArtifact): Promise<PptxManifest | null> {
+    if (artifact.type !== "pptx") return null;
+    const filePath = join(projectWorkspaceRoot(projectId), artifact.fileRef);
+    try {
+      const fileStat = await stat(filePath);
+      return {
+        kind: "pptx",
+        fileName: "slides.pptx",
+        exists: fileStat.isFile(),
+        sizeBytes: fileStat.isFile() ? fileStat.size : 0,
+        updatedAt: fileStat.isFile() ? fileStat.mtime.toISOString() : null,
+      };
+    } catch {
+      return {
+        kind: "pptx",
+        fileName: "slides.pptx",
+        exists: false,
+        sizeBytes: 0,
+        updatedAt: null,
+      };
+    }
+  }
+
+  private materializeProject(project: SlideProject, artifact: SlideArtifact) {
+    const root = ensureProjectDirs(project.id);
+    if (artifact.type === "deck") materializeDeckProject(root, project, artifact);
+    else materializePptxProject(root, project, artifact);
+    writeFileSync(join(root, "AGENTS.md"), projectAgentInstructions(project, artifact), "utf8");
+  }
+}
+
+function defaultArtifactInput(input: { projectId: string; type: SlideArtifactType; now: string }) {
+  const id = randomUUID();
+  if (input.type === "pptx") {
+    return {
+      id,
+      type: "pptx" as const,
+      fileRef: pptxArtifactFileRef,
+      mimeType: pptxMimeType,
+    };
+  }
+  return {
+    id,
+    type: "deck" as const,
+    fileRef: deckArtifactFileRef,
+    mimeType: deckMimeType,
+  };
+}
+
+function materializeDeckProject(root: string, project: SlideProject, artifact: SlideArtifact) {
+  const deckRoot = join(root, artifact.fileRef);
+  const manifestPath = join(deckRoot, "manifest.json");
+  const createdAt = project.createdAt;
+  mkdirSync(join(deckRoot, "slides"), { recursive: true });
+  mkdirSync(join(deckRoot, "assets"), { recursive: true });
+  mkdirSync(join(deckRoot, "previews"), { recursive: true });
+  mkdirSync(join(deckRoot, "thumbnails"), { recursive: true });
+  if (project.templateId && materializeTemplateDeckProject(deckRoot, project)) return;
+  if (!existsSync(manifestPath)) {
+    const manifest = createBlankDeckManifest({ title: project.title, createdAt });
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  }
+  const stylesPath = join(deckRoot, "assets", "styles.css");
+  if (!existsSync(stylesPath)) {
+    writeFileSync(
+      stylesPath,
+      `html, body { margin: 0; width: 100%; height: 100%; }\nbody { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }\n.slide { width: 1920px; height: 1080px; box-sizing: border-box; padding: 96px; }\n`,
+      "utf8",
+    );
+  }
+  const coverPath = join(deckRoot, "slides", "01-cover.html");
+  if (!existsSync(coverPath)) {
+    writeFileSync(
+      coverPath,
+      `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/styles.css">
+  <title>${escapeHtml(project.title)}</title>
+</head>
+<body>
+  <section class="slide">
+    <p style="margin:0 0 24px;color:#667085;font-size:28px;font-weight:700;">AI Slide</p>
+    <h1 style="margin:0;color:#111827;font-size:96px;line-height:1.05;">${escapeHtml(project.title)}</h1>
+  </section>
+</body>
+</html>
+`,
+      "utf8",
+    );
+  }
+}
+
+function materializeTemplateDeckProject(deckRoot: string, project: SlideProject) {
+  const source = readTemplateDeckSource(project.templateId);
+  if (!source) return false;
+  rmSync(deckRoot, { force: true, recursive: true });
+  mkdirSync(join(deckRoot, "slides"), { recursive: true });
+  mkdirSync(join(deckRoot, "assets"), { recursive: true });
+  mkdirSync(join(deckRoot, "previews"), { recursive: true });
+  mkdirSync(join(deckRoot, "thumbnails"), { recursive: true });
+
+  if (existsSync(source.assetsDir)) {
+    cpSync(source.assetsDir, join(deckRoot, "assets"), { recursive: true });
+  }
+
+  const slides = source.playlist.map((fileName, index) => {
+    const sourcePage = join(source.pagesDir, fileName);
+    const destinationFile = fileName.replace(/[\\/]/g, "-");
+    const destinationPage = join(deckRoot, "slides", destinationFile);
+    if (existsSync(sourcePage)) cpSync(sourcePage, destinationPage);
+    else writeFileSync(destinationPage, missingTemplateSlideHtml(project.title, fileName), "utf8");
+    return {
+      id: `slide-${String(index + 1).padStart(3, "0")}`,
+      title: titleFromSlideFile(fileName),
+      file: `slides/${destinationFile}`,
+    };
+  });
+
+  const now = new Date().toISOString();
+  const manifest: DeckManifest = {
+    schemaVersion: "ai-slide.deck.v1",
+    title: source.title || project.title,
+    canvas: source.canvas,
+    slides,
+    createdAt: project.createdAt,
+    updatedAt: now,
+  };
+  writeFileSync(join(deckRoot, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  return true;
+}
+
+function readTemplateDeckSource(templateId: string | null) {
+  if (!templateId) return null;
+  const templateDir = join(templateRoot, templateId);
+  const deckDir = join(templateDir, "deck");
+  const pagesDir = join(templateDir, "pages");
+  if (!existsSync(deckDir) || !existsSync(pagesDir)) return null;
+  const slidesDirName = readdirSync(deckDir, { withFileTypes: true }).find((entry) => entry.isDirectory() && entry.name.endsWith(".slides"))?.name;
+  if (!slidesDirName) return null;
+  const manifestPath = join(deckDir, slidesDirName, "manifest.json");
+  if (!existsSync(manifestPath)) return null;
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+    metadata?: { title?: string };
+    canvas?: { width?: number; height?: number };
+    playlist?: string[];
+  };
+  const playlist = (manifest.playlist ?? []).filter((item) => typeof item === "string" && item.endsWith(".html"));
+  if (!playlist.length) return null;
+  return {
+    title: manifest.metadata?.title ?? "",
+    canvas: {
+      width: Number.isFinite(manifest.canvas?.width) ? Number(manifest.canvas?.width) : 1920,
+      height: Number.isFinite(manifest.canvas?.height) ? Number(manifest.canvas?.height) : 1080,
+    },
+    pagesDir,
+    assetsDir: join(templateDir, "assets"),
+    playlist,
+  };
+}
+
+function isBlankDeckManifest(manifestPath: string) {
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Partial<DeckManifest>;
+    return manifest.schemaVersion === "ai-slide.deck.v1" && manifest.slides?.length === 1 && manifest.slides[0]?.file === "slides/01-cover.html";
+  } catch {
+    return true;
+  }
+}
+
+function titleFromSlideFile(fileName: string) {
+  return fileName
+    .replace(/\.html$/i, "")
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function missingTemplateSlideHtml(title: string, fileName: string) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(fileName)}</title>
+</head>
+<body>
+  <section style="width:1920px;height:1080px;box-sizing:border-box;padding:96px;font-family:Inter,system-ui,sans-serif;">
+    <p style="margin:0 0 24px;color:#667085;font-size:28px;font-weight:700;">${escapeHtml(title)}</p>
+    <h1 style="margin:0;color:#111827;font-size:72px;line-height:1.1;">Missing template slide: ${escapeHtml(fileName)}</h1>
+  </section>
+</body>
+</html>
+`;
+}
+
+function materializePptxProject(root: string, project: SlideProject, artifact: SlideArtifact) {
+  const manifestPath = join(root, `${artifact.fileRef}.manifest.json`);
+  if (!existsSync(manifestPath)) {
+    const manifest: PptxManifest = {
+      kind: "pptx",
+      fileName: "slides.pptx",
+      exists: false,
+      sizeBytes: 0,
+      updatedAt: null,
+    };
+    writeFileSync(manifestPath, `${JSON.stringify({ ...manifest, title: project.title }, null, 2)}\n`, "utf8");
+  }
+}
+
+function projectAgentInstructions(project: SlideProject, artifact: SlideArtifact) {
+  if (artifact.type === "pptx") {
+    return [
+      "# AI Slide Workspace",
+      "",
+      "You are editing a slide presentation with the local AI Slide app.",
+      "The canonical PowerPoint artifact is `slides.pptx` in this directory.",
+      "When asked to create or edit the presentation as PPTX, write the final file to `slides.pptx`.",
+      "",
+      `Project: ${project.title}`,
+      `Project ID: ${project.id}`,
+    ].join("\n");
+  }
+  return [
+    "# AI Slide Workspace",
+    "",
+    "You are editing a slide deck with the local AI Slide app.",
+    "The canonical editable deck artifact is the `deck.slides/` directory.",
+    "Use `deck.slides/manifest.json` for deck structure and `deck.slides/slides/*.html` for individual slides.",
+    "Do not collapse the deck into a single HTML file.",
+    "",
+    `Project: ${project.title}`,
+    `Project ID: ${project.id}`,
+  ].join("\n");
+}
+
+function escapeHtml(value: string) {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+function rowToProject(row: ProjectRow): SlideProject {
+  return {
+    id: row.id,
+    title: row.title,
+    activeArtifactId: row.active_artifact_id,
+    templateId: row.template_id,
+    templateName: row.template_name,
+    updatedBy: row.updated_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function rowToArtifact(row: ArtifactRow): SlideArtifact {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    type: row.type,
+    fileRef: row.file_ref,
+    mimeType: row.mime_type,
+    revision: row.revision,
+    updatedBy: row.updated_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function resolveDeckSlidePath(projectId: string, artifact: SlideArtifact, file: string) {
+  const deckRoot = join(projectWorkspaceRoot(projectId), artifact.fileRef);
+  const normalizedFile = normalize(file);
+  if (normalizedFile.startsWith("..") || normalizedFile.includes(`${sep}..${sep}`) || normalizedFile.startsWith(sep)) {
+    throw new Error("Invalid slide path");
+  }
+  return join(deckRoot, normalizedFile);
+}
+
+function rowToRun(row: SlideRunRow): SlideRun {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    runtime: row.runtime,
+    provider: row.provider,
+    model: row.model,
+    status: row.status,
+    mode: row.mode,
+    instruction: row.instruction,
+    selectionType: row.selection_type,
+    selectionPath: row.selection_path,
+    selectedText: row.selected_text,
+    selectedHtml: row.selected_html,
+    resultPreview: row.result_preview,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    completedAt: row.completed_at,
+    error: row.error,
+  };
+}
+
+function rowToRunEvent(row: SlideRunEventRow): SlideRunEvent {
+  return {
+    id: row.id,
+    runId: row.run_id,
+    projectId: row.project_id,
+    type: row.type,
+    content: row.content,
+    status: row.status,
+    metadata: parseJson<Record<string, unknown> | null>(row.metadata, null),
+    sortOrder: row.sort_order,
+    createdAt: row.created_at,
+  };
+}
+
+interface ProjectRow {
+  id: string;
+  title: string;
+  active_artifact_id: string;
+  template_id: string | null;
+  template_name: string | null;
+  updated_by: "human" | "ai" | "system";
+  created_at: string;
+  updated_at: string;
+}
+
+interface ArtifactRow {
+  id: string;
+  project_id: string;
+  type: "deck" | "pptx";
+  file_ref: string;
+  mime_type: string;
+  revision: number;
+  updated_by: "human" | "ai" | "system";
+  created_at: string;
+  updated_at: string;
+}
+
+interface SlideRunRow {
+  id: string;
+  project_id: string;
+  runtime: string;
+  provider: string;
+  model: string;
+  status: SlideRun["status"];
+  mode: "rewrite" | "write";
+  instruction: string;
+  selection_type: SlideRun["selectionType"];
+  selection_path: string;
+  selected_text: string;
+  selected_html: string;
+  result_preview: string;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  error: string | null;
+}
+
+interface SlideRunEventRow {
+  id: string;
+  run_id: string;
+  project_id: string;
+  type: SlideRunEvent["type"];
+  content: string;
+  status: SlideRunEvent["status"];
+  metadata: string | null;
+  sort_order: number;
+  created_at: string;
+}

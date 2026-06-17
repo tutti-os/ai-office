@@ -1,0 +1,15 @@
+{
+  "name": "@ai-doc/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @ai-doc/server --filter @ai-doc/web dev",
+    "dev:web": "pnpm --filter @ai-doc/web dev",
+    "dev:server": "pnpm --filter @ai-doc/server dev",
+    "build": "pnpm --filter @ai-doc/shared build && pnpm --filter @ai-doc/web build && pnpm --filter @ai-doc/server build",
+    "check": "pnpm --filter @ai-doc/shared check && pnpm --filter @ai-doc/web check && pnpm --filter @ai-doc/server check",
+    "package:nextop": "node ../../tooling/nextop/package-doc-nextop-app.mjs",
+    "sync:templates": "node scripts/sync-doc-templates.mjs"
+  }
+}
