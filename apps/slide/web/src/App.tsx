@@ -32,8 +32,13 @@ import {
 } from "lucide-react";
 import { allCategoriesForTemplates, categoryCountsForTemplates, type OutputType, type SlideTemplate } from "./templates";
 import { AgentConversationPanel } from "./app/AgentConversationPanel";
+import { PptxPreview } from "./app/PptxPreview";
+import { SlideFilmstrip } from "./app/SlideFilmstrip";
+import { fitScale, nextSlideIndex, scaledHeight, shouldIgnoreSlideNavigationEvent, slideDirectionFromKey, thumbnailMetrics, useElementSize } from "./app/slideView";
 import { useAgentConversation } from "./app/useAgentConversation";
 import { clearProjectHistory, createProject, getProject, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
+import { PptxArtifactRuntimeAdapter } from "./artifact/pptxArtifactAdapter";
+import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
 import type { DeckManifestSlide, ProjectDetailResponse, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
 
 const agentProfiles = [
@@ -83,6 +88,16 @@ export function App() {
   const [agentSending, setAgentSending] = useState(false);
   const currentProjectId = route.name === "slide" ? route.projectId : null;
   const agentConversation = useAgentConversation(currentProjectId);
+  const pptxArtifactAdapter = useMemo(() => new PptxArtifactRuntimeAdapter(), []);
+  const {
+    runtime: pptxRuntime,
+    loading: pptxLoading,
+    error: pptxError,
+    loadArtifact: loadPptxArtifact,
+    clearArtifact: clearPptxArtifact,
+    updateSelection: updatePptxSelection,
+    createAiEditRequest: createPptxAiEditRequest,
+  } = usePptxArtifactRuntime(pptxArtifactAdapter);
   const allCategories = useMemo(() => allCategoriesForTemplates(slideTemplates), [slideTemplates]);
   const categoryCounts = useMemo(() => categoryCountsForTemplates(slideTemplates), [slideTemplates]);
 
@@ -127,6 +142,7 @@ export function App() {
   useEffect(() => {
     if (route.name !== "slide") {
       setProjectDetail(null);
+      clearPptxArtifact();
       return;
     }
     setLoadingProject(true);
@@ -135,7 +151,30 @@ export function App() {
       .then(setProjectDetail)
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoadingProject(false));
-  }, [route]);
+  }, [clearPptxArtifact, route]);
+
+  useEffect(() => {
+    if (route.name !== "slide" || projectDetail?.artifact.type !== "pptx") {
+      clearPptxArtifact();
+      return;
+    }
+    if (!projectDetail.pptxManifest) return;
+    void loadPptxArtifact(projectDetail.project.id, {
+      title: projectDetail.project.title,
+      manifest: projectDetail.pptxManifest,
+    }).catch(() => undefined);
+  }, [
+    clearPptxArtifact,
+    loadPptxArtifact,
+    projectDetail?.artifact.id,
+    projectDetail?.artifact.revision,
+    projectDetail?.artifact.type,
+    projectDetail?.project.id,
+    projectDetail?.project.title,
+    projectDetail?.pptxManifest?.sha256,
+    projectDetail?.pptxManifest?.updatedAt,
+    route.name,
+  ]);
 
   const createAndOpenProject = async (input: { title: string; template?: SlideTemplate }) => {
     setCreating(true);
@@ -192,13 +231,27 @@ export function App() {
     setAgentSending(true);
     setError("");
     try {
-      await startAiEdit(currentProjectId, {
-        userPrompt,
-        mode: "write",
-        artifactType: projectDetail?.artifact.type,
-        selectionType: "write",
-        runtimeProfileId: selectedAgent || null,
-      });
+      if (projectDetail?.artifact.type === "pptx") {
+        if (!pptxRuntime) throw new Error("PPTX runtime is not ready");
+        await startAiEdit(
+          currentProjectId,
+          createPptxAiEditRequest({
+            projectId: currentProjectId,
+            runtime: pptxRuntime,
+            userPrompt,
+            runtimeProfileId: selectedAgent || null,
+          }),
+        );
+        setProjectDetail(await getProject(currentProjectId));
+      } else {
+        await startAiEdit(currentProjectId, {
+          userPrompt,
+          mode: "write",
+          artifactType: projectDetail?.artifact.type,
+          selectionType: "write",
+          runtimeProfileId: selectedAgent || null,
+        });
+      }
       await agentConversation.reload();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -217,10 +270,14 @@ export function App() {
         conversationLoading={agentConversation.loading}
         detail={projectDetail}
         error={error}
+        activeSelectionText={projectDetail?.artifact.type === "pptx" ? pptxRuntime?.selection.selectedText ?? "" : ""}
         sending={agentSending}
-        loading={loadingProject}
+        loading={loadingProject || pptxLoading}
+        pptxError={pptxError}
+        pptxRuntime={pptxRuntime}
         projectId={route.projectId}
         onBackHome={() => setRoute(pushHomeRoute())}
+        onPptxSelectionChange={updatePptxSelection}
         onSend={sendAgentPrompt}
       />
     );
@@ -542,23 +599,27 @@ function TemplatePreviewModal(props: {
 }
 
 function EditorPlaceholder(props: {
+  activeSelectionText: string;
   conversationError: string;
   conversationItems: SlideRunTimelineItem[];
   conversationLoading: boolean;
   detail: ProjectDetailResponse | null;
   error: string;
   loading: boolean;
+  pptxError: string;
+  pptxRuntime: ReturnType<typeof usePptxArtifactRuntime>["runtime"];
   projectId: string;
   sending: boolean;
   onBackHome: () => void;
+  onPptxSelectionChange: ReturnType<typeof usePptxArtifactRuntime>["updateSelection"];
   onSend: (prompt: string) => Promise<void>;
 }) {
   return (
     <main className="editor-workbench">
       <AgentConversationPanel
-        activeSelectionText=""
+        activeSelectionText={props.activeSelectionText}
         dirty={false}
-        error={props.conversationError || props.error}
+        error={props.conversationError || props.error || props.pptxError}
         items={props.conversationItems}
         loading={props.conversationLoading}
         sending={props.sending}
@@ -587,9 +648,17 @@ function EditorPlaceholder(props: {
           <EditorInfoPanel detail={props.error} title="Presentation not found" />
         ) : props.detail?.artifact.type === "deck" ? (
           <DeckEditor detail={props.detail} projectId={props.projectId} />
+        ) : props.detail?.artifact.type === "pptx" && props.pptxRuntime ? (
+          <PptxPreview
+            runtime={props.pptxRuntime}
+            error={props.pptxError}
+            loading={props.loading}
+            onBackHome={props.onBackHome}
+            onSelectionChange={props.onPptxSelectionChange}
+          />
         ) : props.detail ? (
           <EditorInfoPanel
-            detail={`PPTX editing area will live here next. fileRef: ${props.detail.artifact.fileRef}`}
+            detail={`Waiting for ${props.detail.artifact.fileRef}`}
             title={props.detail.project.title}
           />
         ) : null}
@@ -705,14 +774,11 @@ const resizeHandles: ResizeHandle[] = ["top-left", "top", "top-right", "right", 
 const maxDeckHistoryEntries = 100;
 
 function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string }) {
-  const hostRef = useRef<HTMLDivElement | null>(null);
-  const filmstripRef = useRef<HTMLDivElement | null>(null);
+  const { ref: hostRef, width: hostWidth, height: hostHeight } = useElementSize<HTMLDivElement>();
   const frameRecordsRef = useRef(new Map<string, FrameRecord>());
   const initializedFramesRef = useRef(new WeakSet<Document>());
   const deckHistoryRef = useRef(new Map<string, DeckSlideHistory>());
   const applyingHistoryRef = useRef(new Set<string>());
-  const [hostWidth, setHostWidth] = useState(0);
-  const [hostHeight, setHostHeight] = useState(0);
   const [activeObject, setActiveObject] = useState<ActiveDeckObject | null>(null);
   const [activeSelectionBox, setActiveSelectionBox] = useState<ActiveDeckSelectionBox | null>(null);
   const [activeTextEdit, setActiveTextEdit] = useState<ActiveTextEdit | null>(null);
@@ -728,30 +794,12 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string })
   const activeSlideIndex = activeSlide ? slides.findIndex((slide) => slide.id === activeSlide.id) : -1;
   const availableFrameWidth = Math.max(0, hostWidth - 64);
   const availableFrameHeight = Math.max(0, hostHeight - 92);
-  const scale =
-    availableFrameWidth > 0 && availableFrameHeight > 0
-      ? Math.min(1, availableFrameWidth / canvas.width, availableFrameHeight / canvas.height)
-      : 0.4;
-  const frameHeight = Math.round(canvas.height * scale);
-  const thumbnailWidth = 128;
-  const thumbnailScale = thumbnailWidth / canvas.width;
-  const thumbnailHeight = Math.round(canvas.height * thumbnailScale);
+  const scale = fitScale({ availableHeight: availableFrameHeight, availableWidth: availableFrameWidth, height: canvas.height, minScale: 0.4, width: canvas.width });
+  const frameHeight = scaledHeight({ height: canvas.height, scale });
+  const deckThumbnail = thumbnailMetrics({ height: canvas.height, width: canvas.width });
   const activeHistory = useMemo(() => (activeSlideId ? deckHistoryRef.current.get(activeSlideId) ?? null : null), [activeSlideId, historyVersion]);
   const canUndo = Boolean(activeHistory && activeHistory.currentIndex > 0);
   const canRedo = Boolean(activeHistory && activeHistory.currentIndex < activeHistory.entries.length - 1);
-
-  useEffect(() => {
-    const element = hostRef.current;
-    if (!element) return;
-    const updateSize = () => {
-      setHostWidth(Math.max(0, element.clientWidth));
-      setHostHeight(Math.max(0, element.clientHeight));
-    };
-    updateSize();
-    const observer = new ResizeObserver(updateSize);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -771,23 +819,6 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string })
     const object = findActiveObject();
     if (object) setActiveSelectionBox(readSelectionBox(activeObject.slideId, object, scale));
   }, [activeObject, scale]);
-
-  useEffect(() => {
-    const filmstrip = filmstripRef.current;
-    const activeThumb = filmstrip?.querySelector<HTMLElement>(".deck-filmstrip-thumb.active");
-    if (!filmstrip || !activeThumb) return;
-    const frame = requestAnimationFrame(() => {
-      const stripRect = filmstrip.getBoundingClientRect();
-      const thumbRect = activeThumb.getBoundingClientRect();
-      const margin = 12;
-      if (thumbRect.left < stripRect.left + margin) {
-        filmstrip.scrollBy({ left: thumbRect.left - stripRect.left - margin, behavior: "smooth" });
-      } else if (thumbRect.right > stripRect.right - margin) {
-        filmstrip.scrollBy({ left: thumbRect.right - stripRect.right + margin, behavior: "smooth" });
-      }
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [activeSlideId, activeSlideIndex]);
 
   const clearSelections = () => {
     for (const record of frameRecordsRef.current.values()) {
@@ -860,7 +891,7 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string })
     if (!slides.length) return;
     const sourceIndex = fromSlideId ? slides.findIndex((slide) => slide.id === fromSlideId) : -1;
     const currentIndex = sourceIndex >= 0 ? sourceIndex : activeSlideIndex >= 0 ? activeSlideIndex : 0;
-    const nextIndex = clamp(currentIndex + direction, 0, slides.length - 1);
+    const nextIndex = nextSlideIndex({ count: slides.length, currentIndex, direction });
     const nextSlide = slides[nextIndex];
     if (!nextSlide || nextIndex === currentIndex) return;
     activateSlide(nextSlide.id);
@@ -947,11 +978,11 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string })
   });
 
   const handleSlideNavigationKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-    if (isInsideEditable(event.target)) return;
-    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    if (shouldIgnoreSlideNavigationEvent(event)) return;
+    const direction = slideDirectionFromKey(event.key, "vertical");
+    if (!direction) return;
     event.preventDefault();
-    navigateSlide(event.key === "ArrowDown" ? 1 : -1);
+    navigateSlide(direction);
   };
 
   const initializeFrame = (slide: DeckManifestSlide, iframe: HTMLIFrameElement | null) => {
@@ -1266,33 +1297,35 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string })
           })()
         ) : null}
       </div>
-      <div ref={filmstripRef} className="deck-filmstrip" aria-label="Slides">
-        {slides.map((slide, index) => {
-          const isActive = slide.id === activeSlide?.id;
+      <SlideFilmstrip
+        activeId={activeSlide?.id ?? null}
+        ariaLabel="Slides"
+        className="deck-filmstrip"
+        frameHeight={deckThumbnail.height}
+        frameWidth={deckThumbnail.width}
+        items={slides.map((slide, index) => ({
+          id: slide.id,
+          label: String(index + 1).padStart(2, "0"),
+          title: slide.title,
+        }))}
+        renderPreview={(item) => {
+          const slide = slides.find((candidate) => candidate.id === item.id);
+          if (!slide) return null;
           return (
-            <button
-              className={`deck-filmstrip-thumb ${isActive ? "active" : ""}`}
-              key={slide.id}
-              type="button"
-              onClick={() => activateSlide(slide.id)}
-            >
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              <div className="deck-filmstrip-frame" style={{ width: thumbnailWidth, height: thumbnailHeight }}>
-                <iframe
-                  src={projectAssetUrl(props.projectId, props.detail.artifact.fileRef, slide.file)}
-                  style={{
-                    width: canvas.width,
-                    height: canvas.height,
-                    transform: `scale(${thumbnailScale})`,
-                  }}
-                  tabIndex={-1}
-                  title={`${slide.title} thumbnail`}
-                />
-              </div>
-            </button>
+            <iframe
+              src={projectAssetUrl(props.projectId, props.detail.artifact.fileRef, slide.file)}
+              style={{
+                width: canvas.width,
+                height: canvas.height,
+                transform: `scale(${deckThumbnail.scale})`,
+              }}
+              tabIndex={-1}
+              title={`${slide.title} thumbnail`}
+            />
           );
-        })}
-      </div>
+        }}
+        onSelect={activateSlide}
+      />
     </div>
   );
 }

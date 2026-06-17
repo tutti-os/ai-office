@@ -1,13 +1,16 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { readFile, stat, writeFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
-import { join, normalize, resolve, sep } from "node:path";
+import { copyFile, readFile, stat, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { basename, extname, join, normalize, resolve, sep } from "node:path";
 import {
   createBlankDeckManifest,
+  createEmptyPptxManifest,
   deckArtifactFileRef,
   deckMimeType,
+  parsePptxManifest,
   pptxArtifactFileRef,
   pptxMimeType,
+  serializePptxManifest,
   type CreateProjectRequest,
   type DeckManifest,
   type PptxManifest,
@@ -81,6 +84,26 @@ export class ProjectRepository {
     if (!project || !createdArtifact) throw new Error("Unable to create project");
     this.materializeProject(project, createdArtifact);
     return { project, artifact: createdArtifact };
+  }
+
+  async importPptxProjectFromFile(input: { sourcePath: string; title?: string }) {
+    const sourcePath = resolve(input.sourcePath);
+    const sourceStat = await stat(sourcePath);
+    if (!sourceStat.isFile()) throw new Error("PPTX source is not a file");
+    if (extname(sourcePath).toLowerCase() !== ".pptx") throw new Error("PPTX source must end with .pptx");
+
+    const title = input.title?.trim() || basename(sourcePath, extname(sourcePath));
+    const created = this.createProject({ title, artifactType: "pptx" });
+    await copyFile(sourcePath, pptxFilePath(created.project.id, created.artifact));
+    const refresh = await this.refreshPptxArtifactFromFile(created.project.id, "human");
+    const project = this.getProject(created.project.id);
+    const artifact = this.getArtifact(created.artifact.id);
+    if (!project || !artifact) throw new Error("Unable to import PPTX project");
+    return {
+      project,
+      artifact,
+      pptxManifest: refresh?.manifest ?? (await readPptxManifestFromFile(project.id, artifact)),
+    };
   }
 
   updateProject(projectId: string, input: UpdateProjectRequest) {
@@ -283,25 +306,39 @@ export class ProjectRepository {
 
   async readPptxManifest(projectId: string, artifact: SlideArtifact): Promise<PptxManifest | null> {
     if (artifact.type !== "pptx") return null;
-    const filePath = join(projectWorkspaceRoot(projectId), artifact.fileRef);
-    try {
-      const fileStat = await stat(filePath);
-      return {
-        kind: "pptx",
-        fileName: "slides.pptx",
-        exists: fileStat.isFile(),
-        sizeBytes: fileStat.isFile() ? fileStat.size : 0,
-        updatedAt: fileStat.isFile() ? fileStat.mtime.toISOString() : null,
-      };
-    } catch {
-      return {
-        kind: "pptx",
-        fileName: "slides.pptx",
-        exists: false,
-        sizeBytes: 0,
-        updatedAt: null,
-      };
+    return readPptxManifestFromFile(projectId, artifact);
+  }
+
+  async readPptxFile(projectId: string) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    const artifact = this.getArtifact(project.activeArtifactId);
+    if (!artifact || artifact.type !== "pptx") throw new Error("PPTX artifact not found");
+    const bytes = await readFile(pptxFilePath(projectId, artifact));
+    return {
+      bytes,
+      fileName: "slides.pptx",
+      mimeType: pptxMimeType,
+    };
+  }
+
+  async refreshPptxArtifactFromFile(projectId: string, updatedBy: SlideProject["updatedBy"]) {
+    const project = this.getProject(projectId);
+    if (!project) return null;
+    const artifact = this.getArtifact(project.activeArtifactId);
+    if (!artifact || artifact.type !== "pptx") return null;
+    const nextManifest = await readPptxManifestFromFile(projectId, artifact);
+    const currentManifest = readStoredPptxManifest(projectId, artifact);
+    if (
+      currentManifest.sha256 === nextManifest.sha256 &&
+      currentManifest.sizeBytes === nextManifest.sizeBytes &&
+      currentManifest.updatedAt === nextManifest.updatedAt
+    ) {
+      return { artifact, manifest: nextManifest, changed: false };
     }
+    writeStoredPptxManifest(projectId, artifact, nextManifest);
+    const updatedArtifact = this.bumpArtifactRevision(artifact.id, updatedBy) ?? artifact;
+    return { artifact: updatedArtifact, manifest: nextManifest, changed: true };
   }
 
   private materializeProject(project: SlideProject, artifact: SlideArtifact) {
@@ -483,15 +520,47 @@ function missingTemplateSlideHtml(title: string, fileName: string) {
 function materializePptxProject(root: string, project: SlideProject, artifact: SlideArtifact) {
   const manifestPath = join(root, `${artifact.fileRef}.manifest.json`);
   if (!existsSync(manifestPath)) {
-    const manifest: PptxManifest = {
-      kind: "pptx",
-      fileName: "slides.pptx",
-      exists: false,
-      sizeBytes: 0,
-      updatedAt: null,
-    };
+    const manifest = createEmptyPptxManifest();
     writeFileSync(manifestPath, `${JSON.stringify({ ...manifest, title: project.title }, null, 2)}\n`, "utf8");
   }
+}
+
+function pptxFilePath(projectId: string, artifact: SlideArtifact) {
+  return join(projectWorkspaceRoot(projectId), artifact.fileRef);
+}
+
+function pptxManifestPath(projectId: string, artifact: SlideArtifact) {
+  return join(projectWorkspaceRoot(projectId), `${artifact.fileRef}.manifest.json`);
+}
+
+async function readPptxManifestFromFile(projectId: string, artifact: SlideArtifact): Promise<PptxManifest> {
+  try {
+    const filePath = pptxFilePath(projectId, artifact);
+    const [fileStat, bytes] = await Promise.all([stat(filePath), readFile(filePath)]);
+    if (!fileStat.isFile()) return createEmptyPptxManifest();
+    return {
+      kind: "pptx",
+      fileName: "slides.pptx",
+      exists: true,
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+      sizeBytes: bytes.byteLength,
+      updatedAt: fileStat.mtime.toISOString(),
+    };
+  } catch {
+    return createEmptyPptxManifest();
+  }
+}
+
+function readStoredPptxManifest(projectId: string, artifact: SlideArtifact) {
+  try {
+    return parsePptxManifest(readFileSync(pptxManifestPath(projectId, artifact), "utf8"));
+  } catch {
+    return createEmptyPptxManifest();
+  }
+}
+
+function writeStoredPptxManifest(projectId: string, artifact: SlideArtifact, manifest: PptxManifest) {
+  writeFileSync(pptxManifestPath(projectId, artifact), `${serializePptxManifest(manifest)}\n`, "utf8");
 }
 
 function projectAgentInstructions(project: SlideProject, artifact: SlideArtifact) {

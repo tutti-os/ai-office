@@ -35,6 +35,15 @@ server.get("/api/projects", async () => projects.listProjects());
 
 server.post<{ Body: CreateProjectRequest }>("/api/projects", async (request) => projects.createProject(request.body ?? {}));
 
+server.post<{ Body: { path?: string; title?: string } }>("/api/dev/projects/import-pptx", async (request, reply) => {
+  try {
+    return await projects.importPptxProject(request.body ?? {});
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to import PPTX project";
+    return reply.code(message.includes("not found") || message.includes("no such file") ? 404 : 400).send({ error: message });
+  }
+});
+
 server.delete("/api/projects", async () => projects.clearProjectHistory());
 
 server.get<{ Params: { projectId: string } }>("/api/projects/:projectId", async (request, reply) => {
@@ -54,6 +63,19 @@ server.patch<{ Params: { projectId: string }; Body: UpdateProjectRequest }>("/ap
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to update project";
     return reply.code(message.includes("not found") ? 404 : 400).send({ error: message });
+  }
+});
+
+server.get<{ Params: { projectId: string } }>("/api/projects/:projectId/files/slides.pptx", async (request, reply) => {
+  try {
+    const file = await projects.readPptxFile(request.params.projectId);
+    return reply
+      .type(file.mimeType)
+      .header("content-disposition", `inline; filename="${file.fileName}"`)
+      .send(file.bytes);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to read PPTX file";
+    return reply.code(message.includes("not found") || message.includes("no such file") ? 404 : 400).send({ error: message });
   }
 });
 

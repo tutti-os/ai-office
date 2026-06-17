@@ -41,6 +41,15 @@ export async function updateProject(projectId: string, input: UpdateProjectReque
   });
 }
 
+export async function getProjectPptxFile(projectId: string) {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/files/slides.pptx`);
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(data?.error ?? `Request failed: ${response.status}`);
+  }
+  return response.arrayBuffer();
+}
+
 export async function listProjectRuns(projectId: string) {
   const response = await requestJson<ProjectRunsResponse>(`/api/projects/${encodeURIComponent(projectId)}/runs`);
   return response.runs;

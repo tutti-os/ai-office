@@ -20,6 +20,20 @@ export class ProjectService {
     return this.repo.createProject(input);
   }
 
+  async importPptxProject(input: { path?: string; title?: string }) {
+    if (!input.path?.trim()) throw new Error("PPTX path is required");
+    const imported = await this.repo.importPptxProjectFromFile({
+      sourcePath: input.path,
+      title: input.title,
+    });
+    return {
+      project: imported.project,
+      artifact: imported.artifact,
+      deckManifest: null,
+      pptxManifest: imported.pptxManifest,
+    };
+  }
+
   async getProject(projectId: string) {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
@@ -51,6 +65,10 @@ export class ProjectService {
     return this.repo.writeDeckSlideHtml(projectId, slideId, input.html);
   }
 
+  readPptxFile(projectId: string) {
+    return this.repo.readPptxFile(projectId);
+  }
+
   listProjectRuns(projectId: string) {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
@@ -62,7 +80,7 @@ export class ProjectService {
     };
   }
 
-  startAiEdit(projectId: string, request: AiEditRequest) {
+  async startAiEdit(projectId: string, request: AiEditRequest) {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
     const artifact = this.repo.getArtifact(project.activeArtifactId);
@@ -107,12 +125,21 @@ export class ProjectService {
       metadata: { toolName: "slide_context", artifactId: artifact.id, fileRef: artifact.fileRef },
       sortOrder: 2,
     });
+    const refresh = artifact.type === "pptx" ? await this.repo.refreshPptxArtifactFromFile(projectId, "ai") : null;
     const completed = this.repo.updateRun(run.id, {
       status: "completed",
-      resultPreview: "Conversation captured. Slide editing execution will plug into this run timeline next.",
+      resultPreview:
+        artifact.type === "pptx"
+          ? pptxRunPreview(refresh?.manifest)
+          : "Conversation captured. Slide editing execution will plug into this run timeline next.",
     });
     return { run: completed ?? run };
   }
+}
+
+function pptxRunPreview(manifest: { exists: boolean; sizeBytes: number } | null | undefined) {
+  if (!manifest?.exists) return "PPTX run completed. No slides.pptx change was detected.";
+  return `PPTX preview refreshed: ${manifest.sizeBytes} bytes`;
 }
 
 function runtimeProfileFromId(profileId: string | null | undefined): {

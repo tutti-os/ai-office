@@ -131,8 +131,43 @@ export interface PptxManifest {
   kind: "pptx";
   fileName: "slides.pptx";
   exists: boolean;
+  sha256: string | null;
   sizeBytes: number;
   updatedAt: string | null;
+}
+
+export function createEmptyPptxManifest(): PptxManifest {
+  return {
+    kind: "pptx",
+    fileName: "slides.pptx",
+    exists: false,
+    sha256: null,
+    sizeBytes: 0,
+    updatedAt: null,
+  };
+}
+
+export function parsePptxManifest(content: string): PptxManifest {
+  try {
+    const parsed = JSON.parse(content) as Partial<PptxManifest>;
+    if (parsed.kind === "pptx" && parsed.fileName === "slides.pptx") {
+      return {
+        kind: "pptx",
+        fileName: "slides.pptx",
+        exists: parsed.exists === true,
+        sha256: typeof parsed.sha256 === "string" ? parsed.sha256 : null,
+        sizeBytes: typeof parsed.sizeBytes === "number" && Number.isFinite(parsed.sizeBytes) ? parsed.sizeBytes : 0,
+        updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : null,
+      };
+    }
+  } catch {
+    // Fall through to an empty manifest.
+  }
+  return createEmptyPptxManifest();
+}
+
+export function serializePptxManifest(manifest: PptxManifest): string {
+  return JSON.stringify(manifest);
 }
 
 export interface SlideProjectRecord {

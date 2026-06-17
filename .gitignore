@@ -13,7 +13,7 @@ packages/*/dist/
 *.tsbuildinfo
 
 # Generated runtime assets
-apps/doc/web/public/office-preview/
+apps/*/web/public/office-preview/
 apps/*/templates/
 apps/*/web/public/generated/
 

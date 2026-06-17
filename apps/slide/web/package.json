@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 5175",
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "copy:office-preview-assets": "node scripts/copy-office-preview-assets.mjs",
+    "dev": "pnpm run copy:office-preview-assets && vite --host 127.0.0.1 --port 5175",
+    "build": "pnpm run copy:office-preview-assets && tsc -p tsconfig.json --noEmit && vite build",
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@ai-app/agent": "workspace:*",
     "@ai-slide/shared": "workspace:*",
+    "@tutti-os/office-preview": "0.0.0-test.20260616183444.f506a6bec39c",
     "@vitejs/plugin-react": "^5.1.1",
     "lucide-react": "^0.562.0",
     "react": "^19.2.3",
