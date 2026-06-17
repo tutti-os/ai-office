@@ -51,6 +51,7 @@ export function ToolbarMoreMenu(props: {
   onSelect: (value: string) => void;
 }) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState({ left: 0, top: 0 });
 
   const updatePosition = () => {
@@ -66,15 +67,19 @@ export function ToolbarMoreMenu(props: {
     if (!props.open) return;
     updatePosition();
     const close = () => props.onOpenChange(false);
+    const closeOnOutsideScroll = (event: Event) => {
+      if (event.target instanceof Node && menuRef.current?.contains(event.target)) return;
+      close();
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") close();
     };
     window.addEventListener("resize", close);
-    window.addEventListener("scroll", close, true);
+    window.addEventListener("scroll", closeOnOutsideScroll, true);
     document.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("scroll", closeOnOutsideScroll, true);
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [props.open, props.onOpenChange]);
@@ -100,6 +105,7 @@ export function ToolbarMoreMenu(props: {
       </button>
       {props.open ? (
         <div
+          ref={menuRef}
           className="fixed z-50 max-h-[320px] w-56 overflow-y-auto rounded-xl border border-black/10 bg-white py-1.5 text-[#242424] shadow-[0_18px_42px_rgba(0,0,0,0.18)]"
           data-toolbar-skip-selection-preserve="true"
           role="menu"
@@ -388,6 +394,7 @@ export function ToolbarGroup(props: { children: ReactNode }) {
 
 export function FontSizeControl(props: { value: string; onChange: (fontSize: string) => void }) {
   const [draft, setDraft] = useState(fontSizeNumber(props.value));
+  const skipBlurCommitRef = useRef(false);
 
   useEffect(() => {
     setDraft(fontSizeNumber(props.value));
@@ -421,9 +428,18 @@ export function FontSizeControl(props: { value: string; onChange: (fontSize: str
         inputMode="numeric"
         value={draft}
         onChange={(event) => setDraft(event.currentTarget.value.replace(/[^\d]/g, "").slice(0, 3))}
-        onBlur={() => commit()}
+        onBlur={() => {
+          if (skipBlurCommitRef.current) {
+            skipBlurCommitRef.current = false;
+            return;
+          }
+          commit();
+        }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
+            event.preventDefault();
+            skipBlurCommitRef.current = true;
+            commit(event.currentTarget.value);
             event.currentTarget.blur();
           }
           if (event.key === "ArrowUp") {

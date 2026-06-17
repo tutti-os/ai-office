@@ -160,6 +160,14 @@ export function applyInlineFormat(doc: Document, tagName: InlineFormatTag, targe
     return execNativeCommand(doc, inlineCommandByTag[tagName]);
   }
 
+  if (context.hasTextSelection) {
+    const selectedBlocks = getSelectedBlockElements(doc, context.selection);
+    if (selectedBlocks.length > 0 && selectedBlocks.every((block) => elementHasFormatting(block, tagName))) {
+      removeInlineFormatFromElements(doc, selectedBlocks, tagName);
+      return true;
+    }
+  }
+
   const explicitlySelectedElement = selectedNodeElement(doc);
   if (explicitlySelectedElement && explicitlySelectedElement !== doc.body) {
     toggleFormattingOnElement(doc, explicitlySelectedElement, tagName);
@@ -168,10 +176,8 @@ export function applyInlineFormat(doc: Document, tagName: InlineFormatTag, targe
 
   if (context.hasTextSelection) {
     const range = context.selection.getRangeAt(0);
-    if (rangeHasMostlyFormatting(doc, range, tagName)) {
-      const changed = execNativeCommand(doc, inlineCommandByTag[tagName]);
-      normalizeEditableDocument(doc);
-      return changed;
+    if (rangeHasMostlyFormatting(doc, range, tagName) || rangeFragmentHasMostlyFormatting(range, tagName)) {
+      return removeInlineFormatInRange(doc, range, context.selection, tagName);
     }
     return wrapTextSelection(doc, range, context.selection, tagName);
   }
@@ -582,7 +588,8 @@ export function indentBlock(doc: Document, targetElement?: Element | null) {
   if (adjustTableCellIndent(doc, 1)) return true;
   ensureSelectionOnTarget(doc, targetElement);
   if (adjustSelectedListItems(doc, 1, targetElement)) return true;
-  if (adjustBlockIndent(doc, 1)) return true;
+  if (adjustBlockIndent(doc, 1, targetElement)) return true;
+  if (hasListIndentContext(doc, targetElement)) return false;
   return execNativeCommand(doc, "indent");
 }
 
@@ -590,7 +597,8 @@ export function outdentBlock(doc: Document, targetElement?: Element | null) {
   if (adjustTableCellIndent(doc, -1)) return true;
   ensureSelectionOnTarget(doc, targetElement);
   if (adjustSelectedListItems(doc, -1, targetElement)) return true;
-  if (adjustBlockIndent(doc, -1)) return true;
+  if (adjustBlockIndent(doc, -1, targetElement)) return true;
+  if (hasListIndentContext(doc, targetElement)) return false;
   return execNativeCommand(doc, "outdent");
 }
 
@@ -1234,6 +1242,26 @@ export function moveCursorToEnd(doc: Document, element: Element) {
   return true;
 }
 
+export function moveSelectionCursorToStart(doc: Document) {
+  const selection = doc.getSelection();
+  if (!selection || selection.rangeCount === 0) return false;
+  const range = selection.getRangeAt(0).cloneRange();
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
+}
+
+export function moveSelectionCursorToEnd(doc: Document) {
+  const selection = doc.getSelection();
+  if (!selection || selection.rangeCount === 0) return false;
+  const range = selection.getRangeAt(0).cloneRange();
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
+}
+
 export function getEditorStats(doc: Document) {
   const text = (doc.body?.textContent ?? "").replaceAll(zeroWidthSpace, "");
   return {
@@ -1545,6 +1573,13 @@ function removeFormattingFromElement(element: Element, tagName: InlineFormatTag)
   if (element.matches(inlineFormatSelectorByTag[tagName])) unwrapElement(element);
 }
 
+function removeInlineFormatFromElements(doc: Document, elements: HTMLElement[], tagName: InlineFormatTag) {
+  elements.forEach((element) => removeFormattingFromElement(element, tagName));
+  const first = elements.find((element) => element.isConnected);
+  if (first) selectTableEditingTarget(doc, first);
+  normalizeEditableDocument(doc);
+}
+
 function rangeHasMostlyFormatting(doc: Document, range: Range, tagName: InlineFormatTag) {
   const textNodes = textNodesIntersectingRange(range);
   let totalChars = 0;
@@ -1556,6 +1591,37 @@ function rangeHasMostlyFormatting(doc: Document, range: Range, tagName: InlineFo
     if (textNodeHasFormatting(doc, node, tagName)) formattedChars += length;
   });
   return totalChars > 0 && formattedChars / totalChars > 0.8;
+}
+
+function rangeFragmentHasMostlyFormatting(range: Range, tagName: InlineFormatTag) {
+  const fragment = range.cloneContents();
+  const totalChars = fragment.textContent?.length ?? 0;
+  if (totalChars === 0) return false;
+  const selector = inlineFormatSelectorByTag[tagName];
+  const formattedElements = [
+    ...Array.from(fragment.children).filter((child) => child.matches(selector)),
+    ...Array.from(fragment.querySelectorAll(selector)),
+  ];
+  const formattedChars = formattedElements.reduce((total, element) => total + (element.textContent?.length ?? 0), 0);
+  return formattedChars / totalChars > 0.8;
+}
+
+function removeInlineFormatInRange(doc: Document, range: Range, selection: Selection, tagName: InlineFormatTag) {
+  const fragment = range.extractContents();
+  const selector = inlineFormatSelectorByTag[tagName];
+  const formattedElements = [
+    ...Array.from(fragment.children).filter((child) => child.matches(selector)),
+    ...Array.from(fragment.querySelectorAll(selector)),
+  ];
+  formattedElements
+    .sort((left, right) => descendantDepth(right) - descendantDepth(left))
+    .forEach((element) => unwrapElement(element));
+  const insertedNodes = Array.from(fragment.childNodes);
+  if (insertedNodes.length === 0) return false;
+  range.insertNode(fragment);
+  selectNodeRange(doc, selection, insertedNodes[0], insertedNodes[insertedNodes.length - 1]);
+  normalizeEditableDocument(doc);
+  return true;
 }
 
 function textNodesIntersectingRange(range: Range) {
@@ -1996,11 +2062,18 @@ function moveChecklistItemContent(doc: Document, item: HTMLElement, target: Node
   if (content) {
     while (content.firstChild) target.appendChild(content.firstChild);
   } else {
-    Array.from(item.childNodes).forEach((node) => target.appendChild(node));
+    Array.from(item.childNodes).forEach((node) => {
+      if (isChecklistCheckboxNode(node)) return;
+      target.appendChild(node);
+    });
   }
   if (!target.textContent?.trim() && !Array.from(target.childNodes).some((node) => node.nodeType === Node.ELEMENT_NODE)) {
     target.appendChild(doc.createElement("br"));
   }
+}
+
+function isChecklistCheckboxNode(node: Node) {
+  return isHtmlElement(node) && node.tagName === "INPUT" && (node as HTMLInputElement).type === "checkbox";
 }
 
 function adjustTableCellIndent(doc: Document, direction: 1 | -1) {
@@ -2021,10 +2094,19 @@ function adjustTableCellIndent(doc: Document, direction: 1 | -1) {
   return true;
 }
 
-function adjustBlockIndent(doc: Document, direction: 1 | -1) {
+function adjustBlockIndent(doc: Document, direction: 1 | -1, targetElement?: Element | null) {
   const selection = doc.getSelection();
-  if (!selection || selection.rangeCount === 0) return false;
-  const blocks = getSelectedBlockElements(doc, selection).filter((block) => canAdjustBlockIndent(block));
+  const selectedBlocks = selection && selection.rangeCount > 0 ? getSelectedBlockElements(doc, selection) : [];
+  const fallbackBlock =
+    targetElement && doc.body.contains(targetElement)
+      ? isBlockElement(targetElement)
+        ? targetElement
+        : findNearestBlock(targetElement, doc)
+      : null;
+  const blocks = sortElementsByDocumentOrder(uniqueElements([
+    ...selectedBlocks,
+    ...(isHtmlElement(fallbackBlock) ? [fallbackBlock] : []),
+  ])).filter((block) => canAdjustBlockIndent(block));
   if (blocks.length === 0) return false;
   let changed = false;
   blocks.forEach((block) => {
@@ -2036,7 +2118,7 @@ function adjustBlockIndent(doc: Document, direction: 1 | -1) {
     else block.style.setProperty(kebabCase(property), `${next}px`);
     changed = true;
   });
-  if (changed) restoreBlockSelection(doc, selection, blocks);
+  if (changed && selection) restoreBlockSelection(doc, selection, blocks);
   return changed;
 }
 
@@ -2056,6 +2138,14 @@ function adjustSelectedListItems(doc: Document, direction: 1 | -1, targetElement
   if (selection) restoreBlockSelection(doc, selection, items.filter((item) => item.isConnected));
   normalizeEditableDocument(doc);
   return true;
+}
+
+function hasListIndentContext(doc: Document, targetElement?: Element | null) {
+  if (targetElement && doc.body.contains(targetElement) && targetElement.closest("li, ol, ul")) return true;
+  const selection = doc.getSelection();
+  if (!selection || selection.rangeCount === 0) return false;
+  const range = selection.getRangeAt(0);
+  return Boolean(nearestElement(range.commonAncestorContainer)?.closest("li, ol, ul"));
 }
 
 function uniqueElements<T extends Element>(elements: T[]) {
@@ -3894,7 +3984,19 @@ function isUrlAttribute(name: string) {
 }
 
 function normalizeEditableDocument(doc: Document) {
+  cleanupEmptyInlineElements(doc);
   doc.body.normalize();
+}
+
+function cleanupEmptyInlineElements(doc: Document) {
+  Array.from(doc.body.querySelectorAll(inlineTags.join(",")))
+    .sort((left, right) => descendantDepth(right) - descendantDepth(left))
+    .forEach((element) => {
+      if (element.attributes.length > 0) return;
+      if (element.textContent?.trim()) return;
+      if (element.querySelector("img,svg,video,audio,canvas,input,textarea,select,br")) return;
+      element.remove();
+    });
 }
 
 function execNativeCommand(doc: Document, command: string, value?: string) {

@@ -4,7 +4,7 @@ This document tracks proposed browser-use automation cases for the Markdown edit
 
 Current scope: Markdown document creation, right-side/editor-area editing, toolbar transforms, keyboard editing, selection handling, undo/redo, preview serialization, and autosave/reopen behavior.
 
-Execution status should be recorded in test results, not in the case definitions.
+This file defines cases only. Temporary execution notes, screenshots, traces, and pass/fail conclusions should live outside this file.
 
 ## Assumptions
 

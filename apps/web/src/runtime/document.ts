@@ -16,7 +16,7 @@ export function parseRuntimeDocument(html: string): RuntimeDocument {
     htmlAttributes: attributesToRecord(htmlElement),
     headHTML: sanitizeHeadHTML(head.innerHTML.trim() || fallbackHeadHTML),
     bodyAttributes: attributesToRecord(body),
-    bodyInnerHTML: body.innerHTML,
+    bodyInnerHTML: sanitizeBodyHTML(body.innerHTML),
   };
 }
 
@@ -24,13 +24,14 @@ export function serializeRuntimeDocument(document: RuntimeDocument) {
   const htmlAttributes = serializeAttributes(document.htmlAttributes);
   const bodyAttributes = serializeAttributes(document.bodyAttributes);
   const headHTML = sanitizeHeadHTML(document.headHTML);
+  const bodyHTML = sanitizeBodyHTML(document.bodyInnerHTML);
   return `${document.doctype || "<!DOCTYPE html>"}
 <html${htmlAttributes ? ` ${htmlAttributes}` : ""}>
 <head>
 ${headHTML}
 </head>
 <body${bodyAttributes ? ` ${bodyAttributes}` : ""}>
-${document.bodyInnerHTML}
+${bodyHTML}
 </body>
 </html>`;
 }
@@ -40,8 +41,8 @@ export function runtimeDocumentFromFrame(doc: Document): RuntimeDocument {
     doctype: doc.doctype ? `<!DOCTYPE ${doc.doctype.name}>` : "<!DOCTYPE html>",
     htmlAttributes: attributesToRecord(doc.documentElement),
     headHTML: sanitizeHeadHTML(doc.head.innerHTML.trim() || fallbackHeadHTML),
-    bodyAttributes: attributesToRecord(doc.body),
-    bodyInnerHTML: doc.body.innerHTML,
+    bodyAttributes: sanitizeBodyAttributes(attributesToRecord(doc.body)),
+    bodyInnerHTML: sanitizeBodyHTML(doc.body.innerHTML),
   };
 }
 
@@ -80,12 +81,40 @@ function serializeAttributes(attributes: Record<string, string>) {
 function sanitizeHeadHTML(headHTML: string) {
   const parsed = new DOMParser().parseFromString(`<head>${headHTML}</head>`, "text/html");
   parsed.querySelector("#__web-inspector-hide-shortcut-style__")?.remove();
+  parsed.querySelector("#ai-document-runtime-editing-styles")?.remove();
   parsed.querySelectorAll("script[data-editor-runtime], style[data-editor-runtime]").forEach((node) => node.remove());
   return parsed.head.innerHTML.trim();
 }
 
+function sanitizeBodyHTML(bodyHTML: string) {
+  const parsed = new DOMParser().parseFromString(`<body>${bodyHTML}</body>`, "text/html");
+  parsed.body.querySelectorAll("br[data-runtime-empty-cell]").forEach((node) => node.remove());
+  stripRuntimeOnlyAttributes(parsed.body);
+  return parsed.body.innerHTML;
+}
+
+function stripRuntimeOnlyAttributes(root: Element) {
+  [root, ...Array.from(root.querySelectorAll("*"))].forEach((element) => {
+    if (element.hasAttribute("data-runtime-editable-cell")) {
+      element.removeAttribute("contenteditable");
+      element.removeAttribute("spellcheck");
+      element.removeAttribute("tabindex");
+    }
+    Array.from(element.attributes).forEach((attribute) => {
+      if (isRuntimeOnlyAttribute(attribute.name)) element.removeAttribute(attribute.name);
+    });
+  });
+}
+
+function sanitizeBodyAttributes(attributes: Record<string, string>) {
+  const next = { ...attributes };
+  if (next.contenteditable === "true") delete next.contenteditable;
+  if (next.spellcheck === "true") delete next.spellcheck;
+  return next;
+}
+
 function isRuntimeOnlyAttribute(name: string) {
-  return name.startsWith("data-runtime-");
+  return name.startsWith("data-runtime-") || name.startsWith("data-ai-runtime-");
 }
 
 function escapeAttribute(value: string) {

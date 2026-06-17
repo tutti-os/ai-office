@@ -113,6 +113,8 @@ import {
   insertText,
   moveCursorToEnd,
   moveCursorToStart,
+  moveSelectionCursorToEnd,
+  moveSelectionCursorToStart,
   normalizeLinkUrl,
   outdentBlock,
   replaceSelection,
@@ -958,6 +960,7 @@ export function RuntimeWorkbench() {
     operationType: string;
     description: string;
     requiresSelection?: boolean;
+    preferTypingSelection?: boolean;
     mutate: (doc: Document, target: Element | null) => boolean | Element;
   }) => {
     const doc = iframeRef.current?.contentDocument;
@@ -966,18 +969,32 @@ export function RuntimeWorkbench() {
     const liveSelectionTarget = currentSelectionElement(doc);
     const stableTarget = liveSelectionTarget ?? lastResolvedTargetRef.current ?? null;
     const liveSelection = captureSelectionState(doc, stableTarget ?? lastEditorTargetRef.current);
-    const operationSelection = usableSelection(liveSelection) ? liveSelection : lastSelectionRef.current ?? runtime.activeSelection;
+    const storedSelection = lastSelectionRef.current ?? runtime.activeSelection;
+    const operationSelection =
+      input.preferTypingSelection && isFallbackOnlySelection(liveSelection) && usableSelection(storedSelection)
+        ? storedSelection
+        : usableSelection(liveSelection)
+          ? liveSelection
+          : storedSelection;
     if (input.requiresSelection && (!operationSelection || operationSelection.selectionType === "write")) return false;
     const operationFallbackPath = operationSelection?.commonAncestorPath ?? "";
     const hasRangeSelection = Boolean(operationSelection && operationSelection.selectionType !== "write");
+    const hasPreciseTypingSelection = Boolean(
+      input.preferTypingSelection &&
+        operationSelection?.selectionType === "write" &&
+        operationSelection.startPath &&
+        operationSelection.endPath,
+    );
     const target = hasRangeSelection
       ? resolveEditorTarget(doc, null, operationFallbackPath) ?? stableTarget
       : resolveEditorTarget(doc, stableTarget ?? lastEditorTargetRef.current, operationFallbackPath) ?? stableTarget;
     restoreSelectionState(doc, operationSelection);
-    ensureEditorSelection(doc, target ?? lastEditorTargetRef.current, {
-      forceFallback: !hasRangeSelection && !operationSelection?.startPath,
-      fallbackPath: operationFallbackPath,
-    });
+    if (!hasPreciseTypingSelection) {
+      ensureEditorSelection(doc, target ?? lastEditorTargetRef.current, {
+        forceFallback: !hasRangeSelection && !operationSelection?.startPath,
+        fallbackPath: operationFallbackPath,
+      });
+    }
     const before = shouldMergeHistory
       ? runtime
       : applier.recordSnapshot(runtime, doc, {
@@ -990,7 +1007,7 @@ export function RuntimeWorkbench() {
     });
     let changed: boolean | Element;
     try {
-      changed = input.mutate(doc, target);
+      changed = input.mutate(doc, hasPreciseTypingSelection ? null : target);
     } catch (error) {
       console.error(`Editor operation failed: ${input.operationType}`, error);
       restoreFailedOperation(doc, rollbackSnapshot, target, operationFallbackPath);
@@ -1072,6 +1089,7 @@ export function RuntimeWorkbench() {
     executeEditorOperation({
       operationType: "setFontFamily",
       description: `Set font family ${fontFamily}`,
+      preferTypingSelection: true,
       mutate: (doc, target) => setFontFamily(doc, fontFamily, target),
     });
   };
@@ -1080,6 +1098,7 @@ export function RuntimeWorkbench() {
     executeEditorOperation({
       operationType: "setFontSize",
       description: `Set font size ${fontSize}`,
+      preferTypingSelection: true,
       mutate: (doc, target) => setFontSize(doc, fontSize, target),
     });
   };
@@ -1190,18 +1209,18 @@ export function RuntimeWorkbench() {
         mutate: (doc, target) => deleteSelectedElement(doc, target),
       });
     } else if (action === "cursorStart") {
-      if (!toolbarState.contentElement) return;
+      if (!toolbarState.contentElement && !toolbarState.rangeSelection) return;
       executeEditorOperation({
         operationType: "moveCursorToStart",
         description: "Move cursor to start",
-        mutate: (doc, target) => (target ? moveCursorToStart(doc, target) : false),
+        mutate: (doc, target) => (toolbarState.rangeSelection ? moveSelectionCursorToStart(doc) : target ? moveCursorToStart(doc, target) : false),
       });
     } else if (action === "cursorEnd") {
-      if (!toolbarState.contentElement) return;
+      if (!toolbarState.contentElement && !toolbarState.rangeSelection) return;
       executeEditorOperation({
         operationType: "moveCursorToEnd",
         description: "Move cursor to end",
-        mutate: (doc, target) => (target ? moveCursorToEnd(doc, target) : false),
+        mutate: (doc, target) => (toolbarState.rangeSelection ? moveSelectionCursorToEnd(doc) : target ? moveCursorToEnd(doc, target) : false),
       });
     }
   };
@@ -1220,6 +1239,7 @@ export function RuntimeWorkbench() {
       operationType: operationPanelMode,
       description: operationPanelTitle[operationPanelMode],
       requiresSelection: operationPanelMode === "wrapSelection" || operationPanelMode === "replaceSelection",
+      preferTypingSelection: operationPanelMode === "color",
       mutate: (doc, target) => {
         if (operationPanelMode === "insertText") return hasContent ? insertText(doc, content, target) : false;
         if (operationPanelMode === "insertHtml") return hasContent ? insertHtml(doc, content, target) : false;
@@ -1462,6 +1482,7 @@ export function RuntimeWorkbench() {
           onForeColor={(color) => executeEditorOperation({
             operationType: "setForeColor",
             description: `Set foreground color ${color}`,
+            preferTypingSelection: true,
             mutate: (doc, target) => setForeColor(doc, color, target),
           })}
           onAlignment={applyAlignment}
@@ -1595,8 +1616,9 @@ function EditorScreen(props: {
   const [letterSpacingMenuOpen, setLetterSpacingMenuOpen] = useState(false);
   const [paragraphSpacingMenuOpen, setParagraphSpacingMenuOpen] = useState(false);
   const hasPreservedRangeSelection = Boolean(props.runtime?.activeSelection && props.runtime.activeSelection.selectionType !== "write");
+  const hasPreservedWriteSelection = Boolean(props.runtime?.activeSelection?.selectionType === "write" && props.runtime.activeSelection.commonAncestorPath);
   const canUseRangeSelection = props.toolbarState.rangeSelection || hasPreservedRangeSelection;
-  const canCreateLink = canUseRangeSelection || props.toolbarState.table || props.toolbarState.contentElement;
+  const canCreateLink = canUseRangeSelection || hasPreservedWriteSelection || props.toolbarState.table || props.toolbarState.contentElement;
   const moreOptions = toolbarMoreOptions(props.toolbarState, canUseRangeSelection);
 
   return (
@@ -2280,6 +2302,10 @@ function usableSelection(selection: SelectionState | null) {
   return Boolean(selection?.startPath || selection?.commonAncestorPath || selection?.selectedText);
 }
 
+function isFallbackOnlySelection(selection: SelectionState | null) {
+  return Boolean(selection?.selectionType === "write" && selection.startPath && !selection.anchorPath && !selection.focusPath);
+}
+
 function ensureEditorSelection(
   doc: Document,
   fallbackNode: Node | null,
@@ -2308,6 +2334,7 @@ function resolveEditorTarget(doc: Document, fallbackNode: Node | null, fallbackP
   if (!element && fallbackPath.startsWith("body:nth-of-type(1) > ")) {
     element = doc.body.querySelector(fallbackPath.replace("body:nth-of-type(1) > ", ""));
   }
+  if (element === doc.body) element = firstEditableChildForToolbar(doc.body);
   return element && doc.body.contains(element) ? element : null;
 }
 
@@ -2334,7 +2361,8 @@ function readToolbarState(doc: Document, fallbackNode: Node | null, fallbackPath
       ? selectedElementFromSelection(selection, doc) ?? nearestElementInDocument(selection.getRangeAt(0).commonAncestorContainer, doc)
       : null;
   const fallbackTarget = resolveEditorTarget(doc, fallbackNode, fallbackPath);
-  const target = fallbackTarget ?? (rangeElement && rangeElement !== doc.body ? rangeElement : null) ?? doc.body;
+  const selectionTarget = nearestSelectionTarget(doc, selection);
+  const target = fallbackTarget ?? (rangeElement && rangeElement !== doc.body ? rangeElement : null) ?? selectionTarget ?? firstEditableChildForToolbar(doc.body) ?? doc.body;
   const block = nearestBlockForToolbar(target, doc);
   const styleTarget = target !== doc.body && !isToolbarBlock(target) ? target : block ?? target;
   const computed = doc.defaultView?.getComputedStyle(styleTarget);
@@ -2377,6 +2405,14 @@ function selectedElementFromSelection(selection: Selection, doc: Document) {
   if (range.collapsed || range.startContainer !== range.endContainer || range.endOffset !== range.startOffset + 1) return null;
   const selected = range.startContainer.childNodes[range.startOffset];
   return isElementNode(selected) && doc.body.contains(selected) ? selected : null;
+}
+
+function nearestSelectionTarget(doc: Document, selection: Selection | null) {
+  if (!selection || selection.rangeCount === 0) return null;
+  const range = selection.getRangeAt(0);
+  const startElement = nearestElementInDocument(range.startContainer, doc);
+  const endElement = nearestElementInDocument(range.endContainer, doc);
+  return nearestBlockForToolbar(startElement, doc) ?? nearestBlockForToolbar(endElement, doc) ?? startElement ?? endElement;
 }
 
 function tableToolbarTarget(doc: Document, target: Element, fallbackTarget?: Element | null) {
@@ -2446,6 +2482,11 @@ function nearestBlockForToolbar(element: Element | null, doc: Document) {
 
 function isToolbarBlock(element: Element) {
   return ["P", "H1", "H2", "H3", "H4", "H5", "H6", "BLOCKQUOTE", "LI", "TD", "TH", "DIV"].includes(element.tagName);
+}
+
+function firstEditableChildForToolbar(element: Element) {
+  const child = Array.from(element.children).find((item) => item.tagName !== "BR" && !["SCRIPT", "STYLE"].includes(item.tagName));
+  return isElementNode(child) ? child : null;
 }
 
 function blockTagForToolbar(element: Element | null): HeadingTag {
@@ -2568,20 +2609,19 @@ function readCurrentStyles(doc: Document | null, fallbackNode: Node | null): Ele
   const target = currentPanelTarget(doc, fallbackNode) ?? doc.body;
   const element = styleTargetForToolbar(target, doc);
   const inline = inlineStyleOf(element);
-  const computed = doc.defaultView?.getComputedStyle(element);
   return {
-    width: inline?.width || styleValue(computed?.width),
-    height: inline?.height || styleValue(computed?.height),
-    lineHeight: inline?.lineHeight || styleValue(computed?.lineHeight),
-    letterSpacing: inline?.letterSpacing || styleValue(computed?.letterSpacing),
-    verticalAlign: inline?.verticalAlign || styleValue(computed?.verticalAlign),
-    borderWidth: inline?.borderWidth || boxStyleValue(computed?.borderWidth),
-    borderStyle: inline?.borderStyle || boxStyleValue(computed?.borderStyle),
-    borderColor: inline?.borderColor || colorStyleValue(computed?.borderColor),
-    borderRadius: inline?.borderRadius || boxStyleValue(computed?.borderRadius),
-    padding: inline?.padding || boxStyleValue(computed?.padding),
-    marginTop: inline?.marginTop || boxStyleValue(computed?.marginTop),
-    marginBottom: inline?.marginBottom || boxStyleValue(computed?.marginBottom),
+    width: inline?.width || "",
+    height: inline?.height || "",
+    lineHeight: inline?.lineHeight || "",
+    letterSpacing: inline?.letterSpacing || "",
+    verticalAlign: inline?.verticalAlign || "",
+    borderWidth: inline?.borderWidth || "",
+    borderStyle: inline?.borderStyle || "",
+    borderColor: inline?.borderColor || "",
+    borderRadius: inline?.borderRadius || "",
+    padding: inline?.padding || "",
+    marginTop: inline?.marginTop || "",
+    marginBottom: inline?.marginBottom || "",
   };
 }
 
@@ -2611,12 +2651,6 @@ function inlineStyleOf(element: Element | null) {
 function styleValue(value: string | undefined) {
   const normalized = value?.trim() ?? "";
   if (!normalized || normalized === "normal" || normalized === "none" || normalized === "normal normal") return "";
-  return normalized;
-}
-
-function boxStyleValue(value: string | undefined) {
-  const normalized = styleValue(value);
-  if (!normalized || normalized === "0px" || normalized === "0px 0px 0px 0px") return "";
   return normalized;
 }
 
@@ -2688,6 +2722,8 @@ function toolbarMoreOptions(toolbarState: ToolbarState, canUseRangeSelection = t
     });
   }
   if (toolbarState.mutableElement) options.push({ label: "Duplicate element", value: "duplicateElement" }, { label: "Delete element", value: "deleteElement" });
-  if (toolbarState.contentElement) options.push({ label: "Cursor to start", value: "cursorStart" }, { label: "Cursor to end", value: "cursorEnd" });
+  if (toolbarState.contentElement || toolbarState.rangeSelection) {
+    options.push({ label: "Cursor to start", value: "cursorStart" }, { label: "Cursor to end", value: "cursorEnd" });
+  }
   return options;
 }
