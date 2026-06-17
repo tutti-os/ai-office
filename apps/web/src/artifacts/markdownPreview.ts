@@ -115,11 +115,43 @@ function isTableStart(lines: string[], index: number) {
 function renderTable(lines: string[]) {
   const rows = lines
     .filter((_, index) => index !== 1)
-    .map((line) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim()));
+    .map(splitMarkdownTableRow);
   const [head = [], ...body] = rows;
-  return `<table><thead><tr>${head.map((cell) => `<th>${renderInline(cell)}</th>`).join("")}</tr></thead><tbody>${body
-    .map((row) => `<tr>${row.map((cell) => `<td>${renderInline(cell)}</td>`).join("")}</tr>`)
+  return `<table><thead><tr>${head.map((cell) => `<th contenteditable="true">${renderInline(cell)}</th>`).join("")}</tr></thead><tbody>${body
+    .map((row) => `<tr>${row.map((cell) => `<td contenteditable="true">${renderInline(cell)}</td>`).join("")}</tr>`)
     .join("")}</tbody></table>`;
+}
+
+function splitMarkdownTableRow(line: string) {
+  const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+  const cells: string[] = [];
+  let current = "";
+  let escaped = false;
+
+  for (const char of trimmed) {
+    if (escaped) {
+      current += char === "|" ? "|" : `\\${char}`;
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+
+    if (char === "|") {
+      cells.push(current.trim());
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (escaped) current += "\\";
+  cells.push(current.trim());
+  return cells;
 }
 
 function renderInline(value: string) {

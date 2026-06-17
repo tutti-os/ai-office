@@ -117,17 +117,19 @@ export function HomePage(props: {
           </div>
 
           {props.activePanel === "templates" ? (
-            <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(158px,1fr))] gap-x-5 gap-y-7">
-              <div className="min-w-0">
-                <button
-                  className="group flex aspect-[0.72] w-full min-h-[212px] flex-col items-center justify-center rounded-lg border border-white/10 bg-[#303030] text-white/42 shadow-[0_14px_34px_rgba(0,0,0,0.24)] transition hover:bg-[#373737]"
-                  type="button"
-                  onClick={props.onCreateBlank}
-                >
-                  <Plus className="mb-4 opacity-60" size={26} />
-                </button>
-                <div className="mt-2 truncate px-1 text-[12px] font-semibold text-white/72">Blank document</div>
-              </div>
+            <div className="mt-5 columns-2 gap-5 sm:columns-3 lg:columns-5">
+              {props.selectedCategory === allTemplatesLabel ? (
+                <div className="mb-7 inline-block w-full min-w-0 break-inside-avoid">
+                  <button
+                    className="group flex aspect-[0.72] w-full min-h-[212px] flex-col items-center justify-center rounded-lg border border-white/10 bg-[#303030] text-white/42 shadow-[0_14px_34px_rgba(0,0,0,0.24)] transition hover:bg-[#373737]"
+                    type="button"
+                    onClick={props.onCreateBlank}
+                  >
+                    <Plus className="mb-4 opacity-60" size={26} />
+                  </button>
+                  <div className="mt-2 truncate px-1 text-[12px] font-semibold text-white/72">Blank document</div>
+                </div>
+              ) : null}
               {props.templates.map((template) => (
                 <TemplateCard key={template.id} template={template} onSelect={props.onSelectTemplate} />
               ))}
@@ -213,7 +215,7 @@ function TemplateCard(props: { template: GensparkTemplate; onSelect: (template: 
       ? `${props.template.screenshot_width} / ${props.template.screenshot_height}`
       : "0.72";
   return (
-    <div className="group min-w-0">
+    <div className="group mb-7 inline-block w-full min-w-0 break-inside-avoid">
       <button
         className="relative w-full overflow-hidden rounded-lg bg-white text-left text-[#1f2933] shadow-[0_14px_36px_rgba(0,0,0,0.38)] ring-1 ring-white/8 transition hover:-translate-y-0.5 hover:shadow-[0_18px_46px_rgba(0,0,0,0.48)]"
         type="button"
