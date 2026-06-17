@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  background: #171717;
+}
+
+.toolbar-scroll {
+  scrollbar-width: none;
+}
+
+.toolbar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+.markdown-preview {
+  font-size: 15px;
+  line-height: 1.65;
+  caret-color: #202124;
+}
+
+.markdown-preview[contenteditable="true"]:focus {
+  outline: none;
+}
+
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4,
+.markdown-preview h5,
+.markdown-preview h6 {
+  margin: 1.2em 0 0.55em;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.markdown-preview h1 {
+  font-size: 32px;
+}
+
+.markdown-preview h2 {
+  font-size: 24px;
+}
+
+.markdown-preview h3 {
+  font-size: 19px;
+}
+
+.markdown-preview p,
+.markdown-preview ul,
+.markdown-preview ol,
+.markdown-preview blockquote,
+.markdown-preview pre,
+.markdown-preview table {
+  margin: 0 0 16px;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  padding-left: 24px;
+}
+
+.markdown-preview blockquote {
+  border-left: 3px solid #d0d5dd;
+  color: #555;
+  padding-left: 14px;
+}
+
+.markdown-preview code {
+  border-radius: 5px;
+  background: #f1f3f5;
+  padding: 2px 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88em;
+}
+
+.markdown-preview pre {
+  overflow: auto;
+  border-radius: 8px;
+  background: #171717;
+  padding: 14px;
+  color: #f7f7f7;
+}
+
+.markdown-preview pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.markdown-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  border: 1px solid #d7dbe0;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.markdown-preview th {
+  background: #f6f7f8;
+}
+
+.markdown-preview img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+
+.markdown-preview .task-list-item {
+  list-style: none;
+}

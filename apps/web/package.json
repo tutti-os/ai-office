@@ -1,0 +1,28 @@
+{
+  "name": "@ai-document/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "copy:office-preview-assets": "node scripts/copy-office-preview-assets.mjs",
+    "dev": "pnpm run copy:office-preview-assets && vite --host 127.0.0.1 --port 5174",
+    "build": "pnpm run copy:office-preview-assets && tsc -p tsconfig.json --noEmit && vite build",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ai-document/shared": "workspace:*",
+    "@tutti-os/office-preview": "0.0.0-test.20260616183444.f506a6bec39c",
+    "@vitejs/plugin-react": "^5.1.1",
+    "lucide-react": "^0.562.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "tailwindcss": "^4.3.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7"
+  }
+}

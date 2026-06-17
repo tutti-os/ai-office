@@ -1,0 +1,20 @@
+{
+  "name": "ai-document",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @ai-document/server --filter @ai-document/web dev",
+    "dev:web": "pnpm --filter @ai-document/web dev",
+    "dev:server": "pnpm --filter @ai-document/server dev",
+    "build": "pnpm -r build",
+    "check": "pnpm -r check",
+    "package:nextop": "node scripts/package-nextop-app.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.9.3"
+  },
+  "packageManager": "pnpm@10.11.0"
+}
