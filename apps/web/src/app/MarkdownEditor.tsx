@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef, type KeyboardEvent } from "react";
 import {
   Bold,
   CheckSquare,
@@ -83,6 +83,18 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     props.onSelectionChange(readPreviewSelection(preview, props.runtime.content));
   };
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+    const key = event.key.toLowerCase();
+    if (key === "b") {
+      event.preventDefault();
+      runTransform((input) => wrapMarkdownSelection(input, "**", "**", "bold text"));
+    } else if (key === "i") {
+      event.preventDefault();
+      runTransform((input) => wrapMarkdownSelection(input, "*", "*", "italic text"));
+    }
+  };
+
   return (
     <section className="relative flex min-h-0 flex-col bg-[#1f1f1f]">
       <header className="flex h-12 items-center justify-between border-b border-white/8 px-5">
@@ -149,6 +161,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
             spellCheck
             suppressContentEditableWarning
             onInput={syncEditableContent}
+            onKeyDown={handleKeyDown}
             onKeyUp={syncPreviewSelection}
             onMouseUp={syncPreviewSelection}
             onBlur={syncEditableContent}
