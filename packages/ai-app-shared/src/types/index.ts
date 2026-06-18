@@ -2,7 +2,7 @@ export type Id = string;
 
 export type ProjectUpdatedBy = "human" | "ai" | "system";
 export type RunStatus = "accepted" | "running" | "completed" | "failed" | "cancelled";
-export type RunEventType = "status" | "thinking_delta" | "tool_call" | "tool_result" | "file_write" | "stderr" | "error";
+export type RunEventType = "status" | "text_delta" | "thinking_delta" | "tool_call" | "tool_result" | "file_write" | "stderr" | "error";
 export type AiEditMode = "rewrite" | "write";
 export type RuntimeKind = "server-demo" | "local-agent";
 export type ReasoningEffort = "low" | "medium" | "high" | "xhigh";

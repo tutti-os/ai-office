@@ -3,7 +3,7 @@
   "appId": "ai-doc",
   "version": "0.1.0",
   "name": "AI Doc",
-  "description": "Human and local agents editing rich documents together.",
+  "description": "Human and local agents editing rich docs together.",
   "icon": {
     "type": "asset",
     "src": "icon.svg"
@@ -29,5 +29,5 @@
   "author": {
     "name": "Nextop"
   },
-  "tags": ["local-first", "agent", "document", "editor"]
+  "tags": ["local-first", "agent", "doc", "editor"]
 }

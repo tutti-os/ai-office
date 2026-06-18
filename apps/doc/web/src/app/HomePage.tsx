@@ -1,5 +1,5 @@
 import { Clock3, FileText, History, Plus, Sparkles, Trash2 } from "lucide-react";
-import type { DocumentProject, DocumentType, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
+import type { DocumentProject, DocumentType, LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
 import {
   allTemplatesLabel,
   type GensparkTemplate,
@@ -13,6 +13,8 @@ export function HomePage(props: {
   categories: string[];
   historyProjects: DocumentProject[];
   localAgentProviders: LocalAgentProviderStatus[];
+  officeCliInstalling: boolean;
+  officeCliStatus: OfficeCliStatus | null;
   outputType: DocumentType;
   selectedCategory: string;
   selectedRuntimeProfileId: string;
@@ -29,6 +31,7 @@ export function HomePage(props: {
   onCreateBlank: () => void;
   onCreateFromPrompt: () => void;
   onOpenHistoryProject: (project: DocumentProject) => void;
+  onInstallOfficeCli: () => void;
   onOutputTypeChange: (type: DocumentType) => void;
   onPromptChange: (value: string) => void;
   onRemoveAttachment: (id: string) => void;
@@ -54,7 +57,7 @@ export function HomePage(props: {
             <Sparkles size={18} />
           </div>
           <h1 className="text-center text-[36px] font-bold leading-tight text-white">
-            Ready to create any document?
+            Ready to create any doc?
           </h1>
 
           <HomeComposer
@@ -62,12 +65,15 @@ export function HomePage(props: {
             error={props.error}
             loading={props.loading}
             localAgentProviders={props.localAgentProviders}
+            officeCliInstalling={props.officeCliInstalling}
+            officeCliStatus={props.officeCliStatus}
             outputType={props.outputType}
             prompt={props.prompt}
             runtimeProfiles={props.runtimeProfiles}
             selectedRuntimeProfileId={props.selectedRuntimeProfileId}
             onAddFiles={props.onAddFiles}
             onCreateFromPrompt={props.onCreateFromPrompt}
+            onInstallOfficeCli={props.onInstallOfficeCli}
             onOutputTypeChange={props.onOutputTypeChange}
             onPromptChange={props.onPromptChange}
             onRemoveAttachment={props.onRemoveAttachment}
@@ -126,7 +132,7 @@ export function HomePage(props: {
                   >
                     <Plus className="mb-4 opacity-60" size={26} />
                   </button>
-                  <div className="mt-2 truncate px-1 text-[12px] font-semibold text-white/72">Blank document</div>
+                  <div className="mt-2 truncate px-1 text-[12px] font-semibold text-white/72">Blank doc</div>
                 </div>
               ) : null}
               {props.templates.map((template) => (
@@ -167,7 +173,7 @@ function ProjectHistory(props: { projects: DocumentProject[]; onOpenProject: (pr
             <History size={17} />
           </div>
           <div className="text-[13px] font-semibold text-white/72">No history yet</div>
-          <div className="mt-1 text-[12px] text-white/42">Create a document or open a template to see it here.</div>
+          <div className="mt-1 text-[12px] text-white/42">Create a doc or open a template to see it here.</div>
         </div>
       </div>
     );
@@ -193,7 +199,7 @@ function ProjectHistoryCard(props: { project: DocumentProject; onOpen: (project:
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate text-[13px] font-semibold text-white">{props.project.title}</div>
-          <div className="mt-1 truncate text-[11px] text-white/38">{props.project.templateName ?? "Blank document"}</div>
+          <div className="mt-1 truncate text-[11px] text-white/38">{props.project.templateName ?? "Blank doc"}</div>
         </div>
         <div className="grid size-8 shrink-0 place-items-center rounded-full bg-white/8 text-white/62">
           <FileText size={15} />
@@ -246,7 +252,7 @@ function TemplateCard(props: { template: GensparkTemplate; onSelect: (template: 
 
 function projectPreview(html: string) {
   const text = html.replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  return text || "Empty document";
+  return text || "Empty doc";
 }
 
 function formatProjectDate(value: string) {

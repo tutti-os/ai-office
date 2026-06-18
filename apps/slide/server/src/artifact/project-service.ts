@@ -1,8 +1,11 @@
+import { createHash } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { AiEditRequest, CreateProjectRequest, RuntimeProfile, UpdateDeckSlideHtmlRequest, UpdateProjectRequest } from "@ai-slide/shared";
+import { projectWorkspaceRoot } from "../local/paths.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
 import { RuntimeProviderUnsupportedError, type RuntimeStreamEvent, type SlideRuntimeProject } from "../runtimes/runtime-provider.js";
 import { EventHub } from "../ws/event-hub.js";
-import { AgentToolTokenStore } from "./agent-tool-tokens.js";
 import { ProjectRepository } from "./project-repository.js";
 
 export class ProjectService {
@@ -12,7 +15,6 @@ export class ProjectService {
   constructor(
     private readonly repo: ProjectRepository,
     private readonly events: EventHub,
-    private readonly toolTokens: AgentToolTokenStore,
   ) {}
 
   bootstrap() {
@@ -101,6 +103,7 @@ export class ProjectService {
 
   async startAiEdit(projectId: string, request: AiEditRequest) {
     const runtimeProject = await this.createRuntimeProject(projectId);
+    this.repo.syncProjectAgentInstructions(projectId);
     const runtimeProfile = runtimeProfileFromId(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);
@@ -143,18 +146,19 @@ export class ProjectService {
     const run = this.repo.getRun(runId);
     if (!run) return;
     const provider = this.runtimes.getProvider(runtimeProfile);
-    const toolAccess = this.toolTokens.issue({ runId, projectId: runtimeProject.id });
     let sortOrder = 0;
     let generatedText = "";
     let refreshedArtifact = false;
+    let workspaceFingerprint = await this.workspaceFingerprint(runtimeProject.id);
 
     const createRunEvent = (
       type: RuntimeStreamEvent["type"] extends infer T ? Extract<T, string> : never,
       input: { content?: string; status?: "pending" | "streaming" | "success" | "error"; metadata?: Record<string, unknown> | null } = {},
     ) => {
-      if (type === "text_delta") return null;
       const eventType =
-        type === "thinking_delta"
+        type === "text_delta"
+          ? "text_delta"
+          : type === "thinking_delta"
           ? "thinking_delta"
           : type === "tool_call"
             ? "tool_call"
@@ -186,7 +190,6 @@ export class ProjectService {
         project: runtimeProject,
         runtimeProfile,
         request,
-        toolAccess,
       })) {
         if (this.cancelledRunIds.has(runId)) {
           await this.finalizeCancellation(runId, "Cancelled by user");
@@ -195,6 +198,7 @@ export class ProjectService {
         const event = typeof rawEvent === "string" ? ({ type: "text_delta", text: rawEvent } as const) : rawEvent;
         if (event.type === "text_delta") {
           generatedText += event.text;
+          createRunEvent(event.type, { content: event.text, status: "streaming" });
           continue;
         }
         if (event.type === "thinking_delta") {
@@ -211,9 +215,14 @@ export class ProjectService {
             status: event.isError || event.status === "failed" ? "error" : "success",
             metadata: { toolCallId: event.id, toolName: event.name ?? null, output: event.output ?? null },
           });
+          const refresh = await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
+          workspaceFingerprint = refresh.fingerprint;
+          refreshedArtifact = refresh.changed || refreshedArtifact;
         } else if (event.type === "file_write") {
           createRunEvent(event.type, { content: `Wrote file: ${event.path}`, metadata: { path: event.path } });
-          refreshedArtifact = (await this.refreshArtifactFromWorkspace(runtimeProject.id, runId)) || refreshedArtifact;
+          const refresh = await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
+          workspaceFingerprint = refresh.fingerprint;
+          refreshedArtifact = refresh.changed || refreshedArtifact;
         } else if (event.type === "status") {
           createRunEvent(event.type, { content: event.message ?? event.status ?? "", metadata: { status: event.status ?? null } });
         } else if (event.type === "stderr" && event.text.trim()) {
@@ -226,7 +235,7 @@ export class ProjectService {
         return;
       }
 
-      if (!refreshedArtifact) await this.refreshArtifactFromWorkspace(runtimeProject.id, runId);
+      if (!refreshedArtifact) await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
       const detail = await this.getProject(runtimeProject.id);
       const finalRun = this.repo.updateRun(runId, {
         status: "completed",
@@ -251,7 +260,6 @@ export class ProjectService {
       const finalRun = this.repo.updateRun(runId, { status: "failed", error: message });
       this.events.emit({ type: "run.failed", projectId: runtimeProject.id, runId, payload: { run: finalRun } });
     } finally {
-      this.toolTokens.revokeRun(runId);
       this.cancelledRunIds.delete(runId);
     }
   }
@@ -292,17 +300,42 @@ export class ProjectService {
     );
   }
 
-  private async refreshArtifactFromWorkspace(projectId: string, runId?: string) {
+  private async refreshArtifactFromWorkspace(projectId: string, runId: string | undefined, previousFingerprint: string) {
     const detail = await this.getProject(projectId);
     if (detail.artifact.type === "pptx") {
       const refresh = await this.repo.refreshPptxArtifactFromFile(projectId, "ai");
-      if (!refresh?.changed) return false;
+      const fingerprint = await this.workspaceFingerprint(projectId);
+      if (!refresh?.changed) return { changed: false, fingerprint };
     } else {
+      const fingerprint = await this.workspaceFingerprintFromDetail(detail);
+      if (fingerprint === previousFingerprint) return { changed: false, fingerprint };
       this.repo.bumpArtifactRevision(detail.artifact.id, "ai");
+      const updated = await this.getProject(projectId);
+      this.events.emit({ type: "project.updated", projectId, runId, payload: updated });
+      return { changed: true, fingerprint };
     }
     const updated = await this.getProject(projectId);
     this.events.emit({ type: "project.updated", projectId, runId, payload: updated });
-    return true;
+    return { changed: true, fingerprint: await this.workspaceFingerprint(projectId) };
+  }
+
+  private async workspaceFingerprint(projectId: string) {
+    const detail = await this.getProject(projectId);
+    return this.workspaceFingerprintFromDetail(detail);
+  }
+
+  private async workspaceFingerprintFromDetail(detail: Awaited<ReturnType<ProjectService["getProject"]>>) {
+    if (detail.artifact.type === "pptx") {
+      const manifest = detail.pptxManifest;
+      return JSON.stringify({
+        type: "pptx",
+        exists: Boolean(manifest?.exists),
+        sha256: manifest?.sha256 ?? "",
+        sizeBytes: manifest?.sizeBytes ?? 0,
+      });
+    }
+    const deckRoot = join(projectWorkspaceRoot(detail.project.id), detail.artifact.fileRef);
+    return `deck:${await hashDirectory(deckRoot)}`;
   }
 
   private async finalizeCancellation(runId: string, reason: string) {
@@ -310,9 +343,35 @@ export class ProjectService {
     if (!run) return null;
     const finalRun = this.repo.updateRun(runId, { status: "cancelled", error: reason }) ?? run;
     this.events.emit({ type: "run.cancelled", projectId: run.projectId, runId, payload: { run: finalRun } });
-    this.toolTokens.revokeRun(runId);
     this.cancelledRunIds.delete(runId);
     return { run: finalRun };
+  }
+}
+
+async function hashDirectory(root: string) {
+  const hash = createHash("sha256");
+  await hashDirectoryInto(hash, root, "");
+  return hash.digest("hex");
+}
+
+async function hashDirectoryInto(hash: ReturnType<typeof createHash>, root: string, relativeDir: string) {
+  let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }> = [];
+  try {
+    entries = await readdir(join(root, relativeDir), { withFileTypes: true });
+  } catch {
+    return;
+  }
+  entries.sort((left, right) => left.name.localeCompare(right.name));
+  for (const entry of entries) {
+    const relativePath = relativeDir ? join(relativeDir, entry.name) : entry.name;
+    if (entry.isDirectory()) {
+      await hashDirectoryInto(hash, root, relativePath);
+    } else if (entry.isFile()) {
+      hash.update(relativePath);
+      hash.update("\0");
+      hash.update(await readFile(join(root, relativePath)));
+      hash.update("\0");
+    }
   }
 }
 
@@ -354,7 +413,7 @@ function runtimeProfileFromId(profileId: string | null | undefined): RuntimeProf
     id: "local-agent:codex",
     kind: "local-agent",
     provider: "codex",
-    model: "codex:gpt-5",
+    model: "codex:default",
     displayName: "Codex",
     enabled: true,
     capabilities: { streaming: true, toolUse: true, reasoning: true, resume: true },
@@ -380,7 +439,12 @@ function previewJson(value: unknown) {
 }
 
 function previewText(value: string) {
-  const text = value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const text = value
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   return text.length > 280 ? `${text.slice(0, 280)}...` : text;
 }
 

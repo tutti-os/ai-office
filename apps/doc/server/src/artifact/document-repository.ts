@@ -17,9 +17,10 @@ import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } fro
 export class DocumentRepository {
   ensureSeedData() {
     this.ensureRuntimeProfiles();
+    this.normalizeRuntimeProfiles();
     const row = getDb().prepare(`SELECT COUNT(*) AS count FROM projects`).get() as { count: number };
     if (row.count > 0) return;
-    this.createProject({ title: "Untitled Document", content: defaultHtmlDocument, type: "html", templateId: null, templateName: null });
+    this.createProject({ title: "Untitled Doc", content: defaultHtmlDocument, type: "html", templateId: null, templateName: null });
   }
 
   interruptActiveRuns(reason: string) {
@@ -105,6 +106,13 @@ export class DocumentRepository {
     const updated = this.getProject(projectId);
     if (updated) this.materializeProject(updated);
     return updated;
+  }
+
+  syncProjectAgentInstructions(projectId: string) {
+    const project = this.getProject(projectId);
+    if (!project) return null;
+    this.writeProjectAgentInstructions(project);
+    return project;
   }
 
   setProjectTemplate(projectId: string, template: { id: string; name: string }) {
@@ -264,7 +272,7 @@ export class DocumentRepository {
         id: "local-agent:codex",
         kind: "local-agent",
         provider: "codex",
-        model: "codex:gpt-5",
+        model: "codex:default",
         displayName: "Codex",
         enabled: true,
         capabilities: { streaming: true, toolUse: true, reasoning: true, resume: true },
@@ -298,6 +306,12 @@ export class DocumentRepository {
     }
   }
 
+  private normalizeRuntimeProfiles() {
+    getDb()
+      .prepare(`UPDATE runtime_profiles SET model = 'codex:default', updated_at = ? WHERE id = 'local-agent:codex' AND model = 'codex:gpt-5'`)
+      .run(new Date().toISOString());
+  }
+
   private materializeProject(project: DocumentProject) {
     const root = ensureProjectDirs(project.id);
     if (project.type === "docx") {
@@ -307,55 +321,52 @@ export class DocumentRepository {
     } else {
       writeFileSync(join(root, "document.html"), project.content, "utf8");
     }
-    writeFileSync(
-      join(root, "AGENTS.md"),
-      project.type === "docx"
-        ? docxProjectAgentInstructions(project)
-        : project.type === "markdown"
-          ? markdownProjectAgentInstructions(project)
-          : htmlProjectAgentInstructions(project),
-      "utf8",
-    );
+    this.writeProjectAgentInstructions(project);
+  }
+
+  private writeProjectAgentInstructions(project: DocumentProject) {
+    const root = ensureProjectDirs(project.id);
+    writeFileSync(join(root, "AGENTS.md"), projectAgentInstructions(project), "utf8");
   }
 }
 
+function projectAgentInstructions(project: DocumentProject) {
+  if (project.type === "docx") return docxProjectAgentInstructions(project);
+  if (project.type === "markdown") return markdownProjectAgentInstructions(project);
+  return htmlProjectAgentInstructions(project);
+}
+
 function htmlProjectAgentInstructions(project: DocumentProject) {
+  const targetHtmlPath = join(projectWorkspaceRoot(project.id), "document.html");
   return [
     "# AI Doc Workspace",
     "",
-    "You are editing a rich HTML document with the local AI Doc app.",
-    "The canonical document is `document.html` and the server is the source of truth.",
-    "Use the provided MCP tools to inspect or update the document instead of writing hidden state files.",
-    "",
-    `Project: ${project.title}`,
-    `Project ID: ${project.id}`,
+    "You are editing a rich HTML doc with the local AI Doc app.",
+    `Current focused file: ${targetHtmlPath}`,
+    "Read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
   ].join("\n");
 }
 
 function markdownProjectAgentInstructions(project: DocumentProject) {
+  const targetMarkdownPath = join(projectWorkspaceRoot(project.id), "document.md");
   return [
     "# AI Doc Workspace",
     "",
-    "You are editing a Markdown document with the local AI Doc app.",
-    "The canonical document is `document.md` and the server is the source of truth.",
-    "Return complete Markdown when responding to edit requests.",
-    "",
-    `Project: ${project.title}`,
-    `Project ID: ${project.id}`,
+    "You are editing a Markdown doc with the local AI Doc app.",
+    `Current focused file: ${targetMarkdownPath}`,
+    "Read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
   ].join("\n");
 }
 
 function docxProjectAgentInstructions(project: DocumentProject) {
+  const targetDocxPath = join(projectWorkspaceRoot(project.id), "document.docx");
   return [
     "# AI Doc Workspace",
     "",
-    "You are editing a Word document project with the local AI Doc app.",
-    "The canonical DOCX file is `document.docx` in this directory.",
-    "When you create or edit the Word document, write the final result to `document.docx`.",
+    "You are editing a Word doc project with the local AI Doc app.",
+    `Current focused file: ${targetDocxPath}`,
+    "When you create or edit the Word doc, write the final result to the focused file with filesystem tools.",
     "The app watches that file and refreshes the preview when its content changes.",
-    "",
-    `Project: ${project.title}`,
-    `Project ID: ${project.id}`,
   ].join("\n");
 }
 

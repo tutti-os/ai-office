@@ -1,6 +1,11 @@
 import { AgentConversationPanel as SharedAgentConversationPanel } from "@ai-app/agent/conversation-ui";
 import type { ArtifactEditorKind } from "@ai-app/ui/editor-frame";
-import type { SlideRun, SlideRunEvent, SlideRunTimelineItem } from "@ai-slide/shared";
+import type { LocalAgentProviderStatus, SlideRun, SlideRunEvent, SlideRunTimelineItem } from "@ai-slide/shared";
+
+const slideAgentProfiles = [
+  { id: "local-agent:codex", provider: "codex", label: "Codex" },
+  { id: "local-agent:claude", provider: "claude", label: "Claude Code" },
+];
 
 type AgentConversationPanelProps = {
   activeSelectionText: string;
@@ -8,9 +13,12 @@ type AgentConversationPanelProps = {
   dirty: boolean;
   error: string;
   items: SlideRunTimelineItem[];
+  localAgentProviders: LocalAgentProviderStatus[];
   loading: boolean;
+  selectedAgent: string;
   sending: boolean;
   onBackHome: () => void;
+  onSelectedAgentChange: (value: string) => void;
   onCancel: (runId: string) => Promise<void>;
   onSend: (prompt: string) => Promise<void>;
 };
@@ -19,6 +27,16 @@ export function AgentConversationPanel(props: AgentConversationPanelProps) {
   return (
     <SharedAgentConversationPanel<SlideRun, SlideRunEvent>
       {...props}
+      agentOptions={slideAgentProfiles.map((profile) => {
+        const status = props.localAgentProviders.find((provider) => provider.provider === profile.provider);
+        const available = status?.available ?? props.localAgentProviders.length === 0;
+        return {
+          id: profile.id,
+          label: `${profile.label}${available ? "" : " unavailable"}`,
+          disabled: !available,
+        };
+      })}
+      selectedAgentId={props.selectedAgent}
       variant="slide"
       copy={{
         homeLabel: "AI Slide",
@@ -27,6 +45,7 @@ export function AgentConversationPanel(props: AgentConversationPanelProps) {
         placeholder: "Ask AI to edit this deck...",
         quickPrompts: ["Rewrite slide", "Add speaker notes", "Polish story", "Tighten visuals"],
       }}
+      onAgentChange={props.onSelectedAgentChange}
     />
   );
 }

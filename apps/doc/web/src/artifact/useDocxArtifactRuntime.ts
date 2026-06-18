@@ -14,7 +14,7 @@ export function useDocxArtifactRuntime(adapter: DocxArtifactRuntimeAdapter) {
   const loadGenerationRef = useRef(0);
   const previewServiceRef = useRef(
     createDocxPreviewService({
-      assetBaseUrl: "/office-preview/ooxml-convert/",
+      assetBaseUrl: import.meta.env.DEV ? "/office-preview-dev/ooxml-convert/" : "/office-preview/ooxml-convert/",
     }),
   );
 

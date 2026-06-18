@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import type { DocumentType, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
+import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import type { DocumentType, LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
 import {
   Check,
   ChevronDown,
   CornerDownLeft,
+  Download,
   File,
   FileCode2,
   FileImage,
@@ -22,7 +23,7 @@ export type OutputFormatOption = {
 };
 
 export const outputFormatOptions: OutputFormatOption[] = [
-  { id: "html", label: "HTML", description: "Rich document runtime" },
+  { id: "html", label: "HTML", description: "Rich doc runtime" },
   { id: "docx", label: "Word", description: "Export as .docx" },
   { id: "markdown", label: "Markdown", description: "Plain text with syntax" },
 ];
@@ -32,55 +33,103 @@ export function HomeComposer(props: {
   error: string;
   loading: boolean;
   localAgentProviders: LocalAgentProviderStatus[];
+  officeCliInstalling: boolean;
+  officeCliStatus: OfficeCliStatus | null;
   outputType: DocumentType;
   prompt: string;
   runtimeProfiles: RuntimeProfile[];
   selectedRuntimeProfileId: string;
   onAddFiles: (files: File[]) => void;
   onCreateFromPrompt: () => void;
+  onInstallOfficeCli: () => void;
   onOutputTypeChange: (type: DocumentType) => void;
   onPromptChange: (value: string) => void;
   onRemoveAttachment: (id: string) => void;
   onRuntimeProfileChange: (profileId: string) => void;
 }) {
   const selectedProfile = props.runtimeProfiles.find((profile) => profile.id === props.selectedRuntimeProfileId) ?? props.runtimeProfiles[0] ?? null;
-  const canSubmit = !props.loading && (props.prompt.trim().length > 0 || props.attachments.length > 0);
+  const docxAvailable = props.officeCliStatus?.available === true;
+  const selectedOutputAvailable = props.outputType !== "docx" || docxAvailable;
+  const canSubmit = !props.loading && selectedOutputAvailable && (props.prompt.trim().length > 0 || props.attachments.length > 0);
 
   const handleFileInput = (event: ChangeEvent<HTMLInputElement>) => {
     props.onAddFiles(Array.from(event.target.files ?? []));
     event.target.value = "";
   };
 
+  const handlePromptKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+    event.preventDefault();
+    if (canSubmit) props.onCreateFromPrompt();
+  };
+
   return (
     <div className="mt-8 w-full">
       <div className="mb-4 grid grid-cols-3 gap-3">
-        {outputFormatOptions.map((option) => (
-          <button
-            key={option.id}
-            className={`flex min-h-[64px] items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition ${
-              option.id === props.outputType
-                ? "border-white bg-white text-black"
-                : "border-white/10 bg-[#2f2f2f] text-white/82 hover:border-white/20 hover:bg-[#363636]"
-            }`}
-            type="button"
-            onClick={() => props.onOutputTypeChange(option.id)}
-          >
-            <div className="flex min-w-0 items-center gap-3">
-              <FormatIcon option={option} active={option.id === props.outputType} />
-              <div className="min-w-0">
-                <div className="truncate text-[14px] font-bold leading-none">{option.label}</div>
-                <div className={option.id === props.outputType ? "mt-1 truncate text-[12px] font-semibold text-black/48" : "mt-1 truncate text-[12px] font-semibold text-white/42"}>
-                  {option.description}
+        {outputFormatOptions.map((option) => {
+          const disabled = option.id === "docx" && !docxAvailable;
+          const active = option.id === props.outputType;
+          return (
+            <div
+              key={option.id}
+              className={`flex min-h-[64px] items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition ${
+                active
+                  ? "border-white bg-white text-black"
+                  : disabled
+                    ? "border-white/8 bg-[#292929] text-white/34"
+                    : "border-white/10 bg-[#2f2f2f] text-white/82 hover:border-white/20 hover:bg-[#363636]"
+              }`}
+              role="button"
+              tabIndex={disabled && !props.officeCliStatus?.canInstall ? -1 : 0}
+              title={disabled ? props.officeCliStatus?.reason ?? "OfficeCLI is required for Word documents" : undefined}
+              onClick={() => {
+                if (!disabled) props.onOutputTypeChange(option.id);
+              }}
+              onKeyDown={(event) => {
+                if (disabled || (event.key !== "Enter" && event.key !== " ")) return;
+                event.preventDefault();
+                props.onOutputTypeChange(option.id);
+              }}
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <FormatIcon option={option} active={active} disabled={disabled} />
+                <div className="min-w-0">
+                  <div className="truncate text-[14px] font-bold leading-none">{option.label}</div>
+                  <div
+                    className={
+                      active
+                        ? "mt-1 truncate text-[12px] font-semibold text-black/48"
+                        : disabled
+                          ? "mt-1 truncate text-[12px] font-semibold text-white/30"
+                          : "mt-1 truncate text-[12px] font-semibold text-white/42"
+                    }
+                  >
+                    {formatOutputDescription(option, props.officeCliStatus)}
+                  </div>
                 </div>
               </div>
+              {active ? (
+                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-black text-white">
+                  <Check size={15} />
+                </span>
+              ) : option.id === "docx" && !docxAvailable && props.officeCliStatus?.canInstall ? (
+                <button
+                  className="grid size-7 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/8 text-white/58 hover:bg-white/12 hover:text-white disabled:cursor-wait disabled:opacity-60"
+                  type="button"
+                  disabled={props.officeCliInstalling || props.loading || props.officeCliStatus.installing}
+                  title="Download OfficeCLI"
+                  aria-label="Download OfficeCLI"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    props.onInstallOfficeCli();
+                  }}
+                >
+                  {props.officeCliInstalling || props.officeCliStatus.installing ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
+                </button>
+              ) : null}
             </div>
-            {option.id === props.outputType ? (
-              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-black text-white">
-                <Check size={15} />
-              </span>
-            ) : null}
-          </button>
-        ))}
+          );
+        })}
       </div>
 
       <div className="rounded-[20px] border border-white/10 bg-[#303030] p-4 shadow-[0_22px_80px_rgba(0,0,0,0.42)]">
@@ -96,6 +145,7 @@ export function HomeComposer(props: {
           className="h-[108px] w-full resize-none border-0 bg-transparent px-1 text-[15px] leading-6 text-white outline-none placeholder:text-white/42"
           value={props.prompt}
           onChange={(event) => props.onPromptChange(event.target.value)}
+          onKeyDown={handlePromptKeyDown}
           placeholder="Ask anything, create anything..."
         />
 
@@ -205,7 +255,7 @@ function AgentProfileMenu(props: {
   );
 }
 
-function FormatIcon(props: { option: OutputFormatOption; active?: boolean; className?: string; small?: boolean }) {
+function FormatIcon(props: { option: OutputFormatOption; active?: boolean; className?: string; small?: boolean; disabled?: boolean }) {
   const Icon = props.option.id === "markdown" ? Hash : props.option.id === "docx" ? FileText : FileCode2;
   const accent =
     props.option.id === "markdown"
@@ -215,14 +265,22 @@ function FormatIcon(props: { option: OutputFormatOption; active?: boolean; class
         : "bg-[#e9f7ef] text-[#187a44]";
 
   if (props.small) {
-    return <Icon className={props.className ?? "text-white/72"} size={15} />;
+    return <Icon className={props.className ?? (props.disabled ? "text-white/32" : "text-white/72")} size={15} />;
   }
 
   return (
-    <span className={`grid size-9 place-items-center rounded-xl ${props.active ? accent : "bg-white/8 text-white/64"}`}>
+    <span className={`grid size-9 place-items-center rounded-xl ${props.active ? accent : props.disabled ? "bg-white/5 text-white/28" : "bg-white/8 text-white/64"}`}>
       <Icon size={20} />
     </span>
   );
+}
+
+function formatOutputDescription(option: OutputFormatOption, officeCliStatus: OfficeCliStatus | null) {
+  if (option.id !== "docx") return option.description;
+  if (!officeCliStatus) return "Checking OfficeCLI";
+  if (officeCliStatus.available) return officeCliStatus.version ? `OfficeCLI ${officeCliStatus.version}` : "OfficeCLI ready";
+  if (officeCliStatus.installing) return "Installing OfficeCLI";
+  return "Requires OfficeCLI";
 }
 
 function AttachmentPreview(props: { attachment: HomeAttachment; onRemove: (id: string) => void }) {

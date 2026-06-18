@@ -369,7 +369,21 @@ export class ProjectRepository {
     const root = ensureProjectDirs(project.id);
     if (artifact.type === "deck") materializeDeckProject(root, project, artifact);
     else materializePptxProject(root, project, artifact);
-    writeFileSync(join(root, "AGENTS.md"), projectAgentInstructions(project, artifact), "utf8");
+    this.writeProjectAgentInstructions(project, artifact);
+  }
+
+  syncProjectAgentInstructions(projectId: string) {
+    const project = this.getProject(projectId);
+    if (!project) return null;
+    const artifact = this.getArtifact(project.activeArtifactId);
+    if (!artifact) return null;
+    this.writeProjectAgentInstructions(project, artifact);
+    return { project, artifact };
+  }
+
+  private writeProjectAgentInstructions(project: SlideProject, artifact: SlideArtifact) {
+    const root = ensureProjectDirs(project.id);
+    writeFileSync(join(root, "AGENTS.md"), projectAgentInstructions(artifact), "utf8");
   }
 }
 
@@ -610,29 +624,25 @@ function writeStoredPptxManifest(projectId: string, artifact: SlideArtifact, man
   writeFileSync(pptxManifestPath(projectId, artifact), `${serializePptxManifest(manifest)}\n`, "utf8");
 }
 
-function projectAgentInstructions(project: SlideProject, artifact: SlideArtifact) {
+function projectAgentInstructions(artifact: SlideArtifact) {
   if (artifact.type === "pptx") {
+    const targetPptxPath = join(projectWorkspaceRoot(artifact.projectId), artifact.fileRef);
     return [
       "# AI Slide Workspace",
       "",
       "You are editing a slide presentation with the local AI Slide app.",
-      "The canonical PowerPoint artifact is `slides.pptx` in this directory.",
-      "When asked to create or edit the presentation as PPTX, write the final file to `slides.pptx`.",
-      "",
-      `Project: ${project.title}`,
-      `Project ID: ${project.id}`,
+      `Current focused file: ${targetPptxPath}`,
+      "When asked to create or edit the presentation as PPTX, write the final file to the focused file with filesystem tools.",
     ].join("\n");
   }
+  const targetDeckPath = join(projectWorkspaceRoot(artifact.projectId), artifact.fileRef);
   return [
     "# AI Slide Workspace",
     "",
     "You are editing a slide deck with the local AI Slide app.",
-    "The canonical editable deck artifact is the `deck.slides/` directory.",
-    "Use `deck.slides/manifest.json` for deck structure and `deck.slides/slides/*.html` for individual slides.",
+    `Current focused directory: ${targetDeckPath}`,
+    "Use the focused directory's `manifest.json` for deck structure and `slides/*.html` for individual slides.",
     "Do not collapse the deck into a single HTML file.",
-    "",
-    `Project: ${project.title}`,
-    `Project ID: ${project.id}`,
   ].join("\n");
 }
 

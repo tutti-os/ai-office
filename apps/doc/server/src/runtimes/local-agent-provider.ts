@@ -1,10 +1,12 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { LocalAgentRuntimeProvider as SharedLocalAgentRuntimeProvider } from "@ai-app/agent/local-agent-runtime";
 import type { AiEditRequest, DocumentProject, DocumentRun } from "@ai-doc/shared";
 import { projectWorkspaceRoot } from "../local/paths.js";
-import { extractOoxmlTextPreview } from "../artifact/ooxml-text.js";
+import { officeCliEnvSync } from "../toolchains/officecli.js";
 import type { RuntimeEditContext } from "./runtime-provider.js";
+
+const noBrowserRenderVerification =
+  "Do not proactively use browser, Playwright, Chrome, or JavaScript rendering tools for visual verification unless the user explicitly asks for browser-based validation.";
 
 export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<DocumentRun, DocumentProject, AiEditRequest> {
   constructor() {
@@ -12,12 +14,11 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<D
       workspaceRoot: (context) => projectWorkspaceRoot(context.project.id),
       buildPrompt: buildEditPrompt,
       buildSystemPrompt,
-      buildMcpServers,
       buildEnv: (context, workspaceRoot) => ({
+        ...officeCliEnvSync(),
         AI_DOC_WORKSPACE: workspaceRoot,
         AI_DOC_PROJECT_ID: context.project.id,
         AI_DOC_RUN_ID: context.run.id,
-        AI_DOC_TOOL_BASE_URL: localToolBaseUrl(),
       }),
       timeoutMs: () => Number(process.env.AI_DOC_LOCAL_AGENT_TIMEOUT_MS ?? 180_000),
       sessionDirName: ".ai-doc",
@@ -26,145 +27,66 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<D
 }
 
 function buildSystemPrompt(context: RuntimeEditContext) {
+  const workspaceRoot = projectWorkspaceRoot(context.project.id);
+
   if (context.project.type === "docx") {
     return [
-      "You are an AI document editing agent inside a local document app.",
-      "This project is a Word DOCX document.",
-      "The canonical file is `document.docx` in the current working directory.",
-      "When asked to create or edit the document, write the final DOCX result to `document.docx`.",
-      "Do not convert the document to HTML or Markdown unless the user explicitly asks for that as a separate export.",
+      "You are an AI doc editing agent inside a local doc app.",
+      "This project is a Word DOCX doc.",
+      `Current focused file: ${resolve(workspaceRoot, "document.docx")}`,
+      "Use the officecli command-line tool to inspect, create, edit, and validate the focused DOCX file. If an office skill is available in the agent environment, follow it.",
+      "Prefer officecli L1/L2 operations such as view, get, query, add, set, remove, and validate. Do not hand-edit OOXML unless officecli high-level commands cannot solve the task.",
+      "When asked to create or edit the doc, write the final DOCX result to the focused file.",
+      "Do not convert the doc to HTML or Markdown unless the user explicitly asks for that as a separate export.",
+      noBrowserRenderVerification,
+      "After editing files, respond with a brief task summary only. Do not include extracted DOCX content in the final response.",
     ].join("\n\n");
   }
 
   if (context.project.type === "markdown") {
+    const targetMarkdownPath = resolve(workspaceRoot, "document.md");
     return [
-      "You are an AI document editing agent inside a local Markdown editor.",
-      "The canonical runtime is Markdown, not HTML.",
-      "Preserve Markdown structure, headings, lists, tables, links, and code fences unless the user explicitly asks for a format change.",
-      "When asked to edit, return one complete updated Markdown document as your final answer.",
-      "Do not wrap the final document in HTML.",
+      "You are editing a Markdown artifact for a local AI doc editor.",
+      `Current focused file: ${targetMarkdownPath}`,
+      "Use filesystem read/write tools to inspect and modify the focused file directly. Do not treat the chat response as the primary way to update the doc.",
+      "Write Markdown as a readable, maintainable working document for humans and agents. Optimize for clarity, scanability, and future edits rather than visual flourish.",
+      "Preserve the existing document style and structure unless the user asks for a rewrite. For edits, make the smallest coherent change that satisfies the user. For new content, create a clear outline before expanding it.",
+      "Use headings, short paragraphs, lists, tables, blockquotes, and fenced code blocks only when they improve understanding. Avoid malformed tables, broken nested lists, inconsistent heading levels, and unclosed code fences.",
+      "Prefer native Markdown over inline HTML. Do not use Markdown as a fake web layout language.",
+      noBrowserRenderVerification,
+      "After editing files, respond with a brief task summary only. Do not include the full Markdown content in the final response.",
     ].join("\n\n");
   }
 
+  const targetHtmlPath = resolve(workspaceRoot, "document.html");
   return [
-    "You are an AI document editing agent inside a local rich text editor.",
-    "The canonical runtime is a full HTML document. Do not convert it to Markdown.",
-    "Preserve existing CSS, layout intent, semantic headings, and editable HTML structure unless the user explicitly asks for a redesign.",
-    "When asked to edit, return one complete updated HTML document as your final answer.",
-    "Do not explain the changes outside the HTML. If you use tools, still ensure the final answer contains the complete updated HTML.",
+    "You are editing an HTML artifact for a local AI doc editor.",
+    `Current focused file: ${targetHtmlPath}`,
+    "Use filesystem read/write tools to inspect and modify the focused file directly. Do not treat the chat response as the primary way to update the doc.",
+    "Use HTML as a high-bandwidth artifact format: choose headings, sections, tables, lists, figures, SVG diagrams, images, code blocks, links, and lightweight interactions when they make the doc easier to understand or use.",
+    "Preserve the existing editor runtime, CSS, layout conventions, and semantic structure unless the user explicitly asks for a redesign.",
+    "Optimize for human review: clear visual hierarchy, readable spacing, navigable structure, and concise sections. Prefer an artifact the user will actually read over a long plain-text dump.",
+    "Keep the file complete, valid, self-contained, and previewable in a browser/editor iframe. Do not convert the doc to Markdown.",
+    noBrowserRenderVerification,
+    "After editing files, respond with a brief task summary only. Do not include the HTML content in the final response.",
   ].join("\n\n");
 }
 
 function buildEditPrompt(context: RuntimeEditContext) {
-  if (context.project.type === "docx") {
-    return `<docs_agent_context>
-project_id: ${context.project.id}
-title: ${context.project.title}
-document_type: ${context.project.type}
-mode: ${context.request.mode}
-selection_type: ${context.request.selectionType ?? "write"}
-selection_path: ${context.request.selectionPath ?? ""}
-canonical_docx_path: document.docx
-</docs_agent_context>
-
-<user_instruction>
-${context.request.userPrompt}
-</user_instruction>
-
-<selected_text>
-${context.request.selectedText ?? ""}
-</selected_text>
-
-<current_docx_manifest>
-${context.project.content}
-</current_docx_manifest>
-
-<current_docx_text_preview>
-${extractOoxmlTextPreview(resolve(projectWorkspaceRoot(context.project.id), "document.docx"), {
-  pathPattern: /^word\/(?:document|header\d+|footer\d+)\.xml$/,
-})}
-</current_docx_text_preview>
-
-Create or edit the DOCX file at document.docx.`;
-  }
-
-  if (context.project.type === "markdown") {
-    return `<markdown_agent_context>
-project_id: ${context.project.id}
-title: ${context.project.title}
-document_type: markdown
-mode: ${context.request.mode}
-selection_type: ${context.request.selectionType ?? "write"}
-selection_path: ${context.request.selectionPath ?? ""}
-</markdown_agent_context>
-
-<user_instruction>
-${context.request.userPrompt}
-</user_instruction>
-
-<selected_markdown>
-${context.request.selectedText ?? ""}
-</selected_markdown>
-
-<current_markdown>
-${context.request.htmlContent || context.project.content}
-</current_markdown>
-
-Return the complete updated Markdown document only.`;
-  }
-
-  return `<docs_agent_context>
-project_id: ${context.project.id}
-title: ${context.project.title}
-document_type: ${context.project.type}
-mode: ${context.request.mode}
-selection_type: ${context.request.selectionType ?? "write"}
-selection_path: ${context.request.selectionPath ?? ""}
-</docs_agent_context>
-
-<user_instruction>
-${context.request.userPrompt}
-</user_instruction>
-
-<selected_text>
-${context.request.selectedText ?? ""}
-</selected_text>
-
-<selected_html>
-${context.request.selectedHtml ?? ""}
-</selected_html>
-
-<current_html>
-${context.request.htmlContent || context.project.content}
-</current_html>
-
-Return the complete updated HTML document only.`;
-}
-
-function buildMcpServers(context: RuntimeEditContext) {
-  if (context.project.type !== "html") return [];
-  if (!context.toolAccess?.token) return [];
-  return [
-    {
-      name: "ai-doc",
-      type: "stdio" as const,
-      command: process.execPath,
-      args: [resolveLocalAgentHostScript("tools-mcp.mjs")],
-      env: {
-        AI_DOC_TOOL_BASE_URL: localToolBaseUrl(),
-        AI_DOC_TOOL_TOKEN: context.toolAccess.token,
-        AI_DOC_PROJECT_ID: context.project.id,
-        AI_DOC_RUN_ID: context.run.id,
-      },
-    },
+  const blocks = [
+    promptBlock("user_instruction", context.request.userPrompt),
+    promptBlock("selected_text", context.request.selectedText ?? ""),
   ];
+
+  if (context.project.type === "html" && context.request.selectedHtml) {
+    blocks.push(promptBlock("selected_html", context.request.selectedHtml));
+  }
+
+  return blocks.join("\n\n");
 }
 
-function resolveLocalAgentHostScript(filename: string) {
-  const currentDir = dirname(fileURLToPath(import.meta.url));
-  return resolve(currentDir, "..", "local-agent-host", filename);
-}
-
-function localToolBaseUrl() {
-  return process.env.AI_DOC_SERVER_URL ?? `http://127.0.0.1:${process.env.PORT ?? 8790}`;
+function promptBlock(name: string, value: string) {
+  return `<${name}>
+${value}
+</${name}>`;
 }

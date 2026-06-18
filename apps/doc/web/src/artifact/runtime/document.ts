@@ -2,7 +2,7 @@ import type { RuntimeDocument } from "./types";
 
 const fallbackHeadHTML = `<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Document</title>`;
+<title>Doc</title>`;
 
 export function parseRuntimeDocument(html: string): RuntimeDocument {
   const parser = new DOMParser();
@@ -48,7 +48,7 @@ export function runtimeDocumentFromFrame(doc: Document): RuntimeDocument {
 
 export function getRuntimeTitle(document: RuntimeDocument) {
   const parsed = new DOMParser().parseFromString(`<head>${document.headHTML}</head>`, "text/html");
-  return parsed.querySelector("title")?.textContent?.trim() || "Untitled Document";
+  return parsed.querySelector("title")?.textContent?.trim() || "Untitled Doc";
 }
 
 function emptyHtmlDocument() {

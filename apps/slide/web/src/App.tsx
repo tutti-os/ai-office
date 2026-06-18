@@ -53,7 +53,7 @@ import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
 import type { DeckManifestSlide, LocalAgentProviderStatus, ProjectDetailResponse, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
 
 const agentProfiles: Array<{ id: string; provider: string; model: string; label: string }> = [
-  { id: "local-agent:codex", provider: "codex", model: "codex:gpt-5", label: "Codex" },
+  { id: "local-agent:codex", provider: "codex", model: "codex:default", label: "Codex" },
   { id: "local-agent:claude", provider: "claude", model: "claude:default", label: "Claude Code" },
 ];
 
@@ -336,6 +336,8 @@ export function App() {
         detail={projectDetail}
         error={error}
         activeSelectionText={projectDetail?.artifact.type === "pptx" ? pptxRuntime?.selection.selectedText ?? "" : ""}
+        localAgentProviders={localAgentProviders}
+        selectedAgent={selectedAgent}
         sending={agentBusy}
         loading={loadingProject || pptxLoading}
         pptxError={pptxError}
@@ -344,6 +346,7 @@ export function App() {
         onBackHome={() => setRoute(pushHomeRoute())}
         onCancel={cancelAgentRun}
         onPptxSelectionChange={updatePptxSelection}
+        onSelectedAgentChange={setSelectedAgent}
         onSend={sendAgentPrompt}
       />
     );
@@ -679,13 +682,16 @@ function EditorPlaceholder(props: {
   detail: ProjectDetailResponse | null;
   error: string;
   loading: boolean;
+  localAgentProviders: LocalAgentProviderStatus[];
   pptxError: string;
   pptxRuntime: ReturnType<typeof usePptxArtifactRuntime>["runtime"];
   projectId: string;
+  selectedAgent: string;
   sending: boolean;
   onBackHome: () => void;
   onCancel: (runId: string) => Promise<void>;
   onPptxSelectionChange: ReturnType<typeof usePptxArtifactRuntime>["updateSelection"];
+  onSelectedAgentChange: (value: string) => void;
   onSend: (prompt: string) => Promise<void>;
 }) {
   const [deckSaveState, setDeckSaveState] = useState<ArtifactSaveState>("saved");
@@ -701,9 +707,12 @@ function EditorPlaceholder(props: {
           dirty={false}
           error={props.conversationError || props.error || props.pptxError}
           items={props.conversationItems}
+          localAgentProviders={props.localAgentProviders}
           loading={props.conversationLoading}
+          selectedAgent={props.selectedAgent}
           sending={props.sending}
           onBackHome={props.onBackHome}
+          onSelectedAgentChange={props.onSelectedAgentChange}
           onCancel={props.onCancel}
           onSend={props.onSend}
         />

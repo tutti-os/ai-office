@@ -3,11 +3,11 @@ import type { DocumentTemplate } from "@ai-doc/shared";
 export const documentTemplates: DocumentTemplate[] = [
   {
     id: "blank",
-    name: "Blank document",
+    name: "Blank doc",
     category: "General",
     description: "A clean editing canvas for free-form writing.",
     previewTone: "Minimal",
-    prompt: "Create a clean blank rich text document with one empty opening paragraph.",
+    prompt: "Create a clean blank rich text doc with one empty opening paragraph.",
   },
   {
     id: "resume-emily",
@@ -63,7 +63,7 @@ export const documentTemplates: DocumentTemplate[] = [
     category: "Research",
     description: "A concise brief for findings, evidence, implications, and open questions.",
     previewTone: "Analytical",
-    prompt: "Create a research brief document with sections for context, key findings, evidence, implications, open questions, and recommended next steps. Use readable typography and subtle section dividers.",
+    prompt: "Create a research brief doc with sections for context, key findings, evidence, implications, open questions, and recommended next steps. Use readable typography and subtle section dividers.",
   },
   {
     id: "resume",
@@ -71,7 +71,7 @@ export const documentTemplates: DocumentTemplate[] = [
     category: "Career",
     description: "A clean one-page resume layout with profile, experience, skills, and education.",
     previewTone: "Editorial",
-    prompt: "Create a clean resume document with a strong name header, role summary, experience, selected projects, skills, and education. Use HTML/CSS suitable for rich text editing and export.",
+    prompt: "Create a clean resume doc with a strong name header, role summary, experience, selected projects, skills, and education. Use HTML/CSS suitable for rich text editing and export.",
   },
   {
     id: "cover-letter",
@@ -103,7 +103,7 @@ export const documentTemplates: DocumentTemplate[] = [
     category: "Creative",
     description: "A timeline-style event plan with schedule, vendors, responsibilities, and notes.",
     previewTone: "Organized",
-    prompt: "Create an event planning document with overview, schedule, venue notes, vendor checklist, responsibilities, risks, and next steps.",
+    prompt: "Create an event planning doc with overview, schedule, venue notes, vendor checklist, responsibilities, risks, and next steps.",
   },
   {
     id: "marketing-one-pager",

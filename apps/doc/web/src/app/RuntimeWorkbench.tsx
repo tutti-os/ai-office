@@ -53,8 +53,8 @@ import { MarkdownEditor } from "./MarkdownEditor";
 import { useAgentConversation } from "./useAgentConversation";
 import { cancelRun, clearProjectHistory, createProject, getProject, listProjects, startAiEdit, updateProject } from "../api/projects";
 import { fetchGensparkStudyPlanFixture } from "../api/fixtures";
-import { fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchTemplates } from "../api/runtime";
-import type { DocumentProject, DocumentRunTimelineItem, DocumentType, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
+import { fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, fetchTemplates, installOfficeCli } from "../api/runtime";
+import type { AiEditRequest, DocumentProject, DocumentRunTimelineItem, DocumentType, LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
 import { createEmptyDocxDocumentManifest, serializeDocxDocumentManifest } from "@ai-doc/shared";
 import { DocxArtifactRuntimeAdapter } from "../artifact/docxArtifactAdapter";
 import { HtmlArtifactRuntimeAdapter } from "../artifact/htmlArtifactAdapter";
@@ -205,7 +205,7 @@ const linkEditorViewportMargin = 8;
 const linkEditorAnchorGap = 8;
 
 const defaultToolbarState: ToolbarState = {
-  targetLabel: "document",
+  targetLabel: "doc",
   block: "p",
   fontFamily: "Arial, sans-serif",
   fontSize: "",
@@ -281,21 +281,6 @@ function initialContentForType(type: DocumentType) {
   return blankHtmlDocument;
 }
 
-function markdownPromptSeed(prompt: string) {
-  return `# ${prompt.trim() || "Untitled Document"}
-
-## Overview
-
-Write the main idea here.
-
-## Details
-
-- Add supporting detail
-- Add examples
-- Add next steps
-`;
-}
-
 function markdownTemplateSeed(name: string, description: string, prompt: string) {
   return `# ${name}
 
@@ -309,6 +294,24 @@ ${plainTextPreview(prompt)}
 
 - Replace this outline with your content.
 `;
+}
+
+function createInitialPromptAiEditRequest(input: {
+  content: string;
+  runtimeProfileId: string | null;
+  type: DocumentType;
+  userPrompt: string;
+}): AiEditRequest {
+  return {
+    htmlContent: input.content,
+    selectedText: "",
+    selectedHtml: "",
+    selectionType: "write",
+    selectionPath: input.type === "markdown" ? "markdown:0-0" : "",
+    userPrompt: input.userPrompt,
+    mode: "write",
+    runtimeProfileId: input.runtimeProfileId,
+  };
 }
 
 function plainTextPreview(value: string) {
@@ -414,6 +417,8 @@ export function RuntimeWorkbench() {
   const [outputType, setOutputType] = useState<DocumentType>("html");
   const [runtimeProfiles, setRuntimeProfiles] = useState<RuntimeProfile[]>([]);
   const [localAgentProviders, setLocalAgentProviders] = useState<LocalAgentProviderStatus[]>([]);
+  const [officeCliStatus, setOfficeCliStatus] = useState<OfficeCliStatus | null>(null);
+  const [officeCliInstalling, setOfficeCliInstalling] = useState(false);
   const [selectedRuntimeProfileId, setSelectedRuntimeProfileId] = useState("");
   const homeAttachments = useHomeAttachments();
   const [homePanel, setHomePanel] = useState<HomePanel>("templates");
@@ -482,13 +487,31 @@ export function RuntimeWorkbench() {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([fetchBootstrapSnapshot(), fetchLocalAgentProviders(), fetchTemplates()])
-      .then(([snapshot, providerStatus, libraryTemplates]) => {
+    const officeCliFallback: OfficeCliStatus = {
+      available: false,
+      source: "missing",
+      canInstall: true,
+      installing: false,
+      reason: "Unable to check OfficeCLI status.",
+    };
+    void Promise.all([
+      fetchBootstrapSnapshot(),
+      fetchLocalAgentProviders(),
+      fetchTemplates(),
+      fetchOfficeCliStatus().catch((error) => ({
+        officecli: {
+          ...officeCliFallback,
+          reason: error instanceof Error ? error.message : String(error),
+        },
+      })),
+    ])
+      .then(([snapshot, providerStatus, libraryTemplates, officeCli]) => {
         if (cancelled) return;
         const enabledProfiles = snapshot.runtimeProfiles.filter((profile) => profile.enabled && profile.kind === "local-agent");
         setRuntimeProfiles(enabledProfiles);
         setLocalAgentProviders(providerStatus.providers);
         setTemplates(normalizeTemplates(libraryTemplates));
+        setOfficeCliStatus(officeCli.officecli);
         setSelectedRuntimeProfileId((current) => {
           if (enabledProfiles.some((profile) => profile.id === current)) return current;
           return enabledProfiles.find((profile) => profile.kind === "local-agent")?.id ?? enabledProfiles[0]?.id ?? "";
@@ -501,6 +524,26 @@ export function RuntimeWorkbench() {
       cancelled = true;
     };
   }, []);
+
+  const downloadOfficeCli = async () => {
+    setError("");
+    setOfficeCliInstalling(true);
+    try {
+      const response = await installOfficeCli();
+      setOfficeCliStatus(response.officecli);
+      if (!response.officecli.available) setError(response.officecli.reason ?? "Unable to install OfficeCLI");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      try {
+        const response = await fetchOfficeCliStatus();
+        setOfficeCliStatus(response.officecli);
+      } catch {
+        // Keep the original install error visible.
+      }
+    } finally {
+      setOfficeCliInstalling(false);
+    }
+  };
 
   const loadHtmlDocument = (html: string, input: { title: string; source?: RuntimeState["source"] }) => {
     loadArtifact({ content: html, title: input.title, source: input.source });
@@ -553,7 +596,7 @@ export function RuntimeWorkbench() {
     setLoading(true);
     try {
       const project = await createProject({
-        title: "Untitled Document",
+        title: "Untitled Doc",
         content: outputType === "markdown" ? undefined : initialContentForType(outputType),
         type: outputType,
       });
@@ -570,16 +613,26 @@ export function RuntimeWorkbench() {
     setError("");
     setLoading(true);
     try {
-      const title = prompt.trim() || "Untitled Document";
-      const attachmentTitle = homeAttachments.attachments[0]?.name ? `Document from ${homeAttachments.attachments[0].name}` : title;
+      const userPrompt = prompt.trim();
+      const title = userPrompt || "Untitled Doc";
+      const attachmentTitle = homeAttachments.attachments[0]?.name ? `Doc from ${homeAttachments.attachments[0].name}` : title;
       const project = await createProject({
         title: attachmentTitle.length > 80 ? `${attachmentTitle.slice(0, 80).trim()}...` : attachmentTitle,
-        content: outputType === "markdown" && title.trim() ? markdownPromptSeed(title) : initialContentForType(outputType),
+        content: initialContentForType(outputType),
         type: outputType,
       });
       homeAttachments.clearAttachments();
       setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
       openProject(project);
+      setPrompt("");
+      if (userPrompt) {
+        await startAiEdit(project.id, createInitialPromptAiEditRequest({
+          content: project.content,
+          runtimeProfileId: selectedRuntimeProfileId || null,
+          type: project.type,
+          userPrompt,
+        }));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -769,7 +822,7 @@ export function RuntimeWorkbench() {
           runtimeProfileId: selectedRuntimeProfileId || null,
         }));
       } else {
-        if (!runtime) throw new Error("Document runtime is not ready");
+        if (!runtime) throw new Error("Doc runtime is not ready");
         await startAiEdit(currentProjectId, createAiEditRequest({
           projectId: currentProjectId,
           runtime,
@@ -834,7 +887,7 @@ export function RuntimeWorkbench() {
     removeImageSelectionOverlay(doc);
     doc.addEventListener("keyup", syncFromFrameEvent, true);
     doc.addEventListener("click", syncClickFromFrameEvent, true);
-    doc.addEventListener("input", () => syncMutation("input", "User edited document body"));
+    doc.addEventListener("input", () => syncMutation("input", "User edited doc body"));
     setRuntime((current) => {
       if (!current) return current;
       const loaded = applier.apply(current, {
@@ -845,7 +898,7 @@ export function RuntimeWorkbench() {
         ? loaded
         : applier.recordSnapshot(loaded, doc, {
             operationType: "initial",
-            description: "Initial document load",
+            description: "Initial doc load",
           });
     });
   };
@@ -1564,6 +1617,8 @@ export function RuntimeWorkbench() {
           activePanel={homePanel}
           historyProjects={historyProjects}
           localAgentProviders={localAgentProviders}
+          officeCliInstalling={officeCliInstalling}
+          officeCliStatus={officeCliStatus}
           outputType={outputType}
           selectedCategory={selectedTemplateCategory}
           selectedRuntimeProfileId={selectedRuntimeProfileId}
@@ -1581,6 +1636,7 @@ export function RuntimeWorkbench() {
           onCreateFromPrompt={loadPromptDocument}
           onClearHistory={clearHistory}
           onOpenHistoryProject={openHistoryProject}
+          onInstallOfficeCli={downloadOfficeCli}
           onOutputTypeChange={setOutputType}
           onRemoveAttachment={homeAttachments.removeAttachment}
           onRuntimeProfileChange={setSelectedRuntimeProfileId}
@@ -1595,9 +1651,13 @@ export function RuntimeWorkbench() {
               dirty={activeDirty}
               error={error || agentConversation.error}
               items={agentConversation.items}
+              localAgentProviders={localAgentProviders}
               loading={agentConversation.loading}
+              runtimeProfiles={runtimeProfiles}
+              selectedRuntimeProfileId={selectedRuntimeProfileId}
               sending={agentBusy}
               onBackHome={() => setRoute(pushHomeRoute())}
+              onRuntimeProfileChange={setSelectedRuntimeProfileId}
               onCancel={cancelAgentRun}
               onSend={sendAgentPrompt}
             />
@@ -1626,9 +1686,13 @@ export function RuntimeWorkbench() {
               dirty={activeDirty}
               error={error || docxError || agentConversation.error}
               items={agentConversation.items}
+              localAgentProviders={localAgentProviders}
               loading={agentConversation.loading}
+              runtimeProfiles={runtimeProfiles}
+              selectedRuntimeProfileId={selectedRuntimeProfileId}
               sending={agentBusy}
               onBackHome={() => setRoute(pushHomeRoute())}
+              onRuntimeProfileChange={setSelectedRuntimeProfileId}
               onCancel={cancelAgentRun}
               onSend={sendAgentPrompt}
             />
@@ -1658,6 +1722,9 @@ export function RuntimeWorkbench() {
           agentConversationLoading={agentConversation.loading}
           agentConversationError={agentConversation.error}
           agentSending={agentBusy}
+          localAgentProviders={localAgentProviders}
+          runtimeProfiles={runtimeProfiles}
+          selectedRuntimeProfileId={selectedRuntimeProfileId}
           editorStats={editorStats}
           runtime={runtime}
           saveState={saveState}
@@ -1732,6 +1799,7 @@ export function RuntimeWorkbench() {
             mutate: (doc, target) => outdentBlock(doc, target),
           })}
           onSendAgentPrompt={sendAgentPrompt}
+          onRuntimeProfileChange={setSelectedRuntimeProfileId}
           onCancelAgentRun={cancelAgentRun}
           onRedo={() => applyHistoryOffset(1)}
           onResetFrame={resetFrameFromRuntime}
@@ -1751,7 +1819,7 @@ function DocumentLoadingScreen(props: { error: string; loading: boolean }) {
   return (
     <section className="relative flex min-h-0 flex-col bg-[#1f1f1f]">
       <header className="flex h-12 shrink-0 items-center border-b border-white/8 px-5">
-        <div className="min-w-0 truncate text-[13px] font-semibold text-white">Loading document</div>
+        <div className="min-w-0 truncate text-[13px] font-semibold text-white">Loading doc</div>
       </header>
       <div className="grid min-h-0 flex-1 place-items-center bg-[#2a2a2a] px-6 text-center">
         <div className="max-w-[360px] text-[13px] font-semibold text-white/58">
@@ -1760,7 +1828,7 @@ function DocumentLoadingScreen(props: { error: string; loading: boolean }) {
           ) : (
             <span className="inline-flex items-center gap-2">
               {props.loading ? <Loader2 className="animate-spin" size={16} /> : null}
-              Loading document...
+              Loading doc...
             </span>
           )}
         </div>
@@ -1781,6 +1849,9 @@ function EditorScreen(props: {
   agentConversationLoading: boolean;
   agentConversationError: string;
   agentSending: boolean;
+  localAgentProviders: LocalAgentProviderStatus[];
+  runtimeProfiles: RuntimeProfile[];
+  selectedRuntimeProfileId: string;
   attributeDraft: AttributeDraft;
   imageDraft: ImageAttributes;
   tableDraft: { rows: string; columns: string };
@@ -1831,6 +1902,7 @@ function EditorScreen(props: {
   onOutdent: () => void;
   onPickImage: () => void;
   onSendAgentPrompt: (prompt: string) => Promise<void>;
+  onRuntimeProfileChange: (profileId: string) => void;
   onCancelAgentRun: (runId: string) => Promise<void>;
   onRemoveLink: () => void;
   onRedo: () => void;
@@ -2041,9 +2113,13 @@ function EditorScreen(props: {
           dirty={props.dirty}
           error={props.error || props.agentConversationError}
           items={props.agentConversationItems}
+          localAgentProviders={props.localAgentProviders}
           loading={props.agentConversationLoading}
+          runtimeProfiles={props.runtimeProfiles}
+          selectedRuntimeProfileId={props.selectedRuntimeProfileId}
           sending={props.agentSending}
           onBackHome={props.onBackHome}
+          onRuntimeProfileChange={props.onRuntimeProfileChange}
           onCancel={props.onCancelAgentRun}
           onSend={props.onSendAgentPrompt}
         />
@@ -2051,7 +2127,7 @@ function EditorScreen(props: {
     >
       <section className="relative flex min-h-0 flex-col bg-[#1f1f1f]">
         <ArtifactWorkspaceHeader
-          title={props.runtime?.title ?? "Untitled Document"}
+          title={props.runtime?.title ?? "Untitled Doc"}
           saveState={props.saveState}
           exportItems={[
             { label: "PDF", disabled: true, onSelect: () => undefined },
@@ -2501,7 +2577,7 @@ function EditorScreen(props: {
               ref={props.iframeRef}
               className="mx-auto block min-h-[860px] w-full max-w-[980px] overflow-clip rounded-[2px] border border-black/30 bg-white shadow-[0_30px_90px_rgba(0,0,0,0.55)]"
               style={{ height: frameHeight }}
-              title={props.runtime?.title ?? "Runtime document"}
+              title={props.runtime?.title ?? "Runtime doc"}
               sandbox="allow-scripts allow-same-origin"
               scrolling="no"
               srcDoc={props.frameSrcDoc}
@@ -2510,7 +2586,7 @@ function EditorScreen(props: {
                 scheduleHtmlFrameResize();
               }}
               onInput={() => {
-                props.onMutation("input", "User edited document body");
+                props.onMutation("input", "User edited doc body");
                 scheduleHtmlFrameResize();
               }}
               onKeyUp={props.onSelection}
@@ -2518,7 +2594,7 @@ function EditorScreen(props: {
             />
           ) : (
             <div className="mx-auto grid min-h-[620px] max-w-[860px] place-items-center rounded border border-white/10 bg-[#202020] text-center text-white/42">
-              Loading document...
+              Loading doc...
             </div>
           )}
         </div>

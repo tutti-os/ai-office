@@ -5,8 +5,6 @@ import fastifyWebsocket from "@fastify/websocket";
 import Fastify from "fastify";
 import type { AiEditRequest, CreateProjectRequest, UpdateDeckSlideHtmlRequest, UpdateProjectRequest, WsClientMessage, WsServerMessage } from "@ai-slide/shared";
 import { projectWorkspaceRoot } from "./local/paths.js";
-import { AgentToolGateway } from "./artifact/agent-tool-gateway.js";
-import { AgentToolTokenStore, AgentToolUnauthorizedError } from "./artifact/agent-tool-tokens.js";
 import { ProjectRepository } from "./artifact/project-repository.js";
 import { ProjectService } from "./artifact/project-service.js";
 import { ensureTemplateDirs, listTemplates, safeTemplateAssetPath, templateAssetRoot } from "./templates/template-service.js";
@@ -19,9 +17,7 @@ const host = process.env.HOST ?? "127.0.0.1";
 const server = Fastify({ logger: true, bodyLimit: 50 * 1024 * 1024 });
 const events = new EventHub();
 const repo = new ProjectRepository();
-const toolTokens = new AgentToolTokenStore();
-const projects = new ProjectService(repo, events, toolTokens);
-const agentTools = new AgentToolGateway(repo, events, toolTokens);
+const projects = new ProjectService(repo, events);
 
 await server.register(fastifyWebsocket);
 await ensureTemplateDirs();
@@ -142,49 +138,6 @@ server.post<{ Params: { runId: string } }>("/api/runs/:runId/cancel", async (req
   return result;
 });
 
-server.get<{ Params: { projectId: string } }>("/api/agent-tools/projects/:projectId/project", async (request, reply) => {
-  try {
-    return await agentTools.getProject(request.params.projectId, readAgentToolCredential(request));
-  } catch (error) {
-    return sendAgentToolError(reply, error, "Unable to read project");
-  }
-});
-
-server.get<{ Params: { projectId: string } }>("/api/agent-tools/projects/:projectId/deck/manifest", async (request, reply) => {
-  try {
-    return await agentTools.getDeckManifest(request.params.projectId, readAgentToolCredential(request));
-  } catch (error) {
-    return sendAgentToolError(reply, error, "Unable to read deck manifest");
-  }
-});
-
-server.get<{ Params: { projectId: string; slideId: string } }>("/api/agent-tools/projects/:projectId/deck/slides/:slideId", async (request, reply) => {
-  try {
-    return await agentTools.getDeckSlide(request.params.projectId, request.params.slideId, readAgentToolCredential(request));
-  } catch (error) {
-    return sendAgentToolError(reply, error, "Unable to read slide");
-  }
-});
-
-server.post<{ Params: { projectId: string; slideId: string }; Body: { html: string } }>(
-  "/api/agent-tools/projects/:projectId/deck/slides/:slideId",
-  async (request, reply) => {
-    try {
-      return await agentTools.saveDeckSlide(request.params.projectId, request.params.slideId, request.body, readAgentToolCredential(request));
-    } catch (error) {
-      return sendAgentToolError(reply, error, "Unable to save slide");
-    }
-  },
-);
-
-server.get<{ Params: { projectId: string } }>("/api/agent-tools/projects/:projectId/pptx/manifest", async (request, reply) => {
-  try {
-    return await agentTools.getPptxManifest(request.params.projectId, readAgentToolCredential(request));
-  } catch (error) {
-    return sendAgentToolError(reply, error, "Unable to read PPTX manifest");
-  }
-});
-
 server.get("/api/ws", { websocket: true }, (socket) => {
   const dispose = events.addClient(socket);
   const hello: WsServerMessage = { type: "hello", lastSeq: events.lastSeq() };
@@ -249,17 +202,4 @@ try {
 } catch (error) {
   server.log.error(error);
   process.exit(1);
-}
-
-function readAgentToolCredential(request: { headers: Record<string, string | string[] | undefined>; query?: unknown }) {
-  const header = request.headers["x-ai-slide-tool-token"];
-  const headerToken = Array.isArray(header) ? header[0] : header;
-  const query = request.query as { toolToken?: string } | undefined;
-  return { token: headerToken ?? query?.toolToken ?? null };
-}
-
-function sendAgentToolError(reply: { code(statusCode: number): { send(payload: unknown): unknown } }, error: unknown, fallback: string) {
-  const message = error instanceof Error ? error.message : fallback;
-  if (error instanceof AgentToolUnauthorizedError) return reply.code(401).send({ error: message });
-  return reply.code(message.includes("not found") ? 404 : 400).send({ error: message });
 }

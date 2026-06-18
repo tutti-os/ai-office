@@ -2,10 +2,28 @@ import type { BaseRun, BaseRunEvent, BaseRunTimelineItem, StreamEvent } from "@a
 
 export type AgentConversationBlock =
   | { type: "thinking"; text: string }
-  | { type: "tool"; title: string; detail: string; status: "streaming" | "success" | "error" }
+  | {
+      type: "tool_group";
+      calls: AgentConversationToolCall[];
+      results: AgentConversationToolResult[];
+      status: "streaming" | "success" | "error";
+    }
   | { type: "status"; text: string }
   | { type: "error"; text: string }
   | { type: "result"; text: string };
+
+export type AgentConversationToolCall = {
+  id: string;
+  name: string;
+  input: unknown;
+};
+
+export type AgentConversationToolResult = {
+  id: string;
+  name: string;
+  content: string;
+  status: "success" | "error";
+};
 
 export type AgentConversationMessage<TRun extends BaseRun = BaseRun> =
   | {
@@ -89,46 +107,42 @@ export function mergeStreamEvent<TProject, TRun extends BaseRun, TEvent extends 
 
 function eventsToBlocks<TEvent extends BaseRunEvent, TRun extends BaseRun>(events: TEvent[], run: TRun) {
   const blocks: AgentConversationBlock[] = [];
-  let thinking = "";
+  const resultByToolId = new Map<string, TEvent>();
+  const pairedResultEventIds = new Set<string>();
+  const runningToolIds = runningToolCallIds(events);
 
-  const flushThinking = () => {
-    const text = thinking.trim();
-    if (text) blocks.push({ type: "thinking", text });
-    thinking = "";
-  };
+  for (const event of events) {
+    if (event.type !== "tool_result") continue;
+    const toolId = toolCallId(event);
+    if (toolId) resultByToolId.set(toolId, event);
+  }
 
   for (const event of events) {
     if (event.type === "thinking_delta") {
-      thinking += event.content;
+      appendTextLikeBlock(blocks, "thinking", event.content);
       continue;
     }
-    flushThinking();
-    if (event.type === "tool_call") {
-      blocks.push({
-        type: "tool",
-        title: toolTitle(event, "Tool call"),
-        detail: event.content,
-        status: event.status === "error" ? "error" : event.status === "success" ? "success" : "streaming",
-      });
+
+    if (event.type === "text_delta") {
+      appendTextLikeBlock(blocks, "result", event.content);
+    } else if (event.type === "tool_call") {
+      const toolId = toolCallId(event) || event.id;
+      const result = resultByToolId.get(toolId);
+      if (result) pairedResultEventIds.add(result.id);
+      appendToolGroupBlock(blocks, event, result, runningToolIds.has(toolId));
     } else if (event.type === "tool_result") {
-      blocks.push({
-        type: "tool",
-        title: toolTitle(event, "Tool result"),
-        detail: event.content,
-        status: event.status === "error" ? "error" : "success",
-      });
+      if (!pairedResultEventIds.has(event.id)) appendToolResultOnlyBlock(blocks, event);
     } else if (event.type === "file_write") {
-      blocks.push({ type: "tool", title: "File write", detail: event.content, status: "success" });
+      appendTextLikeBlock(blocks, "status", event.content || "File written");
     } else if (event.type === "stderr" || event.type === "error") {
-      blocks.push({ type: "error", text: event.content });
+      appendTextLikeBlock(blocks, "error", event.content);
     } else if (event.content.trim()) {
-      blocks.push({ type: "status", text: event.content });
+      appendTextLikeBlock(blocks, "status", event.content);
     }
   }
 
-  flushThinking();
-
-  if (run.status === "completed" && run.resultPreview.trim()) {
+  const hasTextDelta = events.some((event) => event.type === "text_delta" && event.content.trim());
+  if (run.status === "completed" && run.resultPreview.trim() && !hasTextDelta) {
     blocks.push({ type: "result", text: run.resultPreview.trim() });
   } else if (run.status === "failed" && run.error) {
     blocks.push({ type: "error", text: run.error });
@@ -139,6 +153,111 @@ function eventsToBlocks<TEvent extends BaseRunEvent, TRun extends BaseRun>(event
   }
 
   return blocks;
+}
+
+function appendTextLikeBlock(blocks: AgentConversationBlock[], type: "thinking" | "status" | "error" | "result", text: string) {
+  if (type === "result") {
+    const last = blocks.at(-1);
+    if (last?.type === "result") {
+      last.text = `${last.text}${text}`;
+      return;
+    }
+    if (!text.trim()) return;
+    blocks.push({ type, text: text.trimStart() });
+    return;
+  }
+
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  const last = blocks.at(-1);
+  if (last?.type === type) {
+    last.text = `${last.text}\n${trimmed}`;
+    return;
+  }
+  blocks.push({ type, text: trimmed });
+}
+
+function appendToolGroupBlock(blocks: AgentConversationBlock[], event: BaseRunEvent, result: BaseRunEvent | undefined, running: boolean) {
+  const call = toolCallFromEvent(event);
+  const toolResult = result ? toolResultFromEvent(result) : null;
+  const status = toolGroupStatus([call], toolResult ? [toolResult] : [], running);
+
+  blocks.push({
+    type: "tool_group",
+    calls: [call],
+    results: toolResult ? [toolResult] : [],
+    status,
+  });
+}
+
+function appendToolResultOnlyBlock(blocks: AgentConversationBlock[], event: BaseRunEvent) {
+  const result = toolResultFromEvent(event);
+  blocks.push({
+    type: "tool_group",
+    calls: [],
+    results: [result],
+    status: result.status,
+  });
+}
+
+function toolCallFromEvent(event: BaseRunEvent): AgentConversationToolCall {
+  return {
+    id: toolCallId(event) || event.id,
+    name: toolTitle(event, "Tool"),
+    input: event.metadata && "input" in event.metadata ? event.metadata.input : null,
+  };
+}
+
+function toolResultFromEvent(event: BaseRunEvent): AgentConversationToolResult {
+  return {
+    id: toolCallId(event) || event.id,
+    name: toolTitle(event, "Tool"),
+    content: event.content,
+    status: event.status === "error" ? "error" : "success",
+  };
+}
+
+function toolGroupStatus(calls: AgentConversationToolCall[], results: AgentConversationToolResult[], running: boolean): "streaming" | "success" | "error" {
+  if (results.some((result) => result.status === "error")) return "error";
+  if (running || results.length < calls.length) return "streaming";
+  return "success";
+}
+
+function runningToolCallIds(events: BaseRunEvent[]) {
+  const resultIds = new Set<string>();
+  const runningIds = new Set<string>();
+  let hasLaterSettlingEvent = false;
+
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (!event) continue;
+
+    if (event.type === "tool_result") {
+      const id = toolCallId(event);
+      if (id) resultIds.add(id);
+      continue;
+    }
+
+    if (event.type === "tool_call") {
+      const id = toolCallId(event) || event.id;
+      if (!resultIds.has(id) && !hasLaterSettlingEvent) runningIds.add(id);
+      hasLaterSettlingEvent = true;
+      continue;
+    }
+
+    if (settlesResultlessToolCall(event)) hasLaterSettlingEvent = true;
+  }
+
+  return runningIds;
+}
+
+function settlesResultlessToolCall(event: BaseRunEvent) {
+  return event.type === "text_delta" || event.type === "thinking_delta" || event.type === "status" || event.type === "file_write" || event.type === "stderr" || event.type === "error";
+}
+
+function toolCallId(event: BaseRunEvent) {
+  const value = event.metadata?.toolCallId;
+  return typeof value === "string" && value.trim() ? value : "";
 }
 
 function upsertRun<TRun extends BaseRun, TEvent extends BaseRunEvent>(items: Array<BaseRunTimelineItem<TRun, TEvent>>, run: TRun) {

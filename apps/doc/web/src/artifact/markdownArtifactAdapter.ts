@@ -33,7 +33,7 @@ export class MarkdownArtifactRuntimeAdapter implements ArtifactRuntimeAdapter<Ma
   readonly type = "markdown" as const;
 
   parse(input: ArtifactRuntimeParseInput): MarkdownRuntimeState {
-    const content = input.content || defaultMarkdownDocument;
+    const content = input.content ?? defaultMarkdownDocument;
     return {
       id: `markdown-${Date.now()}`,
       title: input.title,
@@ -89,13 +89,4 @@ export class MarkdownArtifactRuntimeAdapter implements ArtifactRuntimeAdapter<Ma
   }
 }
 
-export const defaultMarkdownDocument = `# Untitled Document
-
-Start writing in **Markdown**.
-
-## Next Section
-
-- Capture the main idea
-- Add supporting details
-- Turn this into a polished document
-`;
+export const defaultMarkdownDocument = "";

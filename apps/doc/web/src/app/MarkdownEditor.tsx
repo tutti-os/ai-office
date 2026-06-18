@@ -136,7 +136,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         exportItems={[
           {
             label: "HTML",
-            onSelect: () => downloadTextFile(`${safeFileName(props.runtime.title || "document")}.html`, editorHtml(editorRef.current), "text/html"),
+            onSelect: () => downloadTextFile(`${safeFileName(props.runtime.title || "doc")}.html`, editorHtml(editorRef.current), "text/html"),
           },
           { label: "PDF", disabled: true, onSelect: () => undefined },
         ]}
@@ -567,5 +567,5 @@ function downloadTextFile(fileName: string, content: string, type: string) {
 }
 
 function safeFileName(value: string) {
-  return value.trim().replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "document";
+  return value.trim().replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "doc";
 }

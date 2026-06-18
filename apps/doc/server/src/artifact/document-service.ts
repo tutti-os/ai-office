@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
@@ -17,11 +16,11 @@ import {
   type UpdateProjectRequest,
 } from "@ai-doc/shared";
 import { projectWorkspaceRoot } from "../local/paths.js";
-import { AgentToolTokenStore } from "./agent-tool-tokens.js";
 import { DocumentRepository } from "./document-repository.js";
 import { documentTemplates, getTemplate } from "./templates.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
 import { RuntimeProviderUnsupportedError, type RuntimeStreamEvent } from "../runtimes/runtime-provider.js";
+import { requireOfficeCli } from "../toolchains/officecli.js";
 import { EventHub } from "../ws/event-hub.js";
 
 export class DocumentService {
@@ -31,7 +30,6 @@ export class DocumentService {
   constructor(
     private readonly repo: DocumentRepository,
     private readonly events: EventHub,
-    private readonly toolTokens: AgentToolTokenStore,
   ) {}
 
   bootstrap() {
@@ -59,14 +57,15 @@ export class DocumentService {
     return this.repo.clearProjectHistory();
   }
 
-  createProject(input: CreateProjectRequest) {
+  async createProject(input: CreateProjectRequest) {
     const template = getTemplate(input.templateId);
     const type = input.type ?? "html";
+    if (type === "docx") await requireOfficeCli();
     const content = input.content ?? defaultProjectContent(type, template);
     const templateId = input.templateId ?? (template.id === "blank" ? null : template.id);
     const templateName = input.templateName ?? (template.id === "blank" ? null : template.name);
     const project = this.repo.createProject({
-      title: input.title?.trim() || input.templateName?.trim() || template.name || "Untitled Document",
+      title: input.title?.trim() || input.templateName?.trim() || template.name || "Untitled Doc",
       content,
       type,
       templateId,
@@ -85,7 +84,7 @@ export class DocumentService {
   async getDocxFile(projectId: string) {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
-    if (project.type !== "docx") throw new Error("Project is not a DOCX document");
+    if (project.type !== "docx") throw new Error("Project is not a DOCX doc");
     const bytes = await readFile(docxFilePath(projectId));
     return {
       bytes,
@@ -126,7 +125,7 @@ export class DocumentService {
       selectedHtml: "",
       selectionType: "write",
       selectionPath: "",
-      userPrompt: `Create an initial rich HTML document from this template seed:\n${prompt}`,
+      userPrompt: `Create an initial rich HTML doc from this template seed:\n${prompt}`,
       mode: "write",
       runtimeProfileId: input.runtimeProfileId,
     };
@@ -136,6 +135,8 @@ export class DocumentService {
   async startAiEdit(projectId: string, request: AiEditRequest) {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
+    if (project.type === "docx") await requireOfficeCli();
+    this.repo.syncProjectAgentInstructions(projectId);
     const runtimeProfile = this.repo.getRuntimeProfile(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);
@@ -175,17 +176,18 @@ export class DocumentService {
     const run = this.repo.getRun(runId);
     if (!run) return;
     const provider = this.runtimes.getProvider(runtimeProfile);
-    const toolAccess = this.toolTokens.issue({ runId, projectId: initialProject.id });
     let sortOrder = 0;
     let generatedText = "";
+    let refreshedFromWorkspace = false;
 
     const createRunEvent = (
       type: RuntimeStreamEvent["type"] extends infer T ? Extract<T, string> : never,
       input: { content?: string; status?: "pending" | "streaming" | "success" | "error"; metadata?: Record<string, unknown> | null } = {},
     ) => {
-      if (type === "text_delta") return null;
       const eventType =
-        type === "thinking_delta"
+        type === "text_delta"
+          ? "text_delta"
+          : type === "thinking_delta"
           ? "thinking_delta"
           : type === "tool_call"
             ? "tool_call"
@@ -222,7 +224,6 @@ export class DocumentService {
         project: initialProject,
         runtimeProfile,
         request,
-        toolAccess,
       })) {
         if (this.cancelledRunIds.has(runId)) {
           await this.finalizeCancellation(runId, "Cancelled by user");
@@ -231,6 +232,7 @@ export class DocumentService {
         const event = typeof rawEvent === "string" ? ({ type: "text_delta", text: rawEvent } as const) : rawEvent;
         if (event.type === "text_delta") {
           generatedText += event.text;
+          createRunEvent(event.type, { content: event.text, status: "streaming" });
           continue;
         }
         if (event.type === "thinking_delta") {
@@ -247,10 +249,10 @@ export class DocumentService {
             status: event.isError || event.status === "failed" ? "error" : "success",
             metadata: { toolCallId: event.id, toolName: event.name ?? null, output: event.output ?? null },
           });
-          await this.refreshDocxProjectFromFile(initialProject.id, runId);
+          refreshedFromWorkspace = Boolean(await this.refreshProjectFromWorkspace(initialProject.id, runId)) || refreshedFromWorkspace;
         } else if (event.type === "file_write") {
           createRunEvent(event.type, { content: `Wrote file: ${event.path}`, metadata: { path: event.path } });
-          await this.refreshDocxProjectFromFile(initialProject.id, runId);
+          refreshedFromWorkspace = Boolean(await this.refreshProjectFromWorkspace(initialProject.id, runId)) || refreshedFromWorkspace;
         } else if (event.type === "status") {
           createRunEvent(event.type, { content: event.message ?? event.status ?? "", metadata: { status: event.status ?? null } });
         } else if (event.type === "stderr" && event.text.trim()) {
@@ -263,9 +265,10 @@ export class DocumentService {
         return;
       }
 
+      refreshedFromWorkspace = Boolean(await this.refreshProjectFromWorkspace(initialProject.id, runId)) || refreshedFromWorkspace;
+
       if (initialProject.type === "docx") {
-        const refreshedProject = await this.refreshDocxProjectFromFile(initialProject.id, runId);
-        const project = refreshedProject ?? this.repo.getProject(initialProject.id);
+        const project = this.repo.getProject(initialProject.id);
         const finalRun = this.repo.updateRun(runId, {
           status: "completed",
           resultPreview: previewText(generatedText || docxRunPreview(project?.content ?? "")),
@@ -274,10 +277,21 @@ export class DocumentService {
         return;
       }
 
+      if (runtimeProfile.kind === "local-agent") {
+        const finalRun = this.repo.updateRun(runId, {
+          status: "completed",
+          resultPreview:
+            previewText(generatedText) ||
+            (refreshedFromWorkspace ? "Workspace file changes were applied." : "Run completed. No workspace file changes were detected."),
+        });
+        this.events.emit({ type: "run.completed", projectId: initialProject.id, runId, payload: { run: finalRun } });
+        return;
+      }
+
       if (initialProject.type === "markdown") {
         const finalMarkdown = extractMarkdownDocument(generatedText);
         let project = this.repo.getProject(initialProject.id);
-        if (finalMarkdown) {
+        if (!refreshedFromWorkspace && finalMarkdown) {
           project = this.repo.updateProject(initialProject.id, {
             content: finalMarkdown,
             type: "markdown",
@@ -285,7 +299,7 @@ export class DocumentService {
           });
           if (project) this.events.emit({ type: "project.updated", projectId: project.id, runId, payload: { project } });
         } else if (!project || project.updatedBy !== "ai") {
-          throw new Error("AI did not return a complete Markdown document.");
+          throw new Error("AI did not return a complete Markdown doc.");
         }
         const finalRun = this.repo.updateRun(runId, {
           status: "completed",
@@ -297,14 +311,14 @@ export class DocumentService {
 
       const finalHtml = extractHtmlDocument(generatedText);
       let project = this.repo.getProject(initialProject.id);
-      if (finalHtml) {
+      if (!refreshedFromWorkspace && finalHtml) {
         project = this.repo.updateProject(initialProject.id, {
           content: finalHtml,
           updatedBy: "ai",
         });
         if (project) this.events.emit({ type: "project.updated", projectId: project.id, runId, payload: { project } });
       } else if (!project || project.updatedBy !== "ai") {
-        throw new Error("AI did not return a complete HTML document.");
+        throw new Error("AI did not return a complete HTML doc.");
       }
 
       const finalRun = this.repo.updateRun(runId, {
@@ -330,7 +344,7 @@ export class DocumentService {
       const finalRun = this.repo.updateRun(runId, { status: "failed", error: message });
       this.events.emit({ type: "run.failed", projectId: initialProject.id, runId, payload: { run: finalRun } });
     } finally {
-      this.toolTokens.revokeRun(runId);
+      this.cancelledRunIds.delete(runId);
     }
   }
 
@@ -339,26 +353,49 @@ export class DocumentService {
     if (!run) return null;
     const finalRun = this.repo.updateRun(runId, { status: "cancelled", error: reason }) ?? run;
     this.events.emit({ type: "run.cancelled", projectId: run.projectId, runId, payload: { run: finalRun } });
-    this.toolTokens.revokeRun(runId);
     this.cancelledRunIds.delete(runId);
     return { run: finalRun };
   }
 
-  private async refreshDocxProjectFromFile(projectId: string, runId?: string) {
+  private async refreshProjectFromWorkspace(projectId: string, runId?: string) {
     const project = this.repo.getProject(projectId);
-    if (!project || project.type !== "docx") return null;
-    const nextManifest = await readDocxManifestFromFile(projectId);
+    if (!project) return null;
+    if (project.type === "html") return this.refreshTextProjectFromFile(project, "document.html", runId);
+    if (project.type === "markdown") return this.refreshTextProjectFromFile(project, "document.md", runId);
+    return this.refreshDocxProjectFromFile(project, runId);
+  }
+
+  private async refreshTextProjectFromFile(project: DocumentProject, fileName: string, runId?: string) {
+    let content = "";
+    try {
+      content = await readFile(join(projectWorkspaceRoot(project.id), fileName), "utf8");
+    } catch {
+      return null;
+    }
+    if (content === project.content) return null;
+    const updated = this.repo.updateProject(project.id, {
+      content,
+      type: project.type,
+      updatedBy: "ai",
+    });
+    if (updated) this.events.emit({ type: "project.updated", projectId: project.id, runId, payload: { project: updated } });
+    return updated;
+  }
+
+  private async refreshDocxProjectFromFile(project: DocumentProject, runId?: string) {
+    if (project.type !== "docx") return null;
+    const nextManifest = await readDocxManifestFromFile(project.id);
     if (!nextManifest) return null;
     const currentManifest = parseDocxDocumentManifest(project.content);
     if (currentManifest.sha256 === nextManifest.sha256 && currentManifest.sizeBytes === nextManifest.sizeBytes) {
       return null;
     }
-    const updated = this.repo.updateProject(projectId, {
+    const updated = this.repo.updateProject(project.id, {
       content: serializeDocxDocumentManifest(nextManifest),
       type: "docx",
       updatedBy: "ai",
     });
-    if (updated) this.events.emit({ type: "project.updated", projectId, runId, payload: { project: updated } });
+    if (updated) this.events.emit({ type: "project.updated", projectId: project.id, runId, payload: { project: updated } });
     return updated;
   }
 }
@@ -376,7 +413,7 @@ function extractHtmlDocument(raw: string) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Document</title>
+  <title>Doc</title>
 </head>
 <body contenteditable="true">
 ${candidate}
@@ -394,7 +431,7 @@ function extractMarkdownDocument(raw: string) {
 }
 
 function defaultProjectContent(type: DocumentProject["type"], template: DocumentTemplate) {
-  if (type === "markdown") return readMarkdownMockDocument();
+  if (type === "markdown") return "";
   if (type === "docx") return serializeDocxDocumentManifest(createEmptyDocxDocumentManifest());
   if (template.id === "blank") return defaultHtmlDocument;
   return renderTemplateSeed(template);
@@ -427,22 +464,6 @@ function docxRunPreview(content: string) {
   const manifest = parseDocxDocumentManifest(content);
   if (!manifest.sha256) return "DOCX run completed. No document.docx change was detected.";
   return `DOCX preview refreshed: ${manifest.sizeBytes} bytes`;
-}
-
-function readMarkdownMockDocument() {
-  const markdownMockPath = process.env.AI_DOC_MARKDOWN_MOCK_PATH ?? "/Users/niuma/code/codex/README.md";
-  try {
-    return readFileSync(markdownMockPath, "utf8");
-  } catch {
-    return `# Markdown Document
-
-Start writing in **Markdown**.
-
-- Add a section
-- Add a checklist
-- Preview the result
-`;
-  }
 }
 
 function renderTemplateSeed(template: DocumentTemplate) {
@@ -533,7 +554,7 @@ function renderBusinessTemplate(template: DocumentTemplate) {
   <div class="rule"></div>
   <section class="section" data-ai-region="overview">
     <h2>Executive Summary</h2>
-    <p>This document outlines the objective, proposed approach, timeline, and next steps for a focused business initiative.</p>
+    <p>This doc outlines the objective, proposed approach, timeline, and next steps for a focused business initiative.</p>
   </section>
   <section class="grid-2 section">
     <div data-ai-region="scope">
@@ -619,7 +640,7 @@ function renderInvoiceTemplate(template: DocumentTemplate) {
     <table>
       <thead><tr><th>Description</th><th>Qty</th><th>Amount</th></tr></thead>
       <tbody>
-        <tr><td>Strategy and document production</td><td>1</td><td>$2,400</td></tr>
+        <tr><td>Strategy and doc production</td><td>1</td><td>$2,400</td></tr>
         <tr><td>Review and revisions</td><td>1</td><td>$600</td></tr>
         <tr><td><strong>Total</strong></td><td></td><td><strong>$3,000</strong></td></tr>
       </tbody>
@@ -661,7 +682,12 @@ function previewJson(value: unknown) {
 }
 
 function previewText(value: string) {
-  const text = value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const text = value
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   return text.length > 280 ? `${text.slice(0, 280)}...` : text;
 }
 

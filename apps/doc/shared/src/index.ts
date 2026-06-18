@@ -223,6 +223,22 @@ export interface LocalAgentProviderStatusResponse {
   providers: LocalAgentProviderStatus[];
 }
 
+export type OfficeCliSource = "env" | "bundled" | "path" | "tutti" | "missing";
+
+export interface OfficeCliStatus {
+  available: boolean;
+  version?: string;
+  executablePath?: string;
+  source: OfficeCliSource;
+  canInstall: boolean;
+  installing: boolean;
+  reason?: string;
+}
+
+export interface OfficeCliStatusResponse {
+  officecli: OfficeCliStatus;
+}
+
 export type StreamEventType =
   | "project.created"
   | "project.updated"
@@ -241,7 +257,7 @@ export const defaultHtmlDocument = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Document</title>
+  <title>Doc</title>
   <style>
     :root {
       color: #1f2933;

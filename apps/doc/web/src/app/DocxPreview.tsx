@@ -41,7 +41,7 @@ export function DocxPreview(props: DocxPreviewProps) {
   return (
     <section className="relative flex min-h-0 flex-col bg-[#1f1f1f]">
       <ArtifactWorkspaceHeader
-        title={props.runtime.title || "Untitled Word Document"}
+        title={props.runtime.title || "Untitled Word Doc"}
         saveState={props.loading ? "loading" : props.dirty ? "saving" : "saved"}
         exportItems={[
           { label: "PDF", disabled: true, onSelect: () => undefined },
@@ -52,7 +52,7 @@ export function DocxPreview(props: DocxPreviewProps) {
         {props.error ? <div className="mx-auto mb-4 max-w-[980px] rounded-xl bg-[#3a241f] p-3 text-[12px] leading-5 text-[#ffad9f]">{props.error}</div> : null}
         <div
           ref={rootRef}
-          className="mx-auto min-h-[760px] w-full max-w-[980px] rounded-[2px] border border-black/30 bg-white text-[#202124] shadow-[0_30px_90px_rgba(0,0,0,0.45)]"
+          className="ai-docx-preview mx-auto min-h-[760px] w-full max-w-[980px] text-[#202124]"
           onKeyUp={syncSelection}
           onMouseUp={syncSelection}
         >
@@ -62,8 +62,8 @@ export function DocxPreview(props: DocxPreviewProps) {
             <div className="grid min-h-[760px] place-items-center px-8 text-center text-[#5f6368]">
               <div>
                 <FileText className="mx-auto mb-3 text-[#2f66d9]" size={34} />
-                <div className="text-[14px] font-semibold text-[#202124]">Waiting for document.docx</div>
-                <p className="mt-2 max-w-[360px] text-[12px] leading-5">
+                <div className="text-[14px] font-semibold text-white">Waiting for document.docx</div>
+                <p className="mt-2 max-w-[360px] text-[12px] leading-5 text-white/48">
                   The agent can create or update the canonical DOCX file in this project workspace.
                 </p>
               </div>

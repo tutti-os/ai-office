@@ -12,11 +12,10 @@ import type {
   WsClientMessage,
   WsServerMessage,
 } from "@ai-doc/shared";
-import { AgentToolGateway } from "./artifact/agent-tool-gateway.js";
-import { AgentToolTokenStore, AgentToolUnauthorizedError } from "./artifact/agent-tool-tokens.js";
 import { DocumentRepository } from "./artifact/document-repository.js";
 import { DocumentService } from "./artifact/document-service.js";
 import { listTemplates } from "./templates/template-service.js";
+import { getOfficeCliStatus, installOfficeCli } from "./toolchains/officecli.js";
 import { EventHub } from "./ws/event-hub.js";
 
 const webDist = process.env.AI_DOC_WEB_DIST
@@ -28,9 +27,7 @@ const host = process.env.HOST ?? "127.0.0.1";
 const server = Fastify({ logger: true, bodyLimit: 30 * 1024 * 1024 });
 const events = new EventHub();
 const repo = new DocumentRepository();
-const toolTokens = new AgentToolTokenStore();
-const documents = new DocumentService(repo, events, toolTokens);
-const agentTools = new AgentToolGateway(repo, events, toolTokens);
+const documents = new DocumentService(repo, events);
 
 await server.register(fastifyWebsocket);
 
@@ -65,9 +62,38 @@ server.get("/api/templates", async () => ({ templates: listTemplates() }));
 
 server.get("/api/local-agent/providers", async () => documents.listLocalAgentProviders());
 
+server.get("/api/toolchains/officecli", async () => {
+  try {
+    return { officecli: await getOfficeCliStatus() };
+  } catch (error) {
+    return {
+      officecli: {
+        available: false,
+        source: "missing",
+        canInstall: false,
+        installing: false,
+        reason: error instanceof Error ? error.message : "Unable to check OfficeCLI status.",
+      },
+    };
+  }
+});
+
+server.post("/api/toolchains/officecli/install", async (_request, reply) => {
+  const officecli = await installOfficeCli();
+  if (!officecli.available) return reply.code(400).send({ officecli, error: officecli.reason ?? "Unable to install OfficeCLI" });
+  return { officecli };
+});
+
 server.get("/api/projects", async () => documents.listProjects());
 
-server.post<{ Body: CreateProjectRequest }>("/api/projects", async (request) => documents.createProject(request.body ?? {}));
+server.post<{ Body: CreateProjectRequest }>("/api/projects", async (request, reply) => {
+  try {
+    return await documents.createProject(request.body ?? {});
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to create project";
+    return reply.code(400).send({ error: message });
+  }
+});
 
 server.delete("/api/projects", async () => documents.clearProjectHistory());
 
@@ -134,29 +160,6 @@ server.post<{ Params: { runId: string } }>("/api/runs/:runId/cancel", async (req
   return result;
 });
 
-server.get<{ Params: { projectId: string } }>("/api/agent-tools/projects/:projectId/document", async (request, reply) => {
-  try {
-    return agentTools.getDocument(request.params.projectId, readAgentToolCredential(request));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to read document";
-    if (error instanceof AgentToolUnauthorizedError) return reply.code(401).send({ error: message });
-    return reply.code(message.includes("not found") ? 404 : 400).send({ error: message });
-  }
-});
-
-server.post<{ Params: { projectId: string }; Body: { htmlContent: string; title?: string } }>(
-  "/api/agent-tools/projects/:projectId/document",
-  async (request, reply) => {
-    try {
-      return agentTools.saveDocument(request.params.projectId, request.body, readAgentToolCredential(request));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to save document";
-      if (error instanceof AgentToolUnauthorizedError) return reply.code(401).send({ error: message });
-      return reply.code(message.includes("not found") ? 404 : 400).send({ error: message });
-    }
-  },
-);
-
 server.get("/api/ws", { websocket: true }, (socket) => {
   const dispose = events.addClient(socket);
   const hello: WsServerMessage = { type: "hello", lastSeq: events.lastSeq() };
@@ -207,11 +210,4 @@ try {
 } catch (error) {
   server.log.error(error);
   process.exit(1);
-}
-
-function readAgentToolCredential(request: { headers: Record<string, string | string[] | undefined>; query?: unknown }) {
-  const header = request.headers["x-ai-doc-tool-token"];
-  const headerToken = Array.isArray(header) ? header[0] : header;
-  const query = request.query as { toolToken?: string } | undefined;
-  return { token: headerToken ?? query?.toolToken ?? null };
 }

@@ -3,7 +3,7 @@ export const blankHtmlDocument = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Untitled Document</title>
+  <title>Untitled Doc</title>
   <style>
     body {
       max-width: 820px;

@@ -4,6 +4,9 @@ import {
   createDefaultLocalAgentProviderPlugins,
   createLocalAgentRuntime,
   type AgentEvent,
+  type LocalAgentProviderPlugin,
+  type RawAgentEvent,
+  type RawAgentStream,
 } from "@nextop-os/agent-acp-kit";
 import type { BaseAiEditRequest, BaseRun, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { safePathSegment } from "@ai-app/shared/local-paths";
@@ -42,7 +45,7 @@ export class LocalAgentRuntimeProvider<
   id = "local-agent";
   private readonly controllers = new Map<string, AbortController>();
   private readonly localAgentRuntime = createLocalAgentRuntime({
-    providers: createDefaultLocalAgentProviderPlugins(),
+    providers: createAiAppLocalAgentProviderPlugins(),
   });
   private readonly options: LocalAgentRuntimeProviderOptions<TRun, TProject, TRequest>;
 
@@ -113,47 +116,101 @@ export class LocalAgentRuntimeProvider<
             }
           : { mode: "fresh" as const };
 
-      for await (const event of this.localAgentRuntime.run({
-        runId: context.run.id,
-        conversationId: context.project.id,
-        sessionId: context.project.id,
-        provider,
-        runtimeKind: "local-agent",
-        runtimeProvider: provider,
-        cwd: workspaceRoot,
-        prompt: this.options.buildPrompt(context),
-        systemPrompt: this.options.buildSystemPrompt(context),
-        history: [],
-        model: stripProviderPrefix(context.runtimeProfile.model, provider),
-        reasoning: context.request.reasoningEffort ?? undefined,
-        mcpServers: this.options.buildMcpServers?.(context) ?? [],
-        env: this.options.buildEnv?.(context, workspaceRoot) ?? {},
-        timeoutMs: this.options.timeoutMs?.() ?? DEFAULT_TIMEOUT_MS,
-        extraAllowedDirs: this.options.extraAllowedDirs?.(context, workspaceRoot) ?? [workspaceRoot],
-        resume,
-        signal: controller.signal,
-      } as any)) {
-        const runtimeEvent = toRuntimeStreamEvent(event as AgentEvent);
-        if (runtimeEvent) {
+      let emittedEvent = false;
+      try {
+        for await (const runtimeEvent of this.runWithResume({
+          context,
+          controller,
+          provider,
+          resume,
+          sessionStore,
+          workspaceRoot,
+        })) {
+          emittedEvent = true;
           yield runtimeEvent;
-        } else if ((event as any).type === "error") {
-          throw new Error((event as any).message);
-        } else if ((event as any).type === "done") {
-          const done = event as any;
-          if (done.sessionId || done.resumeToken) {
-            sessionStore.write(context.project.id, {
-              provider,
-              providerSessionId: done.sessionId,
-              resumeToken: done.resumeToken,
-            });
-          }
-          if (done.status === "failed") {
-            throw new Error(`local-agent ${provider} failed${typeof done.exitCode === "number" ? ` with exit code ${done.exitCode}` : ""}`);
-          }
         }
+      } catch (error) {
+        if (previousSession && !emittedEvent && isProviderResumeFailure(error)) {
+          sessionStore.remove(context.project.id);
+          for await (const runtimeEvent of this.runWithResume({
+            context,
+            controller,
+            provider,
+            resume: { mode: "fresh" },
+            sessionStore,
+            workspaceRoot,
+          })) {
+            yield runtimeEvent;
+          }
+          return;
+        }
+        throw error;
       }
     } finally {
       this.controllers.delete(context.run.id);
+    }
+  }
+
+  private async *runWithResume(input: {
+    context: RuntimeEditContext<TRun, TProject, TRequest>;
+    controller: AbortController;
+    provider: string;
+    resume: { mode: "provider"; providerSessionId?: string; resumeToken?: string } | { mode: "fresh" };
+    sessionStore: LocalAgentSessionStore;
+    workspaceRoot: string;
+  }) {
+    const { context, controller, provider, resume, sessionStore, workspaceRoot } = input;
+    let lastError: Extract<AgentEvent, { type: "error" }> | undefined;
+    for await (const event of this.localAgentRuntime.run({
+      runId: context.run.id,
+      conversationId: context.project.id,
+      sessionId: context.project.id,
+      provider,
+      runtimeKind: "local-agent",
+      runtimeProvider: provider,
+      cwd: workspaceRoot,
+      prompt: this.options.buildPrompt(context),
+      systemPrompt: this.options.buildSystemPrompt(context),
+      history: [],
+      model: stripProviderPrefix(context.runtimeProfile.model, provider),
+      reasoning: context.request.reasoningEffort ?? undefined,
+      mcpServers: this.options.buildMcpServers?.(context) ?? [],
+      env: this.options.buildEnv?.(context, workspaceRoot) ?? {},
+      timeoutMs: this.options.timeoutMs?.() ?? DEFAULT_TIMEOUT_MS,
+      extraAllowedDirs: this.options.extraAllowedDirs?.(context, workspaceRoot) ?? [workspaceRoot],
+      resume,
+      signal: controller.signal,
+    } as any)) {
+      const runtimeEvent = toRuntimeStreamEvent(event as AgentEvent);
+      if ((event as AgentEvent).type === "error") {
+        lastError = event as Extract<AgentEvent, { type: "error" }>;
+      }
+      if (runtimeEvent) {
+        yield runtimeEvent;
+      } else if ((event as any).type === "error") {
+        throw new Error((event as any).message);
+      } else if ((event as any).type === "done") {
+        const done = event as any;
+        if (done.sessionId || done.resumeToken) {
+          sessionStore.write(context.project.id, {
+            provider,
+            providerSessionId: done.sessionId,
+            resumeToken: done.resumeToken,
+          });
+        }
+        const terminalStatus =
+          done.status ??
+          (done.reason === "cancelled" ? "canceled" : done.reason === "error" ? "failed" : "completed");
+        if (terminalStatus === "failed") {
+          throw new Error(
+            lastError?.message ??
+              `local-agent ${provider} failed${typeof done.exitCode === "number" ? ` with exit code ${done.exitCode}` : ""}`,
+          );
+        }
+        if (terminalStatus === "canceled") {
+          throw new Error(`local-agent ${provider} was canceled`);
+        }
+      }
     }
   }
 
@@ -167,9 +224,116 @@ export class LocalAgentRuntimeProvider<
   }
 }
 
+function createAiAppLocalAgentProviderPlugins(): LocalAgentProviderPlugin[] {
+  return createDefaultLocalAgentProviderPlugins().map((provider) =>
+    provider.id === "claude" ? withClaudeStreamCompatibility(provider) : provider,
+  );
+}
+
+function toRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
+}
+
+function extractClaudeAssistantText(item: RawAgentEvent) {
+  const record = toRecord(item);
+  if (!record || record.type !== "assistant") return undefined;
+
+  if (typeof record.text === "string" && record.text.trim()) return record.text;
+
+  const message = toRecord(record.message);
+  const content = message?.content;
+  if (!Array.isArray(content)) return undefined;
+
+  const text = content
+    .map((entry) => {
+      const block = toRecord(entry);
+      return block?.type === "text" && typeof block.text === "string" ? block.text : "";
+    })
+    .filter(Boolean)
+    .join("\n");
+  return text.trim() ? text : undefined;
+}
+
+function extractClaudeResultText(item: RawAgentEvent) {
+  const record = toRecord(item);
+  if (!record || record.type !== "result" || record.is_error === true) return undefined;
+  return typeof record.result === "string" && record.result.trim() ? record.result : undefined;
+}
+
+function splitClaudeReasoning(text: string): RawAgentEvent[] {
+  const events: RawAgentEvent[] = [];
+  let cleaned = text;
+  const reasoningParts: string[] = [];
+  cleaned = cleaned.replace(/<reasoning>([\s\S]*?)<\/reasoning>/g, (_match, content: string) => {
+    const trimmed = content.trim();
+    if (trimmed) reasoningParts.push(trimmed);
+    return "";
+  });
+
+  if (reasoningParts.length > 0) events.push({ type: "thinking", text: reasoningParts.join("\n") });
+  const finalText = cleaned.trim();
+  if (finalText) events.push({ type: "assistant", text: finalText });
+  return events;
+}
+
+async function* normalizeClaudeRawStream(stream: RawAgentStream): RawAgentStream {
+  let emittedAssistantText = false;
+  for await (const item of stream) {
+    const assistantText = extractClaudeAssistantText(item);
+    if (assistantText) {
+      emittedAssistantText = true;
+      yield* splitClaudeReasoning(assistantText);
+      continue;
+    }
+
+    const resultText = emittedAssistantText ? undefined : extractClaudeResultText(item);
+    if (resultText) {
+      emittedAssistantText = true;
+      yield* splitClaudeReasoning(resultText);
+      continue;
+    }
+
+    yield item;
+  }
+}
+
+function withClaudeStreamCompatibility(provider: LocalAgentProviderPlugin): LocalAgentProviderPlugin {
+  const baseCreateAdapter = provider.createAdapter;
+  const baseDetect = provider.detect.bind(provider);
+  return {
+    ...provider,
+    detect: baseDetect,
+    ...(baseCreateAdapter
+      ? {
+          createAdapter() {
+            const adapter = baseCreateAdapter();
+            return {
+              ...adapter,
+              parseEvents(stream: RawAgentStream) {
+                return adapter.parseEvents(normalizeClaudeRawStream(stream));
+              },
+            };
+          },
+        }
+      : {}),
+  };
+}
+
+function isProviderResumeFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /thread\/resume|resume failed|no rollout found|providerSessionId|resumeToken/i.test(message);
+}
+
 export function toRuntimeStreamEvent(event: AgentEvent): RuntimeStreamEvent | null {
   const item = event as any;
   if (item.type === "text_delta") return { type: "text_delta", text: item.text };
+  if ((item.type === "assistant" || item.type === "agent_message" || item.type === "message") && typeof item.text === "string") {
+    return { type: "text_delta", text: item.text };
+  }
+  if (item.type === "result" && item.is_error !== true && typeof item.result === "string") {
+    return { type: "text_delta", text: item.result };
+  }
   if (item.type === "thinking" || item.type === "thinking_delta") return { type: "thinking_delta", text: item.text };
   if (item.type === "tool_call") return { type: "tool_call", id: item.id, name: item.name || "unknown_tool", input: item.input };
   if (item.type === "tool_result") {
