@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FileText, Loader2 } from "lucide-react";
+import { FileText } from "lucide-react";
 import { PptxRenderer } from "@tutti-os/office-preview/pptx";
 import "@tutti-os/office-preview/styles/pptx.css";
 import type { PptxRenderPresentation } from "@tutti-os/office-preview/pptx";
@@ -10,10 +10,10 @@ import { fitScale, nextSlideIndex, scaledHeight, scaledWidth, shouldIgnoreSlideN
 type PptxPreviewProps = {
   runtime: PptxRuntimeState;
   error: string;
-  loading: boolean;
-  onBackHome: () => void;
   onSelectionChange: (selection: PptxSelection) => void;
 };
+
+const filmstripClass = "flex min-h-32 min-w-0 shrink-0 items-center gap-3 overflow-x-auto overflow-y-hidden border-t border-white/8 bg-[#242424] px-5 pb-4 pt-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
 export function PptxPreview(props: PptxPreviewProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -100,32 +100,19 @@ export function PptxPreview(props: PptxPreviewProps) {
   });
 
   return (
-    <section className="pptx-preview">
-      <header className="pptx-preview-header">
-        <div className="pptx-preview-title">
-          <div>{props.runtime.title || "Untitled Presentation"}</div>
-          <span>
-            {props.loading ? <Loader2 className="spin" size={12} /> : <FileText size={12} />}
-            Saved · PPTX · {visibleSlides.length ? `${activeSlideIndex + 1}/${visibleSlides.length}` : "read-only preview"}
-          </span>
-        </div>
-        <button className="editor-back" type="button" onClick={props.onBackHome}>
-          Home
-        </button>
-      </header>
-
-      <div ref={stageRef} className="pptx-preview-stage" tabIndex={0}>
-        {props.error ? <div className="pptx-preview-error">{props.error}</div> : null}
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#1f1f1f]">
+      <div ref={stageRef} className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#2a2a2a] px-8 py-7 outline-none" tabIndex={0}>
+        {props.error ? <div className="absolute left-1/2 top-4 z-[2] w-[min(calc(100%_-_48px),980px)] -translate-x-1/2 rounded-[10px] bg-[#3a241f] p-3 text-[12px] leading-5 text-[#ffad9f]">{props.error}</div> : null}
         <div
           ref={rootRef}
-          className="pptx-preview-frame"
+          className="relative shrink-0 overflow-hidden rounded-[2px] border border-black/30 bg-white text-[#202124] shadow-[0_30px_90px_rgba(0,0,0,0.45)] [&_.tsh-pptx-document]:block [&_.tsh-pptx-slide]:shadow-none"
           style={currentPresentation ? { width: frameWidth, height: frameHeight } : undefined}
           onKeyUp={syncSelection}
           onMouseUp={syncSelection}
         >
           {currentPresentation ? (
             <div
-              className="pptx-current-render"
+              className="absolute left-0 top-0 origin-top-left"
               style={{
                 width: slideWidth,
                 height: slideHeight,
@@ -135,10 +122,10 @@ export function PptxPreview(props: PptxPreviewProps) {
               <PptxRenderer presentation={currentPresentation} />
             </div>
           ) : (
-            <div className="pptx-preview-empty">
-              <FileText size={36} />
-              <strong>Waiting for slides.pptx</strong>
-              <span>The agent can create or update the canonical PowerPoint file in this project workspace.</span>
+            <div className="grid min-h-[420px] w-[min(calc(100vw_-_420px),760px)] min-w-[360px] place-items-center content-center gap-2.5 p-8 text-center text-[#5f6368]">
+              <FileText className="text-[#2f66d9]" size={36} />
+              <strong className="text-[14px] text-[#202124]">Waiting for slides.pptx</strong>
+              <span className="max-w-[380px] text-[12px] leading-5">The agent can create or update the canonical PowerPoint file in this project workspace.</span>
             </div>
           )}
         </div>
@@ -147,13 +134,13 @@ export function PptxPreview(props: PptxPreviewProps) {
         <SlideFilmstrip
           activeId={activeSlide?.id ?? null}
           ariaLabel="Slides"
-          className="pptx-filmstrip"
+          className={filmstripClass}
           frameHeight={pptxThumbnail.height}
           frameWidth={pptxThumbnail.width}
           items={filmstripItems}
           renderPreview={(item) => (
             <div
-              className="pptx-thumbnail-render"
+              className="absolute left-0 top-0 origin-top-left [&_.tsh-pptx-document]:block [&_.tsh-pptx-slide]:shadow-none"
               style={{
                 width: slideWidth,
                 height: slideHeight,

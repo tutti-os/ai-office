@@ -1,170 +1,162 @@
-import { useLayoutEffect, useMemo, useRef, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type FC } from "react";
+import { createPortal } from "react-dom";
 import {
-  Bold,
-  CheckSquare,
-  Code,
-  Heading1,
-  Image,
-  Italic,
-  Link2,
-  List,
-  ListOrdered,
-  Minus,
-  Pilcrow,
-  Quote,
-  Redo2,
-  Rows3,
-  Strikethrough,
-  Table2,
-  Undo2,
-} from "lucide-react";
+  IS_BOLD,
+  IS_CODE,
+  IS_ITALIC,
+  IS_STRIKETHROUGH,
+  MDXEditor,
+  $isImageNode,
+  type MDXEditorMethods,
+  activeEditor$,
+  addTopAreaChild$,
+  applyFormat$,
+  applyListType$,
+  codeBlockPlugin,
+  type CodeBlockEditorProps,
+  currentBlockType$,
+  currentFormat$,
+  currentListType$,
+  headingsPlugin,
+  imagePlugin,
+  insertCodeBlock$,
+  insertImage$,
+  insertMarkdown$,
+  insertTable$,
+  insertThematicBreak$,
+  lexical,
+  linkDialogPlugin,
+  linkDialogState$,
+  linkPlugin,
+  listsPlugin,
+  markdownShortcutPlugin,
+  quotePlugin,
+  realmPlugin,
+  removeLink$,
+  tablePlugin,
+  thematicBreakPlugin,
+  useCodeBlockEditorContext,
+  useCellValue,
+  useCellValues,
+  usePublisher,
+} from "@mdxeditor/editor";
+import "@mdxeditor/editor/style.css";
+import { Bold, Code2, Image, Italic, Link2, List, ListOrdered, ListTodo, Minus, Quote, Redo2, Replace, Strikethrough, Table2, Undo2 } from "lucide-react";
+import { ArtifactWorkspaceHeader } from "@ai-app/ui/editor-frame";
+import type { ArtifactSaveState } from "@ai-app/ui/editor-frame";
+import { IconButtonLight, Toolbar, ToolbarDivider, ToolbarGroup, ToolbarRow, ToolbarSelect } from "@ai-app/ui/toolbar";
 import type { MarkdownRuntimeState, MarkdownSelection } from "../artifact/markdownArtifactAdapter";
-import { markdownDomToMarkdown } from "../artifact/markdownDomSerializer";
-import { renderMarkdownPreview } from "../artifact/markdownPreview";
-import {
-  applyMarkdownHeading,
-  applyMarkdownLinePrefix,
-  applyMarkdownQuote,
-  insertMarkdownCodeBlock,
-  insertMarkdownHorizontalRule,
-  insertMarkdownImage,
-  insertMarkdownLink,
-  insertMarkdownTable,
-  wrapMarkdownSelection,
-  type MarkdownTransformInput,
-  type MarkdownTransformResult,
-} from "../artifact/markdownTransforms";
-import { IconButtonLight, ToolbarDivider, ToolbarGroup } from "./toolbarPrimitives";
 
 type MarkdownEditorProps = {
   runtime: MarkdownRuntimeState;
   dirty: boolean;
+  saveState: ArtifactSaveState;
   loading: boolean;
-  onBackHome: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onChange: (content: string, selection: MarkdownSelection) => void;
   onSelectionChange: (selection: MarkdownSelection) => void;
 };
 
+type MarkdownLinkDraft = {
+  text: string;
+  href: string;
+};
+
+type MarkdownLinkPosition = {
+  left: number;
+  top: number;
+  width: number;
+};
+
+const markdownLinkPanelWidth = 300;
+const markdownLinkViewportMargin = 8;
+const markdownLinkAnchorGap = 8;
+
 export function MarkdownEditor(props: MarkdownEditorProps) {
-  const previewRef = useRef<HTMLDivElement | null>(null);
-  const lastInputMarkdownRef = useRef("");
-  const previewHtml = useMemo(() => renderMarkdownPreview(props.runtime.content), [props.runtime.content]);
-  const canUndo = props.runtime.history.currentIndex > 0;
-  const canRedo = props.runtime.history.currentIndex < props.runtime.history.entries.length - 1;
+  const editorRef = useRef<MDXEditorMethods | null>(null);
+  const markdownRef = useRef(props.runtime.content);
 
-  useLayoutEffect(() => {
-    const preview = previewRef.current;
-    if (!preview) return;
-    if (document.activeElement === preview && props.runtime.content === lastInputMarkdownRef.current) return;
-    preview.innerHTML = previewHtml;
-  }, [previewHtml, props.runtime.content]);
+  const plugins = useMemo(
+    () => [
+      markdownToolbarPlugin(),
+      headingsPlugin({ allowedHeadingLevels: [1, 2, 3, 4, 5, 6] }),
+      listsPlugin(),
+      quotePlugin(),
+      thematicBreakPlugin(),
+      linkPlugin(),
+      linkDialogPlugin({ showLinkTitleField: false }),
+      tablePlugin(),
+      imagePlugin({ imageUploadHandler: fileToDataUrl, EditImageToolbar: MarkdownImageReplaceToolbar as unknown as FC<{}> }),
+      codeBlockPlugin({
+        defaultCodeBlockLanguage: "text",
+        codeBlockEditorDescriptors: [
+          {
+            priority: 0,
+            match: () => true,
+            Editor: PlainMarkdownCodeBlockEditor,
+          },
+        ],
+      }),
+      markdownShortcutPlugin(),
+    ],
+    [],
+  );
 
-  const runTransform = (transform: (input: MarkdownTransformInput) => MarkdownTransformResult) => {
-    const selection = props.runtime.selection;
-    const result = transform({ content: props.runtime.content, selection });
-    props.onChange(result.content, result.selection);
-    props.onSelectionChange(result.selection);
-  };
+  useEffect(() => {
+    markdownRef.current = props.runtime.content;
+    const editor = editorRef.current;
+    if (!editor || editor.getMarkdown() === props.runtime.content) return;
+    editor.setMarkdown(props.runtime.content);
+  }, [props.runtime.content, props.runtime.revision]);
 
-  const syncEditableContent = () => {
-    const preview = previewRef.current;
-    if (!preview) return;
-    const content = markdownDomToMarkdown(preview);
-    const selection = readPreviewSelection(preview, content);
-    lastInputMarkdownRef.current = content;
-    props.onChange(content, selection);
-  };
+  const syncSelection = useCallback(() => {
+    const editor = editorRef.current;
+    const markdown = editor?.getMarkdown() ?? markdownRef.current;
+    props.onSelectionChange(selectionFromEditor(editor, markdown));
+  }, [props]);
 
-  const syncPreviewSelection = () => {
-    const preview = previewRef.current;
-    if (!preview) return;
-    props.onSelectionChange(readPreviewSelection(preview, props.runtime.content));
-  };
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
-    const key = event.key.toLowerCase();
-    if (key === "b") {
-      event.preventDefault();
-      runTransform((input) => wrapMarkdownSelection(input, "**", "**", "bold text"));
-    } else if (key === "i") {
-      event.preventDefault();
-      runTransform((input) => wrapMarkdownSelection(input, "*", "*", "italic text"));
-    }
-  };
+  const handleChange = useCallback(
+    (markdown: string, initialMarkdownNormalize: boolean) => {
+      markdownRef.current = markdown;
+      const selection = selectionFromEditor(editorRef.current, markdown);
+      props.onSelectionChange(selection);
+      if (!initialMarkdownNormalize) {
+        props.onChange(markdown, selection);
+      }
+    },
+    [props],
+  );
 
   return (
     <section className="relative flex min-h-0 flex-col bg-[#1f1f1f]">
-      <header className="flex h-12 items-center justify-between border-b border-white/8 px-5">
-        <div className="min-w-0">
-          <div className="truncate text-[13px] font-semibold text-white">{props.runtime.title || "Untitled Markdown"}</div>
-          <div className="text-[11px] text-white/38">
-            {props.dirty ? "Unsaved changes" : "Saved"} · Markdown · {wordCount(props.runtime.content)} words
-          </div>
-        </div>
-        <button className="text-[12px] font-semibold text-white/52 hover:text-white" type="button" onClick={props.onBackHome}>
-          Home
-        </button>
-      </header>
+      <ArtifactWorkspaceHeader
+        title={props.runtime.title || "Untitled Markdown"}
+        saveState={props.saveState}
+        exportItems={[
+          {
+            label: "HTML",
+            onSelect: () => downloadTextFile(`${safeFileName(props.runtime.title || "document")}.html`, editorHtml(editorRef.current), "text/html"),
+          },
+          { label: "PDF", disabled: true, onSelect: () => undefined },
+        ]}
+      />
 
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-[#2a2a2a] px-3 py-4 md:px-6 md:py-6">
-        <div className="sticky top-0 z-10 mx-auto mb-4 flex w-fit max-w-full items-center gap-2 rounded-2xl border border-black/[0.04] bg-white px-3 py-2 text-[#202124] shadow-[0_10px_28px_rgba(0,0,0,0.12)] [&_svg]:size-4">
-          <div className="toolbar-scroll flex min-w-0 items-center gap-1.5 overflow-x-auto">
-            <ToolbarGroup>
-              <IconButtonLight disabled={!canUndo} title="Undo" onClick={props.onUndo}><Undo2 /></IconButtonLight>
-              <IconButtonLight disabled={!canRedo} title="Redo" onClick={props.onRedo}><Redo2 /></IconButtonLight>
-            </ToolbarGroup>
-            <ToolbarDivider />
-            <ToolbarGroup>
-              <MarkdownToolbarButton testId="md-heading-1" title="Heading 1" onClick={() => runTransform((input) => applyMarkdownHeading(input, 1))}><Heading1 /></MarkdownToolbarButton>
-              <MarkdownToolbarButton testId="md-paragraph" title="Paragraph" onClick={() => runTransform((input) => applyMarkdownHeading(input, 0))}><Pilcrow /></MarkdownToolbarButton>
-            </ToolbarGroup>
-            <ToolbarDivider />
-            <ToolbarGroup>
-              <MarkdownToolbarButton testId="md-bold" title="Bold" onClick={() => runTransform((input) => wrapMarkdownSelection(input, "**", "**", "bold text"))}><Bold /></MarkdownToolbarButton>
-              <MarkdownToolbarButton testId="md-italic" title="Italic" onClick={() => runTransform((input) => wrapMarkdownSelection(input, "*", "*", "italic text"))}><Italic /></MarkdownToolbarButton>
-              <MarkdownToolbarButton testId="md-strike" title="Strikethrough" onClick={() => runTransform((input) => wrapMarkdownSelection(input, "~~", "~~", "deleted text"))}><Strikethrough /></MarkdownToolbarButton>
-              <MarkdownToolbarButton testId="md-inline-code" title="Inline code" onClick={() => runTransform((input) => wrapMarkdownSelection(input, "`", "`", "code"))}><Code /></MarkdownToolbarButton>
-            </ToolbarGroup>
-            <ToolbarDivider />
-            <ToolbarGroup>
-              <MarkdownToolbarButton testId="md-quote" title="Quote" onClick={() => runTransform(applyMarkdownQuote)}><Quote /></MarkdownToolbarButton>
-              <MarkdownToolbarButton testId="md-hr" title="Horizontal rule" onClick={() => runTransform(insertMarkdownHorizontalRule)}><Minus /></MarkdownToolbarButton>
-              <MarkdownToolbarButton testId="md-code-block" title="Code block" onClick={() => runTransform(insertMarkdownCodeBlock)}><Rows3 /></MarkdownToolbarButton>
-            </ToolbarGroup>
-            <ToolbarDivider />
-            <ToolbarGroup>
-              <MarkdownToolbarButton testId="md-bullet-list" title="Bullet list" onClick={() => runTransform((input) => applyMarkdownLinePrefix(input, "- "))}><List /></MarkdownToolbarButton>
-              <MarkdownToolbarButton testId="md-ordered-list" title="Numbered list" onClick={() => runTransform((input) => applyMarkdownLinePrefix(input, "1. "))}><ListOrdered /></MarkdownToolbarButton>
-              <MarkdownToolbarButton testId="md-task-list" title="Task list" onClick={() => runTransform((input) => applyMarkdownLinePrefix(input, "- [ ] "))}><CheckSquare /></MarkdownToolbarButton>
-            </ToolbarGroup>
-            <ToolbarDivider />
-            <ToolbarGroup>
-              <MarkdownToolbarButton testId="md-link" title="Link" onClick={() => runTransform(insertMarkdownLink)}><Link2 /></MarkdownToolbarButton>
-              <MarkdownToolbarButton testId="md-image" title="Image" onClick={() => runTransform(insertMarkdownImage)}><Image /></MarkdownToolbarButton>
-              <MarkdownToolbarButton testId="md-table" title="Table" onClick={() => runTransform(insertMarkdownTable)}><Table2 /></MarkdownToolbarButton>
-            </ToolbarGroup>
-          </div>
-
-        </div>
-
-        <div className="mx-auto grid min-h-[760px] w-full max-w-[980px] overflow-hidden rounded border border-black/20 bg-white shadow-[0_30px_90px_rgba(0,0,0,0.45)]">
-          <div
-            ref={previewRef}
-            data-testid="markdown-preview"
-            aria-label="Markdown document"
-            className="markdown-preview min-h-[760px] overflow-auto px-10 py-8 text-[#202124]"
-            contentEditable
-            role="textbox"
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-[#2a2a2a] px-3 py-5 md:px-6 md:py-7">
+        <div
+          className="mx-auto min-h-[760px] w-full max-w-[1120px]"
+          onBlurCapture={syncSelection}
+          onKeyUpCapture={syncSelection}
+          onMouseUpCapture={syncSelection}
+        >
+          <MDXEditor
+            ref={editorRef}
+            markdown={props.runtime.content}
+            className="flex min-h-[760px] flex-col bg-transparent text-[#202124]"
+            contentEditableClassName="markdown-preview ai-markdown-content mx-auto min-h-[780px] w-full max-w-[980px] flex-1 overflow-visible rounded border border-black/20 bg-white !px-12 !py-9 text-[#202124] shadow-[0_30px_90px_rgba(0,0,0,0.45)] outline-none max-[760px]:!px-7 max-[760px]:!py-7 md:!px-18 md:!py-10"
+            onChange={handleChange}
+            plugins={plugins}
             spellCheck
-            suppressContentEditableWarning
-            onInput={syncEditableContent}
-            onKeyDown={handleKeyDown}
-            onKeyUp={syncPreviewSelection}
-            onMouseUp={syncPreviewSelection}
-            onBlur={syncEditableContent}
           />
         </div>
       </div>
@@ -172,45 +164,408 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   );
 }
 
-function MarkdownToolbarButton(props: { testId: string; title: string; onClick: () => void; children: React.ReactNode }) {
+type MarkdownBlockKind = "p" | "h1" | "h2" | "h3" | "h4" | "blockquote";
+
+function markdownToolbarPlugin() {
+  return realmPlugin({
+    init(realm) {
+      realm.pub(addTopAreaChild$, MarkdownToolbarAdapter);
+    },
+  })();
+}
+
+function MarkdownToolbarAdapter() {
+  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
+  const linkButtonRef = useRef<HTMLDivElement | null>(null);
+  const linkPanelRef = useRef<HTMLFormElement | null>(null);
+  const activeEditor = useCellValue(activeEditor$);
+  const [currentFormat, currentListType, currentBlockType] = useCellValues(currentFormat$, currentListType$, currentBlockType$);
+  const applyFormat = usePublisher(applyFormat$);
+  const applyListType = usePublisher(applyListType$);
+  const insertMarkdown = usePublisher(insertMarkdown$);
+  const insertImage = usePublisher(insertImage$);
+  const insertTable = usePublisher(insertTable$);
+  const insertCodeBlock = usePublisher(insertCodeBlock$);
+  const insertThematicBreak = usePublisher(insertThematicBreak$);
+  const removeLink = usePublisher(removeLink$);
+  const linkDialogState = useCellValue(linkDialogState$);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const [linkPanelOpen, setLinkPanelOpen] = useState(false);
+  const [linkDraft, setLinkDraft] = useState<MarkdownLinkDraft>({ text: "", href: "https://" });
+  const [linkPosition, setLinkPosition] = useState<MarkdownLinkPosition | null>(null);
+
+  useEffect(() => {
+    if (!activeEditor) {
+      setCanUndo(false);
+      setCanRedo(false);
+      return;
+    }
+    const unregisterUndo = activeEditor.registerCommand(
+      lexical.CAN_UNDO_COMMAND,
+      (payload) => {
+        setCanUndo(payload);
+        return false;
+      },
+      lexical.COMMAND_PRIORITY_CRITICAL,
+    );
+    const unregisterRedo = activeEditor.registerCommand(
+      lexical.CAN_REDO_COMMAND,
+      (payload) => {
+        setCanRedo(payload);
+        return false;
+      },
+      lexical.COMMAND_PRIORITY_CRITICAL,
+    );
+    return () => {
+      unregisterUndo();
+      unregisterRedo();
+    };
+  }, [activeEditor]);
+
+  const blockType = markdownBlockTypeFromEditor(currentBlockType);
+  const listType = markdownListTypeFromEditor(currentListType);
+  const linkActive = linkDialogState.type !== "inactive";
+
+  useLayoutEffect(() => {
+    if (!linkPanelOpen) {
+      setLinkPosition(null);
+      return;
+    }
+    const updatePosition = () => {
+      const anchor = linkButtonRef.current?.querySelector("button");
+      const panel = linkPanelRef.current;
+      if (!anchor || !panel) return;
+      const anchorRect = anchor.getBoundingClientRect();
+      const availableWidth = Math.max(0, window.innerWidth - markdownLinkViewportMargin * 2);
+      const panelWidth = Math.min(markdownLinkPanelWidth, availableWidth);
+      const panelHeight = panel.offsetHeight;
+      const centeredLeft = anchorRect.left + anchorRect.width / 2 - panelWidth / 2;
+      const maxLeft = window.innerWidth - markdownLinkViewportMargin - panelWidth;
+      const left = clampNumber(centeredLeft, markdownLinkViewportMargin, Math.max(markdownLinkViewportMargin, maxLeft));
+      const belowTop = anchorRect.bottom + markdownLinkAnchorGap;
+      const aboveTop = anchorRect.top - markdownLinkAnchorGap - panelHeight;
+      const maxTop = window.innerHeight - markdownLinkViewportMargin - panelHeight;
+      const top =
+        belowTop + panelHeight <= window.innerHeight - markdownLinkViewportMargin || aboveTop < markdownLinkViewportMargin
+          ? clampNumber(belowTop, markdownLinkViewportMargin, Math.max(markdownLinkViewportMargin, maxTop))
+          : clampNumber(aboveTop, markdownLinkViewportMargin, Math.max(markdownLinkViewportMargin, maxTop));
+      setLinkPosition((current) =>
+        current && current.left === left && current.top === top && current.width === panelWidth
+          ? current
+          : { left, top, width: panelWidth },
+      );
+    };
+    const raf = window.requestAnimationFrame(updatePosition);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [linkPanelOpen]);
+
+  useEffect(() => {
+    if (!linkPanelOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (linkButtonRef.current?.contains(event.target as Node) || linkPanelRef.current?.contains(event.target as Node)) return;
+      setLinkPanelOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [linkPanelOpen]);
+
+  const requestImageFileSelection = () => {
+    const input = imageFileInputRef.current;
+    if (!input) return;
+    input.value = "";
+    input.click();
+  };
+
+  const openMarkdownLinkPanel = () => {
+    let selectedText = "";
+    activeEditor?.getEditorState().read(() => {
+      const selection = lexical.$getSelection();
+      if (lexical.$isRangeSelection(selection)) selectedText = selection.getTextContent();
+    });
+    setLinkDraft({ text: selectedText, href: "https://" });
+    setLinkPanelOpen((current) => !current);
+  };
+
+  const applyMarkdownLink = () => {
+    const href = normalizeMarkdownLinkUrl(linkDraft.href);
+    if (!href) return;
+    insertMarkdown(markdownLinkText(linkDraft.text, href));
+    setLinkPanelOpen(false);
+  };
+
+  const linkPanelStyle: CSSProperties = linkPosition ? { left: linkPosition.left, top: linkPosition.top, width: linkPosition.width } : { visibility: "hidden" };
+  const linkPanel =
+    linkPanelOpen && typeof document !== "undefined"
+      ? createPortal(
+          <form
+            ref={linkPanelRef}
+            className="fixed z-50 grid w-[300px] max-w-[calc(100vw-16px)] gap-1.5 rounded-lg border border-black/10 bg-white p-2 shadow-[0_12px_28px_rgba(0,0,0,0.14)]"
+            style={linkPanelStyle}
+            onSubmit={(event) => {
+              event.preventDefault();
+              applyMarkdownLink();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.stopPropagation();
+                setLinkPanelOpen(false);
+              }
+            }}
+          >
+            <input
+              className="h-7 w-full rounded-md border border-black/10 bg-white px-2 text-[11px] font-medium text-[#333] outline-none"
+              value={linkDraft.text}
+              onChange={(event) => setLinkDraft((current) => ({ ...current, text: event.currentTarget.value }))}
+              placeholder="Text"
+              aria-label="Link text"
+            />
+            <div className="flex min-w-0 items-center gap-1">
+              <input
+                className="h-7 min-w-0 flex-1 rounded-md border border-black/10 bg-white px-2 text-[11px] font-medium text-[#333] outline-none"
+                value={linkDraft.href}
+                onChange={(event) => setLinkDraft((current) => ({ ...current, href: event.currentTarget.value }))}
+                placeholder="https://"
+                aria-label="Link URL"
+              />
+              <button className="h-7 rounded-md bg-black px-2.5 text-[10px] font-semibold text-white" type="submit">
+                Apply
+              </button>
+            </div>
+          </form>,
+          document.body,
+        )
+      : null;
+
+  const handleImageFileInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0] ?? null;
+    input.value = "";
+    if (!file || !file.type.startsWith("image/")) return;
+    const src = await fileToDataUrl(file);
+    const altText = imageAltFromFileName(file.name);
+    if (replaceSelectedImage(activeEditor, src, altText)) return;
+    insertImage({ src, altText });
+  };
+
   return (
-    <button
-      data-testid={props.testId}
-      className="grid size-7 shrink-0 place-items-center rounded-md text-[#242424] transition hover:bg-black/[0.045]"
-      type="button"
-      title={props.title}
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={props.onClick}
-    >
-      {props.children}
-    </button>
+    <>
+    <Toolbar className="relative -translate-y-1.5 overflow-visible" display={{ maxWidth: 1500, width: "content" }}>
+      <input ref={imageFileInputRef} className="hidden" type="file" accept="image/*" onChange={handleImageFileInputChange} />
+      <ToolbarRow wrap className="gap-y-1.5">
+        <ToolbarGroup>
+          <IconButtonLight disabled={!canUndo} title="Undo" onClick={() => activeEditor?.dispatchCommand(lexical.UNDO_COMMAND, undefined)}><Undo2 size={18} /></IconButtonLight>
+          <IconButtonLight disabled={!canRedo} title="Redo" onClick={() => activeEditor?.dispatchCommand(lexical.REDO_COMMAND, undefined)}><Redo2 size={18} /></IconButtonLight>
+        </ToolbarGroup>
+        <ToolbarDivider />
+        <ToolbarGroup className="[column-gap:4px]">
+          <ToolbarSelect title="Block style" value={blockType} onChange={(value) => applyMarkdownBlock(value as MarkdownBlockKind, insertMarkdown)}>
+            <option value="p">Normal Text</option>
+            <option value="h1">Heading 1</option>
+            <option value="h2">Heading 2</option>
+            <option value="h3">Heading 3</option>
+            <option value="h4">Heading 4</option>
+            <option value="blockquote">Quote</option>
+          </ToolbarSelect>
+        </ToolbarGroup>
+        <ToolbarDivider />
+        <ToolbarGroup>
+          <IconButtonLight active={Boolean(currentFormat & IS_BOLD)} title="Bold" onClick={() => applyFormat("bold")}><Bold size={19} /></IconButtonLight>
+          <IconButtonLight active={Boolean(currentFormat & IS_ITALIC)} title="Italic" onClick={() => applyFormat("italic")}><Italic size={19} /></IconButtonLight>
+          <IconButtonLight active={Boolean(currentFormat & IS_STRIKETHROUGH)} title="Strikethrough" onClick={() => applyFormat("strikethrough")}><Strikethrough size={19} /></IconButtonLight>
+          <IconButtonLight active={Boolean(currentFormat & IS_CODE)} title="Inline code" onClick={() => applyFormat("code")}><Code2 size={18} /></IconButtonLight>
+        </ToolbarGroup>
+        <ToolbarDivider />
+        <ToolbarGroup>
+          <IconButtonLight active={listType === "number"} title="Numbered list" onClick={() => applyListType(listType === "number" ? "" : "number")}><ListOrdered size={19} /></IconButtonLight>
+          <IconButtonLight active={listType === "bullet"} title="Bulleted list" onClick={() => applyListType(listType === "bullet" ? "" : "bullet")}><List size={19} /></IconButtonLight>
+          <IconButtonLight active={listType === "check"} title="Checklist" onClick={() => applyListType(listType === "check" ? "" : "check")}><ListTodo size={19} /></IconButtonLight>
+        </ToolbarGroup>
+        <ToolbarDivider />
+        <ToolbarGroup>
+          <IconButtonLight title="Image" onClick={requestImageFileSelection}><Image size={18} /></IconButtonLight>
+          <div ref={linkButtonRef} className="relative inline-grid">
+            <IconButtonLight active={linkActive || linkPanelOpen} title="Create link" onClick={linkActive ? removeLink : openMarkdownLinkPanel}><Link2 size={18} /></IconButtonLight>
+          </div>
+          <IconButtonLight title="Insert table" onClick={() => insertTable({ rows: 3, columns: 3 })}><Table2 size={18} /></IconButtonLight>
+        </ToolbarGroup>
+        <ToolbarDivider />
+        <ToolbarGroup>
+          <IconButtonLight active={blockType === "blockquote"} title="Quote" onClick={() => applyMarkdownBlock("blockquote", insertMarkdown)}><Quote size={18} /></IconButtonLight>
+          <IconButtonLight title="Thematic break" onClick={insertThematicBreak}><Minus size={18} /></IconButtonLight>
+          <IconButtonLight title="Code block" onClick={() => insertCodeBlock({})}><Code2 size={18} /></IconButtonLight>
+        </ToolbarGroup>
+      </ToolbarRow>
+    </Toolbar>
+    {linkPanel}
+    </>
   );
 }
 
-function wordCount(content: string) {
-  const words = content.trim().match(/\S+/g);
-  return words?.length ?? 0;
+function MarkdownImageReplaceToolbar(props: { nodeKey: string; alt: string }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const activeEditor = useCellValue(activeEditor$);
+
+  const requestImageFileSelection = () => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.value = "";
+    input.click();
+  };
+
+  const handleImageFileInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0] ?? null;
+    input.value = "";
+    if (!file || !file.type.startsWith("image/")) return;
+    const src = await fileToDataUrl(file);
+    const altText = props.alt.trim() || imageAltFromFileName(file.name);
+    replaceImageByNodeKey(activeEditor, props.nodeKey, src, altText);
+  };
+
+  return (
+    <div className="ai-markdown-image-replace-toolbar">
+      <input ref={inputRef} className="hidden" type="file" accept="image/*" onChange={(event) => void handleImageFileInputChange(event)} />
+      <button type="button" title="Replace image" aria-label="Replace image" onMouseDown={(event) => event.preventDefault()} onClick={requestImageFileSelection}>
+        <Replace size={18} />
+      </button>
+    </div>
+  );
 }
 
-function readPreviewSelection(root: HTMLElement, markdown: string): MarkdownSelection {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) return { start: markdown.length, end: markdown.length, selectedText: "" };
-  const range = selection.getRangeAt(0);
-  if (!root.contains(range.commonAncestorContainer)) return { start: markdown.length, end: markdown.length, selectedText: "" };
+function markdownBlockTypeFromEditor(blockType: string): MarkdownBlockKind {
+  if (blockType === "quote") return "blockquote";
+  if (blockType === "h1" || blockType === "h2" || blockType === "h3" || blockType === "h4") return blockType;
+  return "p";
+}
 
-  const selectedText = selection.toString();
-  if (selectedText) {
-    const start = markdown.indexOf(selectedText);
-    if (start >= 0) return { start, end: start + selectedText.length, selectedText };
+function markdownListTypeFromEditor(listType: string) {
+  if (listType === "number" || listType === "bullet" || listType === "check") return listType;
+  return "";
+}
+
+function applyMarkdownBlock(kind: MarkdownBlockKind, insertMarkdown: (markdown: string) => void) {
+  if (kind === "p") {
+    insertMarkdown("Text");
+    return;
   }
+  if (kind === "blockquote") {
+    insertMarkdown("> Quote");
+    return;
+  }
+  insertMarkdown(`${"#".repeat(Number(kind.slice(1)))} Heading`);
+}
 
-  const beforeRange = range.cloneRange();
-  beforeRange.selectNodeContents(root);
-  beforeRange.setEnd(range.startContainer, range.startOffset);
-  const start = Math.min(markdown.length, beforeRange.toString().length);
+function replaceSelectedImage(editor: { update: (fn: () => void) => void } | null, src: string, altText: string) {
+  let replaced = false;
+  editor?.update(() => {
+    const selection = lexical.$getSelection();
+    if (!lexical.$isNodeSelection(selection)) return;
+    const imageNode = selection.getNodes().find((node) => $isImageNode(node));
+    if (!imageNode) return;
+    imageNode.setSrc(src);
+    if (!imageNode.getAltText().trim()) imageNode.setAltText(altText);
+    replaced = true;
+  });
+  return replaced;
+}
+
+function replaceImageByNodeKey(editor: { update: (fn: () => void) => void } | null, nodeKey: string, src: string, altText: string) {
+  editor?.update(() => {
+    const node = lexical.$getNodeByKey(nodeKey);
+    if (!$isImageNode(node)) return;
+    node.setSrc(src);
+    node.setAltText(altText);
+  });
+}
+
+function PlainMarkdownCodeBlockEditor(props: CodeBlockEditorProps) {
+  const { setCode } = useCodeBlockEditorContext();
+  return (
+    <textarea
+      aria-label="Code block"
+      className="min-h-24 w-full resize-y rounded-lg border-0 bg-[#171717] p-3.5 font-mono text-[13px] leading-[1.55] text-[#f7f7f7] outline-none focus:shadow-[0_0_0_2px_rgba(26,115,232,0.32)]"
+      value={props.code}
+      spellCheck={false}
+      onChange={(event) => setCode(event.target.value)}
+    />
+  );
+}
+
+function selectionFromEditor(editor: MDXEditorMethods | null, markdown: string): MarkdownSelection {
+  const selectedText = editor?.getSelectionMarkdown() ?? "";
+  if (!selectedText) {
+    return {
+      start: markdown.length,
+      end: markdown.length,
+      selectedText: "",
+    };
+  }
+  const start = markdown.indexOf(selectedText);
+  const safeStart = start >= 0 ? start : 0;
   return {
-    start,
-    end: start + selectedText.length,
+    start: safeStart,
+    end: safeStart + selectedText.length,
     selectedText,
   };
+}
+
+function editorHtml(editor: MDXEditorMethods | null) {
+  return editor?.getContentEditableHTML() ?? "";
+}
+
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error ?? new Error("Unable to read image"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function imageAltFromFileName(fileName: string) {
+  return fileName.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim() || "image";
+}
+
+function markdownLinkText(text: string, href: string) {
+  return `[${escapeMarkdownLinkLabel(text.trim() || href)}](${escapeMarkdownLinkDestination(href)})`;
+}
+
+function normalizeMarkdownLinkUrl(url: string) {
+  const trimmed = url.trim();
+  if (!trimmed || trimmed === "https://") return "";
+  if (/^(https?:|mailto:|tel:|#|\/|\.\/|\.\.\/)/i.test(trimmed)) return trimmed;
+  if (!/^[a-z][a-z\d+.-]*:/i.test(trimmed) && /^[^\s@]+\.[^\s]+$/.test(trimmed)) return `https://${trimmed}`;
+  return trimmed;
+}
+
+function escapeMarkdownLinkLabel(value: string) {
+  return value.replace(/([\\\]])/g, "\\$1");
+}
+
+function escapeMarkdownLinkDestination(value: string) {
+  return value.replace(/[\\\s()]/g, (match) => `\\${match}`);
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function downloadTextFile(fileName: string, content: string, type: string) {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function safeFileName(value: string) {
+  return value.trim().replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "document";
 }

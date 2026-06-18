@@ -18,9 +18,8 @@ export function listTemplates(): SlideTemplate[] {
 }
 
 export function templateAssetRoot() {
-  return process.env.AI_SLIDE_TEMPLATE_ASSET_ROOT
-    ? resolve(process.env.AI_SLIDE_TEMPLATE_ASSET_ROOT)
-    : resolve(appRoot(), "templates", "generated", "templates");
+  const roots = templateAssetRoots();
+  return roots.find((root) => existsSync(root)) ?? roots[0];
 }
 
 export function safeTemplateAssetPath(routePath: string) {
@@ -30,7 +29,8 @@ export function safeTemplateAssetPath(routePath: string) {
 }
 
 export async function ensureTemplateDirs() {
-  await mkdir(templateAssetRoot(), { recursive: true });
+  const root = templateAssetRoot();
+  if (!existsSync(root)) await mkdir(root, { recursive: true });
 }
 
 function templateAssetUrl(value: string) {
@@ -46,4 +46,11 @@ function appRoot() {
     resolve(process.cwd(), "apps", "slide"),
   ];
   return candidates.find((candidate) => existsSync(join(candidate, "package.json"))) ?? resolve(process.cwd(), "..");
+}
+
+function templateAssetRoots() {
+  return [
+    process.env.AI_SLIDE_TEMPLATE_ASSET_ROOT ? resolve(process.env.AI_SLIDE_TEMPLATE_ASSET_ROOT) : "",
+    resolve(appRoot(), "templates", "generated", "templates"),
+  ].filter(Boolean);
 }

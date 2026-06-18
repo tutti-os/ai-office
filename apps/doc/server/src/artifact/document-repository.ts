@@ -22,6 +22,16 @@ export class DocumentRepository {
     this.createProject({ title: "Untitled Document", content: defaultHtmlDocument, type: "html", templateId: null, templateName: null });
   }
 
+  interruptActiveRuns(reason: string) {
+    const activeRuns = rows<DocumentRunRow>(
+      getDb().prepare(`SELECT * FROM document_runs WHERE status IN ('accepted', 'running') ORDER BY created_at ASC`).all(),
+    ).map(rowToRun);
+    for (const run of activeRuns) {
+      this.updateRun(run.id, { status: "failed", error: reason });
+    }
+    return activeRuns;
+  }
+
   snapshot() {
     const db = getDb();
     return {
@@ -220,6 +230,21 @@ export class DocumentRepository {
     return row ? rowToRuntimeProfile(row) : this.getDefaultRuntimeProfile();
   }
 
+  getRuntimeProfileForRun(run: Pick<DocumentRun, "runtime" | "provider" | "model">) {
+    const row = rowOrNull<RuntimeProfileRow>(
+      getDb()
+        .prepare(`SELECT * FROM runtime_profiles WHERE kind = ? AND provider = ? AND model = ? AND enabled = 1 LIMIT 1`)
+        .get(run.runtime, run.provider, run.model),
+    );
+    if (row) return rowToRuntimeProfile(row);
+    const fallback = rowOrNull<RuntimeProfileRow>(
+      getDb()
+        .prepare(`SELECT * FROM runtime_profiles WHERE kind = ? AND provider = ? AND enabled = 1 ORDER BY created_at ASC LIMIT 1`)
+        .get(run.runtime, run.provider),
+    );
+    return fallback ? rowToRuntimeProfile(fallback) : this.getDefaultRuntimeProfile();
+  }
+
   getDefaultRuntimeProfile() {
     const row = rowOrNull<RuntimeProfileRow>(
       getDb()
@@ -277,12 +302,18 @@ export class DocumentRepository {
     const root = ensureProjectDirs(project.id);
     if (project.type === "docx") {
       writeFileSync(join(root, "document.json"), project.content || JSON.stringify(createEmptyDocxDocumentManifest()), "utf8");
+    } else if (project.type === "markdown") {
+      writeFileSync(join(root, "document.md"), project.content, "utf8");
     } else {
       writeFileSync(join(root, "document.html"), project.content, "utf8");
     }
     writeFileSync(
       join(root, "AGENTS.md"),
-      project.type === "docx" ? docxProjectAgentInstructions(project) : htmlProjectAgentInstructions(project),
+      project.type === "docx"
+        ? docxProjectAgentInstructions(project)
+        : project.type === "markdown"
+          ? markdownProjectAgentInstructions(project)
+          : htmlProjectAgentInstructions(project),
       "utf8",
     );
   }
@@ -295,6 +326,19 @@ function htmlProjectAgentInstructions(project: DocumentProject) {
     "You are editing a rich HTML document with the local AI Doc app.",
     "The canonical document is `document.html` and the server is the source of truth.",
     "Use the provided MCP tools to inspect or update the document instead of writing hidden state files.",
+    "",
+    `Project: ${project.title}`,
+    `Project ID: ${project.id}`,
+  ].join("\n");
+}
+
+function markdownProjectAgentInstructions(project: DocumentProject) {
+  return [
+    "# AI Doc Workspace",
+    "",
+    "You are editing a Markdown document with the local AI Doc app.",
+    "The canonical document is `document.md` and the server is the source of truth.",
+    "Return complete Markdown when responding to edit requests.",
     "",
     `Project: ${project.title}`,
     `Project ID: ${project.id}`,

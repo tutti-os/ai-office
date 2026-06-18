@@ -201,6 +201,7 @@ server.setNotFoundHandler((request, reply) => {
 
 try {
   documents.bootstrap();
+  documents.interruptActiveRuns();
   await server.listen({ port, host });
   server.log.info(`ai-doc server listening on http://${host}:${port}`);
 } catch (error) {

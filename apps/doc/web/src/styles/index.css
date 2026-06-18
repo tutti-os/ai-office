@@ -1,44 +1,9 @@
 @import "tailwindcss";
+@source "../../../../../packages/ai-app-ui/src";
+@source "../../../../../packages/ai-app-agent/src";
 
 @theme {
   --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-}
-
-body {
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  font-family: var(--font-sans);
-  background: #171717;
-}
-
-.toolbar-scroll {
-  scrollbar-width: none;
-}
-
-.toolbar-scroll::-webkit-scrollbar {
-  display: none;
-}
-
-button,
-input,
-select,
-textarea {
-  font-family: inherit;
-}
-
-button {
-  cursor: pointer;
-}
-
-button:disabled {
-  cursor: default;
 }
 
 .markdown-preview {
@@ -86,6 +51,14 @@ button:disabled {
 .markdown-preview ul,
 .markdown-preview ol {
   padding-left: 24px;
+}
+
+.markdown-preview ul {
+  list-style: disc;
+}
+
+.markdown-preview ol {
+  list-style: decimal;
 }
 
 .markdown-preview blockquote {
@@ -141,3 +114,42 @@ button:disabled {
 .markdown-preview .task-list-item {
   list-style: none;
 }
+
+.ai-markdown-content :where(.cm-editor) {
+  border-radius: 8px;
+  border: 1px solid #d7dbe0;
+}
+
+.ai-markdown-content [data-editor-block-type="image"] {
+  position: relative;
+}
+
+.ai-markdown-content [data-editor-block-type="image"]:not(:has(> div[draggable="true"])) .ai-markdown-image-replace-toolbar {
+  display: none;
+}
+
+.ai-markdown-image-replace-toolbar {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  z-index: 2;
+  transform: translate(-50%, -100%);
+}
+
+.ai-markdown-image-replace-toolbar button {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  background: #fff;
+  color: rgba(0, 0, 0, 0.66);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+}
+
+.ai-markdown-image-replace-toolbar button:hover {
+  background: #f8fafc;
+  color: #111;
+}
+

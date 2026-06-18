@@ -85,7 +85,7 @@ export function HomeComposer(props: {
 
       <div className="rounded-[20px] border border-white/10 bg-[#303030] p-4 shadow-[0_22px_80px_rgba(0,0,0,0.42)]">
         {props.attachments.length > 0 ? (
-          <div className="toolbar-scroll mb-4 flex gap-3 overflow-x-auto pb-1">
+          <div className="mb-4 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {props.attachments.map((attachment) => (
               <AttachmentPreview key={attachment.id} attachment={attachment} onRemove={props.onRemoveAttachment} />
             ))}

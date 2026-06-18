@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@ai-app/agent": "workspace:*",
+    "@ai-app/ui": "workspace:*",
     "@ai-slide/shared": "workspace:*",
     "@tutti-os/office-preview": "0.0.0-test.20260616183444.f506a6bec39c",
     "@vitejs/plugin-react": "^5.1.1",
@@ -19,8 +20,10 @@
     "react-dom": "^19.2.3"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "tailwindcss": "^4.3.1",
     "typescript": "^5.9.3",
     "vite": "^7.2.7"
   },

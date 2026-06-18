@@ -60,6 +60,13 @@ export async function startAiEdit(projectId: string, input: AiEditRequest) {
   return response.run;
 }
 
+export async function cancelRun(runId: string) {
+  const response = await requestJson<AiEditResponse>(`/api/runs/${encodeURIComponent(runId)}/cancel`, {
+    method: "POST",
+  });
+  return response.run;
+}
+
 export async function clearProjectHistory() {
   const response = await requestJson<ProjectsResponse>("/api/projects", {
     method: "DELETE",

@@ -17,12 +17,16 @@ type SlideFilmstripProps = {
   onSelect: (id: string) => void;
 };
 
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
 export function SlideFilmstrip(props: SlideFilmstripProps) {
   const localRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const filmstrip = localRef.current;
-    const activeThumb = filmstrip?.querySelector<HTMLElement>(".slide-filmstrip-thumb.active");
+    const activeThumb = filmstrip?.querySelector<HTMLElement>('[aria-selected="true"]');
     if (!filmstrip || !activeThumb) return;
     const frame = requestAnimationFrame(() => {
       const stripRect = filmstrip.getBoundingClientRect();
@@ -38,19 +42,23 @@ export function SlideFilmstrip(props: SlideFilmstripProps) {
   }, [props.activeId]);
 
   return (
-    <div ref={localRef} className={`slide-filmstrip ${props.className ?? ""}`} aria-label={props.ariaLabel ?? "Slides"}>
+    <div ref={localRef} className={props.className ?? ""} aria-label={props.ariaLabel ?? "Slides"}>
       {props.items.map((item, index) => {
         const isActive = item.id === props.activeId;
         return (
           <button
-            className={`slide-filmstrip-thumb ${isActive ? "active" : ""}`}
+            aria-selected={isActive}
+            className={cn(
+              "relative w-36 shrink-0 rounded-lg border border-white/10 bg-[#303030] p-[7px] text-white/70",
+              "aria-selected:border-violet-500/90 aria-selected:shadow-[0_0_0_2px_rgba(139,92,246,0.24)]",
+            )}
             key={item.id}
             type="button"
             title={item.title}
             onClick={() => props.onSelect(item.id)}
           >
-            <span>{item.label}</span>
-            <div className="slide-filmstrip-frame" style={{ width: props.frameWidth, height: props.frameHeight }}>
+            <span className="absolute left-2.5 top-2.5 z-[2] inline-flex h-[22px] items-center rounded-md bg-black/56 px-1.5 font-mono text-[11px] font-black text-white">{item.label}</span>
+            <div className="relative overflow-hidden rounded bg-white [&>iframe]:absolute [&>iframe]:left-0 [&>iframe]:top-0 [&>iframe]:block [&>iframe]:origin-top-left [&>iframe]:border-0 [&>iframe]:pointer-events-none" style={{ width: props.frameWidth, height: props.frameHeight }}>
               {props.renderPreview(item, index)}
             </div>
           </button>

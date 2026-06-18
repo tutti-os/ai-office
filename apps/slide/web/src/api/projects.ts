@@ -3,6 +3,7 @@ import type {
   AiEditRequest,
   AiEditResponse,
   DeckSlideHtmlResponse,
+  LocalAgentProviderStatusResponse,
   ProjectDetailResponse,
   ProjectRunsResponse,
   ProjectResponse,
@@ -34,6 +35,10 @@ export async function listTemplates() {
   return response.templates;
 }
 
+export async function fetchLocalAgentProviders() {
+  return requestJson<LocalAgentProviderStatusResponse>("/api/local-agent/providers");
+}
+
 export async function updateProject(projectId: string, input: UpdateProjectRequest) {
   return requestJson<ProjectResponse>(`/api/projects/${encodeURIComponent(projectId)}`, {
     method: "PATCH",
@@ -59,6 +64,13 @@ export async function startAiEdit(projectId: string, input: AiEditRequest) {
   const response = await requestJson<AiEditResponse>(`/api/projects/${encodeURIComponent(projectId)}/ai-edit`, {
     method: "POST",
     body: JSON.stringify(input),
+  });
+  return response.run;
+}
+
+export async function cancelRun(runId: string) {
+  const response = await requestJson<AiEditResponse>(`/api/runs/${encodeURIComponent(runId)}/cancel`, {
+    method: "POST",
   });
   return response.run;
 }

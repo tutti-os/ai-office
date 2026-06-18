@@ -88,6 +88,8 @@ function sanitizeHeadHTML(headHTML: string) {
 
 function sanitizeBodyHTML(bodyHTML: string) {
   const parsed = new DOMParser().parseFromString(`<body>${bodyHTML}</body>`, "text/html");
+  parsed.body.querySelectorAll("[data-runtime-editor-overlay]").forEach((node) => node.remove());
+  parsed.body.querySelectorAll("script[data-editor-runtime], style[data-editor-runtime]").forEach((node) => node.remove());
   parsed.body.querySelectorAll("br[data-runtime-empty-cell]").forEach((node) => node.remove());
   stripRuntimeOnlyAttributes(parsed.body);
   return parsed.body.innerHTML;

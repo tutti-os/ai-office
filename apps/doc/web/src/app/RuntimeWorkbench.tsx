@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from "react";
+import { createPortal } from "react-dom";
 import {
   AlignCenter,
   AlignJustify,
@@ -10,11 +11,8 @@ import {
   BetweenHorizontalEnd,
   BetweenHorizontalStart,
   Bold,
-  ChevronUp,
   Columns2,
   Copy,
-  Crosshair,
-  Grid2X2,
   Image,
   IndentDecrease,
   IndentIncrease,
@@ -26,47 +24,34 @@ import {
   Loader2,
   Minus,
   PaintBucket,
-  Paintbrush,
-  PanelBottom,
   PanelLeft,
-  PanelLeftRightDashed,
-  PanelRight,
-  PanelTop,
-  PanelTopBottomDashed,
-  RefreshCcw,
   Redo2,
-  RotateCcw,
   Rows3,
-  SlidersHorizontal,
   Strikethrough,
   Table2,
-  TableCellsMerge,
-  TableCellsSplit,
   Underline,
   Undo2,
-  Unlink2,
 } from "lucide-react";
+import { ArtifactEditorFrame, ArtifactWorkspaceHeader, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
 import {
-  ColorSwatch,
   FontSizeControl,
-  IconButton,
   IconButtonLight,
+  Toolbar,
+  ToolbarColorInput,
   ToolbarDivider,
   ToolbarGroup,
-  ToolbarLetterSpacingMenu,
-  ToolbarLineHeightMenu,
-  ToolbarMoreMenu,
-  ToolbarParagraphSpacingMenu,
+  ToolbarLayoutMenu,
+  ToolbarRow,
   ToolbarSelect,
-  type ParagraphSpacingValue,
-  type ToolbarMoreOption,
-} from "./toolbarPrimitives";
+  ToolbarSpacingMenu,
+  type ToolbarLayoutValue,
+} from "@ai-app/ui/toolbar";
 import { HomePage } from "./HomePage";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { DocxPreview } from "./DocxPreview";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { useAgentConversation } from "./useAgentConversation";
-import { clearProjectHistory, createProject, getProject, listProjects, startAiEdit, updateProject } from "../api/projects";
+import { cancelRun, clearProjectHistory, createProject, getProject, listProjects, startAiEdit, updateProject } from "../api/projects";
 import { fetchGensparkStudyPlanFixture } from "../api/fixtures";
 import { fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchTemplates } from "../api/runtime";
 import type { DocumentProject, DocumentRunTimelineItem, DocumentType, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
@@ -83,22 +68,19 @@ import { blankHtmlDocument } from "../artifact/runtime/documentSeeds";
 import { enableEditableFrame } from "../artifact/runtime/frame";
 import {
   applyInlineFormat,
-  applyPresentationStyle,
   appendToElement,
-  beginTableCellSelection,
   canEditElementContent,
   canMutateElement,
   canSetElementAttributes,
-  clearFormat,
   clearTableCellSelection,
   cleanupAbandonedTypingStyleMarkers,
   cleanupTypingStyleMarkers,
-  copyCurrentPresentationStyle,
   createLink,
   deleteSelectedElement,
   duplicateElement,
   editTable,
   getCurrentLinkHref,
+  getCurrentLinkText,
   getCurrentImageAttributes,
   getEditorStats,
   getSelectedTableCells,
@@ -107,7 +89,6 @@ import {
   getTableHeaderState,
   indentBlock,
   insertAtPosition,
-  insertHorizontalRule,
   insertHtml,
   insertTable,
   insertText,
@@ -123,21 +104,15 @@ import {
   selectionContainsLink,
   setAlignment,
   setBackColor,
-  clearTableColumnWidth,
-  clearTableRowHeight,
   setElementAttributes,
   setElementStyle,
   setForeColor,
   setFontFamily,
   setFontSize,
   setHeading,
-  setTableCellBorders,
-  setTableColumnWidth,
-  setTableRowHeight,
   tableEditActions,
   toggleChecklist,
   toggleList,
-  updateTableCellSelection,
   upsertImage,
   wrapSelection,
   type AdjacentInsertPosition,
@@ -147,9 +122,7 @@ import {
   type ImageAttributes,
   type InlineFormatTag,
   type ListKind,
-  type PresentationStyle,
   type TableActionAvailability,
-  type TableBorderAction,
   type TableEditAction,
   type TableHeaderState,
 } from "../artifact/runtime/operations";
@@ -167,11 +140,15 @@ import {
 import { useHomeAttachments } from "./useHomeAttachments";
 
 type ToolbarState = {
+  targetLabel: string;
   block: HeadingTag;
   fontFamily: string;
   fontSize: string;
   foreColor: string;
   backColor: string;
+  lineHeight: string;
+  letterSpacing: string;
+  layout: ToolbarLayoutValue;
   alignment: Alignment;
   bold: boolean;
   italic: boolean;
@@ -203,7 +180,6 @@ const operationPanelModes = [
   "setAttributes",
   "wrapSelection",
   "image",
-  "color",
   "style",
   "table",
 ] as const;
@@ -211,13 +187,42 @@ type OperationPanelMode = (typeof operationPanelModes)[number] | null;
 
 type EditorStats = ReturnType<typeof getEditorStats>;
 type HomePanel = "templates" | "history";
+type ResizeHandle = "top-left" | "top" | "top-right" | "right" | "bottom-right" | "bottom" | "bottom-left" | "left";
+type ImageObjectElement = HTMLElement;
+type LinkDraft = {
+  text: string;
+  href: string;
+};
+type LinkEditorPosition = {
+  left: number;
+  top: number;
+  width: number;
+};
+
+const imageResizeHandles: ResizeHandle[] = ["top-left", "top", "top-right", "right", "bottom-right", "bottom", "bottom-left", "left"];
+const linkEditorPanelWidth = 300;
+const linkEditorViewportMargin = 8;
+const linkEditorAnchorGap = 8;
 
 const defaultToolbarState: ToolbarState = {
+  targetLabel: "document",
   block: "p",
   fontFamily: "Arial, sans-serif",
   fontSize: "",
   foreColor: "#111111",
   backColor: "#fff2a8",
+  lineHeight: "",
+  letterSpacing: "",
+  layout: {
+    marginTop: "",
+    marginRight: "",
+    marginBottom: "",
+    marginLeft: "",
+    paddingTop: "",
+    paddingRight: "",
+    paddingBottom: "",
+    paddingLeft: "",
+  },
   alignment: "left",
   bold: false,
   italic: false,
@@ -261,13 +266,13 @@ const operationPanelTitle: Record<Exclude<OperationPanelMode, null>, string> = {
   setAttributes: "Set attributes",
   wrapSelection: "Wrap selection",
   image: "Image",
-  color: "Color",
   style: "Style",
   table: "Table",
 };
-const mergeableColorOperationTypes = new Set(["setForeColor", "setBackColor", "color"]);
+const minimumHtmlFrameHeight = 860;
+const mergeableColorOperationTypes = new Set(["setForeColor", "setBackColor"]);
 const colorHistoryMergeWindowMs = 2000;
-const mergeableInputOperationTypes = new Set(["input"]);
+const mergeableInputOperationTypes = new Set(["input", "setLineHeight", "setLetterSpacing", "setLayout"]);
 const inputHistoryMergeWindowMs = 3000;
 
 function initialContentForType(type: DocumentType) {
@@ -351,8 +356,10 @@ export function RuntimeWorkbench() {
   const lastEditorTargetRef = useRef<Node | null>(null);
   const lastResolvedTargetRef = useRef<Element | null>(null);
   const lastSelectionRef = useRef<SelectionState | null>(null);
-  const tableCellSelectionDraggingRef = useRef(false);
-  const tableCellSelectionAnchorRef = useRef<HTMLTableCellElement | null>(null);
+  const activeImageRef = useRef<ImageObjectElement | null>(null);
+  const pendingImageTargetRef = useRef<ImageObjectElement | null>(null);
+  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
+  const initializedFrameDocsRef = useRef<WeakSet<Document>>(new WeakSet());
   const toolbarSelectionPreserveTimestampRef = useRef(0);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const applier = useMemo(() => new RuntimeApplier(), []);
@@ -415,7 +422,7 @@ export function RuntimeWorkbench() {
   const [selectedTemplateCategory, setSelectedTemplateCategory] = useState(allTemplatesLabel);
   const [toolbarState, setToolbarState] = useState<ToolbarState>(defaultToolbarState);
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
-  const [linkDraft, setLinkDraft] = useState("https://");
+  const [linkDraft, setLinkDraft] = useState<LinkDraft>({ text: "", href: "https://" });
   const [operationPanelMode, setOperationPanelMode] = useState<OperationPanelMode>(null);
   const [operationDraft, setOperationDraft] = useState("");
   const [operationPosition, setOperationPosition] = useState<AdjacentInsertPosition>("afterend");
@@ -423,7 +430,6 @@ export function RuntimeWorkbench() {
   const [operationWrapperTag, setOperationWrapperTag] = useState("span");
   const [attributeDraft, setAttributeDraft] = useState<AttributeDraft>({ id: "", className: "", title: "", custom: "" });
   const [imageDraft, setImageDraft] = useState<ImageAttributes>({ src: "", alt: "", width: "", height: "" });
-  const [colorDraft, setColorDraft] = useState({ foreColor: "#111111", backColor: "#fff2a8" });
   const [tableDraft, setTableDraft] = useState({ rows: "3", columns: "3" });
   const [styleDraft, setStyleDraft] = useState<ElementStyleAttributes>({
     width: "",
@@ -436,27 +442,36 @@ export function RuntimeWorkbench() {
     borderColor: "#d0d5dd",
     borderRadius: "",
     padding: "",
+    paddingTop: "",
+    paddingRight: "",
+    paddingBottom: "",
+    paddingLeft: "",
     marginTop: "",
+    marginRight: "",
     marginBottom: "",
+    marginLeft: "",
   });
   const [editorStats, setEditorStats] = useState<EditorStats>({ characterCount: 0, wordCount: 0, paragraphCount: 0, elementCount: 0 });
-  const [toolbarExpanded, setToolbarExpanded] = useState(true);
-  const [formatClipboard, setFormatClipboard] = useState<PresentationStyle | null>(null);
   const editorOpen = route.name === "document";
   const currentProjectId = route.name === "document" ? route.projectId : null;
-  const currentDocumentType = currentProject?.type ?? "html";
+  const loadedCurrentProject = currentProjectId && currentProject?.id === currentProjectId ? currentProject : null;
+  const currentDocumentType: DocumentType | null = loadedCurrentProject?.type ?? null;
   const activeDirty =
     currentDocumentType === "markdown"
       ? markdownSaveState !== "saved"
       : currentDocumentType === "docx"
         ? docxSaveState !== "saved"
-        : saveState !== "saved";
+        : currentDocumentType === "html"
+          ? saveState !== "saved"
+          : false;
   const activeSelectionText =
     currentDocumentType === "markdown"
       ? markdownRuntime?.selection.selectedText ?? ""
       : currentDocumentType === "docx"
         ? docxRuntime?.selection.selectedText ?? ""
-        : runtime?.activeSelection?.selectedText ?? "";
+        : currentDocumentType === "html"
+          ? runtime?.activeSelection?.selectedText ?? ""
+          : "";
 
   const templateCategories = useMemo(() => templateCategoriesFor(templates), [templates]);
   const templateCounts = useMemo(() => templateCountsFor(templates), [templates]);
@@ -495,9 +510,7 @@ export function RuntimeWorkbench() {
     lastEditorTargetRef.current = null;
     lastResolvedTargetRef.current = null;
     lastSelectionRef.current = null;
-    tableCellSelectionDraggingRef.current = false;
-    tableCellSelectionAnchorRef.current = null;
-    setFormatClipboard(null);
+    activeImageRef.current = null;
     setEditorStats({ characterCount: 0, wordCount: 0, paragraphCount: 0, elementCount: 0 });
   };
 
@@ -509,7 +522,7 @@ export function RuntimeWorkbench() {
     lastEditorTargetRef.current = null;
     lastResolvedTargetRef.current = null;
     lastSelectionRef.current = null;
-    setFormatClipboard(null);
+    activeImageRef.current = null;
     setEditorStats({ characterCount: content.length, wordCount: markdownWordCount(content), paragraphCount: 0, elementCount: 0 });
   };
 
@@ -520,9 +533,7 @@ export function RuntimeWorkbench() {
     lastEditorTargetRef.current = null;
     lastResolvedTargetRef.current = null;
     lastSelectionRef.current = null;
-    tableCellSelectionDraggingRef.current = false;
-    tableCellSelectionAnchorRef.current = null;
-    setFormatClipboard(null);
+    activeImageRef.current = null;
     setEditorStats({ characterCount: 0, wordCount: 0, paragraphCount: 0, elementCount: 0 });
     await loadDocxArtifact(project.id, { content: project.content, title: project.title, source: "imported-html" });
   };
@@ -775,9 +786,21 @@ export function RuntimeWorkbench() {
     }
   };
 
+  const cancelAgentRun = async (runId: string) => {
+    setError("");
+    try {
+      await cancelRun(runId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      throw err;
+    }
+  };
+
   const handleFrameLoad = () => {
     const doc = iframeRef.current?.contentDocument;
     if (!doc) return;
+    if (initializedFrameDocsRef.current.has(doc)) return;
+    initializedFrameDocsRef.current.add(doc);
     enableEditableFrame(doc);
     setEditorStats(getEditorStats(doc));
     const queueSelectionSync = (fallbackNode?: Node | null) => {
@@ -794,58 +817,23 @@ export function RuntimeWorkbench() {
       lastEditorTargetRef.current = frameEventTarget(doc, event);
       queueSelectionSync(lastEditorTargetRef.current);
     };
-    const supportsPointerEvents = Boolean(doc.defaultView?.PointerEvent);
-    const tableSelectionStartEvents = supportsPointerEvents ? ["pointerdown"] : ["mousedown"];
-    const tableSelectionMoveEvents = supportsPointerEvents ? ["pointermove"] : ["mousemove"];
-    const tableSelectionEndEvents = supportsPointerEvents ? ["pointerup", "pointercancel"] : ["mouseup"];
-    const syncTableSelectionFromPointer = (event: Event) => {
+    const syncClickFromFrameEvent = (event: Event) => {
       const target = frameEventTarget(doc, event);
-      if (tableSelectionStartEvents.includes(event.type)) {
-        const cell = tableCellFromNode(target, doc);
-        tableCellSelectionAnchorRef.current = cell;
-        tableCellSelectionDraggingRef.current = false;
-        if (!cell) clearTableCellSelection(doc);
-        lastEditorTargetRef.current = cell ?? target;
-        syncSelection(lastEditorTargetRef.current);
-        return;
-      }
-      if (tableSelectionMoveEvents.includes(event.type)) {
-        const anchor = tableCellSelectionAnchorRef.current;
-        if (!anchor) return;
-        const targetCell = tableCellFromNode(target, doc);
-        if (!targetCell || targetCell === anchor || targetCell.closest("table") !== anchor.closest("table")) return;
-        if (!tableCellSelectionDraggingRef.current) {
-          beginTableCellSelection(doc, anchor);
-          tableCellSelectionDraggingRef.current = true;
-        }
-        const cell = updateTableCellSelection(doc, target);
-        if (!cell) return;
+      const image = imageFromNode(target, doc);
+      if (image) {
         event.preventDefault();
-        clearNativeSelection(doc);
-        lastEditorTargetRef.current = cell;
-        syncSelection(cell);
+        event.stopPropagation();
+        selectImageObject(doc, image);
         return;
       }
-      if (tableSelectionEndEvents.includes(event.type)) {
-        if (tableCellSelectionDraggingRef.current) {
-          const cell = updateTableCellSelection(doc, target) ?? getSelectedTableCellTarget(doc);
-          tableCellSelectionDraggingRef.current = false;
-          tableCellSelectionAnchorRef.current = null;
-          clearNativeSelection(doc);
-          lastEditorTargetRef.current = cell ?? target;
-          syncSelection(lastEditorTargetRef.current);
-          return;
-        }
-        tableCellSelectionAnchorRef.current = null;
-        clearTableCellSelection(doc);
-        queueSelectionSync(target);
-      }
+      clearImageObjectSelection(doc);
+      lastEditorTargetRef.current = target;
+      queueSelectionSync(target);
     };
+    clearTableCellSelection(doc);
+    removeImageSelectionOverlay(doc);
     doc.addEventListener("keyup", syncFromFrameEvent, true);
-    tableSelectionStartEvents.forEach((eventName) => doc.addEventListener(eventName, syncTableSelectionFromPointer, true));
-    tableSelectionMoveEvents.forEach((eventName) => doc.addEventListener(eventName, syncTableSelectionFromPointer, true));
-    tableSelectionEndEvents.forEach((eventName) => doc.addEventListener(eventName, syncTableSelectionFromPointer, true));
-    doc.addEventListener("click", syncFromFrameEvent, true);
+    doc.addEventListener("click", syncClickFromFrameEvent, true);
     doc.addEventListener("input", () => syncMutation("input", "User edited document body"));
     setRuntime((current) => {
       if (!current) return current;
@@ -861,6 +849,21 @@ export function RuntimeWorkbench() {
           });
     });
   };
+
+  useEffect(() => {
+    if (!editorOpen || currentDocumentType !== "html" || !frameSrcDoc) return;
+    const frame = iframeRef.current;
+    const doc = frame?.contentDocument;
+    if (!doc?.body) return;
+    const frameWindow = doc.defaultView;
+    const run = () => handleFrameLoad();
+    if (frameWindow?.requestAnimationFrame) {
+      const id = frameWindow.requestAnimationFrame(run);
+      return () => frameWindow.cancelAnimationFrame(id);
+    }
+    const id = window.setTimeout(run, 0);
+    return () => window.clearTimeout(id);
+  }, [currentDocumentType, editorOpen, frameRevision, frameSrcDoc]);
 
   const syncSelection = (fallbackNode?: Node | null) => {
     const doc = iframeRef.current?.contentDocument;
@@ -1056,22 +1059,26 @@ export function RuntimeWorkbench() {
     const liveTarget = doc ? currentSelectionElement(doc) ?? lastResolvedTargetRef.current : null;
     const liveSelection = doc ? captureSelectionState(doc, liveTarget ?? lastEditorTargetRef.current) : null;
     const currentHref = readCurrentLinkHref(doc, liveTarget ?? lastEditorTargetRef.current);
+    const currentText = readCurrentLinkText(doc, liveTarget ?? lastEditorTargetRef.current);
+    const selectedText = liveSelection?.selectedText || runtime?.activeSelection?.selectedText || "";
     const hasLinkableSelection = Boolean(liveSelection && liveSelection.selectionType !== "write");
     const hasStoredLinkableSelection = Boolean(runtime?.activeSelection && runtime.activeSelection.selectionType !== "write");
     const hasInsertionTarget = Boolean(liveTarget ?? lastEditorTargetRef.current);
     if (!currentHref && !hasLinkableSelection && !hasStoredLinkableSelection && !toolbarState.table && !hasInsertionTarget) return;
-    const selectedTextUrl = normalizeLinkUrl(liveSelection?.selectedText || runtime?.activeSelection?.selectedText || "");
-    setLinkDraft(currentHref || selectedTextUrl || "https://");
+    setLinkDraft({
+      text: currentHref ? currentText : selectedText,
+      href: currentHref || "https://",
+    });
     setOperationPanelMode(null);
     setLinkEditorOpen((current) => !current);
   };
 
-  const applyLink = (url: string) => {
-    if (!url.trim() || url.trim() === "https://") return;
+  const applyLink = (draft: LinkDraft) => {
+    if (!draft.href.trim() || draft.href.trim() === "https://") return;
     const applied = executeEditorOperation({
       operationType: "createLink",
       description: "Create link",
-      mutate: (doc, target) => createLink(doc, url, target),
+      mutate: (doc, target) => createLink(doc, draft.href, target, draft.text),
     });
     if (!applied) return;
     setLinkEditorOpen(false);
@@ -1108,6 +1115,24 @@ export function RuntimeWorkbench() {
     });
   };
 
+  const applyForeColor = (color: string) => {
+    executeEditorOperation({
+      operationType: "setForeColor",
+      description: `Set text color ${color}`,
+      preferTypingSelection: true,
+      mutate: (doc, target) => setForeColor(doc, color, target),
+    });
+  };
+
+  const applyBackColor = (color: string) => {
+    executeEditorOperation({
+      operationType: "setBackColor",
+      description: `Set fill color ${color}`,
+      preferTypingSelection: true,
+      mutate: (doc, target) => setBackColor(doc, color, target),
+    });
+  };
+
   const applyAlignment = (alignment: Alignment) => {
     executeEditorOperation({
       operationType: "setAlignment",
@@ -1116,24 +1141,181 @@ export function RuntimeWorkbench() {
     });
   };
 
-  const copyFormat = () => {
-    const doc = iframeRef.current?.contentDocument;
-    if (!doc) return;
-    const target =
-      currentSelectionElement(doc) ??
-      lastResolvedTargetRef.current ??
-      resolveEditorTarget(doc, lastEditorTargetRef.current, lastSelectionRef.current?.commonAncestorPath ?? runtime?.activeSelection?.commonAncestorPath ?? "");
-    const style = copyCurrentPresentationStyle(doc, target);
-    if (style) setFormatClipboard(style);
+  const selectImageObject = (doc: Document, image: ImageObjectElement) => {
+    if (!doc.body.contains(image)) return;
+    activeImageRef.current = image;
+    lastEditorTargetRef.current = image;
+    lastResolvedTargetRef.current = image;
+    selectElementInDocument(doc, image);
+    syncSelection(image);
+    renderImageSelectionOverlay(doc, image);
   };
 
-  const pasteFormat = () => {
-    if (!formatClipboard) return;
-    executeEditorOperation({
-      operationType: "applyPresentationStyle",
-      description: "Apply copied format",
-      mutate: (doc, target) => applyPresentationStyle(doc, formatClipboard, target),
+  const clearImageObjectSelection = (doc: Document) => {
+    activeImageRef.current = null;
+    removeImageSelectionOverlay(doc);
+  };
+
+  const renderImageSelectionOverlay = (doc: Document, image: ImageObjectElement) => {
+    removeImageSelectionOverlay(doc);
+    if (!doc.body.contains(image)) return;
+    const overlay = doc.createElement("div");
+    overlay.setAttribute("data-runtime-editor-overlay", "image-selection");
+    overlay.contentEditable = "false";
+    Object.assign(overlay.style, {
+      position: "absolute",
+      zIndex: "2147483647",
+      pointerEvents: "none",
+      border: "2px solid #2684ff",
+      boxSizing: "border-box",
+      boxShadow: "0 0 0 1px rgba(255,255,255,0.95)",
+    } satisfies Partial<CSSStyleDeclaration>);
+
+    const menu = doc.createElement("div");
+    Object.assign(menu.style, {
+      position: "absolute",
+      left: "50%",
+      top: "-8px",
+      transform: "translate(-50%, -100%)",
+      display: "grid",
+      width: "32px",
+      height: "32px",
+      boxSizing: "border-box",
+      placeItems: "center",
+      alignItems: "center",
+      border: "1px solid rgba(0,0,0,0.08)",
+      borderRadius: "8px",
+      background: "#fff",
+      padding: "0",
+      boxShadow: "0 6px 18px rgba(0,0,0,0.14)",
+      pointerEvents: "auto",
+    } satisfies Partial<CSSStyleDeclaration>);
+    const replaceButton = doc.createElement("button");
+    replaceButton.type = "button";
+    replaceButton.title = "Replace image";
+    replaceButton.setAttribute("aria-label", "Replace image");
+    Object.assign(replaceButton.style, {
+      appearance: "none",
+      width: "28px",
+      minWidth: "28px",
+      height: "28px",
+      minHeight: "28px",
+      boxSizing: "border-box",
+      border: "0",
+      borderRadius: "7px",
+      background: "transparent",
+      padding: "0",
+      margin: "0",
+      color: "rgba(0,0,0,0.62)",
+      cursor: "pointer",
+      display: "grid",
+      placeItems: "center",
+      lineHeight: "1",
+    } satisfies Partial<CSSStyleDeclaration>);
+    const replaceIcon = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+    replaceIcon.setAttribute("width", "16");
+    replaceIcon.setAttribute("height", "16");
+    replaceIcon.setAttribute("viewBox", "0 0 24 24");
+    replaceIcon.setAttribute("fill", "none");
+    replaceIcon.setAttribute("stroke", "currentColor");
+    replaceIcon.setAttribute("stroke-width", "2");
+    replaceIcon.setAttribute("stroke-linecap", "round");
+    replaceIcon.setAttribute("stroke-linejoin", "round");
+    replaceIcon.setAttribute("aria-hidden", "true");
+    Object.assign(replaceIcon.style, {
+      display: "block",
+      width: "16px",
+      height: "16px",
+      flex: "0 0 auto",
+    } satisfies Partial<CSSStyleDeclaration>);
+    const imagePath = doc.createElementNS("http://www.w3.org/2000/svg", "path");
+    imagePath.setAttribute("d", "M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7");
+    const mountainPath = doc.createElementNS("http://www.w3.org/2000/svg", "path");
+    mountainPath.setAttribute("d", "m21 15-3.1-3.1a2 2 0 0 0-2.8 0L9 18");
+    const imageLinePath = doc.createElementNS("http://www.w3.org/2000/svg", "path");
+    imageLinePath.setAttribute("d", "m3 15 4-4a2 2 0 0 1 2.8 0L13 14");
+    const circle = doc.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx", "9");
+    circle.setAttribute("cy", "9");
+    circle.setAttribute("r", "2");
+    const replacePath = doc.createElementNS("http://www.w3.org/2000/svg", "path");
+    replacePath.setAttribute("d", "M17 3h4v4");
+    const arrowPath = doc.createElementNS("http://www.w3.org/2000/svg", "path");
+    arrowPath.setAttribute("d", "m21 3-5 5");
+    replaceIcon.append(imagePath, mountainPath, imageLinePath, circle, replacePath, arrowPath);
+    replaceButton.append(replaceIcon);
+    replaceButton.addEventListener("mouseenter", () => {
+      replaceButton.style.background = "rgba(0,0,0,0.06)";
+      replaceButton.style.color = "#111";
     });
+    replaceButton.addEventListener("mouseleave", () => {
+      replaceButton.style.background = "transparent";
+      replaceButton.style.color = "rgba(0,0,0,0.62)";
+    });
+    replaceButton.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    replaceButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      requestImageFileSelection(image);
+    });
+    menu.append(replaceButton);
+    overlay.append(menu);
+
+    imageResizeHandles.forEach((handle) => {
+      const button = doc.createElement("button");
+      button.type = "button";
+      button.setAttribute("aria-label", `Resize ${handle}`);
+      button.setAttribute("data-handle", handle);
+      Object.assign(button.style, imageResizeHandleStyle(handle));
+      button.addEventListener("pointerdown", (event) => beginResizeImage(handle, image, overlay, event));
+      overlay.append(button);
+    });
+
+    doc.body.append(overlay);
+    positionImageSelectionOverlay(image, overlay);
+    image.addEventListener("load", () => positionImageSelectionOverlay(image, overlay), { once: true });
+  };
+
+  const beginResizeImage = (handle: ResizeHandle, image: ImageObjectElement, overlay: HTMLElement, event: globalThis.PointerEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!image.ownerDocument.body.contains(image)) return;
+    const initial = image.getBoundingClientRect();
+    const startClientX = event.clientX;
+    const startClientY = event.clientY;
+    const target = event.currentTarget;
+    if (target instanceof Element && "setPointerCapture" in target) target.setPointerCapture(event.pointerId);
+    const ownerWindow = image.ownerDocument.defaultView ?? window;
+
+    const onPointerMove = (moveEvent: globalThis.PointerEvent) => {
+      moveEvent.preventDefault();
+      const deltaX = moveEvent.clientX - startClientX;
+      const deltaY = moveEvent.clientY - startClientY;
+      const next = resizedImageSizeForHandle(handle, initial.width, initial.height, deltaX, deltaY);
+      image.style.width = `${Math.round(next.width)}px`;
+      if (next.height !== null) image.style.height = `${Math.round(next.height)}px`;
+      positionImageSelectionOverlay(image, overlay);
+    };
+
+    const onPointerEnd = (endEvent: globalThis.PointerEvent) => {
+      endEvent.preventDefault();
+      ownerWindow.removeEventListener("pointermove", onPointerMove);
+      ownerWindow.removeEventListener("pointerup", onPointerEnd);
+      ownerWindow.removeEventListener("pointercancel", onPointerEnd);
+      activeImageRef.current = image;
+      lastEditorTargetRef.current = image;
+      lastResolvedTargetRef.current = image;
+      selectElementInDocument(image.ownerDocument, image);
+      positionImageSelectionOverlay(image, overlay);
+      syncMutation("resizeImage", "Resize image");
+    };
+
+    ownerWindow.addEventListener("pointermove", onPointerMove);
+    ownerWindow.addEventListener("pointerup", onPointerEnd);
+    ownerWindow.addEventListener("pointercancel", onPointerEnd);
   };
 
   const applyList = (kind: ListKind) => {
@@ -1144,8 +1326,72 @@ export function RuntimeWorkbench() {
     });
   };
 
+  const requestImageFileSelection = (image?: ImageObjectElement | null) => {
+    const doc = iframeRef.current?.contentDocument ?? null;
+    const currentImage =
+      image ??
+      (doc
+        ? imageFromNode(lastEditorTargetRef.current, doc) ??
+          imageFromNode(currentSelectionElement(doc), doc) ??
+          imageFromNode(lastResolvedTargetRef.current, doc)
+        : null);
+    pendingImageTargetRef.current = currentImage && currentImage.ownerDocument === doc && doc.body.contains(currentImage) ? currentImage : null;
+    setLinkEditorOpen(false);
+    setOperationPanelMode(null);
+    const input = imageFileInputRef.current;
+    if (!input) return;
+    input.value = "";
+    input.click();
+  };
+
+  const handleImageFileInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0] ?? null;
+    input.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file.");
+      return;
+    }
+    let src = "";
+    try {
+      src = await readFileAsDataUrl(file);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      pendingImageTargetRef.current = null;
+      return;
+    }
+    const pendingImage = pendingImageTargetRef.current;
+    pendingImageTargetRef.current = null;
+    const doc = iframeRef.current?.contentDocument ?? null;
+    const existingAttributes =
+      pendingImage && doc && pendingImage.ownerDocument === doc && doc.body.contains(pendingImage)
+        ? readCurrentImageAttributes(doc, pendingImage)
+        : { src: "", alt: "", width: "", height: "" };
+    const attributes: ImageAttributes = {
+      ...existingAttributes,
+      src,
+      alt: existingAttributes.alt?.trim() || imageAltFromFileName(file.name),
+    };
+    executeEditorOperation({
+      operationType: pendingImage ? "replaceImage" : "insertImage",
+      description: pendingImage ? "Replace image" : "Insert image",
+      mutate: (operationDoc, target) => {
+        const activeImage =
+          pendingImage && pendingImage.ownerDocument === operationDoc && operationDoc.body.contains(pendingImage)
+            ? pendingImage
+            : null;
+        return upsertSelectedImageObject(operationDoc, attributes, target, activeImage);
+      },
+    });
+  };
+
   const applyToolbarMoreAction = (action: string) => {
     if (!action) return;
+    if (action === "image") {
+      requestImageFileSelection();
+      return;
+    }
     if (isOperationPanelMode(action)) {
       if (action === "setAttributes" && !toolbarState.attributeElement) return;
       if (isContentBoundOperation(action) && !toolbarState.contentElement) return;
@@ -1156,9 +1402,6 @@ export function RuntimeWorkbench() {
       setOperationIsHtml(action === "insertHtml" || action === "appendHtml" || action === "insertAtPosition");
       if (action === "image") {
         setImageDraft(readCurrentImageAttributes(iframeRef.current?.contentDocument ?? null, lastEditorTargetRef.current));
-      }
-      if (action === "color") {
-        setColorDraft(readCurrentColors(iframeRef.current?.contentDocument ?? null, lastEditorTargetRef.current));
       }
       if (action === "style") {
         setStyleDraft(readCurrentStyles(iframeRef.current?.contentDocument ?? null, lastEditorTargetRef.current));
@@ -1197,7 +1440,7 @@ export function RuntimeWorkbench() {
       executeEditorOperation({
         operationType: "removeImage",
         description: "Remove image",
-        mutate: (doc, target) => removeImage(doc, target),
+        mutate: (doc, target) => removeSelectedImageObject(doc, target, activeImageRef.current),
       });
     } else if (action === "duplicateElement") {
       if (!toolbarState.mutableElement) return;
@@ -1244,7 +1487,6 @@ export function RuntimeWorkbench() {
       operationType: operationPanelMode,
       description: operationPanelTitle[operationPanelMode],
       requiresSelection: operationPanelMode === "wrapSelection" || operationPanelMode === "replaceSelection",
-      preferTypingSelection: operationPanelMode === "color",
       mutate: (doc, target) => {
         if (operationPanelMode === "insertText") return hasContent ? insertText(doc, content, target) : false;
         if (operationPanelMode === "insertHtml") return hasContent ? insertHtml(doc, content, target) : false;
@@ -1254,12 +1496,7 @@ export function RuntimeWorkbench() {
         if (operationPanelMode === "insertAtPosition") return Boolean(target && hasContent && insertAtPosition(doc, target, content, operationPosition, operationIsHtml));
         if (operationPanelMode === "setAttributes") return setElementAttributes(doc, target, attributes);
         if (operationPanelMode === "wrapSelection") return wrapSelection(doc, operationWrapperTag, attributes, target);
-        if (operationPanelMode === "image") return upsertImage(doc, imageDraft, target);
-        if (operationPanelMode === "color") {
-          const foregroundApplied = colorDraft.foreColor ? setForeColor(doc, colorDraft.foreColor, target) : false;
-          const backgroundApplied = colorDraft.backColor ? setBackColor(doc, colorDraft.backColor, target) : false;
-          return foregroundApplied || backgroundApplied;
-        }
+        if (operationPanelMode === "image") return upsertSelectedImageObject(doc, imageDraft, target, activeImageRef.current);
         if (operationPanelMode === "style") return setElementStyle(doc, target, styleDraft);
         if (operationPanelMode === "table") {
           const rows = Number.parseInt(tableDraft.rows, 10);
@@ -1312,7 +1549,14 @@ export function RuntimeWorkbench() {
   };
 
   return (
-    <main className="h-screen overflow-hidden bg-[#1f1f1f] text-white">
+    <main className="h-screen overflow-hidden bg-[#1f1f1f] font-sans text-white">
+      <input
+        ref={imageFileInputRef}
+        className="hidden"
+        type="file"
+        accept="image/*"
+        onChange={(event) => void handleImageFileInputChange(event)}
+      />
       {!editorOpen ? (
         <HomePage
           attachments={homeAttachments.attachments}
@@ -1343,22 +1587,27 @@ export function RuntimeWorkbench() {
           onSelectTemplate={loadTemplate}
         />
       ) : currentDocumentType === "markdown" && markdownRuntime ? (
-        <section className="grid h-full grid-cols-[minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)]">
-          <AgentConversationPanel
-            activeSelectionText={activeSelectionText}
-            dirty={activeDirty}
-            error={error || agentConversation.error}
-            items={agentConversation.items}
-            loading={agentConversation.loading}
-            sending={agentBusy}
-            onBackHome={() => setRoute(pushHomeRoute())}
-            onSend={sendAgentPrompt}
-          />
+        <ArtifactEditorFrame
+          sidebar={
+            <AgentConversationPanel
+              activeSelectionText={activeSelectionText}
+              artifactLabel="markdown"
+              dirty={activeDirty}
+              error={error || agentConversation.error}
+              items={agentConversation.items}
+              loading={agentConversation.loading}
+              sending={agentBusy}
+              onBackHome={() => setRoute(pushHomeRoute())}
+              onCancel={cancelAgentRun}
+              onSend={sendAgentPrompt}
+            />
+          }
+        >
           <MarkdownEditor
             runtime={markdownRuntime}
             dirty={activeDirty}
+            saveState={markdownSaveState}
             loading={loading}
-            onBackHome={() => setRoute(pushHomeRoute())}
             onUndo={undoMarkdown}
             onRedo={redoMarkdown}
             onChange={(content, selection) => {
@@ -1367,29 +1616,36 @@ export function RuntimeWorkbench() {
             }}
             onSelectionChange={updateMarkdownSelection}
           />
-        </section>
+        </ArtifactEditorFrame>
       ) : currentDocumentType === "docx" && docxRuntime ? (
-        <section className="grid h-full grid-cols-[minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)]">
-          <AgentConversationPanel
-            activeSelectionText={activeSelectionText}
-            dirty={activeDirty}
-            error={error || docxError || agentConversation.error}
-            items={agentConversation.items}
-            loading={agentConversation.loading}
-            sending={agentBusy}
-            onBackHome={() => setRoute(pushHomeRoute())}
-            onSend={sendAgentPrompt}
-          />
+        <ArtifactEditorFrame
+          sidebar={
+            <AgentConversationPanel
+              activeSelectionText={activeSelectionText}
+              artifactLabel="docx"
+              dirty={activeDirty}
+              error={error || docxError || agentConversation.error}
+              items={agentConversation.items}
+              loading={agentConversation.loading}
+              sending={agentBusy}
+              onBackHome={() => setRoute(pushHomeRoute())}
+              onCancel={cancelAgentRun}
+              onSend={sendAgentPrompt}
+            />
+          }
+        >
           <DocxPreview
             runtime={docxRuntime}
+            projectId={currentProjectId}
             dirty={activeDirty}
             error={docxError}
             loading={loading || docxLoading}
-            onBackHome={() => setRoute(pushHomeRoute())}
             onSelectionChange={updateDocxSelection}
           />
-        </section>
-      ) : (
+        </ArtifactEditorFrame>
+      ) : !currentDocumentType ? (
+        <DocumentLoadingScreen error={error} loading={loading} />
+      ) : currentDocumentType === "html" && runtime ? (
         <EditorScreen
           activeSelectionText={activeSelectionText}
           dirty={activeDirty}
@@ -1404,8 +1660,8 @@ export function RuntimeWorkbench() {
           agentSending={agentBusy}
           editorStats={editorStats}
           runtime={runtime}
+          saveState={saveState}
           toolbarState={toolbarState}
-          toolbarExpanded={toolbarExpanded}
           linkDraft={linkDraft}
           linkEditorOpen={linkEditorOpen}
           operationDraft={operationDraft}
@@ -1415,21 +1671,11 @@ export function RuntimeWorkbench() {
           operationWrapperTag={operationWrapperTag}
           attributeDraft={attributeDraft}
           imageDraft={imageDraft}
-          colorDraft={colorDraft}
           tableDraft={tableDraft}
           styleDraft={styleDraft}
           onBackHome={() => setRoute(pushHomeRoute())}
-          onBackColor={(color) => executeEditorOperation({
-            operationType: "setBackColor",
-            description: `Set background color ${color}`,
-            mutate: (doc, target) => setBackColor(doc, color, target),
-          })}
-          onClearFormat={() => executeEditorOperation({
-            operationType: "clearFormat",
-            description: "Clear formatting",
-            mutate: (doc, target) => clearFormat(doc, target),
-          })}
           onApplyLink={applyLink}
+          onCloseLinkEditor={() => setLinkEditorOpen(false)}
           onCreateLink={openLinkEditor}
           onLinkDraftChange={setLinkDraft}
           onApplyOperation={applyOperationPanel}
@@ -1438,15 +1684,11 @@ export function RuntimeWorkbench() {
           onOperationDraftChange={setOperationDraft}
           onOperationHtmlChange={setOperationIsHtml}
           onImageDraftChange={setImageDraft}
-          onCopyFormat={copyFormat}
-          onColorDraftChange={setColorDraft}
+          onPickImage={requestImageFileSelection}
           onTableDraftChange={setTableDraft}
           onStyleDraftChange={setStyleDraft}
-          onVerticalAlign={(verticalAlign) => executeEditorOperation({
-            operationType: "setVerticalAlign",
-            description: `Set vertical align ${verticalAlign}`,
-            mutate: (doc, target) => setElementStyle(doc, target, { verticalAlign }),
-          })}
+          onBackColor={applyBackColor}
+          onForeColor={applyForeColor}
           onLineHeight={(lineHeight) => executeEditorOperation({
             operationType: "setLineHeight",
             description: `Set line height ${lineHeight || "normal"}`,
@@ -1457,49 +1699,19 @@ export function RuntimeWorkbench() {
             description: `Set letter spacing ${letterSpacing || "normal"}`,
             mutate: (doc, target) => setElementStyle(doc, target, { letterSpacing }),
           })}
-          onParagraphSpacing={(spacing) => executeEditorOperation({
-            operationType: "setParagraphSpacing",
-            description: `Set paragraph spacing ${spacing.label}`,
-            mutate: (doc, target) => setElementStyle(doc, target, { marginTop: spacing.marginTop, marginBottom: spacing.marginBottom }),
-          })}
-          onTableBorder={(borderAction) => executeEditorOperation({
-            operationType: "setTableCellBorders",
-            description: `Set table cell border ${borderAction}`,
-            mutate: (doc, target) => setTableCellBorders(doc, borderAction, target, {
-              width: styleDraft.borderWidth,
-              style: styleDraft.borderStyle,
-              color: styleDraft.borderColor,
-            }),
-          })}
-          onTableColumnWidth={(mode) => executeEditorOperation({
-            operationType: mode === "clear" ? "clearTableColumnWidth" : "setTableColumnWidth",
-            description: mode === "clear" ? "Clear table column width" : `Set table column width ${styleDraft.width || "auto"}`,
-            mutate: (doc, target) => (mode === "clear" ? clearTableColumnWidth(doc, target) : setTableColumnWidth(doc, target, styleDraft.width ?? "")),
-          })}
-          onTableRowHeight={(mode) => executeEditorOperation({
-            operationType: mode === "clear" ? "clearTableRowHeight" : "setTableRowHeight",
-            description: mode === "clear" ? "Clear table row height" : `Set table row height ${styleDraft.height || "auto"}`,
-            mutate: (doc, target) => (mode === "clear" ? clearTableRowHeight(doc, target) : setTableRowHeight(doc, target, styleDraft.height ?? "")),
+          onLayoutChange={(attributes) => executeEditorOperation({
+            operationType: "setLayout",
+            description: "Set layout",
+            mutate: (doc, target) => setElementStyle(doc, target, attributes),
           })}
           onOperationPositionChange={setOperationPosition}
           onOperationWrapperTagChange={setOperationWrapperTag}
           onRemoveLink={applyRemoveLink}
-          onForeColor={(color) => executeEditorOperation({
-            operationType: "setForeColor",
-            description: `Set foreground color ${color}`,
-            preferTypingSelection: true,
-            mutate: (doc, target) => setForeColor(doc, color, target),
-          })}
           onAlignment={applyAlignment}
           onFontFamily={applyFontFamily}
           onFontSize={applyFontSize}
           onFormat={applyFormat}
           onHeading={applyHeading}
-          onHorizontalRule={() => executeEditorOperation({
-            operationType: "insertHorizontalRule",
-            description: "Insert horizontal rule",
-            mutate: insertHorizontalRule,
-          })}
           onIndent={() => executeEditorOperation({
             operationType: "indent",
             description: "Indent block",
@@ -1520,18 +1732,40 @@ export function RuntimeWorkbench() {
             mutate: (doc, target) => outdentBlock(doc, target),
           })}
           onSendAgentPrompt={sendAgentPrompt}
+          onCancelAgentRun={cancelAgentRun}
           onRedo={() => applyHistoryOffset(1)}
           onResetFrame={resetFrameFromRuntime}
           onSelection={syncSelection}
-          onPasteFormat={pasteFormat}
-          hasCopiedFormat={Boolean(formatClipboard)}
           onToolbarInteractionStart={preserveEditorSelection}
           onUndo={() => applyHistoryOffset(-1)}
-          onToggleToolbar={() => setToolbarExpanded((current) => !current)}
           onFrameLoad={handleFrameLoad}
         />
+      ) : (
+        <DocumentLoadingScreen error={error} loading={loading} />
       )}
     </main>
+  );
+}
+
+function DocumentLoadingScreen(props: { error: string; loading: boolean }) {
+  return (
+    <section className="relative flex min-h-0 flex-col bg-[#1f1f1f]">
+      <header className="flex h-12 shrink-0 items-center border-b border-white/8 px-5">
+        <div className="min-w-0 truncate text-[13px] font-semibold text-white">Loading document</div>
+      </header>
+      <div className="grid min-h-0 flex-1 place-items-center bg-[#2a2a2a] px-6 text-center">
+        <div className="max-w-[360px] text-[13px] font-semibold text-white/58">
+          {props.error ? (
+            props.error
+          ) : (
+            <span className="inline-flex items-center gap-2">
+              {props.loading ? <Loader2 className="animate-spin" size={16} /> : null}
+              Loading document...
+            </span>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1549,10 +1783,9 @@ function EditorScreen(props: {
   agentSending: boolean;
   attributeDraft: AttributeDraft;
   imageDraft: ImageAttributes;
-  colorDraft: { foreColor: string; backColor: string };
   tableDraft: { rows: string; columns: string };
   styleDraft: ElementStyleAttributes;
-  linkDraft: string;
+  linkDraft: LinkDraft;
   linkEditorOpen: boolean;
   loading: boolean;
   operationDraft: string;
@@ -1561,41 +1794,33 @@ function EditorScreen(props: {
   operationPosition: AdjacentInsertPosition;
   operationWrapperTag: string;
   runtime: RuntimeState | null;
+  saveState: WorkspaceSaveState;
   toolbarState: ToolbarState;
-  toolbarExpanded: boolean;
-  hasCopiedFormat: boolean;
   onAlignment: (alignment: Alignment) => void;
-  onApplyLink: (url: string) => void;
+  onApplyLink: (draft: LinkDraft) => void;
   onApplyOperation: () => void;
   onAttributeDraftChange: (value: AttributeDraft) => void;
-  onBackColor: (color: string) => void;
   onBackHome: () => void;
-  onClearFormat: () => void;
+  onCloseLinkEditor: () => void;
   onCloseOperation: () => void;
-  onCopyFormat: () => void;
-  onColorDraftChange: (value: { foreColor: string; backColor: string }) => void;
+  onBackColor: (color: string) => void;
+  onForeColor: (color: string) => void;
   onTableDraftChange: (value: { rows: string; columns: string }) => void;
   onStyleDraftChange: (value: ElementStyleAttributes) => void;
-  onVerticalAlign: (verticalAlign: "top" | "middle" | "bottom") => void;
   onLineHeight: (lineHeight: string) => void;
   onLetterSpacing: (letterSpacing: string) => void;
-  onParagraphSpacing: (spacing: ParagraphSpacingValue) => void;
-  onTableBorder: (borderAction: TableBorderAction) => void;
-  onTableColumnWidth: (mode: "apply" | "clear") => void;
-  onTableRowHeight: (mode: "apply" | "clear") => void;
+  onLayoutChange: (attributes: Partial<ToolbarLayoutValue>) => void;
   onCreateLink: () => void;
   onFontFamily: (fontFamily: string) => void;
   onFontSize: (fontSize: string) => void;
   onFrameLoad: () => void;
-  onForeColor: (color: string) => void;
   onFormat: (tagName: InlineFormatTag) => void;
   onHeading: (tagName: HeadingTag) => void;
-  onHorizontalRule: () => void;
   onImageDraftChange: (value: ImageAttributes) => void;
   onIndent: () => void;
   onChecklist: () => void;
   onList: (kind: ListKind) => void;
-  onLinkDraftChange: (value: string) => void;
+  onLinkDraftChange: (value: LinkDraft) => void;
   onLoadFixture: () => void;
   onMoreAction: (action: string) => void;
   onMutation: (operationType: string, description: string) => void;
@@ -1604,62 +1829,240 @@ function EditorScreen(props: {
   onOperationPositionChange: (value: AdjacentInsertPosition) => void;
   onOperationWrapperTagChange: (value: string) => void;
   onOutdent: () => void;
-  onPasteFormat: () => void;
+  onPickImage: () => void;
   onSendAgentPrompt: (prompt: string) => Promise<void>;
+  onCancelAgentRun: (runId: string) => Promise<void>;
   onRemoveLink: () => void;
   onRedo: () => void;
   onResetFrame: () => void;
   onSelection: () => void;
   onToolbarInteractionStart: () => void;
-  onToggleToolbar: () => void;
   onUndo: () => void;
 }) {
   const canUndo = Boolean(props.runtime && props.runtime.history.currentIndex > 0);
   const canRedo = Boolean(props.runtime && props.runtime.history.currentIndex < props.runtime.history.snapshots.length - 1);
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-  const [lineHeightMenuOpen, setLineHeightMenuOpen] = useState(false);
-  const [letterSpacingMenuOpen, setLetterSpacingMenuOpen] = useState(false);
-  const [paragraphSpacingMenuOpen, setParagraphSpacingMenuOpen] = useState(false);
+  const [spacingMenuOpen, setSpacingMenuOpen] = useState(false);
+  const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
+  const [frameHeight, setFrameHeight] = useState(minimumHtmlFrameHeight);
+  const linkEditorRef = useRef<HTMLDivElement | null>(null);
+  const linkEditorPanelRef = useRef<HTMLFormElement | null>(null);
+  const frameScrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const frameResizeRafRef = useRef<number | null>(null);
+  const [linkEditorPosition, setLinkEditorPosition] = useState<LinkEditorPosition | null>(null);
   const hasPreservedRangeSelection = Boolean(props.runtime?.activeSelection && props.runtime.activeSelection.selectionType !== "write");
   const hasPreservedWriteSelection = Boolean(props.runtime?.activeSelection?.selectionType === "write" && props.runtime.activeSelection.commonAncestorPath);
   const canUseRangeSelection = props.toolbarState.rangeSelection || hasPreservedRangeSelection;
   const canCreateLink = canUseRangeSelection || hasPreservedWriteSelection || props.toolbarState.table || props.toolbarState.contentElement;
-  const moreOptions = toolbarMoreOptions(props.toolbarState, canUseRangeSelection);
+
+  const updateHtmlFrameHeight = (pass = 0) => {
+    const frame = props.iframeRef.current;
+    const doc = frame?.contentDocument;
+    if (!frame || !doc?.body) return;
+    const nextHeight = measureHtmlFrameContentHeight(doc);
+    frame.style.height = `${nextHeight}px`;
+    setFrameHeight((current) => (current === nextHeight ? current : nextHeight));
+    if (pass >= 2) return;
+    frameResizeRafRef.current = window.requestAnimationFrame(() => {
+      frameResizeRafRef.current = null;
+      const renderedHeight = Math.ceil(frame.getBoundingClientRect().height);
+      if (measureHtmlFrameContentHeight(doc) > renderedHeight) updateHtmlFrameHeight(pass + 1);
+    });
+  };
+
+  const scheduleHtmlFrameResize = () => {
+    if (frameResizeRafRef.current !== null) window.cancelAnimationFrame(frameResizeRafRef.current);
+    frameResizeRafRef.current = window.requestAnimationFrame(() => {
+      frameResizeRafRef.current = null;
+      updateHtmlFrameHeight();
+    });
+  };
+
+  useEffect(() => {
+    setFrameHeight(minimumHtmlFrameHeight);
+    scheduleHtmlFrameResize();
+
+    const doc = props.iframeRef.current?.contentDocument ?? null;
+    if (!doc?.body) {
+      return () => {
+        if (frameResizeRafRef.current !== null) window.cancelAnimationFrame(frameResizeRafRef.current);
+      };
+    }
+
+    const mutationObserver = new MutationObserver(scheduleHtmlFrameResize);
+    mutationObserver.observe(doc.documentElement, {
+      attributes: true,
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+
+    doc.addEventListener("load", scheduleHtmlFrameResize, true);
+
+    return () => {
+      mutationObserver.disconnect();
+      doc.removeEventListener("load", scheduleHtmlFrameResize, true);
+      if (frameResizeRafRef.current !== null) window.cancelAnimationFrame(frameResizeRafRef.current);
+      frameResizeRafRef.current = null;
+    };
+  }, [props.frameRevision, props.frameSrcDoc]);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== props.iframeRef.current?.contentWindow) return;
+      const data = event.data as { type?: unknown; deltaX?: unknown; deltaY?: unknown };
+      if (!data || data.type !== "ai-doc-frame-wheel") return;
+      const scroller = frameScrollContainerRef.current;
+      if (!scroller) return;
+      scroller.scrollLeft += typeof data.deltaX === "number" ? data.deltaX : 0;
+      scroller.scrollTop += typeof data.deltaY === "number" ? data.deltaY : 0;
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [props.iframeRef]);
+
+  useLayoutEffect(() => {
+    if (!props.linkEditorOpen) {
+      setLinkEditorPosition(null);
+      return;
+    }
+    const updatePosition = () => {
+      const anchor = linkEditorRef.current?.querySelector("button");
+      const panel = linkEditorPanelRef.current;
+      if (!anchor || !panel) return;
+      const anchorRect = anchor.getBoundingClientRect();
+      const availableWidth = Math.max(0, window.innerWidth - linkEditorViewportMargin * 2);
+      const panelWidth = Math.min(linkEditorPanelWidth, availableWidth);
+      const panelHeight = panel.offsetHeight;
+      const centeredLeft = anchorRect.left + anchorRect.width / 2 - panelWidth / 2;
+      const maxLeft = window.innerWidth - linkEditorViewportMargin - panelWidth;
+      const left = clampNumber(centeredLeft, linkEditorViewportMargin, Math.max(linkEditorViewportMargin, maxLeft));
+      const belowTop = anchorRect.bottom + linkEditorAnchorGap;
+      const aboveTop = anchorRect.top - linkEditorAnchorGap - panelHeight;
+      const maxTop = window.innerHeight - linkEditorViewportMargin - panelHeight;
+      const top =
+        belowTop + panelHeight <= window.innerHeight - linkEditorViewportMargin || aboveTop < linkEditorViewportMargin
+          ? clampNumber(belowTop, linkEditorViewportMargin, Math.max(linkEditorViewportMargin, maxTop))
+          : clampNumber(aboveTop, linkEditorViewportMargin, Math.max(linkEditorViewportMargin, maxTop));
+      setLinkEditorPosition((current) =>
+        current && current.left === left && current.top === top && current.width === panelWidth
+          ? current
+          : { left, top, width: panelWidth },
+      );
+    };
+
+    const raf = window.requestAnimationFrame(updatePosition);
+    const scroller = frameScrollContainerRef.current;
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    scroller?.addEventListener("scroll", updatePosition, { passive: true });
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      scroller?.removeEventListener("scroll", updatePosition);
+    };
+  }, [props.linkEditorOpen]);
+
+  useEffect(() => {
+    if (!props.linkEditorOpen) return;
+    const doc = props.iframeRef.current?.contentDocument;
+    if (!doc) return;
+    const onFramePointerDown = () => props.onCloseLinkEditor();
+    doc.addEventListener("pointerdown", onFramePointerDown, true);
+    return () => doc.removeEventListener("pointerdown", onFramePointerDown, true);
+  }, [props.frameRevision, props.iframeRef, props.linkEditorOpen, props.onCloseLinkEditor]);
+
+  useEffect(() => {
+    if (!props.linkEditorOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (linkEditorRef.current?.contains(event.target as Node) || linkEditorPanelRef.current?.contains(event.target as Node)) return;
+      props.onCloseLinkEditor();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") props.onCloseLinkEditor();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [props.linkEditorOpen, props.onCloseLinkEditor]);
+
+  const linkEditorStyle: CSSProperties = linkEditorPosition
+    ? { left: linkEditorPosition.left, top: linkEditorPosition.top, width: linkEditorPosition.width }
+    : { visibility: "hidden" };
+  const linkEditorPortal =
+    props.linkEditorOpen && typeof document !== "undefined"
+      ? createPortal(
+          <form
+            ref={linkEditorPanelRef}
+            data-toolbar-skip-selection-preserve="true"
+            className="fixed z-50 grid w-[300px] max-w-[calc(100vw-16px)] gap-1.5 rounded-lg border border-black/10 bg-white p-2 shadow-[0_12px_28px_rgba(0,0,0,0.14)]"
+            style={linkEditorStyle}
+            onSubmit={(event) => {
+              event.preventDefault();
+              props.onApplyLink(props.linkDraft);
+            }}
+          >
+            <input
+              className="h-7 w-full rounded-md border border-black/10 bg-white px-2 text-[11px] font-medium text-[#333] outline-none"
+              value={props.linkDraft.text}
+              onChange={(event) => props.onLinkDraftChange({ ...props.linkDraft, text: event.currentTarget.value })}
+              onMouseDown={(event) => event.stopPropagation()}
+              placeholder="Text"
+              aria-label="Link text"
+            />
+            <div className="flex min-w-0 items-center gap-1">
+              <input
+                className="h-7 min-w-0 flex-1 rounded-md border border-black/10 bg-white px-2 text-[11px] font-medium text-[#333] outline-none"
+                value={props.linkDraft.href}
+                onChange={(event) => props.onLinkDraftChange({ ...props.linkDraft, href: event.currentTarget.value })}
+                onMouseDown={(event) => event.stopPropagation()}
+                placeholder="https://"
+                aria-label="Link URL"
+              />
+              <button className="h-7 rounded-md bg-black px-2.5 text-[10px] font-semibold text-white" type="submit">
+                Apply
+              </button>
+            </div>
+          </form>,
+          document.body,
+        )
+      : null;
 
   return (
-    <section className="grid h-full grid-cols-[minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)]">
-      <AgentConversationPanel
-        activeSelectionText={props.activeSelectionText}
-        dirty={props.dirty}
-        error={props.error || props.agentConversationError}
-        items={props.agentConversationItems}
-        loading={props.agentConversationLoading}
-        sending={props.agentSending}
-        onBackHome={props.onBackHome}
-        onSend={props.onSendAgentPrompt}
-      />
-
+    <>
+    <ArtifactEditorFrame
+      sidebar={
+        <AgentConversationPanel
+          activeSelectionText={props.activeSelectionText}
+          artifactLabel="html"
+          dirty={props.dirty}
+          error={props.error || props.agentConversationError}
+          items={props.agentConversationItems}
+          loading={props.agentConversationLoading}
+          sending={props.agentSending}
+          onBackHome={props.onBackHome}
+          onCancel={props.onCancelAgentRun}
+          onSend={props.onSendAgentPrompt}
+        />
+      }
+    >
       <section className="relative flex min-h-0 flex-col bg-[#1f1f1f]">
-        <header className="flex h-12 items-center justify-between border-b border-white/8 px-5">
-          <div className="min-w-0">
-            <div className="truncate text-[13px] font-semibold text-white">{props.runtime?.title ?? "Untitled Document"}</div>
-            <div className="text-[11px] text-white/38">
-              {props.dirty ? "Unsaved changes" : "Saved"} · {props.editorStats.wordCount} words · {props.editorStats.elementCount} elements
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <IconButton disabled={props.loading} title="Reload template" onClick={props.onLoadFixture}>
-              {props.loading ? <Loader2 className="animate-spin" size={15} /> : <RefreshCcw size={15} />}
-            </IconButton>
-            <IconButton disabled={!props.runtime} title="Reset iframe from RuntimeState" onClick={props.onResetFrame}>
-              <RotateCcw size={15} />
-            </IconButton>
-          </div>
-        </header>
+        <ArtifactWorkspaceHeader
+          title={props.runtime?.title ?? "Untitled Document"}
+          saveState={props.saveState}
+          exportItems={[
+            { label: "PDF", disabled: true, onSelect: () => undefined },
+            { label: "DOCX", disabled: true, onSelect: () => undefined },
+          ]}
+        />
 
-        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-[#2a2a2a] px-3 py-4 md:px-6 md:py-6">
-          <div
-            className="sticky top-0 z-10 mx-auto mb-4 w-full max-w-[1500px] rounded-2xl border border-black/[0.04] bg-white px-3 py-2 text-[#202124] shadow-[0_10px_28px_rgba(0,0,0,0.12)] [&_svg]:size-4"
+        <div ref={frameScrollContainerRef} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-[#2a2a2a] px-3 py-5 md:px-6 md:py-7">
+          <Toolbar
+            className="relative -translate-y-1.5 overflow-visible !shadow-[0_16px_44px_rgba(0,0,0,0.24)]"
+            display={{ maxWidth: 1500, width: "content" }}
             onMouseDownCapture={(event) => {
               if (!shouldSkipToolbarSelectionPreserve(event.target)) props.onToolbarInteractionStart();
               if (shouldKeepEditorSelectionOnToolbarCommand(event.target)) event.preventDefault();
@@ -1668,28 +2071,30 @@ function EditorScreen(props: {
               if (!shouldSkipToolbarSelectionPreserve(event.target)) props.onToolbarInteractionStart();
             }}
           >
-            <div className="toolbar-scroll flex min-w-0 items-center gap-1.5 overflow-x-auto">
+            <ToolbarRow wrap className="gap-y-1.5">
               <ToolbarGroup>
                 <IconButtonLight disabled={!canUndo} title="Undo" onClick={props.onUndo}><Undo2 size={18} /></IconButtonLight>
                 <IconButtonLight disabled={!canRedo} title="Redo" onClick={props.onRedo}><Redo2 size={18} /></IconButtonLight>
               </ToolbarGroup>
               <ToolbarDivider />
-              <ToolbarSelect title="Block style" value={props.toolbarState.block} onChange={(value) => props.onHeading(value as HeadingTag)}>
-                <option value="p">Normal Text</option>
-                <option value="h1">Heading 1</option>
-                <option value="h2">Heading 2</option>
-                <option value="h3">Heading 3</option>
-                <option value="h4">Heading 4</option>
-                <option value="blockquote">Quote</option>
-              </ToolbarSelect>
-              <ToolbarSelect title="Font family" value={props.toolbarState.fontFamily} onChange={props.onFontFamily}>
-                <option value="Arial, sans-serif">Arial</option>
-                <option value="Inter, sans-serif">Inter</option>
-                <option value="Georgia, serif">Georgia</option>
-                <option value="'Times New Roman', serif">Times</option>
-                <option value="'Courier New', monospace">Courier</option>
-              </ToolbarSelect>
-              <FontSizeControl value={props.toolbarState.fontSize || "14px"} onChange={props.onFontSize} />
+              <ToolbarGroup className="[column-gap:4px]">
+                <ToolbarSelect title="Block style" value={props.toolbarState.block} onChange={(value) => props.onHeading(value as HeadingTag)}>
+                  <option value="p">Normal Text</option>
+                  <option value="h1">Heading 1</option>
+                  <option value="h2">Heading 2</option>
+                  <option value="h3">Heading 3</option>
+                  <option value="h4">Heading 4</option>
+                  <option value="blockquote">Quote</option>
+                </ToolbarSelect>
+                <ToolbarSelect title="Font family" value={props.toolbarState.fontFamily} onChange={props.onFontFamily}>
+                  <option value="Arial, sans-serif">Arial</option>
+                  <option value="Inter, sans-serif">Inter</option>
+                  <option value="Georgia, serif">Georgia</option>
+                  <option value="'Times New Roman', serif">Times</option>
+                  <option value="'Courier New', monospace">Courier</option>
+                </ToolbarSelect>
+                <FontSizeControl value={props.toolbarState.fontSize || "14px"} onChange={props.onFontSize} />
+              </ToolbarGroup>
               <ToolbarDivider />
               <ToolbarGroup>
                 <IconButtonLight active={props.toolbarState.bold} title="Bold" onClick={() => props.onFormat("strong")}><Bold size={19} /></IconButtonLight>
@@ -1702,160 +2107,95 @@ function EditorScreen(props: {
                 <IconButtonLight active={props.toolbarState.alignment === "left"} title="Align left" onClick={() => props.onAlignment("left")}><AlignLeft size={19} /></IconButtonLight>
                 <IconButtonLight active={props.toolbarState.alignment === "center"} title="Align center" onClick={() => props.onAlignment("center")}><AlignCenter size={19} /></IconButtonLight>
                 <IconButtonLight active={props.toolbarState.alignment === "right"} title="Align right" onClick={() => props.onAlignment("right")}><AlignRight size={19} /></IconButtonLight>
+                <IconButtonLight active={props.toolbarState.alignment === "justify"} title="Justify" onClick={() => props.onAlignment("justify")}><AlignJustify size={19} /></IconButtonLight>
+                <ToolbarSpacingMenu
+                  lineHeight={props.toolbarState.lineHeight}
+                  letterSpacing={props.toolbarState.letterSpacing}
+                  open={spacingMenuOpen}
+                  onLineHeightChange={props.onLineHeight}
+                  onLetterSpacingChange={props.onLetterSpacing}
+                  onOpenChange={(open) => {
+                    setSpacingMenuOpen(open);
+                    if (open) setLayoutMenuOpen(false);
+                  }}
+                />
+                <ToolbarLayoutMenu
+                  open={layoutMenuOpen}
+                  targetLabel={props.toolbarState.targetLabel}
+                  value={props.toolbarState.layout}
+                  onOpenChange={(open) => {
+                    setLayoutMenuOpen(open);
+                    if (open) setSpacingMenuOpen(false);
+                  }}
+                  onChange={props.onLayoutChange}
+                />
+              </ToolbarGroup>
+              <ToolbarDivider />
+              <ToolbarGroup>
                 <IconButtonLight active={props.toolbarState.list === "ordered"} title="Numbered list" onClick={() => props.onList("ordered")}><ListOrdered size={19} /></IconButtonLight>
                 <IconButtonLight active={props.toolbarState.list === "unordered"} title="Bulleted list" onClick={() => props.onList("unordered")}><List size={19} /></IconButtonLight>
                 <IconButtonLight active={props.toolbarState.checklist} title="Checklist" onClick={props.onChecklist}><ListTodo size={19} /></IconButtonLight>
                 <IconButtonLight title="Indent" onClick={props.onIndent}><IndentIncrease size={19} /></IconButtonLight>
                 <IconButtonLight title="Outdent" onClick={props.onOutdent}><IndentDecrease size={19} /></IconButtonLight>
-                <IconButtonLight active={props.toolbarState.alignment === "justify"} title="Justify" onClick={() => props.onAlignment("justify")}><AlignJustify size={19} /></IconButtonLight>
-                <ToolbarLineHeightMenu
-                  open={lineHeightMenuOpen}
-                  onOpenChange={setLineHeightMenuOpen}
-                  onSelect={(lineHeight) => {
-                    setLineHeightMenuOpen(false);
-                    props.onLineHeight(lineHeight);
-                  }}
+              </ToolbarGroup>
+              <ToolbarDivider />
+              <ToolbarGroup>
+                <ToolbarColorInput
+                  title="Text color"
+                  color={props.toolbarState.foreColor}
+                  onChange={props.onForeColor}
                 />
-                <ToolbarLetterSpacingMenu
-                  open={letterSpacingMenuOpen}
-                  onOpenChange={setLetterSpacingMenuOpen}
-                  onSelect={(letterSpacing) => {
-                    setLetterSpacingMenuOpen(false);
-                    props.onLetterSpacing(letterSpacing);
-                  }}
-                />
-                <ToolbarParagraphSpacingMenu
-                  open={paragraphSpacingMenuOpen}
-                  onOpenChange={setParagraphSpacingMenuOpen}
-                  onSelect={(spacing) => {
-                    setParagraphSpacingMenuOpen(false);
-                    props.onParagraphSpacing(spacing);
-                  }}
+                <ToolbarColorInput
+                  title="Fill color"
+                  color={props.toolbarState.backColor}
+                  icon={<PaintBucket size={17} />}
+                  onChange={props.onBackColor}
                 />
               </ToolbarGroup>
               <ToolbarDivider />
               <ToolbarGroup>
-                <IconButtonLight title="Color" onClick={() => props.onMoreAction("color")}>
-                  <span className="grid size-4 place-items-center border-b-2 text-[16px] font-bold leading-none" style={{ borderColor: props.toolbarState.foreColor }}>A</span>
-                </IconButtonLight>
-                <ColorSwatch title="Current text color" color={props.toolbarState.foreColor} onClick={() => props.onForeColor(props.toolbarState.foreColor)} />
-              </ToolbarGroup>
-            </div>
-
-            {props.toolbarExpanded ? (
-            <div className="toolbar-scroll mt-1.5 flex min-w-0 items-center gap-1.5 overflow-x-auto">
-              <ToolbarGroup>
-                <IconButtonLight title="Fill color" onClick={() => props.onMoreAction("color")}><PaintBucket size={18} /></IconButtonLight>
-                <ColorSwatch title="Current fill color" color={props.toolbarState.backColor} onClick={() => props.onBackColor(props.toolbarState.backColor)} />
-                <IconButtonLight title="Copy format" onClick={props.onCopyFormat}><Paintbrush size={18} /></IconButtonLight>
-                <IconButtonLight disabled={!props.hasCopiedFormat} title="Apply copied format" onClick={props.onPasteFormat}><Paintbrush className="rotate-180" size={18} /></IconButtonLight>
-              </ToolbarGroup>
-              <ToolbarDivider />
-              <ToolbarGroup>
-                <IconButtonLight active={props.toolbarState.image} title="Image" onClick={() => props.onMoreAction("image")}><Image size={18} /></IconButtonLight>
-                {props.toolbarState.image ? <IconButtonLight title="Remove image" onClick={() => props.onMoreAction("removeImage")}><Minus size={18} /></IconButtonLight> : null}
-                <IconButtonLight active={props.toolbarState.link} disabled={!props.toolbarState.link && !canCreateLink} title="Create link" onClick={props.onCreateLink}><Link2 size={18} /></IconButtonLight>
-                {props.toolbarState.link ? <IconButtonLight title="Remove link" onClick={props.onRemoveLink}><Unlink2 size={18} /></IconButtonLight> : null}
-              </ToolbarGroup>
-              <ToolbarDivider />
-              <ToolbarGroup>
+                <IconButtonLight active={props.toolbarState.image} title="Image" onClick={props.onPickImage}><Image size={18} /></IconButtonLight>
+                <div ref={linkEditorRef} className="relative inline-grid">
+                  <IconButtonLight
+                    active={props.toolbarState.link}
+                    disabled={!props.toolbarState.link && !canCreateLink}
+                    title="Create link"
+                    onClick={props.toolbarState.link ? props.onRemoveLink : props.onCreateLink}
+                  >
+                    <Link2 size={18} />
+                  </IconButtonLight>
+                </div>
                 <IconButtonLight title="Insert table" onClick={() => props.onMoreAction("insertTable")}><Table2 size={18} /></IconButtonLight>
-                {props.toolbarState.table ? (
-                  <>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.addRowBefore} title="Add row before" onClick={() => props.onMoreAction("addRowBefore")}><BetweenHorizontalStart size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.addRowAfter} title="Add row after" onClick={() => props.onMoreAction("addRowAfter")}><Rows3 size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.addColumnBefore} title="Add column before" onClick={() => props.onMoreAction("addColumnBefore")}><BetweenHorizontalEnd size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.addColumnAfter} title="Add column after" onClick={() => props.onMoreAction("addColumnAfter")}><Columns2 size={18} /></IconButtonLight>
+              </ToolbarGroup>
+              {props.toolbarState.table ? (
+                <>
+                  <ToolbarDivider />
+                  <ToolbarGroup>
+                    <IconButtonLight disabled={!props.toolbarState.tableActions.addColumnAfter} title="Add column" onClick={() => props.onMoreAction("addColumnAfter")}><Columns2 size={18} /></IconButtonLight>
+                    <IconButtonLight disabled={!props.toolbarState.tableActions.deleteColumn} title="Delete column" onClick={() => props.onMoreAction("deleteColumn")}><BetweenHorizontalEnd size={18} /></IconButtonLight>
+                    <IconButtonLight disabled={!props.toolbarState.tableActions.addRowAfter} title="Add row" onClick={() => props.onMoreAction("addRowAfter")}><Rows3 size={18} /></IconButtonLight>
+                    <IconButtonLight disabled={!props.toolbarState.tableActions.deleteRow} title="Delete row" onClick={() => props.onMoreAction("deleteRow")}><Minus size={18} /></IconButtonLight>
+                  </ToolbarGroup>
+                  <ToolbarDivider />
+                  <ToolbarGroup>
                     <IconButtonLight disabled={!props.toolbarState.tableActions.copyRow} title="Copy row" onClick={() => props.onMoreAction("copyRow")}><Copy size={18} /></IconButtonLight>
                     <IconButtonLight disabled={!props.toolbarState.tableActions.copyColumn} title="Copy column" onClick={() => props.onMoreAction("copyColumn")}><Copy className="rotate-90" size={18} /></IconButtonLight>
+                  </ToolbarGroup>
+                  <ToolbarDivider />
+                  <ToolbarGroup>
                     <IconButtonLight disabled={!props.toolbarState.tableActions.moveColumnLeft} title="Move column left" onClick={() => props.onMoreAction("moveColumnLeft")}><ArrowLeft size={18} /></IconButtonLight>
                     <IconButtonLight disabled={!props.toolbarState.tableActions.moveColumnRight} title="Move column right" onClick={() => props.onMoreAction("moveColumnRight")}><ArrowRight size={18} /></IconButtonLight>
                     <IconButtonLight disabled={!props.toolbarState.tableActions.moveRowUp} title="Move row up" onClick={() => props.onMoreAction("moveRowUp")}><ArrowUp size={18} /></IconButtonLight>
                     <IconButtonLight disabled={!props.toolbarState.tableActions.moveRowDown} title="Move row down" onClick={() => props.onMoreAction("moveRowDown")}><ArrowUp className="rotate-180" size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.toggleHeaderRow} title={tableActionTitle("toggleHeaderRow", props.toolbarState.tableHeaderState)} onClick={() => props.onMoreAction("toggleHeaderRow")}><PanelTop size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.toggleHeaderColumn} title={tableActionTitle("toggleHeaderColumn", props.toolbarState.tableHeaderState)} onClick={() => props.onMoreAction("toggleHeaderColumn")}><PanelLeft size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.distributeRows} title="Distribute rows" onClick={() => props.onMoreAction("distributeRows")}><PanelTopBottomDashed size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.distributeColumns} title="Distribute columns" onClick={() => props.onMoreAction("distributeColumns")}><PanelLeftRightDashed size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.styleDraft.height?.trim()} title="Apply row height" onClick={() => props.onTableRowHeight("apply")}><Rows3 size={18} /></IconButtonLight>
-                    <IconButtonLight title="Clear row height" onClick={() => props.onTableRowHeight("clear")}><Minus className="rotate-90" size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.styleDraft.width?.trim()} title="Apply column width" onClick={() => props.onTableColumnWidth("apply")}><Columns2 size={18} /></IconButtonLight>
-                    <IconButtonLight title="Clear column width" onClick={() => props.onTableColumnWidth("clear")}><Minus size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.deleteRow} title="Delete row" onClick={() => props.onMoreAction("deleteRow")}><Minus size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.deleteColumn} title="Delete column" onClick={() => props.onMoreAction("deleteColumn")}><BetweenHorizontalEnd size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.deleteTable} title="Delete table" onClick={() => props.onMoreAction("deleteTable")}><Grid2X2 size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.mergeCellRight} title="Merge cell right" onClick={() => props.onMoreAction("mergeCellRight")}><TableCellsMerge size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.mergeCellDown} title="Merge cell down" onClick={() => props.onMoreAction("mergeCellDown")}><TableCellsMerge className="rotate-90" size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.splitCell} title="Split cell" onClick={() => props.onMoreAction("splitCell")}><TableCellsSplit size={18} /></IconButtonLight>
-                    <IconButtonLight title="Vertical align top" onClick={() => props.onVerticalAlign("top")}><ArrowUp size={18} /></IconButtonLight>
-                    <IconButtonLight title="Vertical align middle" onClick={() => props.onVerticalAlign("middle")}><Rows3 size={18} /></IconButtonLight>
-                    <IconButtonLight title="Vertical align bottom" onClick={() => props.onVerticalAlign("bottom")}><ArrowUp className="rotate-180" size={18} /></IconButtonLight>
-                    <IconButtonLight title="All cell borders" onClick={() => props.onTableBorder("all")}><Grid2X2 size={18} /></IconButtonLight>
-                    <IconButtonLight title="Outer cell borders" onClick={() => props.onTableBorder("outer")}><Table2 size={18} /></IconButtonLight>
-                    <IconButtonLight title="Inner cell borders" onClick={() => props.onTableBorder("inner")}><Columns2 size={18} /></IconButtonLight>
-                    <IconButtonLight title="Top cell border" onClick={() => props.onTableBorder("top")}><PanelTop size={18} /></IconButtonLight>
-                    <IconButtonLight title="Right cell border" onClick={() => props.onTableBorder("right")}><PanelRight size={18} /></IconButtonLight>
-                    <IconButtonLight title="Bottom cell border" onClick={() => props.onTableBorder("bottom")}><PanelBottom size={18} /></IconButtonLight>
-                    <IconButtonLight title="Left cell border" onClick={() => props.onTableBorder("left")}><PanelLeft size={18} /></IconButtonLight>
-                    <IconButtonLight title="Clear cell borders" onClick={() => props.onTableBorder("none")}><Minus size={18} /></IconButtonLight>
-                  </>
-                ) : null}
-              </ToolbarGroup>
-              <ToolbarDivider />
-              <ToolbarGroup>
-                <IconButtonLight disabled={!props.runtime} title="Horizontal rule" onClick={props.onHorizontalRule}><Minus size={18} /></IconButtonLight>
-                <IconButtonLight title="Clear formatting" onClick={props.onClearFormat}><span className="text-[11px] font-bold">Tx</span></IconButtonLight>
-                <IconButtonLight title="Style" onClick={() => props.onMoreAction("style")}><SlidersHorizontal size={18} /></IconButtonLight>
-                <ToolbarMoreMenu
-                  open={moreMenuOpen}
-                  options={moreOptions}
-                  onOpenChange={setMoreMenuOpen}
-                  onSelect={(action) => {
-                    setMoreMenuOpen(false);
-                    props.onMoreAction(action);
-                  }}
-                />
-                <IconButtonLight title="Collapse toolbar" onClick={props.onToggleToolbar}><ChevronUp size={18} /></IconButtonLight>
-              </ToolbarGroup>
-            </div>
-            ) : (
-              <button
-                className="mt-1.5 flex h-6 w-full items-center justify-center rounded-lg text-[#555] hover:bg-black/[0.04]"
-                type="button"
-                title="Expand toolbar"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={props.onToggleToolbar}
-              >
-                <ChevronUp className="rotate-180" size={18} />
-              </button>
-            )}
+                  </ToolbarGroup>
+                </>
+              ) : null}
+            </ToolbarRow>
 
-            {props.toolbarExpanded && props.linkEditorOpen ? (
+            {props.operationPanelMode ? (
               <form
                 data-toolbar-skip-selection-preserve="true"
-                className="mt-2 flex h-8 w-fit shrink-0 items-center gap-1 rounded-lg bg-black/[0.04] px-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  props.onApplyLink(props.linkDraft);
-                }}
-              >
-                <input
-                  className="h-6 w-[220px] rounded-md border border-black/10 bg-white px-2 text-[10px] font-medium text-[#333] outline-none"
-                  value={props.linkDraft}
-                  onChange={(event) => props.onLinkDraftChange(event.currentTarget.value)}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  placeholder="https://"
-                  aria-label="Link URL"
-                />
-                <button className="h-6 rounded-md bg-black px-2.5 text-[9px] font-semibold text-white" type="submit">
-                  Apply
-                </button>
-              </form>
-            ) : null}
-
-            {props.toolbarExpanded && props.operationPanelMode ? (
-              <form
-                data-toolbar-skip-selection-preserve="true"
-                className="toolbar-scroll mt-2 flex min-h-9 w-fit max-w-full shrink-0 items-center gap-1.5 overflow-x-auto rounded-lg bg-black/[0.04] px-2.5 py-1.5"
+                className="absolute left-3 right-3 top-full z-30 mt-2 flex min-h-9 w-fit max-w-[calc(100%-1.5rem)] shrink-0 items-center gap-1.5 overflow-x-auto rounded-lg border border-black/10 bg-white px-2.5 py-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.14)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 onSubmit={(event) => {
                   event.preventDefault();
                   props.onApplyOperation();
@@ -1919,46 +2259,7 @@ function EditorScreen(props: {
                     <option value="li">li</option>
                   </select>
                 ) : null}
-                {props.operationPanelMode === "color" ? (
-                  <>
-                    <label className="flex h-8 items-center gap-2 rounded-lg border border-black/10 bg-white px-2 text-[11px] font-semibold text-[#555]">
-                      Text
-                      <input
-                        aria-label="Text color"
-                        className="size-5 rounded border border-black/10"
-                        type="color"
-                        value={props.colorDraft.foreColor}
-                        onChange={(event) => props.onColorDraftChange({ ...props.colorDraft, foreColor: event.currentTarget.value })}
-                        onMouseDown={(event) => event.stopPropagation()}
-                      />
-                    </label>
-                    <input
-                      aria-label="Text color value"
-                      className="h-8 w-[92px] rounded-lg border border-black/10 bg-white px-2 text-[12px] font-medium text-[#333] outline-none"
-                      value={props.colorDraft.foreColor}
-                      onChange={(event) => props.onColorDraftChange({ ...props.colorDraft, foreColor: event.currentTarget.value })}
-                      onMouseDown={(event) => event.stopPropagation()}
-                    />
-                    <label className="flex h-8 items-center gap-2 rounded-lg border border-black/10 bg-white px-2 text-[11px] font-semibold text-[#555]">
-                      Fill
-                      <input
-                        aria-label="Fill color"
-                        className="size-5 rounded border border-black/10"
-                        type="color"
-                        value={props.colorDraft.backColor}
-                        onChange={(event) => props.onColorDraftChange({ ...props.colorDraft, backColor: event.currentTarget.value })}
-                        onMouseDown={(event) => event.stopPropagation()}
-                      />
-                    </label>
-                    <input
-                      aria-label="Fill color value"
-                      className="h-8 w-[92px] rounded-lg border border-black/10 bg-white px-2 text-[12px] font-medium text-[#333] outline-none"
-                      value={props.colorDraft.backColor}
-                      onChange={(event) => props.onColorDraftChange({ ...props.colorDraft, backColor: event.currentTarget.value })}
-                      onMouseDown={(event) => event.stopPropagation()}
-                    />
-                  </>
-                ) : props.operationPanelMode === "table" ? (
+                {props.operationPanelMode === "table" ? (
                   <>
                     <input
                       aria-label="Table rows"
@@ -2192,18 +2493,26 @@ function EditorScreen(props: {
                 </button>
               </form>
             ) : null}
-          </div>
+          </Toolbar>
 
           {props.frameSrcDoc ? (
             <iframe
               key={props.frameRevision}
               ref={props.iframeRef}
-              className="mx-auto block min-h-[860px] w-full max-w-[980px] rounded-[2px] border border-black/30 bg-white shadow-[0_30px_90px_rgba(0,0,0,0.55)]"
+              className="mx-auto block min-h-[860px] w-full max-w-[980px] overflow-clip rounded-[2px] border border-black/30 bg-white shadow-[0_30px_90px_rgba(0,0,0,0.55)]"
+              style={{ height: frameHeight }}
               title={props.runtime?.title ?? "Runtime document"}
-              sandbox="allow-same-origin"
+              sandbox="allow-scripts allow-same-origin"
+              scrolling="no"
               srcDoc={props.frameSrcDoc}
-              onLoad={props.onFrameLoad}
-              onInput={() => props.onMutation("input", "User edited document body")}
+              onLoad={() => {
+                props.onFrameLoad();
+                scheduleHtmlFrameResize();
+              }}
+              onInput={() => {
+                props.onMutation("input", "User edited document body");
+                scheduleHtmlFrameResize();
+              }}
               onKeyUp={props.onSelection}
               onMouseUp={props.onSelection}
             />
@@ -2214,12 +2523,39 @@ function EditorScreen(props: {
           )}
         </div>
       </section>
-    </section>
+    </ArtifactEditorFrame>
+    {linkEditorPortal}
+    </>
   );
 }
 
 function isOperationPanelMode(action: string): action is Exclude<OperationPanelMode, null> {
   return (operationPanelModes as readonly string[]).includes(action);
+}
+
+function measureHtmlFrameContentHeight(doc: Document) {
+  const body = doc.body;
+  const view = doc.defaultView;
+  const computed = view?.getComputedStyle(body);
+  const contentBottom = measureBodyContentBottom(doc);
+  const paddingBottom = Number.parseFloat(computed?.paddingBottom || "") || 0;
+  const borderBottom = Number.parseFloat(computed?.borderBottomWidth || "") || 0;
+  const marginBottom = Number.parseFloat(computed?.marginBottom || "") || 0;
+  return Math.ceil(Math.max(minimumHtmlFrameHeight, contentBottom + (view?.scrollY ?? 0) + paddingBottom + borderBottom + marginBottom)) + 2;
+}
+
+function measureBodyContentBottom(doc: Document) {
+  const childBottom = Array.from(doc.body.children).reduce((bottom, child) => {
+    const rect = child.getBoundingClientRect();
+    return Math.max(bottom, rect.bottom);
+  }, 0);
+  if (childBottom > 0) return childBottom;
+  const range = doc.createRange();
+  range.selectNodeContents(doc.body);
+  const rangeRect = range.getBoundingClientRect();
+  range.detach();
+  if (rangeRect.width || rangeRect.height) return rangeRect.bottom;
+  return doc.body.getBoundingClientRect().bottom;
 }
 
 function isContentBoundOperation(action: string) {
@@ -2371,31 +2707,44 @@ function readToolbarState(doc: Document, fallbackNode: Node | null, fallbackPath
   const block = nearestBlockForToolbar(target, doc);
   const styleTarget = target !== doc.body && !isToolbarBlock(target) ? target : block ?? target;
   const computed = doc.defaultView?.getComputedStyle(styleTarget);
+  const inline = inlineStyleOf(styleTarget);
   const backgroundTarget = target.closest("td, th") ?? styleTarget;
   const backgroundComputed = doc.defaultView?.getComputedStyle(backgroundTarget);
   const tableTarget = tableToolbarTarget(doc, target, fallbackTarget);
   const tableActions = tableTarget ? getTableActionAvailability(doc, tableTarget) : defaultTableActions();
   const tableHeaderState = tableTarget ? getTableHeaderState(doc, tableTarget) : defaultTableHeaderState();
   const selectedTableCells = getSelectedTableCells(doc);
-  const toolbarTargets = selectedTableCells.length > 0 ? selectedTableCells : [target];
   return {
+    targetLabel: styleTarget.tagName.toLowerCase(),
     block: blockTagForToolbar(block),
     fontFamily: normalizeToolbarFont(computed?.fontFamily || ""),
     fontSize: normalizeToolbarFontSize(computed?.fontSize || ""),
     foreColor: rgbToHex(computed?.color || "") || "#111111",
     backColor: colorStyleValue(backgroundComputed?.backgroundColor) || "#fff2a8",
+    lineHeight: inline?.lineHeight || "",
+    letterSpacing: inline?.letterSpacing || "",
+    layout: {
+      marginTop: inline?.marginTop || "",
+      marginRight: inline?.marginRight || "",
+      marginBottom: inline?.marginBottom || "",
+      marginLeft: inline?.marginLeft || "",
+      paddingTop: inline?.paddingTop || "",
+      paddingRight: inline?.paddingRight || "",
+      paddingBottom: inline?.paddingBottom || "",
+      paddingLeft: inline?.paddingLeft || "",
+    },
     alignment: normalizeToolbarAlignment(computed?.textAlign || ""),
-    bold: toolbarTargetsHaveFormat(doc, toolbarTargets, ["strong", "b"], (style) => Number(style.fontWeight) >= 600),
-    italic: toolbarTargetsHaveFormat(doc, toolbarTargets, ["em", "i"], (style) => style.fontStyle === "italic"),
-    underline: toolbarTargetsHaveFormat(doc, toolbarTargets, ["u"], (style) => style.textDecorationLine.includes("underline")),
-    strikethrough: toolbarTargetsHaveFormat(doc, toolbarTargets, ["s", "strike", "del"], (style) => style.textDecorationLine.includes("line-through")),
+    bold: toolbarFormatActive(doc, selection, target, selectedTableCells, ["strong", "b"], (style) => Number(style.fontWeight) >= 600),
+    italic: toolbarFormatActive(doc, selection, target, selectedTableCells, ["em", "i"], (style) => style.fontStyle === "italic"),
+    underline: toolbarFormatActive(doc, selection, target, selectedTableCells, ["u"], (style) => style.textDecorationLine.includes("underline")),
+    strikethrough: toolbarFormatActive(doc, selection, target, selectedTableCells, ["s", "strike", "del"], (style) => style.textDecorationLine.includes("line-through")),
     link: selectedTableCells.length > 0 ? selectedTableCells.some((cell) => Boolean(cell.querySelector("a"))) : Boolean(target.closest("a")) || selectionContainsLink(doc),
     list: selectedTableCells.length > 0 ? listKindForToolbarCells(selectedTableCells) : listKindForToolbar(target),
     checklist: selectedTableCells.length > 0 ? selectedTableCells.every((cell) => Boolean(cell.querySelector(':scope > ul[data-ai-checklist="true"]'))) : Boolean(target.closest('ul[data-ai-checklist="true"]')),
     table: Object.values(tableActions).some(Boolean),
     tableActions,
     tableHeaderState,
-    image: target.tagName === "IMG",
+    image: Boolean(imageFromNode(target, doc)),
     attributeElement: canSetElementAttributes(doc, target),
     mutableElement: canMutateElement(doc, target),
     contentElement: canEditElementContent(doc, target),
@@ -2461,14 +2810,182 @@ function tableTargetFromElement(element: Element | null | undefined) {
   return targetCell ?? (element.tagName === "TABLE" ? element : null);
 }
 
-function tableCellFromNode(node: Node | null, doc: Document) {
+function imageFromNode(node: Node | null, doc: Document): ImageObjectElement | null {
   const element = isElementNode(node) ? node : node?.parentElement ?? null;
-  const cell = element?.closest("td, th") ?? null;
-  return cell && doc.body.contains(cell) ? (cell as HTMLTableCellElement) : null;
+  const image = element?.closest("img") ?? null;
+  if (image && doc.body.contains(image)) return image as HTMLImageElement;
+
+  let current: Element | null = element;
+  while (current && current !== doc.body && current !== doc.documentElement) {
+    if (isHTMLElementInDocument(current, doc) && isBackgroundImageObject(current, doc)) return current;
+    current = current.parentElement;
+  }
+  return null;
 }
 
-function clearNativeSelection(doc: Document) {
-  doc.getSelection()?.removeAllRanges();
+function isHTMLElementInDocument(element: Element, doc: Document): element is HTMLElement {
+  const ctor = doc.defaultView?.HTMLElement;
+  return Boolean(ctor && element instanceof ctor);
+}
+
+function isBackgroundImageObject(element: HTMLElement, doc: Document) {
+  if (!doc.body.contains(element)) return false;
+  if (!backgroundImageUrl(doc.defaultView?.getComputedStyle(element).backgroundImage || "")) return false;
+  const rect = element.getBoundingClientRect();
+  if (rect.width < 16 || rect.height < 16) return false;
+  const hasImageSemantics = element.getAttribute("role") === "img" || Boolean(element.getAttribute("aria-label") || element.getAttribute("title"));
+  const hasText = Boolean(element.textContent?.trim());
+  return hasImageSemantics || !hasText;
+}
+
+function selectElementInDocument(doc: Document, element: Element) {
+  const selection = doc.getSelection();
+  if (!selection || !doc.body.contains(element)) return;
+  const range = doc.createRange();
+  range.selectNode(element);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function removeImageSelectionOverlay(doc: Document) {
+  doc.querySelectorAll("[data-runtime-editor-overlay='image-selection']").forEach((node) => node.remove());
+}
+
+function positionImageSelectionOverlay(image: ImageObjectElement, overlay: HTMLElement) {
+  const doc = image.ownerDocument;
+  const win = doc.defaultView;
+  if (!win || !doc.body.contains(image)) return;
+  const rect = image.getBoundingClientRect();
+  const left = rect.left + win.scrollX;
+  const top = rect.top + win.scrollY;
+  overlay.style.left = `${left}px`;
+  overlay.style.top = `${top}px`;
+  overlay.style.width = `${Math.max(0, rect.width)}px`;
+  overlay.style.height = `${Math.max(0, rect.height)}px`;
+}
+
+function imageResizeHandleStyle(handle: ResizeHandle): Partial<CSSStyleDeclaration> {
+  const style: Partial<CSSStyleDeclaration> = {
+    position: "absolute",
+    width: "10px",
+    height: "10px",
+    border: "1px solid #2684ff",
+    background: "#fff",
+    borderRadius: "2px",
+    boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
+    padding: "0",
+    pointerEvents: "auto",
+  };
+  if (handle.includes("top")) style.top = "-6px";
+  if (handle.includes("bottom")) style.bottom = "-6px";
+  if (handle.includes("left")) style.left = "-6px";
+  if (handle.includes("right")) style.right = "-6px";
+  if (handle === "top" || handle === "bottom") {
+    style.left = "50%";
+    style.transform = "translateX(-50%)";
+    style.cursor = "ns-resize";
+  } else if (handle === "left" || handle === "right") {
+    style.top = "50%";
+    style.transform = "translateY(-50%)";
+    style.cursor = "ew-resize";
+  } else if (handle === "top-left" || handle === "bottom-right") {
+    style.cursor = "nwse-resize";
+  } else {
+    style.cursor = "nesw-resize";
+  }
+  return style;
+}
+
+function resizedImageSizeForHandle(handle: ResizeHandle, width: number, height: number, deltaX: number, deltaY: number) {
+  const minSize = 24;
+  let nextWidth = width;
+  let nextHeight: number | null = null;
+  if (handle.includes("right")) nextWidth = width + deltaX;
+  if (handle.includes("left")) nextWidth = width - deltaX;
+  if (handle.includes("bottom")) nextHeight = height + deltaY;
+  if (handle.includes("top")) nextHeight = height - deltaY;
+  return {
+    width: Math.max(minSize, nextWidth),
+    height: nextHeight === null ? null : Math.max(minSize, nextHeight),
+  };
+}
+
+function upsertSelectedImageObject(doc: Document, attributes: ImageAttributes, target: Element | null, activeImage: ImageObjectElement | null) {
+  const image = activeImage && activeImage.ownerDocument === doc && doc.body.contains(activeImage) ? activeImage : imageFromNode(target, doc);
+  if (image && image.tagName !== "IMG") return updateBackgroundImageObject(doc, image, attributes);
+  return upsertImage(doc, attributes, target);
+}
+
+function removeSelectedImageObject(doc: Document, target: Element | null, activeImage: ImageObjectElement | null) {
+  const image = activeImage && activeImage.ownerDocument === doc && doc.body.contains(activeImage) ? activeImage : imageFromNode(target, doc);
+  if (!image) return false;
+  if (image.tagName === "IMG") return removeImage(doc, image);
+  image.style.removeProperty("background-image");
+  removeImageSelectionOverlay(doc);
+  selectElementInDocument(doc, image);
+  return image;
+}
+
+function updateBackgroundImageObject(doc: Document, image: ImageObjectElement, attributes: ImageAttributes) {
+  const src = sanitizeImageSource(attributes.src);
+  if (!src || !doc.body.contains(image)) return false;
+  image.style.backgroundImage = cssUrlValue(src);
+  if (!image.style.backgroundSize) image.style.backgroundSize = "cover";
+  if (!image.style.backgroundPosition) image.style.backgroundPosition = "center";
+  const width = normalizeImageCssSize(attributes.width ?? "");
+  const height = normalizeImageCssSize(attributes.height ?? "");
+  if (width) image.style.width = width;
+  else image.style.removeProperty("width");
+  if (height) image.style.height = height;
+  else image.style.removeProperty("height");
+  const alt = attributes.alt?.trim() ?? "";
+  if (alt) {
+    image.setAttribute("role", "img");
+    image.setAttribute("aria-label", alt);
+  } else if (image.getAttribute("role") === "img") {
+    image.removeAttribute("role");
+    image.removeAttribute("aria-label");
+  }
+  selectElementInDocument(doc, image);
+  return image;
+}
+
+function sanitizeImageSource(url: string) {
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  return /^(https?:|data:image\/|blob:|\/|\.\/|\.\.\/)/i.test(trimmed) ? trimmed : "";
+}
+
+function normalizeImageCssSize(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^\d+(\.\d+)?$/.test(trimmed)) return `${trimmed}px`;
+  return /^(auto|[\d.]+(px|%|rem|em|vw|vh))$/i.test(trimmed) ? trimmed : "";
+}
+
+function cssUrlValue(url: string) {
+  return `url("${url.replace(/["\\\n\r\f]/g, (match) => `\\${match}`)}")`;
+}
+
+function backgroundImageUrl(value: string) {
+  const match = value.match(/url\((?:"([^"]*)"|'([^']*)'|([^)]*))\)/i);
+  return (match?.[1] ?? match?.[2] ?? match?.[3] ?? "").trim();
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Unable to read image file."));
+    });
+    reader.addEventListener("error", () => reject(reader.error ?? new Error("Unable to read image file.")));
+    reader.readAsDataURL(file);
+  });
+}
+
+function imageAltFromFileName(fileName: string) {
+  return fileName.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim();
 }
 
 function nearestElementInDocument(node: Node | null, doc: Document) {
@@ -2528,13 +3045,77 @@ function hasAncestorTag(element: Element | null, tags: string[]) {
   return false;
 }
 
-function toolbarTargetsHaveFormat(doc: Document, targets: Element[], tags: string[], styleCheck: (style: CSSStyleDeclaration) => boolean) {
-  if (targets.length === 0) return false;
-  return targets.every((target) => {
-    const selector = tags.join(",");
-    const style = doc.defaultView?.getComputedStyle(target);
-    return hasAncestorTag(target, tags) || Boolean(target.querySelector(selector)) || Boolean(style && styleCheck(style));
-  });
+function toolbarFormatActive(
+  doc: Document,
+  selection: Selection | null,
+  target: Element,
+  selectedTableCells: HTMLTableCellElement[],
+  tags: string[],
+  styleCheck: (style: CSSStyleDeclaration) => boolean,
+) {
+  if (selectedTableCells.length > 0) {
+    return selectedTableCells.every((cell) => elementTextFullyHasFormat(doc, cell, tags, styleCheck));
+  }
+  if (!selection || selection.rangeCount === 0) return elementHasInlineFormat(doc, target, tags, styleCheck);
+  if (selection.isCollapsed) {
+    const element = nearestElementInDocument(selection.anchorNode, doc) ?? target;
+    return elementHasInlineFormat(doc, element, tags, styleCheck);
+  }
+  return selectionTextFullyHasFormat(doc, selection, tags, styleCheck);
+}
+
+function elementHasInlineFormat(doc: Document, element: Element | null, tags: string[], styleCheck: (style: CSSStyleDeclaration) => boolean) {
+  if (!element || !doc.body.contains(element)) return false;
+  const style = doc.defaultView?.getComputedStyle(element);
+  return hasAncestorTag(element, tags) || Boolean(style && styleCheck(style));
+}
+
+function selectionTextFullyHasFormat(doc: Document, selection: Selection, tags: string[], styleCheck: (style: CSSStyleDeclaration) => boolean) {
+  let sawText = false;
+  for (let index = 0; index < selection.rangeCount; index += 1) {
+    const range = selection.getRangeAt(index);
+    if (!doc.body.contains(range.commonAncestorContainer)) continue;
+    for (const node of selectedTextNodesForRange(doc.body, range)) {
+      const selectedText = selectedTextForNode(range, node);
+      if (!selectedText.trim()) continue;
+      sawText = true;
+      if (!elementHasInlineFormat(doc, node.parentElement, tags, styleCheck)) return false;
+    }
+  }
+  return sawText;
+}
+
+function elementTextFullyHasFormat(doc: Document, root: Element, tags: string[], styleCheck: (style: CSSStyleDeclaration) => boolean) {
+  let sawText = false;
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let current = walker.nextNode();
+  while (current) {
+    const text = current.textContent ?? "";
+    if (text.trim()) {
+      sawText = true;
+      if (!elementHasInlineFormat(doc, current.parentElement, tags, styleCheck)) return false;
+    }
+    current = walker.nextNode();
+  }
+  return sawText;
+}
+
+function selectedTextNodesForRange(root: Element, range: Range) {
+  const doc = root.ownerDocument;
+  const nodes: Text[] = [];
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let current = walker.nextNode();
+  while (current) {
+    if (range.intersectsNode(current)) nodes.push(current as Text);
+    current = walker.nextNode();
+  }
+  return nodes;
+}
+
+function selectedTextForNode(range: Range, node: Text) {
+  const start = node === range.startContainer ? range.startOffset : 0;
+  const end = node === range.endContainer ? range.endOffset : node.data.length;
+  return node.data.slice(start, end);
 }
 
 function listKindForToolbar(element: Element | null): ListKind | null {
@@ -2561,9 +3142,25 @@ function readCurrentLinkHref(doc: Document | null, fallbackNode: Node | null) {
   return getCurrentLinkHref(doc, target);
 }
 
+function readCurrentLinkText(doc: Document | null, fallbackNode: Node | null) {
+  if (!doc) return "";
+  const target = currentPanelTarget(doc, fallbackNode);
+  return getCurrentLinkText(doc, target);
+}
+
 function readCurrentImageAttributes(doc: Document | null, fallbackNode: Node | null): ImageAttributes {
   if (!doc) return { src: "", alt: "", width: "", height: "" };
   const target = currentPanelTarget(doc, fallbackNode);
+  const image = imageFromNode(target ?? fallbackNode, doc);
+  if (image && image.tagName !== "IMG") {
+    const computed = doc.defaultView?.getComputedStyle(image);
+    return {
+      src: backgroundImageUrl(computed?.backgroundImage || image.style.backgroundImage || ""),
+      alt: image.getAttribute("aria-label") ?? image.getAttribute("title") ?? "",
+      width: image.style.width || "",
+      height: image.style.height || "",
+    };
+  }
   return getCurrentImageAttributes(doc, target);
 }
 
@@ -2597,18 +3194,6 @@ function isReadableCustomAttribute(name: string) {
   );
 }
 
-function readCurrentColors(doc: Document | null, fallbackNode: Node | null) {
-  if (!doc) return { foreColor: "#111111", backColor: "#fff2a8" };
-  const target = currentPanelTarget(doc, fallbackNode) ?? doc.body;
-  const backgroundTarget = target.closest("td, th") ?? target;
-  const computed = doc.defaultView?.getComputedStyle(target);
-  const backgroundComputed = doc.defaultView?.getComputedStyle(backgroundTarget);
-  return {
-    foreColor: rgbToHex(computed?.color || "") || "#111111",
-    backColor: colorStyleValue(backgroundComputed?.backgroundColor) || "#fff2a8",
-  };
-}
-
 function readCurrentStyles(doc: Document | null, fallbackNode: Node | null): ElementStyleAttributes {
   if (!doc) return {};
   const target = currentPanelTarget(doc, fallbackNode) ?? doc.body;
@@ -2625,13 +3210,23 @@ function readCurrentStyles(doc: Document | null, fallbackNode: Node | null): Ele
     borderColor: inline?.borderColor || "",
     borderRadius: inline?.borderRadius || "",
     padding: inline?.padding || "",
+    paddingTop: inline?.paddingTop || "",
+    paddingRight: inline?.paddingRight || "",
+    paddingBottom: inline?.paddingBottom || "",
+    paddingLeft: inline?.paddingLeft || "",
     marginTop: inline?.marginTop || "",
+    marginRight: inline?.marginRight || "",
     marginBottom: inline?.marginBottom || "",
+    marginLeft: inline?.marginLeft || "",
   };
 }
 
 function currentPanelTarget(doc: Document, fallbackNode: Node | null) {
   return resolveEditorTarget(doc, fallbackNode, "") ?? currentSelectionElement(doc);
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function shouldSkipToolbarSelectionPreserve(target: EventTarget | null) {
@@ -2696,39 +3291,4 @@ function resolveRuntimePath(doc: Document, path: string) {
     if (!current) return null;
   }
   return isElementNode(current) ? current : null;
-}
-
-function toolbarMoreOptions(toolbarState: ToolbarState, canUseRangeSelection = toolbarState.rangeSelection): ToolbarMoreOption[] {
-  const options: ToolbarMoreOption[] = [
-    { label: "Insert text", value: "insertText" },
-    { label: "Insert HTML", value: "insertHtml" },
-  ];
-  if (canUseRangeSelection) options.push({ label: "Replace selection", value: "replaceSelection" });
-  options.push(
-    { label: "Image", value: "image" },
-    ...(toolbarState.image ? [{ label: "Remove image", value: "removeImage" }] : []),
-    { label: "Color", value: "color" },
-    { label: "Style", value: "style" },
-    { label: "Insert table", value: "insertTable" },
-  );
-  if (toolbarState.contentElement) {
-    options.push({ label: "Append text", value: "appendText" }, { label: "Append HTML", value: "appendHtml" });
-  }
-  if (toolbarState.mutableElement) options.push({ label: "Insert at position", value: "insertAtPosition" });
-  if (canUseRangeSelection) options.push({ label: "Wrap selection", value: "wrapSelection" });
-  if (toolbarState.attributeElement) options.push({ label: "Set attributes", value: "setAttributes" });
-  if (toolbarState.table) {
-    tableEditActions.forEach((action) => {
-      options.push({
-        label: tableActionTitle(action, toolbarState.tableHeaderState),
-        value: action,
-        disabled: !toolbarState.tableActions[action],
-      });
-    });
-  }
-  if (toolbarState.mutableElement) options.push({ label: "Duplicate element", value: "duplicateElement" }, { label: "Delete element", value: "deleteElement" });
-  if (toolbarState.contentElement || toolbarState.rangeSelection) {
-    options.push({ label: "Cursor to start", value: "cursorStart" }, { label: "Cursor to end", value: "cursorEnd" });
-  }
-  return options;
 }

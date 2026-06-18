@@ -30,21 +30,51 @@ import {
   Wand2,
   X,
 } from "lucide-react";
+import { ArtifactEditorFrame, ArtifactWorkspaceHeader, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
+import {
+  Toolbar,
+  ToolbarColorInput,
+  ToolbarDivider,
+  ToolbarGroup,
+  ToolbarIconButton,
+  ToolbarNumberInput,
+  ToolbarRow,
+  ToolbarSelect,
+} from "@ai-app/ui/toolbar";
 import { allCategoriesForTemplates, categoryCountsForTemplates, type OutputType, type SlideTemplate } from "./templates";
 import { AgentConversationPanel } from "./app/AgentConversationPanel";
 import { PptxPreview } from "./app/PptxPreview";
 import { SlideFilmstrip } from "./app/SlideFilmstrip";
 import { fitScale, nextSlideIndex, scaledHeight, shouldIgnoreSlideNavigationEvent, slideDirectionFromKey, thumbnailMetrics, useElementSize } from "./app/slideView";
 import { useAgentConversation } from "./app/useAgentConversation";
-import { clearProjectHistory, createProject, getProject, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
+import { cancelRun, clearProjectHistory, createProject, fetchLocalAgentProviders, getProject, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
 import { PptxArtifactRuntimeAdapter } from "./artifact/pptxArtifactAdapter";
 import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
-import type { DeckManifestSlide, ProjectDetailResponse, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
+import type { DeckManifestSlide, LocalAgentProviderStatus, ProjectDetailResponse, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
 
-const agentProfiles = [
-  { id: "local-agent:codex", label: "Codex", state: "ready" },
-  { id: "local-agent:claude", label: "Claude Code", state: "ready" },
+const agentProfiles: Array<{ id: string; provider: string; model: string; label: string }> = [
+  { id: "local-agent:codex", provider: "codex", model: "codex:gpt-5", label: "Codex" },
+  { id: "local-agent:claude", provider: "claude", model: "claude:default", label: "Claude Code" },
 ];
+
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+const scrollbarHidden = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+const slideFilmstripClass = cn("flex min-h-32 min-w-0 shrink-0 items-center gap-3 overflow-x-auto overflow-y-hidden border-t border-white/8 bg-[#242424] px-5 pb-4 pt-3.5", scrollbarHidden);
+const slideFilmstripThumbClass =
+  "relative w-36 shrink-0 rounded-lg border border-white/10 bg-[#303030] p-[7px] text-white/70 aria-selected:border-violet-500/90 aria-selected:shadow-[0_0_0_2px_rgba(139,92,246,0.24)]";
+const resizeHandlePosition: Record<ResizeHandle, string> = {
+  "top-left": "-left-1 -top-1 cursor-nwse-resize",
+  top: "-top-1 left-1/2 -translate-x-1/2 cursor-ns-resize",
+  "top-right": "-right-1 -top-1 cursor-nesw-resize",
+  right: "-right-1 top-1/2 -translate-y-1/2 cursor-ew-resize",
+  "bottom-right": "-bottom-1 -right-1 cursor-nwse-resize",
+  bottom: "-bottom-1 left-1/2 -translate-x-1/2 cursor-ns-resize",
+  "bottom-left": "-bottom-1 -left-1 cursor-nesw-resize",
+  left: "-left-1 top-1/2 -translate-y-1/2 cursor-ew-resize",
+};
 
 type AppRoute = { name: "home" } | { name: "slide"; projectId: string };
 
@@ -80,6 +110,7 @@ export function App() {
   const [projectDetail, setProjectDetail] = useState<ProjectDetailResponse | null>(null);
   const [historyProjects, setHistoryProjects] = useState<SlideProject[]>([]);
   const [slideTemplates, setSlideTemplates] = useState<SlideTemplate[]>([]);
+  const [localAgentProviders, setLocalAgentProviders] = useState<LocalAgentProviderStatus[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [loadingProject, setLoadingProject] = useState(false);
   const [error, setError] = useState("");
@@ -87,7 +118,14 @@ export function App() {
   const [selectedSlideIndex, setSelectedSlideIndex] = useState(0);
   const [agentSending, setAgentSending] = useState(false);
   const currentProjectId = route.name === "slide" ? route.projectId : null;
-  const agentConversation = useAgentConversation(currentProjectId);
+  const agentConversation = useAgentConversation({
+    projectId: currentProjectId,
+    onProjectUpdated: (detail) => {
+      if (detail.project.id !== currentProjectId) return;
+      setProjectDetail(detail);
+      setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
+    },
+  });
   const pptxArtifactAdapter = useMemo(() => new PptxArtifactRuntimeAdapter(), []);
   const {
     runtime: pptxRuntime,
@@ -115,7 +153,7 @@ export function App() {
         ...template.tags,
       ].some((value) => value.toLowerCase().includes(normalizedQuery));
     });
-  }, [query, selectedCategory]);
+  }, [query, selectedCategory, slideTemplates]);
 
   useEffect(() => {
     const onPopState = () => setRoute(readCurrentRoute());
@@ -129,6 +167,21 @@ export function App() {
       .then(setHistoryProjects)
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
   }, [route.name]);
+
+  useEffect(() => {
+    void fetchLocalAgentProviders()
+      .then((response) => {
+        setLocalAgentProviders(response.providers);
+        setSelectedAgent((current) => {
+          const currentProfile = agentProfiles.find((profile) => profile.id === current);
+          const currentStatus = currentProfile ? response.providers.find((provider) => provider.provider === currentProfile.provider) : null;
+          if (currentStatus?.available) return current;
+          const firstAvailable = agentProfiles.find((profile) => response.providers.find((provider) => provider.provider === profile.provider)?.available);
+          return firstAvailable?.id ?? current;
+        });
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, []);
 
   useEffect(() => {
     if (route.name !== "home" || slideTemplates.length > 0) return;
@@ -176,13 +229,13 @@ export function App() {
     route.name,
   ]);
 
-  const createAndOpenProject = async (input: { title: string; template?: SlideTemplate }) => {
+  const createAndOpenProject = async (input: { title: string; template?: SlideTemplate; artifactType?: SlideArtifactType }) => {
     setCreating(true);
     setError("");
     try {
       const response = await createProject({
         title: input.title,
-        artifactType: artifactTypeForOutput(outputType),
+        artifactType: input.artifactType ?? artifactTypeForOutput(outputType),
         templateId: input.template?.id ?? null,
         templateName: input.template?.name ?? null,
       });
@@ -207,7 +260,7 @@ export function App() {
   const createFromTemplate = (template: SlideTemplate) => {
     setSelectedTemplate(null);
     setSelectedSlideIndex(0);
-    void createAndOpenProject({ title: template.name, template });
+    void createAndOpenProject({ title: template.name, template, artifactType: "deck" });
   };
 
   const openTemplate = (template: SlideTemplate) => {
@@ -262,6 +315,18 @@ export function App() {
     }
   };
 
+  const cancelAgentRun = async (runId: string) => {
+    setError("");
+    try {
+      await cancelRun(runId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      throw err;
+    }
+  };
+
+  const agentBusy = agentSending || agentConversation.items.some((item) => item.run.status === "accepted" || item.run.status === "running");
+
   if (route.name === "slide") {
     return (
       <EditorPlaceholder
@@ -271,12 +336,13 @@ export function App() {
         detail={projectDetail}
         error={error}
         activeSelectionText={projectDetail?.artifact.type === "pptx" ? pptxRuntime?.selection.selectedText ?? "" : ""}
-        sending={agentSending}
+        sending={agentBusy}
         loading={loadingProject || pptxLoading}
         pptxError={pptxError}
         pptxRuntime={pptxRuntime}
         projectId={route.projectId}
         onBackHome={() => setRoute(pushHomeRoute())}
+        onCancel={cancelAgentRun}
         onPptxSelectionChange={updatePptxSelection}
         onSend={sendAgentPrompt}
       />
@@ -284,56 +350,57 @@ export function App() {
   }
 
   return (
-    <main className="app-shell">
-      <button className="debug-clear" type="button" title="Clear history data" onClick={() => void clearHistory()}>
+    <main className="relative min-h-screen overflow-auto bg-[#1f1f1f] px-3.5 pb-9 pt-14 font-sans text-white md:px-7 md:pb-12">
+      <button className="absolute right-7 top-7 z-20 flex h-8 items-center gap-2 rounded-full border border-[#5b332f] bg-[#3a241f] px-3 text-[12px] font-bold text-[#ffad9f]" type="button" title="Clear history data" onClick={() => void clearHistory()}>
         <Trash2 size={14} />
         Debug clear history
       </button>
 
-      <section className="home-hero">
-        <div className="hero-icon">
+      <section className="mx-auto flex w-full max-w-[820px] flex-col items-center text-center">
+        <div className="mb-5 grid size-10 place-items-center rounded-full bg-white text-black">
           <Sparkles size={18} />
         </div>
-        <h1>Ready to create any presentation?</h1>
+        <h1 className="m-0 text-[34px] font-extrabold leading-[1.18] text-white md:text-[36px]">Ready to create any presentation?</h1>
         <Composer
           creating={creating}
           outputType={outputType}
           prompt={prompt}
           selectedAgent={selectedAgent}
+          localAgentProviders={localAgentProviders}
           onCreate={createFromPrompt}
           onOutputTypeChange={setOutputType}
           onPromptChange={setPrompt}
           onSelectedAgentChange={setSelectedAgent}
         />
-        {error ? <div className="home-error">{error}</div> : null}
+        {error ? <div className="mt-4 w-full rounded-xl bg-[#3a241f] p-3 text-left text-[12px] leading-5 text-[#ffad9f]">{error}</div> : null}
       </section>
 
-      <section className="template-workbench">
-        <div className="template-toolbar">
-          <div className="template-heading">
-            <div className="panel-tabs" aria-label="Home panels">
-              <button className={activePanel === "templates" ? "active" : ""} type="button" onClick={() => setActivePanel("templates")}>
+      <section className="mx-auto mt-9 w-full max-w-[1180px]">
+        <div className="flex flex-col items-stretch justify-between gap-4 md:flex-row md:items-end">
+          <div className="flex min-w-0 flex-col gap-2">
+            <div className="flex items-center gap-2" aria-label="Home panels">
+              <button className={cn("inline-flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-bold", activePanel === "templates" ? "bg-white text-black" : "bg-[#303030] text-white/72 hover:bg-[#383838]")} type="button" onClick={() => setActivePanel("templates")}>
                 <Layers3 size={15} />
                 Templates
               </button>
-              <button className={activePanel === "history" ? "active" : ""} type="button" onClick={() => setActivePanel("history")}>
+              <button className={cn("inline-flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-bold", activePanel === "history" ? "bg-white text-black" : "bg-[#303030] text-white/72 hover:bg-[#383838]")} type="button" onClick={() => setActivePanel("history")}>
                 <History size={15} />
                 History
               </button>
             </div>
-            <div className="template-count">
+            <div className="text-[12px] font-bold text-white/44">
               {activePanel === "templates" ? `${templatesLoading ? "Loading" : visibleTemplates.length} templates` : `${historyProjects.length} projects`}
             </div>
           </div>
-          <label className="search-box">
+          <label className="flex h-[38px] w-full items-center gap-2 rounded-full border border-white/10 bg-[#303030] px-3.5 text-white/58 md:w-[min(340px,42vw)]">
             <Search size={15} />
-            <input value={query} placeholder="Search templates" onChange={(event) => setQuery(event.currentTarget.value)} />
+            <input className="min-w-0 flex-1 border-0 bg-transparent text-[13px] font-semibold text-white outline-none placeholder:text-white/42" value={query} placeholder="Search templates" onChange={(event) => setQuery(event.currentTarget.value)} />
           </label>
         </div>
 
         {activePanel === "templates" ? (
           <>
-            <div className="category-strip">
+            <div className={cn("mt-4 flex gap-2 overflow-x-auto pb-2", scrollbarHidden)}>
               <CategoryButton
                 active={selectedCategory === "All"}
                 count={slideTemplates.length}
@@ -350,7 +417,7 @@ export function App() {
                 />
               ))}
             </div>
-            <div className="template-grid">
+            <div className="mt-4 columns-1 gap-5 md:columns-2 lg:columns-3">
               {selectedCategory === "All" ? <BlankTemplateCard outputType={outputType} onCreate={createBlank} /> : null}
               {visibleTemplates.map((template) => (
                 <TemplateCard key={template.id} showCategory={selectedCategory === "All"} template={template} onSelect={openTemplate} />
@@ -377,6 +444,7 @@ export function App() {
 
 function Composer(props: {
   creating: boolean;
+  localAgentProviders: LocalAgentProviderStatus[];
   outputType: OutputType;
   prompt: string;
   selectedAgent: string;
@@ -388,13 +456,13 @@ function Composer(props: {
   const canSubmit = props.prompt.trim().length > 0 && !props.creating;
 
   return (
-    <div className="composer">
-      <div className="format-switch">
+    <div className="mt-8 w-full rounded-[20px] border border-white/10 bg-[#303030] p-4 text-left shadow-[0_22px_80px_rgba(0,0,0,0.42)]">
+      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
         <FormatOption
           active={props.outputType === "html"}
           description="Editable slide runtime"
           icon={<FileCode2 size={20} />}
-          label="HTML"
+          label="Deck"
           onClick={() => props.onOutputTypeChange("html")}
         />
         <FormatOption
@@ -407,18 +475,19 @@ function Composer(props: {
       </div>
 
       <textarea
+        className="block h-[108px] w-full resize-none border-0 bg-transparent px-1 pb-2 text-[15px] leading-6 text-white outline-none placeholder:text-white/42"
         value={props.prompt}
         placeholder="Ask for a pitch deck, lesson deck, board update, research talk..."
         onChange={(event) => props.onPromptChange(event.currentTarget.value)}
       />
 
-      <div className="composer-actions">
-        <button className="add-button" type="button" title="Add source files">
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
+        <button className="grid size-9 shrink-0 place-items-center rounded-full border-0 bg-white text-black" type="button" title="Add source files">
           <Plus size={20} />
         </button>
-        <AgentMenu selectedAgent={props.selectedAgent} onChange={props.onSelectedAgentChange} />
-        <button className="create-button" disabled={!canSubmit} type="button" title="Create deck" onClick={props.onCreate}>
-          {props.creating ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
+        <AgentMenu localAgentProviders={props.localAgentProviders} selectedAgent={props.selectedAgent} onChange={props.onSelectedAgentChange} />
+        <button className="inline-flex h-10 min-w-[108px] flex-1 items-center justify-center gap-2 rounded-full border-0 bg-white px-[18px] text-[13px] font-extrabold text-black disabled:cursor-default disabled:bg-white/16 disabled:text-white/36 md:flex-none" disabled={!canSubmit} type="button" title="Create deck" onClick={props.onCreate}>
+          {props.creating ? <Loader2 className="animate-spin" size={18} /> : <Wand2 size={18} />}
           Create
         </button>
       </div>
@@ -428,14 +497,14 @@ function Composer(props: {
 
 function FormatOption(props: { active: boolean; description: string; icon: React.ReactNode; label: string; onClick: () => void }) {
   return (
-    <button className={`format-option ${props.active ? "active" : ""}`} type="button" onClick={props.onClick}>
-      <span className="format-icon">{props.icon}</span>
-      <span className="format-copy">
-        <span>{props.label}</span>
-        <small>{props.description}</small>
+    <button className={cn("flex min-h-16 min-w-0 items-center gap-3 rounded-xl border p-3 text-left transition", props.active ? "border-white bg-white text-black" : "border-white/10 bg-[#2f2f2f] text-white/82 hover:border-white/20 hover:bg-[#363636]")} type="button" onClick={props.onClick}>
+      <span className={cn("grid size-9 shrink-0 place-items-center rounded-xl", props.active ? (props.label === "PPTX" ? "bg-[#e9f0ff] text-[#2f66d9]" : "bg-[#e9f7ef] text-[#187a44]") : "bg-white/8 text-white/64")}>{props.icon}</span>
+      <span className="grid min-w-0 gap-1">
+        <span className="truncate text-[14px] font-extrabold leading-none">{props.label}</span>
+        <small className="truncate text-[12px] font-bold text-current opacity-50">{props.description}</small>
       </span>
       {props.active ? (
-        <span className="check-pill">
+        <span className="ml-auto grid size-6 shrink-0 place-items-center rounded-full bg-black text-white">
           <Check size={14} />
         </span>
       ) : null}
@@ -443,39 +512,43 @@ function FormatOption(props: { active: boolean; description: string; icon: React
   );
 }
 
-function AgentMenu(props: { selectedAgent: string; onChange: (value: string) => void }) {
+function AgentMenu(props: { localAgentProviders: LocalAgentProviderStatus[]; selectedAgent: string; onChange: (value: string) => void }) {
   return (
-    <label className="agent-menu">
-      <select value={props.selectedAgent} aria-label="Select ACP agent" onChange={(event) => props.onChange(event.currentTarget.value)}>
-        {agentProfiles.map((agent) => (
-          <option key={agent.id} value={agent.id}>
-            {agent.label}
+    <label className="relative mr-auto flex h-9 w-auto flex-1 basis-[150px] items-center md:w-[168px] md:flex-none md:basis-auto">
+      <select className="h-full w-full appearance-none rounded-full border border-white/10 bg-[#3b3b3b] px-4 pr-9 text-[13px] font-bold text-white outline-none" value={props.selectedAgent} aria-label="Select ACP agent" onChange={(event) => props.onChange(event.currentTarget.value)}>
+        {agentProfiles.map((agent) => {
+          const status = props.localAgentProviders.find((provider) => provider.provider === agent.provider);
+          const available = status?.available ?? props.localAgentProviders.length === 0;
+          return (
+          <option disabled={!available} key={agent.id} value={agent.id}>
+            {agent.label}{available ? "" : " unavailable"}
           </option>
-        ))}
+          );
+        })}
       </select>
-      <ChevronDown size={14} />
+      <ChevronDown className="pointer-events-none absolute right-3 text-white/56" size={14} />
     </label>
   );
 }
 
 function CategoryButton(props: { active: boolean; count: number; label: string; onClick: () => void }) {
   return (
-    <button className={props.active ? "active" : ""} type="button" onClick={props.onClick}>
+    <button className={cn("inline-flex h-8 shrink-0 items-center gap-2 rounded-full px-3.5 text-[12px] font-bold", props.active ? "bg-white text-black" : "bg-[#303030] text-white/72 hover:bg-[#383838]")} type="button" onClick={props.onClick}>
       <span>{humanizeCategory(props.label)}</span>
-      <small>{props.count}</small>
+      <small className="opacity-50">{props.count}</small>
     </button>
   );
 }
 
 function BlankTemplateCard(props: { outputType: OutputType; onCreate: () => void }) {
   return (
-    <button className="blank-card" type="button" onClick={props.onCreate}>
-      <span>
+    <button className="mb-5 flex h-[292px] w-full min-w-0 break-inside-avoid flex-col items-center justify-center gap-2.5 rounded-lg border border-white/10 bg-[#303030] text-left text-inherit transition hover:-translate-y-0.5 hover:bg-[#373737] hover:shadow-[0_18px_46px_rgba(0,0,0,0.34)]" type="button" onClick={props.onCreate}>
+      <span className="grid size-[58px] place-items-center rounded-full bg-white text-black">
         <Plus size={26} />
       </span>
-      <strong>Blank deck</strong>
-      <small>Blank presentation</small>
-      <em>{props.outputType.toUpperCase()}</em>
+      <strong className="text-[14px] font-extrabold">Blank deck</strong>
+      <small className="text-white/48">Blank presentation</small>
+      <em className="text-[11px] not-italic font-extrabold text-white/48">{props.outputType === "html" ? "DECK" : props.outputType.toUpperCase()}</em>
     </button>
   );
 }
@@ -484,17 +557,17 @@ function TemplateCard(props: { showCategory: boolean; template: SlideTemplate; o
   const { template } = props;
   return (
     <button
-      className={`template-card ${props.showCategory ? "with-category" : "compact"}`}
+      className="mb-5 grid w-full min-w-0 break-inside-avoid grid-rows-[auto_1fr] overflow-hidden rounded-lg border-0 bg-[#303030] text-left text-inherit shadow-[0_14px_34px_rgba(0,0,0,0.24)] transition hover:-translate-y-0.5 hover:bg-[#373737] hover:shadow-[0_18px_46px_rgba(0,0,0,0.34)]"
       type="button"
       aria-label={`Create ${template.name}`}
       onClick={() => props.onSelect(template)}
     >
-      <span className="cover-frame">
-        {template.coverImage ? <img src={template.coverImage} alt="" loading="lazy" draggable={false} /> : <span className="missing-cover">{template.name}</span>}
+      <span className="block aspect-video overflow-hidden bg-white">
+        {template.coverImage ? <img className="block size-full object-cover" src={template.coverImage} alt="" loading="lazy" draggable={false} /> : <span className="grid h-full place-items-center p-5 text-center text-[12px] font-extrabold text-[#222]">{template.name}</span>}
       </span>
-      <span className="template-body">
-        <strong>{template.name}</strong>
-        {props.showCategory ? <span className="template-category">{humanizeCategory(template.category)}</span> : null}
+      <span className={cn("flex min-w-0 flex-col justify-start gap-[7px] p-3", props.showCategory ? "min-h-[92px]" : "min-h-0")}>
+        <strong className="line-clamp-3 overflow-hidden text-[12px] font-extrabold leading-[1.35] text-white">{template.name}</strong>
+        {props.showCategory ? <span className="mt-auto inline-flex h-6 w-fit max-w-full items-center overflow-hidden truncate rounded-full border border-white/10 bg-white/[0.07] px-2.5 text-[11px] font-bold text-white/62">{humanizeCategory(template.category)}</span> : null}
       </span>
     </button>
   );
@@ -525,71 +598,71 @@ function TemplatePreviewModal(props: {
   };
 
   return (
-    <div className="template-modal-backdrop" role="presentation" onMouseDown={props.onClose}>
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/62 p-[18px]" role="presentation" onMouseDown={props.onClose}>
       <section
         aria-modal="true"
-        className="template-modal"
+        className="relative flex h-[min(900px,calc(100vh_-_24px))] w-[min(960px,calc(100vw_-_24px))] flex-col overflow-hidden rounded-[18px] bg-white text-[#202124] shadow-[0_32px_120px_rgba(0,0,0,0.42)] max-md:h-auto max-md:max-h-[calc(100vh_-_20px)] max-md:w-[calc(100vw_-_20px)]"
         role="dialog"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <button className="template-modal-close" type="button" aria-label="Close template preview" onClick={props.onClose}>
+        <button className="absolute right-7 top-5 z-[3] grid size-9 place-items-center border-0 bg-transparent text-[#80848c] max-md:right-4 max-md:top-3" type="button" aria-label="Close template preview" onClick={props.onClose}>
           <X size={26} />
         </button>
 
-        <div className="template-modal-top">
-          <div className="template-modal-copy">
-            <div className="template-modal-category">{humanizeCategory(props.template.category)}</div>
-            <h2>{props.template.name}</h2>
-            <div className="template-modal-slug">
-              <span>Name:</span>
-              <code>{props.template.slug}</code>
+        <div className="grid shrink-0 basis-[340px] grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] gap-7 px-[34px] pb-[18px] pt-[58px] max-md:basis-auto max-md:grid-cols-1 max-md:gap-6 max-md:px-[18px] max-md:pb-[18px] max-md:pt-[52px]">
+          <div className="min-w-0">
+            <div className="inline-flex h-[30px] max-w-full items-center overflow-hidden whitespace-nowrap rounded-[9px] bg-[#f2f3f5] px-3.5 text-[13px] font-black uppercase tracking-[0.08em] text-[#60636a] max-md:h-[34px]">{humanizeCategory(props.template.category)}</div>
+            <h2 className="my-3 mt-[18px] max-w-full text-[30px] font-black leading-[1.16] text-[#202124] md:text-[32px]">{props.template.name}</h2>
+            <div className="inline-flex h-[34px] max-w-full items-center gap-2.5 overflow-hidden rounded-[10px] bg-[#f5f5f5] px-3 text-[13px] font-bold text-[#6a6d74] max-md:h-10">
+              <span className="text-[#9a9da3]">Name:</span>
+              <code className="min-w-0 truncate font-mono">{props.template.slug}</code>
               <Copy size={18} />
             </div>
-            <blockquote>{props.template.shortDescription || props.template.description}</blockquote>
+            <blockquote className="mt-[18px] line-clamp-2 max-w-[840px] overflow-hidden border-l-[5px] border-[#202124] pl-[18px] text-[16px] italic leading-[1.55] text-[#24262a] max-md:text-[17px]">{props.template.shortDescription || props.template.description}</blockquote>
           </div>
 
-          <div className="template-modal-preview">
-            {selectedImage ? <img src={selectedImage} alt="" draggable={false} /> : <div className="template-modal-empty">{props.template.name}</div>}
+          <div className="relative self-center overflow-hidden rounded-[14px] border border-[#eceef1] bg-white shadow-[inset_0_0_0_1px_rgba(17,24,39,0.02)]">
+            {selectedImage ? <img className="block aspect-video w-full object-cover" src={selectedImage} alt="" draggable={false} /> : <div className="grid aspect-video w-full place-items-center bg-[#f3f0ea] p-7 text-center text-[18px] font-extrabold text-[#202124]">{props.template.name}</div>}
             {thumbnails.length > 1 ? (
               <>
-                <button className="preview-arrow left" type="button" aria-label="Previous slide" onClick={() => move(-1)}>
+                <button className="absolute left-3 top-1/2 grid size-[46px] -translate-y-1/2 place-items-center rounded-full border border-[#202124]/8 bg-white/86 text-[#202124] shadow-[0_10px_24px_rgba(0,0,0,0.12)]" type="button" aria-label="Previous slide" onClick={() => move(-1)}>
                   <ChevronLeft size={30} />
                 </button>
-                <button className="preview-arrow right" type="button" aria-label="Next slide" onClick={() => move(1)}>
+                <button className="absolute right-3 top-1/2 grid size-[46px] -translate-y-1/2 place-items-center rounded-full border border-[#202124]/8 bg-white/86 text-[#202124] shadow-[0_10px_24px_rgba(0,0,0,0.12)]" type="button" aria-label="Next slide" onClick={() => move(1)}>
                   <ChevronRight size={30} />
                 </button>
               </>
             ) : null}
-            <div className="preview-count">
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/64 px-2.5 py-1 text-[11px] font-extrabold text-white">
               {selectedIndex + 1} / {slideCount}
             </div>
           </div>
         </div>
 
-        <div className="template-modal-slides">
-          <div className="template-modal-section-title">
-            <h3>All Slides</h3>
-            <span>{slideCount} slides</span>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex items-center justify-between gap-4 border-t border-[#eceef1] px-[34px] py-[18px] max-md:px-[18px]">
+            <h3 className="m-0 text-[22px] font-black leading-tight text-[#202124]">All Slides</h3>
+            <span className="text-[13px] font-bold text-[#80848c]">{slideCount} slides</span>
           </div>
 
-          <div className="template-modal-thumbnails">
+          <div className="flex flex-wrap gap-4 px-[34px] pb-24 max-md:px-[18px]">
             {thumbnails.map((image, index) => (
               <button
                 key={`${image}-${index}`}
-                className={index === selectedIndex ? "active" : ""}
+                className={cn("relative basis-[calc(33.333%_-_11px)] overflow-hidden rounded-xl border border-[#e5e7eb] bg-white p-0 text-left shadow-[0_10px_24px_rgba(0,0,0,0.08)] max-md:basis-full", index === selectedIndex ? "border-[#202124] ring-2 ring-[#202124]/12" : "")}
                 type="button"
                 aria-label={`Preview slide ${index + 1}`}
                 onClick={() => props.onSelectIndex(index)}
               >
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <img src={image} alt="" loading="lazy" draggable={false} />
+                <span className="absolute left-2 top-2 z-[2] rounded-md bg-black/58 px-1.5 py-1 font-mono text-[10px] font-black text-white">{String(index + 1).padStart(2, "0")}</span>
+                <img className="block aspect-video w-full object-cover" src={image} alt="" loading="lazy" draggable={false} />
               </button>
             ))}
           </div>
         </div>
 
-        <div className="template-modal-footer">
-          <button className="template-use-button" type="button" disabled={props.creating} onClick={() => props.onUseTemplate(props.template)}>
+        <div className="absolute inset-x-0 bottom-0 flex justify-end border-t border-[#eceef1] bg-white/96 px-[34px] py-4 backdrop-blur max-md:px-[18px]">
+          <button className="h-10 rounded-xl border-0 bg-[#202124] px-7 text-[15px] font-extrabold text-white disabled:cursor-default disabled:bg-[#d1d5db]" type="button" disabled={props.creating} onClick={() => props.onUseTemplate(props.template)}>
             {props.creating ? "Adding..." : "Use"}
           </button>
         </div>
@@ -611,49 +684,47 @@ function EditorPlaceholder(props: {
   projectId: string;
   sending: boolean;
   onBackHome: () => void;
+  onCancel: (runId: string) => Promise<void>;
   onPptxSelectionChange: ReturnType<typeof usePptxArtifactRuntime>["updateSelection"];
   onSend: (prompt: string) => Promise<void>;
 }) {
+  const [deckSaveState, setDeckSaveState] = useState<ArtifactSaveState>("saved");
+  const artifactType = props.detail?.artifact.type ?? "deck";
+  const headerSaveState: ArtifactSaveState = props.loading ? "loading" : props.pptxError ? "error" : artifactType === "deck" ? deckSaveState : "saved";
+
   return (
-    <main className="editor-workbench">
-      <AgentConversationPanel
-        activeSelectionText={props.activeSelectionText}
-        dirty={false}
-        error={props.conversationError || props.error || props.pptxError}
-        items={props.conversationItems}
-        loading={props.conversationLoading}
-        sending={props.sending}
-        onBackHome={props.onBackHome}
-        onSend={props.onSend}
-      />
-      <section className="editor-stage">
-        <div className="editor-stage-toolbar">
-          <div className="editor-stage-title">
-            <div>{props.detail?.project.title ?? "Untitled Presentation"}</div>
-            <span>
-              {props.loading
-                ? "Loading"
-                : props.detail?.artifact.type === "deck"
-                  ? `Saved · ${props.detail.deckManifest?.slides.length ?? 0} slides`
-                  : props.detail?.artifact.type.toUpperCase() ?? `/slide/${props.projectId}`}
-            </span>
-          </div>
-          <button className="editor-back" type="button" onClick={props.onBackHome}>
-            Back
-          </button>
-        </div>
+    <ArtifactEditorFrame
+      sidebar={
+        <AgentConversationPanel
+          activeSelectionText={props.activeSelectionText}
+          artifactLabel={props.detail?.artifact.type ?? "deck"}
+          dirty={false}
+          error={props.conversationError || props.error || props.pptxError}
+          items={props.conversationItems}
+          loading={props.conversationLoading}
+          sending={props.sending}
+          onBackHome={props.onBackHome}
+          onCancel={props.onCancel}
+          onSend={props.onSend}
+        />
+      }
+    >
+      <section className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#242424]">
+        <ArtifactWorkspaceHeader
+          title={props.detail?.project.title ?? "Untitled Presentation"}
+          saveState={headerSaveState}
+          exportItems={slideExportItems(props.projectId, artifactType)}
+        />
         {props.loading ? (
           <EditorInfoPanel title="Loading presentation..." />
         ) : props.error ? (
           <EditorInfoPanel detail={props.error} title="Presentation not found" />
         ) : props.detail?.artifact.type === "deck" ? (
-          <DeckEditor detail={props.detail} projectId={props.projectId} />
+          <DeckEditor detail={props.detail} projectId={props.projectId} onSaveStateChange={setDeckSaveState} />
         ) : props.detail?.artifact.type === "pptx" && props.pptxRuntime ? (
           <PptxPreview
             runtime={props.pptxRuntime}
             error={props.pptxError}
-            loading={props.loading}
-            onBackHome={props.onBackHome}
             onSelectionChange={props.onPptxSelectionChange}
           />
         ) : props.detail ? (
@@ -663,7 +734,7 @@ function EditorPlaceholder(props: {
           />
         ) : null}
       </section>
-    </main>
+    </ArtifactEditorFrame>
   );
 }
 
@@ -773,7 +844,8 @@ const deckFontOptions = [
 const resizeHandles: ResizeHandle[] = ["top-left", "top", "top-right", "right", "bottom-right", "bottom", "bottom-left", "left"];
 const maxDeckHistoryEntries = 100;
 
-function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string }) {
+function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; onSaveStateChange: (state: ArtifactSaveState) => void }) {
+  const { onSaveStateChange } = props;
   const { ref: hostRef, width: hostWidth, height: hostHeight } = useElementSize<HTMLDivElement>();
   const frameRecordsRef = useRef(new Map<string, FrameRecord>());
   const initializedFramesRef = useRef(new WeakSet<Document>());
@@ -800,6 +872,10 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string })
   const activeHistory = useMemo(() => (activeSlideId ? deckHistoryRef.current.get(activeSlideId) ?? null : null), [activeSlideId, historyVersion]);
   const canUndo = Boolean(activeHistory && activeHistory.currentIndex > 0);
   const canRedo = Boolean(activeHistory && activeHistory.currentIndex < activeHistory.entries.length - 1);
+
+  useEffect(() => {
+    onSaveStateChange(saveState);
+  }, [onSaveStateChange, saveState]);
 
   useEffect(() => {
     return () => {
@@ -1175,7 +1251,7 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string })
   }
 
   return (
-    <div className="deck-stage-scroll">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#2a2a2a] px-3 py-3.5 md:px-6 md:pb-6 md:pt-5">
       <DeckToolbar
         activeObject={activeObject}
         saveState={saveState}
@@ -1197,7 +1273,7 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string })
       />
       <div
         ref={hostRef}
-        className="deck-slide-list"
+        className="flex min-h-0 flex-1 items-center justify-center overflow-auto px-0 pb-5 pt-2.5 outline-none md:px-2 md:pb-7 md:pt-3"
         tabIndex={0}
         onKeyDown={handleSlideNavigationKey}
         onPointerDown={(event) => {
@@ -1212,17 +1288,18 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string })
               ? editingShieldRects(activeSelectionBox, Math.round(canvas.width * scale), frameHeight)
               : [];
             return (
-              <article className={`deck-slide-card ${selectionMode === "object" && activeObject?.slideId === slide.id ? "active" : ""}`} key={slide.id}>
-                <div className="deck-slide-meta">
-                  <span>{String(activeSlideIndex + 1).padStart(2, "0")}</span>
-                  <strong>{slide.title}</strong>
+              <article className="w-[min(100%,1100px)] min-w-0 shrink-0" key={slide.id}>
+                <div className="mb-2 flex items-center gap-2.5">
+                  <span className="inline-flex h-6 items-center rounded-md bg-white/10 px-[7px] font-mono text-[12px] font-black text-white/72">{String(activeSlideIndex + 1).padStart(2, "0")}</span>
+                  <strong className="min-w-0 truncate text-[12px] font-extrabold text-white/78">{slide.title}</strong>
                 </div>
-                <div className="deck-slide-frame" style={{ height: frameHeight || undefined }}>
+                <div className={cn("relative overflow-hidden rounded-[2px] border border-black/30 bg-white shadow-[0_30px_90px_rgba(0,0,0,0.55)]", selectionMode === "object" && activeObject?.slideId === slide.id ? "border-blue-500/75" : "")} style={{ height: frameHeight || undefined }}>
                   <iframe
+                    className="absolute left-0 top-0 block origin-top-left border-0"
                     ref={(iframe) => {
                       if (iframe) initializeFrame(slide, iframe);
                     }}
-                    src={projectAssetUrl(props.projectId, props.detail.artifact.fileRef, slide.file)}
+                    src={projectAssetUrl(props.projectId, props.detail.artifact.fileRef, slide.file, props.detail.artifact.revision)}
                     style={{
                       width: canvas.width,
                       height: canvas.height,
@@ -1234,7 +1311,7 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string })
                   {activeSelectionBox?.slideId === slide.id && activeTextEdit?.slideId !== slide.id ? (
                     <>
                       <div
-                        className="deck-selection-box"
+                        className="pointer-events-none absolute z-[3] border border-violet-500 shadow-none"
                         style={{
                           left: activeSelectionBox.left,
                           top: activeSelectionBox.top,
@@ -1245,7 +1322,7 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string })
                         {resizeHandles.map((handle) => (
                           <button
                             aria-label={`Resize ${handle}`}
-                            className={`deck-resize-handle ${handle}`}
+                            className={cn("pointer-events-auto absolute size-2 rounded-full border border-violet-500 bg-white p-0 shadow-[0_1px_4px_rgba(0,0,0,0.18)]", resizeHandlePosition[handle])}
                             data-handle={handle}
                             key={handle}
                             type="button"
@@ -1254,7 +1331,7 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string })
                         ))}
                       </div>
                       <div
-                        className="deck-floating-toolbar"
+                        className="absolute z-[4] inline-flex h-[30px] -translate-x-1/2 -translate-y-[calc(100%_+_8px)] items-center gap-px rounded-md border border-black/8 bg-white p-[3px] shadow-[0_8px_22px_rgba(0,0,0,0.16)] [&>button]:grid [&>button]:size-[22px] [&>button]:place-items-center [&>button]:rounded-[5px] [&>button]:border-0 [&>button]:bg-transparent [&>button]:p-0 [&>button]:text-black/58 [&>button:hover]:bg-black/[0.06] [&>button:hover]:text-[#111]"
                         style={{
                           left: activeSelectionBox.left + activeSelectionBox.width / 2,
                           top: activeSelectionBox.top,
@@ -1275,7 +1352,7 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string })
                   {isTextEditingSlide ? (
                     shieldRects.map((shield, shieldIndex) => (
                       <div
-                        className="deck-slide-editing-shield"
+                        className="absolute z-[2] cursor-default bg-transparent"
                         key={shieldIndex}
                         role="presentation"
                         style={shield}
@@ -1285,7 +1362,7 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string })
                     ))
                   ) : (
                     <div
-                      className="deck-slide-hit-layer"
+                      className="absolute inset-0 z-[2] cursor-default bg-transparent"
                       role="presentation"
                       onPointerDown={(event) => selectObjectFromFramePoint(slide, event.clientX, event.clientY)}
                       onDoubleClick={(event) => enterTextEditFromFramePoint(slide, event.clientX, event.clientY)}
@@ -1300,7 +1377,7 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string })
       <SlideFilmstrip
         activeId={activeSlide?.id ?? null}
         ariaLabel="Slides"
-        className="deck-filmstrip"
+        className={slideFilmstripClass}
         frameHeight={deckThumbnail.height}
         frameWidth={deckThumbnail.width}
         items={slides.map((slide, index) => ({
@@ -1352,94 +1429,83 @@ function DeckToolbar(props: {
   const disabled = !props.activeObject;
   const hasCurrentFontOption = deckFontOptions.some((option) => option.value === props.state.fontFamily);
   return (
-    <div
-      className="deck-toolbar"
-      data-selection-mode={props.selectionMode}
-      onMouseDown={(event) => {
-        if (event.target instanceof HTMLButtonElement) event.preventDefault();
-      }}
-    >
-      <div className="deck-toolbar-main toolbar-scroll">
-        <div className="deck-toolbar-group">
-          <button disabled={!props.canUndo} type="button" title="Undo" onClick={props.onUndo}>
+    <Toolbar display={{ maxWidth: 1500 }}>
+      <ToolbarRow>
+        <ToolbarGroup>
+          <ToolbarIconButton disabled={!props.canUndo} title="Undo" onClick={props.onUndo}>
             <Undo2 size={16} />
-          </button>
-          <button disabled={!props.canRedo} type="button" title="Redo" onClick={props.onRedo}>
+          </ToolbarIconButton>
+          <ToolbarIconButton disabled={!props.canRedo} title="Redo" onClick={props.onRedo}>
             <Redo2 size={16} />
-          </button>
-        </div>
-        <div className="deck-toolbar-group">
-          <select disabled={disabled} value={props.state.block} onChange={() => {}}>
+          </ToolbarIconButton>
+        </ToolbarGroup>
+        <ToolbarDivider />
+        <ToolbarGroup className="[column-gap:4px]">
+          <ToolbarSelect compact disabled={disabled} title="Block style" value={props.state.block} onChange={() => {}}>
             <option value="normal">Normal Text</option>
             <option value="heading">Heading</option>
             <option value="shape">Shape</option>
             <option value="image">Image</option>
-          </select>
-          <select disabled={disabled} value={props.state.fontFamily} onChange={(event) => props.onFontFamily(event.currentTarget.value)}>
+          </ToolbarSelect>
+          <ToolbarSelect disabled={disabled} title="Font family" value={props.state.fontFamily} onChange={props.onFontFamily}>
             {hasCurrentFontOption ? null : <option value={props.state.fontFamily}>{fontFamilyLabel(props.state.fontFamily)}</option>}
             {deckFontOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
-          </select>
-          <input
-            disabled={disabled}
-            inputMode="numeric"
-            value={props.state.fontSize}
-            onChange={(event) => props.onFontSize(event.currentTarget.value)}
-          />
-        </div>
-        <div className="deck-toolbar-group">
-          <button className={props.state.bold ? "active" : ""} disabled={disabled} type="button" title="Bold" onClick={props.onToggleBold}>
+          </ToolbarSelect>
+          <ToolbarNumberInput disabled={disabled} title="Font size" value={props.state.fontSize} onChange={props.onFontSize} />
+        </ToolbarGroup>
+        <ToolbarDivider />
+        <ToolbarGroup>
+          <ToolbarIconButton active={props.state.bold} disabled={disabled} title="Bold" onClick={props.onToggleBold}>
             <Bold size={16} />
-          </button>
-          <button className={props.state.italic ? "active" : ""} disabled={disabled} type="button" title="Italic" onClick={props.onToggleItalic}>
+          </ToolbarIconButton>
+          <ToolbarIconButton active={props.state.italic} disabled={disabled} title="Italic" onClick={props.onToggleItalic}>
             <Italic size={16} />
-          </button>
-          <button className={props.state.underline ? "active" : ""} disabled={disabled} type="button" title="Underline">
+          </ToolbarIconButton>
+          <ToolbarIconButton active={props.state.underline} disabled={disabled} title="Underline" onClick={() => undefined}>
             <Underline size={16} />
-          </button>
-          <button className={props.state.strikethrough ? "active" : ""} disabled={disabled} type="button" title="Strikethrough">
-            <span className="deck-strike-icon">S</span>
-          </button>
-          <label className="deck-color-control" title="Text color">
-            <span className="deck-color-letter" style={{ borderColor: props.state.textColor }}>
-              A
-            </span>
-            <input disabled={disabled} type="color" value={props.state.textColor} onChange={(event) => props.onTextColor(event.currentTarget.value)} />
-          </label>
-          <label className="deck-color-control" title="Fill color">
-            <PaintBucket size={15} />
-            <span className="deck-fill-swatch" style={{ backgroundColor: props.state.fillColor }} />
-            <input disabled={disabled} type="color" value={props.state.fillColor} onChange={(event) => props.onFillColor(event.currentTarget.value)} />
-          </label>
-        </div>
-        <div className="deck-toolbar-group">
-          <button className={props.state.align === "left" ? "active" : ""} disabled={disabled} type="button" title="Align left" onClick={() => props.onAlign("left")}>
+          </ToolbarIconButton>
+          <ToolbarIconButton active={props.state.strikethrough} disabled={disabled} title="Strikethrough" onClick={() => undefined}>
+            <span style={{ fontSize: 13, fontWeight: 800, lineHeight: 1, textDecoration: "line-through" }}>S</span>
+          </ToolbarIconButton>
+        </ToolbarGroup>
+        <ToolbarDivider />
+        <ToolbarGroup>
+          <ToolbarIconButton active={props.state.align === "left"} disabled={disabled} title="Align left" onClick={() => props.onAlign("left")}>
             <AlignLeft size={16} />
-          </button>
-          <button className={props.state.align === "center" ? "active" : ""} disabled={disabled} type="button" title="Align center" onClick={() => props.onAlign("center")}>
+          </ToolbarIconButton>
+          <ToolbarIconButton active={props.state.align === "center"} disabled={disabled} title="Align center" onClick={() => props.onAlign("center")}>
             <AlignCenter size={16} />
-          </button>
-          <button className={props.state.align === "right" ? "active" : ""} disabled={disabled} type="button" title="Align right" onClick={() => props.onAlign("right")}>
+          </ToolbarIconButton>
+          <ToolbarIconButton active={props.state.align === "right"} disabled={disabled} title="Align right" onClick={() => props.onAlign("right")}>
             <AlignRight size={16} />
-          </button>
-        </div>
-        <div className="deck-toolbar-group">
-          <button disabled={disabled} type="button" title="Duplicate object" onClick={props.onDuplicate}>
-            <Copy size={16} />
-          </button>
-          <button disabled={disabled} type="button" title="Delete object" onClick={props.onDelete}>
-            <Trash2 size={16} />
-          </button>
-          <button disabled={disabled} type="button" title="Image">
+          </ToolbarIconButton>
+        </ToolbarGroup>
+        <ToolbarDivider />
+        <ToolbarGroup>
+          <ToolbarColorInput disabled={disabled} title="Text color" color={props.state.textColor} onChange={props.onTextColor} />
+          <ToolbarColorInput disabled={disabled} title="Fill color" color={props.state.fillColor} icon={<PaintBucket size={15} />} onChange={props.onFillColor} />
+        </ToolbarGroup>
+        <ToolbarDivider />
+        <ToolbarGroup>
+          <ToolbarIconButton disabled={disabled} title="Image" onClick={() => undefined}>
             <Image size={16} />
-          </button>
-        </div>
-        <div className={`deck-toolbar-save ${props.saveState}`}>{props.saveState === "saving" ? "Saving" : props.saveState === "error" ? "Save error" : "Saved"}</div>
-      </div>
-    </div>
+          </ToolbarIconButton>
+        </ToolbarGroup>
+        <ToolbarDivider />
+        <ToolbarGroup>
+          <ToolbarIconButton disabled={disabled} title="Duplicate object" onClick={props.onDuplicate}>
+            <Copy size={16} />
+          </ToolbarIconButton>
+          <ToolbarIconButton disabled={disabled} title="Delete object" onClick={props.onDelete}>
+            <Trash2 size={16} />
+          </ToolbarIconButton>
+        </ToolbarGroup>
+      </ToolbarRow>
+    </Toolbar>
   );
 }
 
@@ -1531,17 +1597,29 @@ function hitTestDeckObject(doc: Document, x: number, y: number): DeckObjectEleme
         object,
         order,
         zIndex: Number.isFinite(zIndex) ? zIndex : 0,
+        area: rect.width * rect.height,
+        depth: objectDepth(object),
         rect,
       };
     })
     .filter(({ rect }) => rect.width > 0 && rect.height > 0 && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
-  candidates.sort((a, b) => a.zIndex - b.zIndex || a.order - b.order);
+  candidates.sort((a, b) => a.zIndex - b.zIndex || a.depth - b.depth || b.area - a.area || a.order - b.order);
   return candidates.at(-1)?.object ?? null;
 }
 
 function hitTestDeckObjectFromElementPoint(doc: Document, x: number, y: number): DeckObjectElement | null {
   const hit = doc.elementFromPoint(x, y);
   return isElement(hit) ? hit.closest<DeckObjectElement>('[data-object="true"]') : null;
+}
+
+function objectDepth(object: Element) {
+  let depth = 0;
+  let cursor = object.parentElement;
+  while (cursor) {
+    depth += 1;
+    cursor = cursor.parentElement;
+  }
+  return depth;
 }
 
 function readSelectionBox(slideId: string, object: DeckObjectElement, scale: number): ActiveDeckSelectionBox {
@@ -1795,27 +1873,45 @@ function rgbToHex(value: string | undefined) {
 
 function EditorInfoPanel(props: { detail?: string; title: string }) {
   return (
-    <div className="editor-panel">
-      <h1>{props.title}</h1>
-      {props.detail ? <p>{props.detail}</p> : null}
+    <div className="m-auto w-[min(720px,calc(100%_-_56px))] rounded-xl border border-white/10 bg-[#303030] p-7 shadow-[0_22px_80px_rgba(0,0,0,0.34)]">
+      <h1 className="m-0 text-left text-[36px] font-extrabold leading-[1.18] text-white">{props.title}</h1>
+      {props.detail ? <p className="text-white/58 leading-relaxed">{props.detail}</p> : null}
     </div>
   );
 }
 
-function projectAssetUrl(projectId: string, fileRef: string, filePath: string) {
-  return `/local-assets/projects/${encodeURIComponent(projectId)}/${[fileRef, ...filePath.split("/")].map(encodeURIComponent).join("/")}`;
+function projectAssetUrl(projectId: string, fileRef: string, filePath: string, revision?: number) {
+  const path = `/local-assets/projects/${encodeURIComponent(projectId)}/${[fileRef, ...filePath.split("/")].map(encodeURIComponent).join("/")}`;
+  return revision ? `${path}?v=${encodeURIComponent(String(revision))}` : path;
 }
 
 function artifactTypeForOutput(outputType: OutputType): SlideArtifactType {
   return outputType === "pptx" ? "pptx" : "deck";
 }
 
+function slideExportItems(projectId: string, artifactType: SlideArtifactType) {
+  if (artifactType === "pptx") {
+    return [
+      {
+        label: "PPTX",
+        onSelect: () => window.open(`/api/projects/${encodeURIComponent(projectId)}/files/slides.pptx`, "_blank"),
+      },
+      { label: "PDF", disabled: true, onSelect: () => undefined },
+    ];
+  }
+  return [
+    { label: "HTML deck", disabled: true, onSelect: () => undefined },
+    { label: "PPTX", disabled: true, onSelect: () => undefined },
+    { label: "PDF", disabled: true, onSelect: () => undefined },
+  ];
+}
+
 function RecentEmptyState() {
   return (
-    <div className="recent-empty">
+    <div className="mt-[18px] grid min-h-[220px] place-items-center gap-2 rounded-xl border border-white/8 bg-[#2b2b2b] p-7 text-center">
       <Clock3 size={22} />
-      <strong>No history yet</strong>
-      <span>Create a presentation or open a template to see it here.</span>
+      <strong className="text-[14px] font-extrabold">No history yet</strong>
+      <span className="max-w-[420px] text-[13px] leading-relaxed text-white/48">Create a presentation or open a template to see it here.</span>
     </div>
   );
 }

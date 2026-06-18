@@ -1,7 +1,8 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { copyFile, readFile, stat, writeFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
-import { basename, extname, join, normalize, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, normalize, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   createBlankDeckManifest,
   createEmptyPptxManifest,
@@ -24,7 +25,15 @@ import {
 import { getDb, json, parseJson, rowOrNull, rows } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
 
-const templateRoot = process.env.AI_SLIDE_TEMPLATE_ROOT ?? resolve(process.cwd(), "..", "templates", "source");
+const templateRoots = templateSourceRoots();
+
+type TemplateDeckSource = {
+  title: string;
+  canvas: { width: number; height: number };
+  pagesDir: string;
+  assetsDir: string;
+  playlist: string[];
+};
 
 export class ProjectRepository {
   snapshot() {
@@ -38,11 +47,22 @@ export class ProjectRepository {
       runEvents: rows<SlideRunEventRow>(
         db.prepare(`SELECT * FROM slide_run_events ORDER BY created_at ASC LIMIT 300`).all(),
       ).map(rowToRunEvent),
+      lastSeq: (db.prepare(`SELECT COALESCE(MAX(seq), 0) AS seq FROM stream_events`).get() as { seq: number }).seq,
     };
   }
 
   listProjects() {
     return rows<ProjectRow>(getDb().prepare(`SELECT * FROM projects ORDER BY updated_at DESC`).all()).map(rowToProject);
+  }
+
+  interruptActiveRuns(reason: string) {
+    const activeRuns = rows<SlideRunRow>(
+      getDb().prepare(`SELECT * FROM slide_runs WHERE status IN ('accepted', 'running') ORDER BY created_at ASC`).all(),
+    ).map(rowToRun);
+    for (const run of activeRuns) {
+      this.updateRun(run.id, { status: "failed", error: reason });
+    }
+    return activeRuns;
   }
 
   getProject(projectId: string) {
@@ -64,6 +84,7 @@ export class ProjectRepository {
   createProject(input: CreateProjectRequest) {
     const id = randomUUID();
     const artifactType = input.artifactType ?? "deck";
+    if (artifactType === "deck" && input.templateId) assertTemplateDeckSourceAvailable(input.templateId);
     const now = new Date().toISOString();
     const title = input.title?.trim() || input.templateName?.trim() || "Untitled Presentation";
     const artifact = defaultArtifactInput({ projectId: id, type: artifactType, now });
@@ -128,6 +149,7 @@ export class ProjectRepository {
     getDb().exec(`
       DELETE FROM slide_run_events;
       DELETE FROM slide_runs;
+      DELETE FROM stream_events;
       DELETE FROM artifacts;
       DELETE FROM projects;
     `);
@@ -267,7 +289,7 @@ export class ProjectRepository {
     return { slide, html, artifact };
   }
 
-  async writeDeckSlideHtml(projectId: string, slideId: string, html: string) {
+  async writeDeckSlideHtml(projectId: string, slideId: string, html: string, updatedBy: SlideProject["updatedBy"] = "human") {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
     const artifact = this.getArtifact(project.activeArtifactId);
@@ -277,7 +299,7 @@ export class ProjectRepository {
     const slide = manifest?.slides.find((item) => item.id === slideId);
     if (!slide) throw new Error("Slide not found");
     await writeFile(resolveDeckSlidePath(projectId, artifact, slide.file), html, "utf8");
-    const updatedArtifact = this.bumpArtifactRevision(artifact.id, "human") ?? artifact;
+    const updatedArtifact = this.bumpArtifactRevision(artifact.id, updatedBy) ?? artifact;
     return { slide, html, artifact: updatedArtifact };
   }
 
@@ -300,8 +322,10 @@ export class ProjectRepository {
     if (artifact.type !== "deck" || !project.templateId) return;
     const deckRoot = join(projectWorkspaceRoot(project.id), artifact.fileRef);
     const manifestPath = join(deckRoot, "manifest.json");
-    if (!isBlankDeckManifest(manifestPath)) return;
-    materializeTemplateDeckProject(deckRoot, project);
+    if (!isBlankDeckManifest(manifestPath) && !isGeneratedImageTemplateDeck(deckRoot, manifestPath)) return;
+    if (!materializeTemplateDeckProject(deckRoot, project)) {
+      throw new Error(`Template HTML source is missing for "${project.templateId}". Run sync:templates with AI_SLIDE_TEMPLATE_ROOT pointing at the template source directory.`);
+    }
   }
 
   async readPptxManifest(projectId: string, artifact: SlideArtifact): Promise<PptxManifest | null> {
@@ -415,7 +439,15 @@ function materializeDeckProject(root: string, project: SlideProject, artifact: S
 
 function materializeTemplateDeckProject(deckRoot: string, project: SlideProject) {
   const source = readTemplateDeckSource(project.templateId);
-  if (!source) return false;
+  return source ? materializeTemplateDeckSource(deckRoot, project, source) : false;
+}
+
+function assertTemplateDeckSourceAvailable(templateId: string) {
+  if (readTemplateDeckSource(templateId)) return;
+  throw new Error(`Template HTML source is missing for "${templateId}". Run sync:templates with AI_SLIDE_TEMPLATE_ROOT pointing at the template source directory.`);
+}
+
+function materializeTemplateDeckSource(deckRoot: string, project: SlideProject, source: TemplateDeckSource) {
   rmSync(deckRoot, { force: true, recursive: true });
   mkdirSync(join(deckRoot, "slides"), { recursive: true });
   mkdirSync(join(deckRoot, "assets"), { recursive: true });
@@ -454,7 +486,8 @@ function materializeTemplateDeckProject(deckRoot: string, project: SlideProject)
 
 function readTemplateDeckSource(templateId: string | null) {
   if (!templateId) return null;
-  const templateDir = join(templateRoot, templateId);
+  const templateDir = templateRoots.map((root) => join(root, templateId)).find((candidate) => existsSync(candidate));
+  if (!templateDir) return null;
   const deckDir = join(templateDir, "deck");
   const pagesDir = join(templateDir, "pages");
   if (!existsSync(deckDir) || !existsSync(pagesDir)) return null;
@@ -487,6 +520,20 @@ function isBlankDeckManifest(manifestPath: string) {
     return manifest.schemaVersion === "ai-slide.deck.v1" && manifest.slides?.length === 1 && manifest.slides[0]?.file === "slides/01-cover.html";
   } catch {
     return true;
+  }
+}
+
+function isGeneratedImageTemplateDeck(deckRoot: string, manifestPath: string) {
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Partial<DeckManifest>;
+    const firstSlideFile = manifest.slides?.[0]?.file;
+    if (!firstSlideFile) return false;
+    const normalizedFile = normalize(firstSlideFile);
+    if (normalizedFile.startsWith("..") || normalizedFile.includes(`..${sep}`)) return false;
+    const html = readFileSync(join(deckRoot, normalizedFile), "utf8");
+    return html.includes('data-ai-slide-object-id="template-image-') || html.includes("assets/template-images/");
+  } catch {
+    return false;
   }
 }
 
@@ -587,6 +634,25 @@ function projectAgentInstructions(project: SlideProject, artifact: SlideArtifact
     `Project: ${project.title}`,
     `Project ID: ${project.id}`,
   ].join("\n");
+}
+
+function appRoot() {
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    resolve(currentDir, "../../../.."),
+    resolve(process.cwd(), ".."),
+    resolve(process.cwd(), "apps", "slide"),
+  ];
+  return candidates.find((candidate) => existsSync(join(candidate, "package.json"))) ?? resolve(process.cwd(), "..");
+}
+
+function templateSourceRoots() {
+  const root = appRoot();
+  return [
+    process.env.AI_SLIDE_TEMPLATE_ROOT ? resolve(process.env.AI_SLIDE_TEMPLATE_ROOT) : "",
+    resolve(root, "templates", "source"),
+    resolve(root, "../../../genspark/slide/template"),
+  ].filter(Boolean);
 }
 
 function escapeHtml(value: string) {

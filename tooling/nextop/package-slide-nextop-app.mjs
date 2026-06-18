@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import { packageNextopApp as packageSharedNextopApp } from "@ai-app/nextop-packager";
 
 const scriptPath = fileURLToPath(import.meta.url);
@@ -21,8 +22,8 @@ export AI_SLIDE_APP_VERSION="${version}"
 export AI_SLIDE_WEB_DIST="$package_dir/dist"
 export AI_SLIDE_HOME="\${NEXTOP_APP_DATA_DIR:-$package_dir/.data}"
 export AI_SLIDE_WORKSPACE_ROOT="\${NEXTOP_WORKSPACE_ROOT:-$AI_SLIDE_HOME}"
-export AI_SLIDE_TEMPLATE_ROOT="\${AI_SLIDE_TEMPLATE_ROOT:-$AI_SLIDE_HOME/templates/source}"
-export AI_SLIDE_TEMPLATE_ASSET_ROOT="\${AI_SLIDE_TEMPLATE_ASSET_ROOT:-$AI_SLIDE_HOME/templates/generated/templates}"
+export AI_SLIDE_TEMPLATE_ROOT="\${AI_SLIDE_TEMPLATE_ROOT:-$package_dir/templates/source}"
+export AI_SLIDE_TEMPLATE_ASSET_ROOT="\${AI_SLIDE_TEMPLATE_ASSET_ROOT:-$package_dir/templates/generated/templates}"
 
 base_url="\${NEXTOP_APP_BASE_URL:-http://$HOST:$PORT}"
 export AI_SLIDE_SERVER_URL="$base_url"
@@ -60,6 +61,7 @@ This package runs AI Slide as a local Nextop workspace app.
 }
 
 export async function packageNextopApp() {
+  const templateSourceRoot = slideTemplateSourceRoot();
   return packageSharedNextopApp({
     appId: APP_ID,
     rootDir,
@@ -68,10 +70,23 @@ export async function packageNextopApp() {
     webBuildFilter: "@ai-slide/web",
     webDistDir: path.join(appDir, "web", "dist"),
     serverEntry: "apps/slide/server/src/main.ts",
+    packageAssets: [
+      ...(templateSourceRoot ? [{ source: templateSourceRoot, target: "templates/source", required: true }] : []),
+      { source: path.join(appDir, "templates", "generated"), target: "templates/generated", required: false },
+    ],
     renderBootstrap,
     renderIcon,
     renderPackageGuide,
   });
+}
+
+function slideTemplateSourceRoot() {
+  const candidates = [
+    process.env.AI_SLIDE_TEMPLATE_ROOT ? path.resolve(process.env.AI_SLIDE_TEMPLATE_ROOT) : "",
+    path.join(appDir, "templates", "source"),
+    path.resolve(rootDir, "../genspark/slide/template"),
+  ].filter(Boolean);
+  return candidates.find((candidate) => existsSync(candidate)) ?? "";
 }
 
 if (process.argv[1] === scriptPath) {

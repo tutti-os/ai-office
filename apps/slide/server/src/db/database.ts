@@ -72,6 +72,17 @@ function migrate(database: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_slide_runs_project ON slide_runs(project_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_slide_run_events_run_order ON slide_run_events(run_id, sort_order, created_at);
+
+    CREATE TABLE IF NOT EXISTS stream_events (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT,
+      id TEXT NOT NULL UNIQUE,
+      type TEXT NOT NULL,
+      project_id TEXT,
+      run_id TEXT,
+      payload TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_stream_events_seq ON stream_events(seq);
   `);
 }
 

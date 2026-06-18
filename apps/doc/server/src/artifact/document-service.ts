@@ -43,6 +43,10 @@ export class DocumentService {
     };
   }
 
+  interruptActiveRuns(reason = "Interrupted by server restart") {
+    return this.repo.interruptActiveRuns(reason);
+  }
+
   async listLocalAgentProviders() {
     return { providers: await this.runtimes.listLocalAgentProviders() };
   }
@@ -157,7 +161,7 @@ export class DocumentService {
     if (!run) return null;
     if (!["accepted", "running"].includes(run.status)) return { run };
     this.cancelledRunIds.add(runId);
-    const profile = this.repo.getRuntimeProfile(null);
+    const profile = this.repo.getRuntimeProfileForRun(run);
     await this.runtimes.getProvider(profile).cancel(runId).catch(() => undefined);
     return this.finalizeCancellation(runId, "Cancelled by user");
   }
@@ -270,6 +274,27 @@ export class DocumentService {
         return;
       }
 
+      if (initialProject.type === "markdown") {
+        const finalMarkdown = extractMarkdownDocument(generatedText);
+        let project = this.repo.getProject(initialProject.id);
+        if (finalMarkdown) {
+          project = this.repo.updateProject(initialProject.id, {
+            content: finalMarkdown,
+            type: "markdown",
+            updatedBy: "ai",
+          });
+          if (project) this.events.emit({ type: "project.updated", projectId: project.id, runId, payload: { project } });
+        } else if (!project || project.updatedBy !== "ai") {
+          throw new Error("AI did not return a complete Markdown document.");
+        }
+        const finalRun = this.repo.updateRun(runId, {
+          status: "completed",
+          resultPreview: previewText(finalMarkdown || project?.content || ""),
+        });
+        this.events.emit({ type: "run.completed", projectId: initialProject.id, runId, payload: { run: finalRun } });
+        return;
+      }
+
       const finalHtml = extractHtmlDocument(generatedText);
       let project = this.repo.getProject(initialProject.id);
       if (finalHtml) {
@@ -359,6 +384,13 @@ ${candidate}
 </html>`;
   }
   return "";
+}
+
+function extractMarkdownDocument(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  const fence = trimmed.match(/```(?:markdown|md)?\s*([\s\S]*?)```/i);
+  return (fence?.[1] ?? trimmed).trim();
 }
 
 function defaultProjectContent(type: DocumentProject["type"], template: DocumentTemplate) {

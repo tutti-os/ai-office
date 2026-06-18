@@ -15,6 +15,7 @@ export async function packageNextopApp(options) {
     webDistDir,
     serverEntry,
     serverBundleOutfile = "build/nextop-app/package/server/server.js",
+    packageAssets = [],
     renderBootstrap,
     renderIcon,
     renderPackageGuide,
@@ -35,6 +36,7 @@ export async function packageNextopApp(options) {
     renderIcon,
     renderPackageGuide,
     webDistDir,
+    packageAssets,
   });
   await bundleServer({ rootDir, serverEntry, serverBundleOutfile });
   await validatePackageRoot(packageRoot, appId);
@@ -55,12 +57,31 @@ async function writePackageFiles(input) {
   await writeFile(path.join(input.packageRoot, "AGENTS.md"), input.renderPackageGuide());
   await writeFile(path.join(input.packageRoot, "icon.svg"), input.renderIcon());
   await cp(input.webDistDir, path.join(input.packageRoot, "dist"), { recursive: true });
+  for (const asset of input.packageAssets ?? []) {
+    await copyPackageAsset(input.packageRoot, asset);
+  }
   for (const locale of input.manifest.localizationInfo?.additionalLocales ?? []) {
     const source = path.join(input.appDir, locale.file);
     const target = path.join(input.packageRoot, locale.file);
     await mkdir(path.dirname(target), { recursive: true });
     await cp(source, target);
   }
+}
+
+async function copyPackageAsset(packageRoot, asset) {
+  try {
+    await access(asset.source);
+  } catch (error) {
+    if (asset.required === false) return;
+    throw error;
+  }
+  const target = path.resolve(packageRoot, asset.target);
+  const packageRootWithSep = `${path.resolve(packageRoot)}${path.sep}`;
+  if (target !== path.resolve(packageRoot) && !target.startsWith(packageRootWithSep)) {
+    throw new Error(`Package asset target escapes package root: ${asset.target}`);
+  }
+  await mkdir(path.dirname(target), { recursive: true });
+  await cp(asset.source, target, { recursive: true });
 }
 
 async function bundleServer(input) {

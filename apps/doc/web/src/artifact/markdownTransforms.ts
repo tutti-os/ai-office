@@ -16,7 +16,32 @@ export function wrapMarkdownSelection(input: MarkdownTransformInput, before: str
   return replaceSelection(input, replacement, before.length, before.length + selected.length);
 }
 
-export function applyMarkdownHeading(input: MarkdownTransformInput, level: 0 | 1 | 2 | 3): MarkdownTransformResult {
+export function toggleMarkdownSelection(input: MarkdownTransformInput, before: string, after = before, placeholder = "text", active = false): MarkdownTransformResult {
+  const selected = input.selection.selectedText;
+  if (active && selected) {
+    const { content, selection } = input;
+    const wrappedBeforeStart = selection.start - before.length;
+    const wrappedAfterEnd = selection.end + after.length;
+    const hasBefore = wrappedBeforeStart >= 0 && content.slice(wrappedBeforeStart, selection.start) === before;
+    const hasAfter = content.slice(selection.end, wrappedAfterEnd) === after;
+    if (hasBefore && hasAfter) {
+      const nextContent = `${content.slice(0, wrappedBeforeStart)}${selected}${content.slice(wrappedAfterEnd)}`;
+      const nextStart = wrappedBeforeStart;
+      const nextEnd = nextStart + selected.length;
+      return {
+        content: nextContent,
+        selection: {
+          start: nextStart,
+          end: nextEnd,
+          selectedText: nextContent.slice(nextStart, nextEnd),
+        },
+      };
+    }
+  }
+  return wrapMarkdownSelection(input, before, after, placeholder);
+}
+
+export function applyMarkdownHeading(input: MarkdownTransformInput, level: 0 | 1 | 2 | 3 | 4 | 5 | 6): MarkdownTransformResult {
   return transformSelectedLines(input, (line) => {
     const cleaned = line.replace(/^#{1,6}\s+/, "");
     return level === 0 ? cleaned : `${"#".repeat(level)} ${cleaned || "Heading"}`;

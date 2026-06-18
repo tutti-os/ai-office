@@ -93,7 +93,7 @@ export function HomePage(props: {
               </div>
             </div>
             {props.activePanel === "templates" ? (
-              <div className="toolbar-scroll flex min-w-0 gap-2 overflow-x-auto pb-2">
+              <div className="flex min-w-0 gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {props.categories.map((item) => {
                   const active = item === props.selectedCategory;
                   const count = props.templateCounts[item] ?? 0;

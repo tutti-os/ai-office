@@ -170,6 +170,25 @@ function ensureRuntimeEditingStyles(doc: Document) {
   style.id = styleId;
   style.setAttribute("data-editor-runtime", "true");
   style.textContent = `
+    html,
+    body {
+      overflow: hidden !important;
+      overscroll-behavior: none !important;
+      scrollbar-width: none !important;
+    }
+
+    * {
+      scrollbar-width: none !important;
+    }
+
+    *::-webkit-scrollbar,
+    html::-webkit-scrollbar,
+    body::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+
     td[data-ai-table-cell-selected],
     th[data-ai-table-cell-selected] {
       outline: 2px solid #3b82f6 !important;

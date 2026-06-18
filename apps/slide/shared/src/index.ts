@@ -1,6 +1,26 @@
-import type { AiEditMode, Id, ReasoningEffort, RunEventType, RunStatus, RuntimeKind } from "@ai-app/shared/types";
+import type {
+  AiEditMode,
+  Id,
+  LocalAgentProviderStatus,
+  ReasoningEffort,
+  RunEventType,
+  RunStatus,
+  RuntimeKind,
+  RuntimeProfile,
+  StreamEvent as BaseStreamEvent,
+  WsServerMessage as BaseWsServerMessage,
+} from "@ai-app/shared/types";
 
-export type { AiEditMode, Id, ReasoningEffort, RuntimeKind } from "@ai-app/shared/types";
+export type {
+  AiEditMode,
+  Id,
+  LocalAgentProviderModel,
+  LocalAgentProviderStatus,
+  ReasoningEffort,
+  RuntimeKind,
+  RuntimeProfile,
+  WsClientMessage,
+} from "@ai-app/shared/types";
 
 export type SlideArtifactType = "deck" | "pptx";
 
@@ -185,6 +205,7 @@ export interface AppSnapshot {
   artifacts: SlideArtifact[];
   activeRuns: SlideRun[];
   runEvents: SlideRunEvent[];
+  lastSeq: number;
 }
 
 export interface CreateProjectRequest {
@@ -240,6 +261,23 @@ export interface ProjectsResponse {
 export interface ProjectRunsResponse {
   runs: SlideRunTimelineItem[];
 }
+
+export interface LocalAgentProviderStatusResponse {
+  providers: LocalAgentProviderStatus[];
+}
+
+export type StreamEventType =
+  | "project.created"
+  | "project.updated"
+  | "run.accepted"
+  | "run.started"
+  | "run.event.created"
+  | "run.completed"
+  | "run.failed"
+  | "run.cancelled";
+
+export type StreamEvent = BaseStreamEvent<StreamEventType>;
+export type WsServerMessage = BaseWsServerMessage<StreamEventType>;
 
 export const deckArtifactFileRef = "deck.slides";
 export const pptxArtifactFileRef = "slides.pptx";

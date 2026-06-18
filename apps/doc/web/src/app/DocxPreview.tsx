@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef } from "react";
-import { FileText, Loader2 } from "lucide-react";
+import { FileText } from "lucide-react";
+import { ArtifactWorkspaceHeader } from "@ai-app/ui/editor-frame";
 import { DocxRenderer } from "@tutti-os/office-preview/docx";
 import "@tutti-os/office-preview/styles/docx.css";
 import type { DocxRuntimeState, DocxSelection } from "../artifact/docxArtifactAdapter";
 
 type DocxPreviewProps = {
   runtime: DocxRuntimeState;
+  projectId: string | null;
   dirty: boolean;
   error: string;
   loading: boolean;
-  onBackHome: () => void;
   onSelectionChange: (selection: DocxSelection) => void;
 };
 
@@ -39,18 +40,13 @@ export function DocxPreview(props: DocxPreviewProps) {
 
   return (
     <section className="relative flex min-h-0 flex-col bg-[#1f1f1f]">
-      <header className="flex h-12 items-center justify-between border-b border-white/8 px-5">
-        <div className="min-w-0">
-          <div className="truncate text-[13px] font-semibold text-white">{props.runtime.title || "Untitled Word Document"}</div>
-          <div className="flex items-center gap-2 text-[11px] text-white/38">
-            {props.loading ? <Loader2 className="animate-spin" size={12} /> : <FileText size={12} />}
-            <span>{props.dirty ? "Unsaved changes" : "Saved"} · DOCX · read-only preview</span>
-          </div>
-        </div>
-        <button className="text-[12px] font-semibold text-white/52 hover:text-white" type="button" onClick={props.onBackHome}>
-          Home
-        </button>
-      </header>
+      <ArtifactWorkspaceHeader
+        title={props.runtime.title || "Untitled Word Document"}
+        saveState={props.loading ? "loading" : props.dirty ? "saving" : "saved"}
+        exportItems={[
+          { label: "PDF", disabled: true, onSelect: () => undefined },
+        ]}
+      />
 
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-[#2a2a2a] px-3 py-4 md:px-6 md:py-6">
         {props.error ? <div className="mx-auto mb-4 max-w-[980px] rounded-xl bg-[#3a241f] p-3 text-[12px] leading-5 text-[#ffad9f]">{props.error}</div> : null}

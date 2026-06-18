@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { LocalAgentRuntimeProvider as SharedLocalAgentRuntimeProvider } from "@ai-app/agent/local-agent-runtime";
 import type { AiEditRequest, DocumentProject, DocumentRun } from "@ai-doc/shared";
 import { projectWorkspaceRoot } from "../local/paths.js";
+import { extractOoxmlTextPreview } from "../artifact/ooxml-text.js";
 import type { RuntimeEditContext } from "./runtime-provider.js";
 
 export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<DocumentRun, DocumentProject, AiEditRequest> {
@@ -32,6 +33,16 @@ function buildSystemPrompt(context: RuntimeEditContext) {
       "The canonical file is `document.docx` in the current working directory.",
       "When asked to create or edit the document, write the final DOCX result to `document.docx`.",
       "Do not convert the document to HTML or Markdown unless the user explicitly asks for that as a separate export.",
+    ].join("\n\n");
+  }
+
+  if (context.project.type === "markdown") {
+    return [
+      "You are an AI document editing agent inside a local Markdown editor.",
+      "The canonical runtime is Markdown, not HTML.",
+      "Preserve Markdown structure, headings, lists, tables, links, and code fences unless the user explicitly asks for a format change.",
+      "When asked to edit, return one complete updated Markdown document as your final answer.",
+      "Do not wrap the final document in HTML.",
     ].join("\n\n");
   }
 
@@ -68,7 +79,38 @@ ${context.request.selectedText ?? ""}
 ${context.project.content}
 </current_docx_manifest>
 
+<current_docx_text_preview>
+${extractOoxmlTextPreview(resolve(projectWorkspaceRoot(context.project.id), "document.docx"), {
+  pathPattern: /^word\/(?:document|header\d+|footer\d+)\.xml$/,
+})}
+</current_docx_text_preview>
+
 Create or edit the DOCX file at document.docx.`;
+  }
+
+  if (context.project.type === "markdown") {
+    return `<markdown_agent_context>
+project_id: ${context.project.id}
+title: ${context.project.title}
+document_type: markdown
+mode: ${context.request.mode}
+selection_type: ${context.request.selectionType ?? "write"}
+selection_path: ${context.request.selectionPath ?? ""}
+</markdown_agent_context>
+
+<user_instruction>
+${context.request.userPrompt}
+</user_instruction>
+
+<selected_markdown>
+${context.request.selectedText ?? ""}
+</selected_markdown>
+
+<current_markdown>
+${context.request.htmlContent || context.project.content}
+</current_markdown>
+
+Return the complete updated Markdown document only.`;
   }
 
   return `<docs_agent_context>
@@ -100,6 +142,7 @@ Return the complete updated HTML document only.`;
 }
 
 function buildMcpServers(context: RuntimeEditContext) {
+  if (context.project.type !== "html") return [];
   if (!context.toolAccess?.token) return [];
   return [
     {

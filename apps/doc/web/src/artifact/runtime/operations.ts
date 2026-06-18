@@ -69,8 +69,14 @@ export type ElementStyleAttributes = {
   borderColor?: string;
   borderRadius?: string;
   padding?: string;
+  paddingTop?: string;
+  paddingRight?: string;
+  paddingBottom?: string;
+  paddingLeft?: string;
   marginTop?: string;
+  marginRight?: string;
   marginBottom?: string;
+  marginLeft?: string;
 };
 const presentationProperties = [
   "color",
@@ -399,16 +405,18 @@ export function applyPresentationStyle(doc: Document, style: PresentationStyle |
   return true;
 }
 
-export function createLink(doc: Document, url: string, targetElement?: Element | null) {
+export function createLink(doc: Document, url: string, targetElement?: Element | null, text?: string) {
   const href = normalizeLinkUrl(url);
   if (!href) return false;
+  const linkText = normalizeLinkText(text, href);
   const selectedCells = selectedTableStyleTargets(doc);
-  if (selectedCells.length > 0) return createLinksInTableCells(doc, selectedCells, href);
+  if (selectedCells.length > 0) return createLinksInTableCells(doc, selectedCells, href, text === undefined ? undefined : linkText);
 
   const selection = doc.getSelection();
   const existingLink = linkForCurrentLinkEdit(doc, targetElement);
   if (existingLink) {
     applyLinkAttributes(existingLink, href);
+    if (text !== undefined) existingLink.textContent = linkText;
     selectElement(doc, existingLink);
     return existingLink;
   }
@@ -416,7 +424,7 @@ export function createLink(doc: Document, url: string, targetElement?: Element |
   if (!selection || selection.rangeCount === 0) {
     const target = targetElement && doc.body.contains(targetElement) ? targetElement : null;
     if (!isHtmlElement(target) || target === doc.body) return false;
-    const link = createTextLink(doc, href);
+    const link = createTextLink(doc, href, linkText);
     target.append(link);
     selectElement(doc, link);
     normalizeEditableDocument(doc);
@@ -425,7 +433,7 @@ export function createLink(doc: Document, url: string, targetElement?: Element |
 
   if (selection.isCollapsed) {
     const range = selection.getRangeAt(0);
-    const link = createTextLink(doc, href);
+    const link = createTextLink(doc, href, linkText);
     range.insertNode(link);
     selectElement(doc, link);
     normalizeEditableDocument(doc);
@@ -435,6 +443,7 @@ export function createLink(doc: Document, url: string, targetElement?: Element |
   const range = selection.getRangeAt(0);
   const link = wrapRangeAsLink(doc, range);
   applyLinkAttributes(link, href);
+  if (text !== undefined) link.textContent = linkText;
   selectElement(doc, link);
   normalizeEditableDocument(doc);
   return link;
@@ -467,6 +476,11 @@ export function selectionContainsLink(doc: Document) {
 export function getCurrentLinkHref(doc: Document, targetElement?: Element | null) {
   const link = targetElement?.closest("a") ?? findLinkInSelection(doc);
   return link?.getAttribute("href") ?? "";
+}
+
+export function getCurrentLinkText(doc: Document, targetElement?: Element | null) {
+  const link = targetElement?.closest("a") ?? findLinkInSelection(doc);
+  return link?.textContent ?? "";
 }
 
 export function setForeColor(doc: Document, color: string, targetElement?: Element | null) {
@@ -1413,8 +1427,14 @@ function normalizeStyleAttributes(attributes: ElementStyleAttributes): ElementSt
   if ("borderColor" in attributes) normalized.borderColor = normalizeColor(attributes.borderColor ?? "");
   if ("borderRadius" in attributes) normalized.borderRadius = normalizeBoxSize(attributes.borderRadius ?? "");
   if ("padding" in attributes) normalized.padding = normalizeBoxSize(attributes.padding ?? "");
+  if ("paddingTop" in attributes) normalized.paddingTop = normalizeBoxSize(attributes.paddingTop ?? "");
+  if ("paddingRight" in attributes) normalized.paddingRight = normalizeBoxSize(attributes.paddingRight ?? "");
+  if ("paddingBottom" in attributes) normalized.paddingBottom = normalizeBoxSize(attributes.paddingBottom ?? "");
+  if ("paddingLeft" in attributes) normalized.paddingLeft = normalizeBoxSize(attributes.paddingLeft ?? "");
   if ("marginTop" in attributes) normalized.marginTop = normalizeBoxSize(attributes.marginTop ?? "");
+  if ("marginRight" in attributes) normalized.marginRight = normalizeBoxSize(attributes.marginRight ?? "");
   if ("marginBottom" in attributes) normalized.marginBottom = normalizeBoxSize(attributes.marginBottom ?? "");
+  if ("marginLeft" in attributes) normalized.marginLeft = normalizeBoxSize(attributes.marginLeft ?? "");
   return normalized;
 }
 
@@ -1465,30 +1485,32 @@ function removeLinksInSelectedRange(doc: Document, range: Range, selection: Sele
   return true;
 }
 
-function createLinksInTableCells(doc: Document, cells: HTMLTableCellElement[], href: string) {
-  const links = cells.map((cell) => wrapElementContentsAsLink(doc, cell, href));
+function createLinksInTableCells(doc: Document, cells: HTMLTableCellElement[], href: string, text?: string) {
+  const links = cells.map((cell) => wrapElementContentsAsLink(doc, cell, href, text));
   const first = cells.find((cell) => cell.isConnected);
   if (first) selectTableEditingTarget(doc, first);
   normalizeEditableDocument(doc);
   return links.length > 0;
 }
 
-function wrapElementContentsAsLink(doc: Document, element: HTMLElement, href: string) {
-  const link = createTextLink(doc, href);
+function wrapElementContentsAsLink(doc: Document, element: HTMLElement, href: string, text?: string) {
+  const link = createTextLink(doc, href, text);
   const fragment = doc.createDocumentFragment();
   while (element.firstChild) fragment.appendChild(element.firstChild);
   clearLinksInFragment(fragment);
-  if (fragment.childNodes.length > 0) {
+  if (text !== undefined) {
+    link.textContent = text;
+  } else if (fragment.childNodes.length > 0) {
     link.replaceChildren(fragment);
   }
   element.append(link);
   return link;
 }
 
-function createTextLink(doc: Document, href: string) {
+function createTextLink(doc: Document, href: string, text = href) {
   const link = doc.createElement("a");
   applyLinkAttributes(link, href);
-  link.textContent = href;
+  link.textContent = text;
   return link;
 }
 
@@ -3907,6 +3929,11 @@ export function normalizeLinkUrl(url: string) {
   if (/^(https?:|mailto:|tel:|#|\/|\.\/|\.\.\/)/i.test(trimmed)) return trimmed;
   if (!/^[a-z][a-z\d+.-]*:/i.test(trimmed) && /^[^\s@]+\.[^\s]+$/.test(trimmed)) return `https://${trimmed}`;
   return "";
+}
+
+function normalizeLinkText(text: string | undefined, href: string) {
+  const trimmed = text?.trim() ?? "";
+  return trimmed || href;
 }
 
 function applyLinkAttributes(link: HTMLAnchorElement, href: string) {

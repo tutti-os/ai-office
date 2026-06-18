@@ -58,5 +58,25 @@ export function useHtmlArtifactRuntime(adapter: HtmlArtifactRuntimeAdapter) {
 }
 
 function revisionedFrameSrcDoc(srcDoc: string) {
-  return `${srcDoc}\n<!-- ai-doc-frame-revision:${Date.now()}:${Math.random().toString(36).slice(2)} -->`;
+  return `${withFrameRuntimeBridge(srcDoc)}\n<!-- ai-doc-frame-revision:${Date.now()}:${Math.random().toString(36).slice(2)} -->`;
+}
+
+function withFrameRuntimeBridge(srcDoc: string) {
+  const bridge = `<script data-editor-runtime="wheel-bridge">
+(() => {
+  if (window.__aiDocWheelBridgeInstalled) return;
+  window.__aiDocWheelBridgeInstalled = true;
+  window.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    window.parent.postMessage({
+      type: "ai-doc-frame-wheel",
+      deltaX: event.deltaX,
+      deltaY: event.deltaY
+    }, "*");
+  }, { capture: true, passive: false });
+})();
+</script>`;
+  if (/<\/body>/i.test(srcDoc)) return srcDoc.replace(/<\/body>/i, `${bridge}\n</body>`);
+  if (/<\/html>/i.test(srcDoc)) return srcDoc.replace(/<\/html>/i, `${bridge}\n</html>`);
+  return `${srcDoc}\n${bridge}`;
 }

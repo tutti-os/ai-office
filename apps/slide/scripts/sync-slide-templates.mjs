@@ -1,8 +1,9 @@
+import { existsSync } from "node:fs";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const projectRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const templateRoot = process.env.AI_SLIDE_TEMPLATE_ROOT ?? path.join(projectRoot, "templates", "source");
+const templateRoot = slideTemplateSourceRoot();
 const publicRoot = path.join(projectRoot, "templates", "generated", "templates");
 const outputPath = path.join(projectRoot, "shared", "src", "generatedTemplates.ts");
 
@@ -42,6 +43,15 @@ function sortSlideAssets(items) {
 
 function compactDescription(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function slideTemplateSourceRoot() {
+  const candidates = [
+    process.env.AI_SLIDE_TEMPLATE_ROOT ? path.resolve(process.env.AI_SLIDE_TEMPLATE_ROOT) : "",
+    path.join(projectRoot, "templates", "source"),
+    path.resolve(projectRoot, "../../genspark/slide/template"),
+  ].filter(Boolean);
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
 await rm(publicRoot, { force: true, recursive: true });
