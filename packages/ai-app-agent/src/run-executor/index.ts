@@ -1,5 +1,5 @@
 import type { BaseAiEditRequest, BaseRun, BaseRunEvent, RuntimeProfile } from "@ai-app/shared/types";
-import type { RuntimeProviderRegistry, RuntimeStreamEvent } from "@ai-app/agent/runtime";
+import type { RuntimeConversationMessage, RuntimeProviderRegistry, RuntimeStreamEvent } from "@ai-app/agent/runtime";
 
 export type RunEventInput<TEvent extends BaseRunEvent> = {
   runId: string;
@@ -36,11 +36,17 @@ export type RuntimeRunExecutorInput<
   request: TRequest;
   runtimeProfile: RuntimeProfile;
   runId: string;
+  conversation?: {
+    conversationId: string;
+    sessionId: string;
+  };
   isCancelled: () => boolean;
   finalizeCancellation: (runId: string, reason: string) => Promise<unknown>;
   beforeRun?: () => Promise<void> | void;
+  history?: RuntimeConversationMessage[];
   onWorkspaceEvent?: (event: RuntimeStreamEvent, runId: string) => Promise<void> | void;
   complete: (input: { generatedText: string; run: TRun }) => Promise<void> | void;
+  onFailure?: (input: { error: string; run: TRun }) => Promise<void> | void;
   onFinally?: () => void;
 };
 
@@ -83,6 +89,8 @@ export class RuntimeRunExecutor<
         project: input.project,
         runtimeProfile: input.runtimeProfile,
         request: input.request,
+        conversation: input.conversation,
+        history: input.history,
       })) {
         if (input.isCancelled()) {
           await input.finalizeCancellation(input.runId, "Cancelled by user");
@@ -109,6 +117,7 @@ export class RuntimeRunExecutor<
       recorder.recordError(message);
       const finalRun = this.input.repo.updateRun(input.runId, { status: "failed", error: message } as Partial<Pick<TRun, "status" | "error" | "resultPreview">>);
       this.input.events.emit({ type: "run.failed", projectId: input.project.id, runId: input.runId, payload: { run: finalRun } });
+      await input.onFailure?.({ error: message, run });
     } finally {
       input.onFinally?.();
     }

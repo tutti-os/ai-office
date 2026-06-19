@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { createDatabaseProvider, json, parseJson, rowOrNull, rows } from "@ai-app/shared/project-store";
+import { agentConversationSchemaSql, createDatabaseProvider, json, parseJson, rowOrNull, rows } from "@ai-app/shared/project-store";
 import { appPaths, ensureBaseDirs } from "../local/paths.js";
 
 export const getDb = createDatabaseProvider({
@@ -96,6 +96,7 @@ function migrate(database: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_stream_events_seq ON stream_events(seq);
   `);
+  database.exec(agentConversationSchemaSql);
 }
 
 export { json, parseJson, rowOrNull, rows };

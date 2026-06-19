@@ -1,5 +1,10 @@
 import type { BaseAiEditRequest, BaseRun, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
 
+export type RuntimeConversationMessage = {
+  role: "user" | "assistant" | "system";
+  content: string;
+};
+
 export interface RuntimeEditContext<
   TRun extends BaseRun = BaseRun,
   TProject extends { id: string } = { id: string },
@@ -9,6 +14,11 @@ export interface RuntimeEditContext<
   project: TProject;
   runtimeProfile: RuntimeProfile;
   request: TRequest;
+  conversation?: {
+    conversationId: string;
+    sessionId: string;
+  };
+  history?: RuntimeConversationMessage[];
   toolAccess?: {
     token: string;
     expiresAt: string;

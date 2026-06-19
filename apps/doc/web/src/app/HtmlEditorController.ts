@@ -41,6 +41,7 @@ export class HtmlEditorController {
       lastResolvedTargetRef: Ref<Element | null>;
       lastSelectionRef: Ref<SelectionState | null>;
       toolbarSelectionPreserveTimestampRef: Ref<number>;
+      isReadOnly: () => boolean;
       setEditorStats: StateSetter<EditorStats>;
       setRuntime: StateSetter<RuntimeState | null>;
       setToolbarState: StateSetter<ToolbarState>;
@@ -73,6 +74,7 @@ export class HtmlEditorController {
   }
 
   syncMutation(operationType: string, description: string) {
+    if (this.deps.isReadOnly()) return;
     const doc = this.currentDocument();
     if (!doc) return;
     cleanupTypingStyleMarkers(doc);
@@ -113,6 +115,7 @@ export class HtmlEditorController {
   }
 
   executeOperation(runtime: RuntimeState | null, input: HtmlEditorOperation) {
+    if (this.deps.isReadOnly()) return false;
     const doc = this.currentDocument();
     if (!doc || !runtime) return false;
     const shouldMergeHistory = shouldMergeEditorHistory(runtime, input.operationType);
@@ -183,6 +186,7 @@ export class HtmlEditorController {
   }
 
   applyHistoryOffset(runtime: RuntimeState | null, offset: -1 | 1) {
+    if (this.deps.isReadOnly()) return;
     const doc = this.currentDocument();
     if (!doc || !runtime) return;
     const nextIndex = runtime.history.currentIndex + offset;

@@ -3,6 +3,7 @@ import { AlignCenter, AlignLeft, AlignRight, Bold, Crosshair, Image, Italic, Pai
 import { type ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { applyInlineFormat, applyPresentationStyle, captureRichTextSelection, restoreRichTextSelection, selectionBelongsToElement, type InlineFormatTag, type RichTextSelectionState, type RichTextStyle } from "@ai-app/ui/rich-text";
 import { Toolbar, ToolbarColorInput, ToolbarDivider, ToolbarGroup, ToolbarIconButton, ToolbarNumberInput, ToolbarRow, ToolbarSelect } from "@ai-app/ui/toolbar";
+import { isArtifactReadOnly, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
 import type { DeckManifestSlide, ProjectDetailResponse, SlideArtifactSelection } from "@ai-slide/shared";
 import { DeckInteractionLayer } from "../artifact/deckInteractionLayerView";
 import { alignedDeckObjectRect, applyDeckObjectRect, applyDeckObjectRotation, collectDeckSnapTargets, isMovableDeckObject, movedDeckRectForDelta, readDeckObjectGeometry, readDeckObjectRect, resizedDeckRectForHandle, snappedDeckDragRect, type DeckObjectAlignment, type DeckObjectElement, type DeckObjectGeometry, type DeckObjectGeometryPatch, type DeckResizeHandle, type DeckSnapGuide } from "../artifact/deckInteractionLayer";
@@ -158,6 +159,7 @@ const deckFontOptions = [
 
 export function useDeckEditorModel(props: {
   detail: ProjectDetailResponse;
+  interaction: ArtifactInteractionPolicy;
   projectId: string;
   onAgentRuntimeProviderChange: (provider: DeckAgentRuntimeProvider | null) => void;
   onAgentSelectionTextChange: (text: string) => void;
@@ -167,6 +169,7 @@ export function useDeckEditorModel(props: {
   const { ref: hostRef, width: hostWidth, height: hostHeight } = useElementSize<HTMLDivElement>();
   const activeTextSelectionRef = useRef<ActiveTextSelection | null>(null);
   const directTextEditModeRef = useRef(false);
+  const readOnlyRef = useRef(false);
   const agentRuntimeSnapshotRef = useRef<DeckAgentRuntimeProvider>(() => null);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const activeObjectRef = useRef<ActiveDeckObject | null>(null);
@@ -206,14 +209,23 @@ export function useDeckEditorModel(props: {
   const activeHistory = useMemo(() => deckController.getHistory(activeSlideId), [activeSlideId, deckController, historyVersion]);
   const canUndo = Boolean(activeHistory && activeHistory.currentIndex > 0);
   const canRedo = Boolean(activeHistory && activeHistory.currentIndex < activeHistory.entries.length - 1);
+  const readOnly = isArtifactReadOnly(props.interaction);
 
   activeObjectRef.current = activeObject;
   activeTextEditRef.current = activeTextEdit;
   selectionModeRef.current = selectionMode;
+  readOnlyRef.current = readOnly;
 
   useEffect(() => {
     directTextEditModeRef.current = directTextEditMode;
   }, [directTextEditMode]);
+
+  useEffect(() => {
+    if (!readOnly) return;
+    exitTextEditMode();
+    setDirectTextEditMode(false);
+    setSnapGuides([]);
+  }, [readOnly]);
 
   useEffect(() => {
     onSaveStateChange(saveState);
@@ -437,6 +449,7 @@ export function useDeckEditorModel(props: {
   };
 
   const applyHistoryOffset = (offset: -1 | 1, requestedSlideId = activeSlideId) => {
+    if (readOnlyRef.current) return;
     const applied = deckController.applyHistoryOffset(requestedSlideId, offset);
     if (!applied) return;
     clearActiveSelection();
@@ -444,6 +457,7 @@ export function useDeckEditorModel(props: {
   };
 
   const handleHistoryShortcut = (event: KeyboardEvent, slideId = activeSlideId) => {
+    if (readOnlyRef.current) return;
     if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
     const key = event.key.toLowerCase();
     if (key !== "z" && key !== "y") return;
@@ -500,6 +514,7 @@ export function useDeckEditorModel(props: {
       "mousedown",
       (event) => {
         if (!directTextEditModeRef.current || event.button !== 0 || isInsideEditable(event.target)) return;
+        if (readOnlyRef.current) return;
         const target = isElement(event.target) ? event.target.closest<DeckObjectElement>('[data-object="true"]') : null;
         if (!target || target.getAttribute("data-object-type") !== "textbox") return;
         setActiveSlideId(slide.id);
@@ -524,7 +539,7 @@ export function useDeckEditorModel(props: {
         if (isInsideEditable(event.target)) return;
         event.preventDefault();
         event.stopPropagation();
-        if (target.getAttribute("data-object-type") === "textbox" && directTextEditModeRef.current) {
+        if (!readOnlyRef.current && target.getAttribute("data-object-type") === "textbox" && directTextEditModeRef.current) {
           enterTextEditMode(slide.id, target, target, {
             caretPoint: event instanceof MouseEvent ? { x: event.clientX, y: event.clientY } : undefined,
             selectContents: false,
@@ -542,7 +557,7 @@ export function useDeckEditorModel(props: {
         setActiveSlideId(slide.id);
         const target = isElement(event.target) ? event.target.closest<DeckObjectElement>('[data-object="true"]') : null;
         if (!target) return;
-        if (target.getAttribute("data-object-type") === "textbox") enterTextEditMode(slide.id, target, isElement(event.target) ? event.target : undefined);
+        if (!readOnlyRef.current && target.getAttribute("data-object-type") === "textbox") enterTextEditMode(slide.id, target, isElement(event.target) ? event.target : undefined);
         else selectObject(slide.id, target);
       },
       true,
@@ -550,6 +565,7 @@ export function useDeckEditorModel(props: {
     doc.addEventListener(
       "input",
       () => {
+        if (readOnlyRef.current) return;
         rememberTextSelection(slide.id, doc);
         recordSlideHistory(slide.id, doc);
         scheduleSlideSave(slide.id);
@@ -580,7 +596,7 @@ export function useDeckEditorModel(props: {
     const x = (clientX - rect.left) * (canvas.width / rect.width);
     const y = (clientY - rect.top) * (canvas.height / rect.height);
     const target = hitTestDeckObject(doc, x, y) ?? hitTestDeckObjectFromElementPoint(doc, x, y);
-    if (target?.getAttribute("data-object-type") === "textbox" && directTextEditModeRef.current) {
+    if (!readOnlyRef.current && target?.getAttribute("data-object-type") === "textbox" && directTextEditModeRef.current) {
       enterTextEditMode(slide.id, target, target, {
         caretPoint: { x, y },
         selectContents: false,
@@ -592,6 +608,7 @@ export function useDeckEditorModel(props: {
   };
 
   const enterTextEditFromFramePoint = (slide: DeckManifestSlide, clientX: number, clientY: number) => {
+    if (readOnlyRef.current) return;
     const iframe = deckController.getIframe(slide.id);
     const doc = deckController.getDocument(slide.id);
     if (!iframe || !doc) return;
@@ -608,6 +625,7 @@ export function useDeckEditorModel(props: {
   };
 
   const enterTextEditMode = (slideId: string, object: DeckObjectElement, preferredTarget?: Element, options: TextEditEntryOptions = {}) => {
+    if (readOnlyRef.current) return;
     setActiveSlideId(slideId);
     if (!isHtmlElement(object)) {
       selectObject(slideId, object);
@@ -648,6 +666,7 @@ export function useDeckEditorModel(props: {
   const beginResizeObject = (handle: ResizeHandle, event: PointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    if (readOnlyRef.current) return;
     const object = findActiveObject();
     if (!object || !activeObject || !activeSelectionBox || scale <= 0) return;
     const initialRect = readDeckObjectRect(object);
@@ -684,6 +703,7 @@ export function useDeckEditorModel(props: {
   const beginDragObject = (event: PointerEvent<HTMLElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    if (readOnlyRef.current) return;
     const object = findActiveObject();
     if (!object || !activeObject || scale <= 0 || !isMovableDeckObject(object)) return;
     const initialRect = readDeckObjectRect(object);
@@ -728,6 +748,7 @@ export function useDeckEditorModel(props: {
   const beginRotateObject = (event: PointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    if (readOnlyRef.current) return;
     const object = findActiveObject();
     if (!object || !activeObject || !activeSelectionBox || scale <= 0) return;
     const selectionElement = event.currentTarget.parentElement;
@@ -776,6 +797,7 @@ export function useDeckEditorModel(props: {
   };
 
   const mutateActiveObject = (mutate: (object: DeckObjectElement, textTarget: DeckObjectElement) => void) => {
+    if (readOnlyRef.current) return;
     const object = findActiveObject();
     if (!object || !activeObject) return;
     const textTarget = findActiveTextTarget(object);
@@ -834,6 +856,7 @@ export function useDeckEditorModel(props: {
   };
 
   const requestImageReplacement = () => {
+    if (readOnlyRef.current) return;
     if (activeObject?.objectType !== "image") return;
     const input = imageFileInputRef.current;
     if (!input) return;
@@ -844,6 +867,7 @@ export function useDeckEditorModel(props: {
   const replaceActiveImageFromFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
+    if (readOnlyRef.current) return;
     if (!file || !file.type.startsWith("image/")) return;
     const reader = new FileReader();
     reader.addEventListener("load", () => {
@@ -904,6 +928,7 @@ export function useDeckEditorModel(props: {
   };
 
   const deleteActiveObject = () => {
+    if (readOnlyRef.current) return;
     const object = findActiveObject();
     if (!object || !activeObject) return;
     object.remove();
@@ -929,8 +954,8 @@ export function useDeckEditorModel(props: {
     beginDragObject,
     beginResizeObject,
     beginRotateObject,
-    canRedo,
-    canUndo,
+    canRedo: !readOnly && canRedo,
+    canUndo: !readOnly && canUndo,
     canvas,
     deckThumbnail,
     deleteActiveObject,
@@ -944,6 +969,7 @@ export function useDeckEditorModel(props: {
     initializeFrame,
     manifest,
     props,
+    readOnly,
     replaceActiveImageFromFile,
     requestImageReplacement,
     saveState,

@@ -4,6 +4,7 @@ import { DocumentLoadingScreen, HtmlEditorScreen } from "./HtmlEditorScreen";
 import { markdownParagraphCount, markdownWordCount } from "./documentWorkbenchContent";
 import { indentBlock, outdentBlock, setElementStyle, toggleChecklist } from "../artifact/runtime/operations";
 import type { useRuntimeWorkbenchModel } from "./useRuntimeWorkbenchModel";
+import { isArtifactAgentRunning } from "@ai-app/shared/artifact-runtime";
 
 export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntimeWorkbenchModel> }) {
   const {
@@ -11,6 +12,8 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     activeSelectionText,
     agentBusy,
     agentConversation,
+    artifactInteraction,
+    artifactReadOnly,
     applyAlignment,
     applyBackColor,
     applyFontFamily,
@@ -108,6 +111,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     updateMarkdownContent,
     updateMarkdownSelection,
   } = props.model;
+  const artifactAgentProcessing = isArtifactAgentRunning(artifactInteraction);
   return (
     <main className="h-screen overflow-hidden bg-[#1f1f1f] font-sans text-white">
       <input
@@ -162,6 +166,8 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           loading={loading}
           runtime={markdownRuntime}
           runtimeProfiles={runtimeProfiles}
+          agentProcessing={artifactAgentProcessing}
+          readOnly={artifactReadOnly}
           saveState={activeDirty && markdownSaveState === "saved" ? "saving" : markdownSaveState}
           selectedRuntimeProfileId={selectedRuntimeProfileId}
           onBackHome={requestHomeRoute}
@@ -192,6 +198,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           projectId={currentProjectId}
           runtime={docxRuntime}
           runtimeProfiles={runtimeProfiles}
+          agentProcessing={artifactAgentProcessing}
           selectedRuntimeProfileId={selectedRuntimeProfileId}
           onBackHome={requestHomeRoute}
           onCancelAgentRun={cancelAgentRun}
@@ -220,7 +227,9 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           editorStats={editorStats}
           runtime={runtime}
           saveState={saveState}
-          toolbarDisabled={!htmlToolbarActive}
+          agentProcessing={artifactAgentProcessing}
+          readOnly={artifactReadOnly}
+          toolbarDisabled={!htmlToolbarActive || artifactReadOnly}
           toolbarState={toolbarState}
           linkDraft={linkDraft}
           linkEditorOpen={linkEditorOpen}

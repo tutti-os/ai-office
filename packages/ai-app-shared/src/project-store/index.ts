@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { BaseRun, BaseRunEvent, RuntimeProfile } from "@ai-app/shared/types";
+import type { AgentConversationMessage, AgentConversationRole, AgentConversationSession, BaseRun, BaseRunEvent, RuntimeProfile } from "@ai-app/shared/types";
 
 export type DatabaseMigrator = (database: DatabaseSync) => void;
 
@@ -141,6 +141,135 @@ export type RunEventSeedInput<TEvent extends BaseRunEvent> = {
   metadata?: Record<string, unknown> | null;
   sortOrder: number;
 };
+
+export const agentConversationSchemaSql = `
+CREATE TABLE IF NOT EXISTS agent_conversation_sessions (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_agent_conversation_sessions_project ON agent_conversation_sessions(project_id, created_at);
+
+CREATE TABLE IF NOT EXISTS agent_conversation_messages (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  metadata TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (session_id) REFERENCES agent_conversation_sessions(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_agent_conversation_messages_session ON agent_conversation_messages(session_id, created_at, id);
+CREATE INDEX IF NOT EXISTS idx_agent_conversation_messages_project ON agent_conversation_messages(project_id, created_at, id);
+`;
+
+export class SqliteAgentConversationStore {
+  constructor(
+    private readonly getDb: () => DatabaseSync,
+    private readonly options: {
+      createSessionId: () => string;
+      createMessageId: () => string;
+    },
+  ) {}
+
+  ensureProjectSession(projectId: string, title = "Default") {
+    const existing = rowOrNull<ConversationSessionRow>(
+      this.getDb()
+        .prepare(`SELECT * FROM agent_conversation_sessions WHERE project_id = ? ORDER BY created_at ASC LIMIT 1`)
+        .get(projectId),
+    );
+    if (existing) return rowToConversationSession(existing);
+    const id = this.options.createSessionId();
+    const now = new Date().toISOString();
+    this.getDb()
+      .prepare(
+        `INSERT INTO agent_conversation_sessions (id, project_id, title, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(id, projectId, title, now, now);
+    const created = rowOrNull<ConversationSessionRow>(
+      this.getDb().prepare(`SELECT * FROM agent_conversation_sessions WHERE id = ?`).get(id),
+    );
+    if (!created) throw new Error("Unable to create conversation session");
+    return rowToConversationSession(created);
+  }
+
+  createMessage(input: {
+    projectId: string;
+    sessionId: string;
+    role: AgentConversationRole;
+    content: string;
+    metadata?: Record<string, unknown> | null;
+  }) {
+    const id = this.options.createMessageId();
+    const now = new Date().toISOString();
+    this.getDb()
+      .prepare(
+        `INSERT INTO agent_conversation_messages (id, session_id, project_id, role, content, metadata, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, input.sessionId, input.projectId, input.role, input.content, input.metadata ? json(input.metadata) : null, now, now);
+    this.touchSession(input.sessionId, now);
+    const created = rowOrNull<ConversationMessageRow>(
+      this.getDb().prepare(`SELECT * FROM agent_conversation_messages WHERE id = ?`).get(id),
+    );
+    if (!created) throw new Error("Unable to create conversation message");
+    return rowToConversationMessage(created);
+  }
+
+  updateMessage(messageId: string, input: { content?: string; metadata?: Record<string, unknown> | null }) {
+    const current = this.getMessage(messageId);
+    if (!current) return null;
+    const now = new Date().toISOString();
+    this.getDb()
+      .prepare(
+        `UPDATE agent_conversation_messages
+         SET content = ?, metadata = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(input.content ?? current.content, input.metadata !== undefined ? (input.metadata ? json(input.metadata) : null) : (current.metadata ? json(current.metadata) : null), now, messageId);
+    this.touchSession(current.sessionId, now);
+    return this.getMessage(messageId);
+  }
+
+  getMessage(messageId: string) {
+    const row = rowOrNull<ConversationMessageRow>(
+      this.getDb().prepare(`SELECT * FROM agent_conversation_messages WHERE id = ?`).get(messageId),
+    );
+    return row ? rowToConversationMessage(row) : null;
+  }
+
+  listSessionMessages(sessionId: string) {
+    return rows<ConversationMessageRow>(
+      this.getDb()
+        .prepare(`SELECT * FROM agent_conversation_messages WHERE session_id = ? ORDER BY created_at ASC, id ASC`)
+        .all(sessionId),
+    ).map(rowToConversationMessage);
+  }
+
+  normalizedHistory(input: { sessionId: string; currentPrompt: string }) {
+    const messages = this.listSessionMessages(input.sessionId);
+    const lastMessage = messages.at(-1);
+    const shouldDropLastUser =
+      lastMessage?.role === "user" &&
+      normalizeConversationText(lastMessage.content) === normalizeConversationText(input.currentPrompt);
+    const history = shouldDropLastUser ? messages.slice(0, -1) : messages;
+    return history
+      .filter((message) => message.role === "user" || message.role === "assistant")
+      .map((message) => ({ role: message.role, content: message.content }))
+      .filter((message) => message.content.trim().length > 0);
+  }
+
+  private touchSession(sessionId: string, updatedAt: string) {
+    this.getDb()
+      .prepare(`UPDATE agent_conversation_sessions SET updated_at = ? WHERE id = ?`)
+      .run(updatedAt, sessionId);
+  }
+}
 
 export class SqliteRunStore<TRun extends BaseRun, TEvent extends BaseRunEvent> {
   constructor(
@@ -339,6 +468,25 @@ interface RunEventRow {
   created_at: string;
 }
 
+interface ConversationSessionRow {
+  id: string;
+  project_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ConversationMessageRow {
+  id: string;
+  session_id: string;
+  project_id: string;
+  role: AgentConversationRole;
+  content: string;
+  metadata: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 function rowToRuntimeProfile(row: RuntimeProfileRow): RuntimeProfile {
   return {
     id: row.id,
@@ -351,6 +499,33 @@ function rowToRuntimeProfile(row: RuntimeProfileRow): RuntimeProfile {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function rowToConversationSession(row: ConversationSessionRow): AgentConversationSession {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    title: row.title,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function rowToConversationMessage(row: ConversationMessageRow): AgentConversationMessage {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    projectId: row.project_id,
+    role: row.role,
+    content: row.content,
+    metadata: row.metadata ? parseJson(row.metadata, null) : null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function normalizeConversationText(value: string) {
+  return value.trim().replace(/\s+/g, " ");
 }
 
 function rowToRun<TRun extends BaseRun>(row: RunRow): TRun {

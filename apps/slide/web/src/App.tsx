@@ -16,6 +16,7 @@ import { DeckArtifactRuntimeAdapter, type DeckAgentRuntimeProvider } from "./art
 import { PptxArtifactRuntimeAdapter } from "./artifact/pptxArtifactAdapter";
 import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
 import type { ArtifactSaveState } from "@ai-app/ui/editor-frame";
+import { editableArtifactInteraction, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
 import type { LocalAgentProviderStatus, OfficeCliStatus, ProjectDetailResponse, RuntimeProfile, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -399,6 +400,10 @@ export function App() {
   };
 
   const agentBusy = agentSending || agentConversation.items.some((item) => item.run.status === "accepted" || item.run.status === "running");
+  const artifactInteraction: ArtifactInteractionPolicy = useMemo(
+    () => (agentBusy ? { mode: "read-only", readOnlyReason: "agent-running" } : editableArtifactInteraction),
+    [agentBusy],
+  );
 
   if (route.name === "slide") {
     return (
@@ -413,6 +418,7 @@ export function App() {
         runtimeProfiles={runtimeProfiles}
         selectedAgent={selectedAgent}
         sending={agentBusy}
+        artifactInteraction={artifactInteraction}
         loading={loadingProject || pptxLoading}
         pptxError={pptxError}
         pptxRuntime={pptxRuntime}

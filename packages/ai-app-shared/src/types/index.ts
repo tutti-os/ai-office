@@ -78,6 +78,27 @@ export interface BaseRunTimelineItem<TRun extends BaseRun = BaseRun, TEvent exte
   events: TEvent[];
 }
 
+export type AgentConversationRole = "user" | "assistant";
+
+export interface AgentConversationSession {
+  id: Id;
+  projectId: Id;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentConversationMessage {
+  id: Id;
+  sessionId: Id;
+  projectId: Id;
+  role: AgentConversationRole;
+  content: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface BaseAiEditRequest {
   userPrompt: string;
   mode: AiEditMode;

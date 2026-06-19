@@ -25,7 +25,9 @@ type SharedShellProps = {
 };
 
 export function MarkdownDocumentScreen(props: SharedShellProps & {
+  agentProcessing: boolean;
   loading: boolean;
+  readOnly: boolean;
   runtime: MarkdownRuntimeState;
   saveState: ArtifactSaveState;
   onChange: (content: string, selection: MarkdownSelection) => void;
@@ -42,6 +44,8 @@ export function MarkdownDocumentScreen(props: SharedShellProps & {
         dirty={props.dirty}
         saveState={props.saveState}
         loading={props.loading}
+        agentProcessing={props.agentProcessing}
+        readOnly={props.readOnly}
         onUndo={props.onUndo}
         onRedo={props.onRedo}
         onChange={props.onChange}
@@ -54,6 +58,7 @@ export function MarkdownDocumentScreen(props: SharedShellProps & {
 }
 
 export function DocxDocumentScreen(props: SharedShellProps & {
+  agentProcessing: boolean;
   loading: boolean;
   projectId: string | null;
   runtime: DocxRuntimeState;
@@ -66,6 +71,7 @@ export function DocxDocumentScreen(props: SharedShellProps & {
         projectId={props.projectId}
         dirty={props.dirty}
         error={props.error}
+        agentProcessing={props.agentProcessing}
         loading={props.loading}
         onSelectionChange={props.onSelectionChange}
       />

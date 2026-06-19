@@ -91,6 +91,7 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
     initializeFrame,
     manifest,
     props,
+    readOnly,
     replaceActiveImageFromFile,
     requestImageReplacement,
     saveState,
@@ -117,6 +118,7 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
       <DeckToolbar
         activeObject={activeObject}
         directTextEditMode={directTextEditMode}
+        readOnly={readOnly}
         saveState={saveState}
         selectionMode={selectionMode}
         state={toolbarState}
@@ -180,6 +182,7 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
                     scale={scale}
                     selectionBox={activeSelectionBox?.slideId === slide.id && activeTextEdit?.slideId !== slide.id ? activeSelectionBox : null}
                     snapGuides={snapGuides}
+                    readOnly={readOnly}
                     onAlignObject={alignActiveObjectGeometry}
                     onBeginDragObject={beginDragObject}
                     onBeginRotateObject={beginRotateObject}
@@ -189,6 +192,7 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
                     onDoubleClickSelection={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
+                      if (readOnly) return;
                       enterTextEditFromFramePoint(slide, event.clientX, event.clientY);
                     }}
                     onUpdateObjectGeometry={updateActiveObjectGeometry}
@@ -201,7 +205,9 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
                         role="presentation"
                         style={shield}
                         onPointerDown={(event) => selectObjectFromFramePoint(slide, event.clientX, event.clientY)}
-                        onDoubleClick={(event) => enterTextEditFromFramePoint(slide, event.clientX, event.clientY)}
+                        onDoubleClick={(event) => {
+                          if (!readOnly) enterTextEditFromFramePoint(slide, event.clientX, event.clientY);
+                        }}
                       />
                     ))
                   ) : directTextEditMode ? null : (
@@ -209,7 +215,9 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
                       className="absolute inset-0 z-[2] cursor-default bg-transparent"
                       role="presentation"
                       onPointerDown={(event) => selectObjectFromFramePoint(slide, event.clientX, event.clientY)}
-                      onDoubleClick={(event) => enterTextEditFromFramePoint(slide, event.clientX, event.clientY)}
+                      onDoubleClick={(event) => {
+                        if (!readOnly) enterTextEditFromFramePoint(slide, event.clientX, event.clientY);
+                      }}
                     />
                   )}
                 </div>
@@ -256,6 +264,7 @@ function DeckToolbar(props: {
   canRedo: boolean;
   canUndo: boolean;
   directTextEditMode: boolean;
+  readOnly: boolean;
   saveState: "saved" | "saving" | "error";
   selectionMode: DeckSelectionMode;
   state: DeckToolbarState;
@@ -273,7 +282,7 @@ function DeckToolbar(props: {
   onToggleUnderline: () => void;
   onUndo: () => void;
 }) {
-  const disabled = !props.activeObject;
+  const disabled = props.readOnly || !props.activeObject;
   const textControlDisabled = disabled || props.selectionMode !== "text";
   const textboxControlDisabled = disabled || props.activeObject?.objectType !== "textbox";
   const imageControlDisabled = props.activeObject?.objectType !== "image";
@@ -282,10 +291,10 @@ function DeckToolbar(props: {
     <Toolbar className="relative overflow-visible" display={{ maxWidth: 1500, width: "content" }}>
       <ToolbarRow wrap className="gap-y-1.5">
         <ToolbarGroup>
-          <ToolbarIconButton disabled={!props.canUndo} title="Undo" onClick={props.onUndo}>
+          <ToolbarIconButton disabled={props.readOnly || !props.canUndo} title="Undo" onClick={props.onUndo}>
             <Undo2 size={16} />
           </ToolbarIconButton>
-          <ToolbarIconButton disabled={!props.canRedo} title="Redo" onClick={props.onRedo}>
+          <ToolbarIconButton disabled={props.readOnly || !props.canRedo} title="Redo" onClick={props.onRedo}>
             <Redo2 size={16} />
           </ToolbarIconButton>
         </ToolbarGroup>
@@ -336,7 +345,7 @@ function DeckToolbar(props: {
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup>
-          <ToolbarIconButton active={props.directTextEditMode} title="Single-click text edit" onClick={props.onToggleDirectTextEditMode}>
+          <ToolbarIconButton active={props.directTextEditMode} disabled={props.readOnly} title="Single-click text edit" onClick={props.onToggleDirectTextEditMode}>
             <Crosshair size={16} />
           </ToolbarIconButton>
         </ToolbarGroup>

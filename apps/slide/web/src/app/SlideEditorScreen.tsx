@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
-import { ArtifactEditorFrame, ArtifactWorkspaceHeader, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
+import { isArtifactAgentRunning } from "@ai-app/shared/artifact-runtime";
+import { ArtifactAgentProcessingOverlay, ArtifactEditorFrame, ArtifactWorkspaceHeader, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { DeckEditor } from "./DeckEditor";
 import { EditorInfoPanel } from "./EditorInfoPanel";
 import { PptxPreview } from "./PptxPreview";
 import { usePptxArtifactRuntime } from "../artifact/usePptxArtifactRuntime";
 import type { DeckAgentRuntimeProvider } from "../artifact/deckArtifactAdapter";
+import type { ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
 import type { LocalAgentProviderStatus, ProjectDetailResponse, RuntimeProfile, SlideArtifactType, SlideRunTimelineItem } from "@ai-slide/shared";
 
 export function SlideEditorScreen(props: {
   activeSelectionText: string;
+  artifactInteraction: ArtifactInteractionPolicy;
   conversationError: string;
   conversationItems: SlideRunTimelineItem[];
   conversationLoading: boolean;
@@ -35,6 +38,7 @@ export function SlideEditorScreen(props: {
   const [deckSaveState, setDeckSaveState] = useState<ArtifactSaveState>("saved");
   const artifactType = props.detail?.artifact.type ?? "deck";
   const headerSaveState: ArtifactSaveState = props.loading ? "loading" : props.pptxError ? "error" : artifactType === "deck" ? deckSaveState : "saved";
+  const agentProcessing = isArtifactAgentRunning(props.artifactInteraction);
 
   useEffect(() => {
     props.onArtifactSaveStateChange(artifactType === "deck" ? deckSaveState : "saved");
@@ -67,30 +71,34 @@ export function SlideEditorScreen(props: {
           saveState={headerSaveState}
           exportItems={slideExportItems(props.projectId, artifactType)}
         />
-        {props.loading ? (
-          <EditorInfoPanel title="Loading presentation..." />
-        ) : props.error ? (
-          <EditorInfoPanel detail={props.error} title="Presentation not found" />
-        ) : props.detail?.artifact.type === "deck" ? (
-          <DeckEditor
-            detail={props.detail}
-            projectId={props.projectId}
-            onAgentRuntimeProviderChange={props.onDeckAgentRuntimeProviderChange}
-            onAgentSelectionTextChange={props.onDeckSelectionTextChange}
-            onSaveStateChange={setDeckSaveState}
-          />
-        ) : props.detail?.artifact.type === "pptx" && props.pptxRuntime ? (
-          <PptxPreview
-            runtime={props.pptxRuntime}
-            error={props.pptxError}
-            onSelectionChange={props.onPptxSelectionChange}
-          />
-        ) : props.detail ? (
-          <EditorInfoPanel
-            detail={`Waiting for ${props.detail.artifact.fileRef}`}
-            title={props.detail.project.title}
-          />
-        ) : null}
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {props.loading ? (
+            <EditorInfoPanel title="Loading presentation..." />
+          ) : props.error ? (
+            <EditorInfoPanel detail={props.error} title="Presentation not found" />
+          ) : props.detail?.artifact.type === "deck" ? (
+            <DeckEditor
+              detail={props.detail}
+              interaction={props.artifactInteraction}
+              projectId={props.projectId}
+              onAgentRuntimeProviderChange={props.onDeckAgentRuntimeProviderChange}
+              onAgentSelectionTextChange={props.onDeckSelectionTextChange}
+              onSaveStateChange={setDeckSaveState}
+            />
+          ) : props.detail?.artifact.type === "pptx" && props.pptxRuntime ? (
+            <PptxPreview
+              runtime={props.pptxRuntime}
+              error={props.pptxError}
+              onSelectionChange={props.onPptxSelectionChange}
+            />
+          ) : props.detail ? (
+            <EditorInfoPanel
+              detail={`Waiting for ${props.detail.artifact.fileRef}`}
+              title={props.detail.project.title}
+            />
+          ) : null}
+          <ArtifactAgentProcessingOverlay active={agentProcessing} />
+        </div>
       </section>
     </ArtifactEditorFrame>
   );

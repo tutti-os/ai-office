@@ -41,6 +41,7 @@ export type AgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent e
   sending: boolean;
   variant: AgentConversationVariant;
   copy: AgentConversationCopy;
+  quickPromptsVisible?: boolean;
   selectedAgentId?: string;
   onBackHome: () => void;
   onAgentChange?: (agentId: string) => void;
@@ -56,6 +57,7 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
   const messages = useMemo(() => timelineToMessages(props.items), [props.items]);
   const activeRun = useMemo(() => props.items.find((item) => item.run.status === "accepted" || item.run.status === "running")?.run ?? null, [props.items]);
   const cx = classes[props.variant];
+  const showQuickPrompts = props.quickPromptsVisible === true && props.copy.quickPrompts.length > 0;
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -90,12 +92,6 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
         <IntroCard copy={props.copy} cx={cx} />
 
         {props.error ? <div className={cx.error}>{props.error}</div> : null}
-        {props.activeSelectionText.trim() ? (
-          <div className={cx.activeSelection}>
-            <div className={cx.activeSelectionLabel}>Selected text</div>
-            <div className={cx.activeSelectionText}>{props.activeSelectionText}</div>
-          </div>
-        ) : null}
 
         <div className={cx.messages}>
           {messages.map((message) => <ConversationMessage cx={cx} key={message.id} message={message} />)}
@@ -103,14 +99,22 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
       </div>
 
       <div className={cx.composerWrap}>
-        <div className={cx.quickPrompts}>
-          {props.copy.quickPrompts.map((label) => (
-            <button className={cx.quickButton} key={label} type="button" onClick={() => setDraft(label)}>
-              <WandSparkles size={13} />
-              {label}
-            </button>
-          ))}
-        </div>
+        {props.activeSelectionText.trim() ? (
+          <div className={cx.composerSelection}>
+            <div className={cx.activeSelectionLabel}>Selected text</div>
+            <div className={cx.composerSelectionText}>{props.activeSelectionText}</div>
+          </div>
+        ) : null}
+        {showQuickPrompts ? (
+          <div className={cx.quickPrompts}>
+            {props.copy.quickPrompts.map((label) => (
+              <button className={cx.quickButton} key={label} type="button" onClick={() => setDraft(label)}>
+                <WandSparkles size={13} />
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className={cx.composer}>
           <textarea
             className={cx.textarea}
@@ -241,8 +245,10 @@ export type ConversationClassNames = {
   quickButton: string;
   error: string;
   activeSelection: string;
+  composerSelection: string;
   activeSelectionLabel: string;
   activeSelectionText: string;
+  composerSelectionText: string;
   messages: string;
   composerWrap: string;
   composer: string;
@@ -298,8 +304,10 @@ const classes: Record<AgentConversationVariant, ConversationClassNames> = {
     quickButton: "flex h-8 items-center gap-1.5 rounded-full border border-white/8 bg-[#252525] px-3 text-left text-[12px] text-white/58 hover:bg-[#2d2d2d] hover:text-white",
     error: "mt-4 rounded-xl bg-[#3a241f] p-3 text-[12px] leading-5 text-[#ffad9f]",
     activeSelection: "mt-4 rounded-2xl border border-white/8 bg-white/[0.04] p-3",
+    composerSelection: "mb-3 rounded-2xl border border-white/8 bg-white/[0.04] p-3",
     activeSelectionLabel: "mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/28",
     activeSelectionText: "max-h-28 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-4 text-white/58",
+    composerSelectionText: "max-h-20 overflow-auto overscroll-contain whitespace-pre-wrap break-words text-[11px] leading-4 text-white/58",
     messages: "mt-5 space-y-4",
     composerWrap: "p-3",
     composer: "rounded-2xl border border-white/12 bg-[#2b2b2b] p-3 shadow-[0_14px_40px_rgba(0,0,0,0.35)]",
@@ -372,8 +380,10 @@ const classes: Record<AgentConversationVariant, ConversationClassNames> = {
     quickButton: "inline-flex h-8 items-center gap-1.5 rounded-full border border-white/8 bg-[#252525] px-3 text-[12px] text-white/58 hover:bg-[#2d2d2d] hover:text-white",
     error: "mt-4 rounded-xl bg-[#3a241f] px-3 py-2.5 text-[12px] leading-5 text-[#ffad9f]",
     activeSelection: "mt-4 rounded-2xl border border-white/8 bg-white/[0.04] p-3",
+    composerSelection: "mb-3 rounded-2xl border border-white/8 bg-white/[0.04] p-3",
     activeSelectionLabel: "mb-1.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-white/28",
     activeSelectionText: "max-h-28 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-4 text-white/58",
+    composerSelectionText: "max-h-20 overflow-auto overscroll-contain whitespace-pre-wrap break-words text-[11px] leading-4 text-white/58",
     messages: "mt-5 grid gap-4",
     composerWrap: "shrink-0 p-3",
     composer: "rounded-2xl border border-white/12 bg-[#2b2b2b] p-3 shadow-[0_14px_40px_rgba(0,0,0,0.35)]",

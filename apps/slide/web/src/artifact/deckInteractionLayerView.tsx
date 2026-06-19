@@ -33,6 +33,7 @@ type DeckInteractionLayerProps = {
   selectionBox: DeckInteractionSelectionBox | null;
   snapGuides: DeckSnapGuide[];
   scale: number;
+  readOnly: boolean;
   onAlignObject: (alignment: DeckObjectAlignment) => void;
   onBeginDragObject: (event: PointerEvent<HTMLElement>) => void;
   onBeginRotateObject: (event: PointerEvent<HTMLButtonElement>) => void;
@@ -80,8 +81,8 @@ export function DeckInteractionLayer(props: DeckInteractionLayerProps) {
   }, [props.activeGeometry?.height, props.activeGeometry?.width]);
 
   useEffect(() => {
-    if (!props.selectionBox) setGeometryPanelOpen(false);
-  }, [props.selectionBox]);
+    if (!props.selectionBox || props.readOnly) setGeometryPanelOpen(false);
+  }, [props.readOnly, props.selectionBox]);
 
   useEffect(() => {
     if (!geometryPanelOpen) return undefined;
@@ -140,7 +141,7 @@ export function DeckInteractionLayer(props: DeckInteractionLayerProps) {
       {props.selectionBox ? (
         <>
           <div
-            className={cx("absolute z-[3] border border-violet-500 shadow-none", props.activeObject?.movable ? "cursor-move" : "cursor-default")}
+            className={cx("absolute z-[3] border border-violet-500 shadow-none", !props.readOnly && props.activeObject?.movable ? "cursor-move" : "cursor-default")}
             style={{
               left: props.selectionBox.left,
               top: props.selectionBox.top,
@@ -149,10 +150,10 @@ export function DeckInteractionLayer(props: DeckInteractionLayerProps) {
               transform: `rotate(${props.selectionBox.rotation}deg)`,
               transformOrigin: "50% 50%",
             }}
-            onPointerDown={props.onBeginDragObject}
-            onDoubleClick={props.onDoubleClickSelection}
+            onPointerDown={props.readOnly ? undefined : props.onBeginDragObject}
+            onDoubleClick={props.readOnly ? undefined : props.onDoubleClickSelection}
           >
-            {resizeHandles.map((handle) => (
+            {props.readOnly ? null : resizeHandles.map((handle) => (
               <button
                 aria-label={`Resize ${handle}`}
                 className={cx("pointer-events-auto absolute size-2 rounded-full border border-violet-500 bg-white p-0 shadow-[0_1px_4px_rgba(0,0,0,0.18)]", resizeHandlePosition[handle])}
@@ -162,7 +163,7 @@ export function DeckInteractionLayer(props: DeckInteractionLayerProps) {
                 onPointerDown={(event) => props.onBeginResizeObject(handle, event)}
               />
             ))}
-            <button
+            {props.readOnly ? null : <button
               aria-label="Rotate object"
               className={cx(
                 objectToolbarTooltip,
@@ -175,9 +176,9 @@ export function DeckInteractionLayer(props: DeckInteractionLayerProps) {
               onPointerDown={props.onBeginRotateObject}
             >
               <RotateCw size={13} />
-            </button>
+            </button>}
           </div>
-          <div
+          {props.readOnly ? null : <div
             className="absolute z-[4] inline-flex h-[30px] -translate-x-1/2 -translate-y-[calc(100%_+_8px)] items-center gap-px overflow-visible rounded-md border border-black/8 bg-white p-[3px] shadow-[0_8px_22px_rgba(0,0,0,0.16)] [&>button]:grid [&>button]:size-[22px] [&>button]:place-items-center [&>button]:rounded-[5px] [&>button]:border-0 [&>button]:bg-transparent [&>button]:p-0 [&>button]:text-black/58 [&>button:disabled]:cursor-default [&>button:disabled]:text-black/20 [&>button:hover:not(:disabled)]:bg-black/[0.06] [&>button:hover:not(:disabled)]:text-[#111]"
             ref={objectToolbarRef}
             style={{
@@ -194,8 +195,8 @@ export function DeckInteractionLayer(props: DeckInteractionLayerProps) {
             <button aria-label="Move panel" className={objectToolbarTooltip} data-tip="Move" type="button" title="Move panel" onClick={() => setGeometryPanelOpen((open) => !open)}>
               <Move size={13} />
             </button>
-          </div>
-          {geometryPanelOpen && props.activeGeometry ? (
+          </div>}
+          {!props.readOnly && geometryPanelOpen && props.activeGeometry ? (
             <ObjectGeometryPanel
               geometry={props.activeGeometry}
               left={props.selectionBox.left + props.selectionBox.width / 2}

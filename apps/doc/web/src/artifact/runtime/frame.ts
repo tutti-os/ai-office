@@ -1,16 +1,63 @@
 import { serializeRuntimeDocument } from "./document";
 import type { RuntimeState } from "./types";
+import type { ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
 
 export function runtimeStateToSrcDoc(state: RuntimeState) {
   return serializeRuntimeDocument(state.document);
 }
 
-export function enableEditableFrame(doc: Document) {
-  doc.body.contentEditable = "true";
-  doc.body.spellcheck = true;
+export function enableEditableFrame(doc: Document, interaction: ArtifactInteractionPolicy = { mode: "editable" }) {
+  installReadOnlyMutationGuard(doc);
   markTableCellsEditable(doc);
   enableTableCellCaretPlacement(doc);
   ensureRuntimeEditingStyles(doc);
+  setEditableFrameInteraction(doc, interaction);
+}
+
+export function setEditableFrameInteraction(doc: Document, interaction: ArtifactInteractionPolicy) {
+  const readOnly = isFrameReadOnlyInteraction(interaction);
+  doc.documentElement.dataset.aiArtifactInteractionMode = interaction.mode;
+  if (interaction.readOnlyReason) doc.documentElement.dataset.aiArtifactReadOnlyReason = interaction.readOnlyReason;
+  else delete doc.documentElement.dataset.aiArtifactReadOnlyReason;
+  doc.body.contentEditable = readOnly ? "false" : "true";
+  doc.body.spellcheck = !readOnly;
+  doc.querySelectorAll<HTMLElement>("td[data-runtime-editable-cell], th[data-runtime-editable-cell]").forEach((cell) => {
+    cell.contentEditable = readOnly ? "false" : "true";
+    cell.spellcheck = !readOnly;
+  });
+}
+
+function isFrameReadOnly(doc: Document) {
+  return doc.documentElement.dataset.aiArtifactInteractionMode === "read-only";
+}
+
+function isFrameReadOnlyInteraction(interaction: ArtifactInteractionPolicy) {
+  return interaction.mode === "read-only";
+}
+
+function installReadOnlyMutationGuard(doc: Document) {
+  if (doc.documentElement.dataset.aiDocReadOnlyGuardInstalled === "true") return;
+  doc.documentElement.dataset.aiDocReadOnlyGuardInstalled = "true";
+
+  const blockWhenReadOnly = (event: Event) => {
+    if (!isFrameReadOnly(doc)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  doc.addEventListener("beforeinput", blockWhenReadOnly, true);
+  doc.addEventListener("paste", blockWhenReadOnly, true);
+  doc.addEventListener("cut", blockWhenReadOnly, true);
+  doc.addEventListener("drop", blockWhenReadOnly, true);
+  doc.addEventListener(
+    "keydown",
+    (event) => {
+      if (!isFrameReadOnly(doc) || !isEditingKey(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    true,
+  );
 }
 
 function markTableCellsEditable(doc: Document) {
@@ -68,6 +115,7 @@ function enableTableCellCaretPlacement(doc: Document) {
   doc.addEventListener(
     "keydown",
     (event) => {
+      if (isFrameReadOnly(doc)) return;
       const cell = activeCell?.isConnected ? activeCell : currentTableCell(doc);
       if (!cell || !isTableCellInputRedirectTarget(doc, event.target) || event.defaultPrevented) return;
       if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
@@ -80,6 +128,7 @@ function enableTableCellCaretPlacement(doc: Document) {
   doc.addEventListener(
     "beforeinput",
     (event) => {
+      if (isFrameReadOnly(doc)) return;
       const cell = activeCell?.isConnected ? activeCell : currentTableCell(doc);
       if (!(event instanceof InputEvent) || event.inputType !== "insertText" || !event.data || !cell) return;
       if (!isTableCellInputRedirectTarget(doc, event.target)) return;
@@ -92,6 +141,7 @@ function enableTableCellCaretPlacement(doc: Document) {
   doc.addEventListener(
     "paste",
     (event) => {
+      if (isFrameReadOnly(doc)) return;
       const cell = activeCell?.isConnected ? activeCell : currentTableCell(doc);
       if (!cell || !isTableCellInputRedirectTarget(doc, event.target)) return;
       const text = event.clipboardData?.getData("text/plain") ?? "";
@@ -102,6 +152,12 @@ function enableTableCellCaretPlacement(doc: Document) {
     },
     true,
   );
+}
+
+function isEditingKey(event: KeyboardEvent) {
+  if (event.metaKey || event.ctrlKey || event.altKey) return false;
+  if (event.key.length === 1) return true;
+  return event.key === "Backspace" || event.key === "Delete" || event.key === "Enter" || event.key === "Tab";
 }
 
 function cellFromEvent(doc: Document, event: Event) {

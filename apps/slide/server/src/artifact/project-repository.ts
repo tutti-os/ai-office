@@ -22,7 +22,7 @@ import {
   type SlideProject,
   type UpdateProjectRequest,
 } from "@ai-slide/shared";
-import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteRunStore } from "@ai-app/shared/project-store";
+import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
 import { getDb, rowOrNull, rows } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
 
@@ -37,6 +37,10 @@ type TemplateDeckSource = {
 };
 
 export class ProjectRepository {
+  private readonly conversations = new SqliteAgentConversationStore(getDb, {
+    createSessionId: randomUUID,
+    createMessageId: randomUUID,
+  });
   private readonly runs = new SqliteRunStore<SlideRun, SlideRunEvent>(getDb, {
     runsTable: "slide_runs",
     eventsTable: "slide_run_events",
@@ -169,6 +173,8 @@ export class ProjectRepository {
     getDb().exec(`
       DELETE FROM slide_run_events;
       DELETE FROM slide_runs;
+      DELETE FROM agent_conversation_messages;
+      DELETE FROM agent_conversation_sessions;
       DELETE FROM stream_events;
       DELETE FROM artifacts;
       DELETE FROM projects;
@@ -191,6 +197,28 @@ export class ProjectRepository {
     selectedHtml: string;
   }) {
     return this.runs.createRun(input);
+  }
+
+  ensureConversationSession(projectId: string, title?: string) {
+    return this.conversations.ensureProjectSession(projectId, title);
+  }
+
+  createConversationMessage(input: {
+    projectId: string;
+    sessionId: string;
+    role: "user" | "assistant";
+    content: string;
+    metadata?: Record<string, unknown> | null;
+  }) {
+    return this.conversations.createMessage(input);
+  }
+
+  updateConversationMessage(messageId: string, input: { content?: string; metadata?: Record<string, unknown> | null }) {
+    return this.conversations.updateMessage(messageId, input);
+  }
+
+  conversationHistory(sessionId: string, currentPrompt: string) {
+    return this.conversations.normalizedHistory({ sessionId, currentPrompt });
   }
 
   getRun(runId: string) {

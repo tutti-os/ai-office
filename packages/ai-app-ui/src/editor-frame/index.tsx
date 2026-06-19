@@ -20,6 +20,35 @@ export function ArtifactEditorFrame(props: {
   );
 }
 
+export function ArtifactAgentProcessingOverlay(props: {
+  active: boolean;
+  className?: string;
+}) {
+  if (!props.active) return null;
+  return (
+    <div className={cx("pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-[inherit]", props.className)} aria-hidden="true">
+      <style>
+        {`
+          @keyframes ai-artifact-agent-sweep {
+            0% { transform: translateX(-130%) skewX(-14deg); opacity: 0; }
+            18% { opacity: 0.72; }
+            56% { opacity: 0.58; }
+            100% { transform: translateX(330%) skewX(-14deg); opacity: 0; }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .ai-artifact-agent-sweep { animation-duration: 4.8s !important; }
+          }
+        `}
+      </style>
+      <div className="absolute inset-0 bg-white/[0.025]" />
+      <div
+        className="ai-artifact-agent-sweep absolute -inset-y-16 left-0 w-1/3 bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.05)_18%,rgba(255,255,255,0.34)_48%,rgba(147,197,253,0.20)_58%,transparent_100%)] blur-[0.5px]"
+        style={{ animation: "ai-artifact-agent-sweep 2.35s cubic-bezier(0.4, 0, 0.2, 1) infinite" }}
+      />
+    </div>
+  );
+}
+
 export type ArtifactSaveState = "saved" | "saving" | "error" | "loading";
 
 export type ArtifactExportItem = {

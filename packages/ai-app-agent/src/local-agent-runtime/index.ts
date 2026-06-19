@@ -108,7 +108,8 @@ export class LocalAgentRuntimeProvider<
 
     try {
       const sessionStore = new LocalAgentSessionStore(workspaceRoot, this.options.sessionDirName ?? ".ai-app");
-      const previousSession = sessionStore.read(context.project.id);
+      const conversationSessionId = context.conversation?.sessionId ?? context.project.id;
+      const previousSession = sessionStore.read(conversationSessionId);
       const resume =
         previousSession?.provider === provider && (previousSession.providerSessionId || previousSession.resumeToken)
           ? {
@@ -133,7 +134,7 @@ export class LocalAgentRuntimeProvider<
         }
       } catch (error) {
         if (previousSession && !emittedEvent && isProviderResumeFailure(error)) {
-          sessionStore.remove(context.project.id);
+          sessionStore.remove(conversationSessionId);
           for await (const runtimeEvent of this.runWithResume({
             context,
             controller,
@@ -164,17 +165,19 @@ export class LocalAgentRuntimeProvider<
     const { context, controller, provider, resume, sessionStore, workspaceRoot } = input;
     let lastError: Extract<AgentEvent, { type: "error" }> | undefined;
     const skillManifest = (await this.options.buildSkillManifest?.(context, workspaceRoot)) ?? [];
+    const conversationId = context.conversation?.conversationId ?? context.project.id;
+    const sessionId = context.conversation?.sessionId ?? context.project.id;
     for await (const event of this.localAgentRuntime.run({
       runId: context.run.id,
-      conversationId: context.project.id,
-      sessionId: context.project.id,
+      conversationId,
+      sessionId,
       provider,
       runtimeKind: "local-agent",
       runtimeProvider: provider,
       cwd: workspaceRoot,
       prompt: this.options.buildPrompt(context),
       systemPrompt: this.options.buildSystemPrompt(context),
-      history: [],
+      history: context.history ?? [],
       model: stripProviderPrefix(context.runtimeProfile.model, provider),
       reasoning: context.request.reasoningEffort ?? undefined,
       mcpServers: this.options.buildMcpServers?.(context) ?? [],
@@ -196,7 +199,7 @@ export class LocalAgentRuntimeProvider<
       } else if ((event as any).type === "done") {
         const done = event as any;
         if (done.sessionId || done.resumeToken) {
-          sessionStore.write(context.project.id, {
+          sessionStore.write(sessionId, {
             provider,
             providerSessionId: done.sessionId,
             resumeToken: done.resumeToken,

@@ -36,6 +36,25 @@ export type ArtifactRuntimeCapabilities = {
   officePreview?: boolean;
 };
 
+export type ArtifactInteractionMode = "editable" | "read-only";
+
+export type ArtifactReadOnlyReason = "agent-running" | "loading" | "unsupported" | "system";
+
+export type ArtifactInteractionPolicy = {
+  mode: ArtifactInteractionMode;
+  readOnlyReason?: ArtifactReadOnlyReason;
+};
+
+export const editableArtifactInteraction: ArtifactInteractionPolicy = { mode: "editable" };
+
+export function isArtifactReadOnly(policy: ArtifactInteractionPolicy) {
+  return policy.mode === "read-only";
+}
+
+export function isArtifactAgentRunning(policy: ArtifactInteractionPolicy) {
+  return policy.mode === "read-only" && policy.readOnlyReason === "agent-running";
+}
+
 export interface ArtifactRuntimeAdapterBase<
   TArtifactType extends string,
   TRuntime,

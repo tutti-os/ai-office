@@ -28,6 +28,7 @@ import { EventHub } from "../ws/event-hub.js";
 export class DocumentService {
   private readonly runtimes = createRuntimeProviderRegistry();
   private readonly cancelledRunIds = new Set<string>();
+  private readonly runAssistantMessageIds = new Map<string, string>();
   private readonly runExecutor: RuntimeRunExecutor<DocumentRun, DocumentRunEvent, DocumentProject, AiEditRequest>;
 
   constructor(
@@ -149,6 +150,21 @@ export class DocumentService {
     const runtimeProfile = this.repo.getRuntimeProfile(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);
+    const session = this.repo.ensureConversationSession(projectId, project.title);
+    this.repo.createConversationMessage({
+      projectId,
+      sessionId: session.id,
+      role: "user",
+      content: request.userPrompt,
+      metadata: conversationMessageMetadata(request),
+    });
+    const assistantMessage = this.repo.createConversationMessage({
+      projectId,
+      sessionId: session.id,
+      role: "assistant",
+      content: "",
+      metadata: { status: "accepted" },
+    });
     const run = this.repo.createRun({
       projectId,
       runtime: descriptor.runtime,
@@ -161,8 +177,10 @@ export class DocumentService {
       selectedText: request.selectedText ?? "",
       selectedHtml: request.selectedHtml ?? "",
     });
+    this.runAssistantMessageIds.set(run.id, assistantMessage.id);
+    this.repo.updateConversationMessage(assistantMessage.id, { metadata: { status: "accepted", runId: run.id } });
     this.events.emit({ type: "run.accepted", projectId, runId: run.id, payload: { run } });
-    void this.executeRun(project, runtimeProfile, request, run.id);
+    void this.executeRun(project, runtimeProfile, request, run.id, { assistantMessageId: assistantMessage.id, sessionId: session.id });
     return { run };
   }
 
@@ -181,6 +199,7 @@ export class DocumentService {
     runtimeProfile: RuntimeProfile,
     request: AiEditRequest,
     runId: string,
+    conversation: { assistantMessageId: string; sessionId: string },
   ) {
     let refreshedFromWorkspace = false;
 
@@ -189,6 +208,8 @@ export class DocumentService {
       request,
       runtimeProfile,
       runId,
+      conversation: { conversationId: initialProject.id, sessionId: conversation.sessionId },
+      history: this.repo.conversationHistory(conversation.sessionId, request.userPrompt),
       isCancelled: () => this.cancelledRunIds.has(runId),
       finalizeCancellation: (id, reason) => this.finalizeCancellation(id, reason),
       onWorkspaceEvent: async () => {
@@ -196,10 +217,21 @@ export class DocumentService {
       },
       complete: async ({ generatedText }) => {
         refreshedFromWorkspace = Boolean(await this.refreshProjectFromWorkspace(initialProject.id, runId)) || refreshedFromWorkspace;
-        await this.completeRun(initialProject, runtimeProfile, runId, generatedText, refreshedFromWorkspace);
+        const finalRun = await this.completeRun(initialProject, runtimeProfile, runId, generatedText, refreshedFromWorkspace);
+        this.repo.updateConversationMessage(conversation.assistantMessageId, {
+          content: assistantConversationContent(runtimeProfile, generatedText, finalRun?.resultPreview ?? ""),
+          metadata: { status: "completed", runId },
+        });
+      },
+      onFailure: async ({ error }) => {
+        this.repo.updateConversationMessage(conversation.assistantMessageId, {
+          content: `Run failed: ${error}`,
+          metadata: { status: "failed", runId },
+        });
       },
       onFinally: () => {
         this.cancelledRunIds.delete(runId);
+        this.runAssistantMessageIds.delete(runId);
       },
     });
   }
@@ -272,6 +304,13 @@ export class DocumentService {
     if (!run) return null;
     const finalRun = this.repo.updateRun(runId, { status: "cancelled", error: reason }) ?? run;
     this.events.emit({ type: "run.cancelled", projectId: run.projectId, runId, payload: { run: finalRun } });
+    const assistantMessageId = this.runAssistantMessageIds.get(runId);
+    if (assistantMessageId) {
+      this.repo.updateConversationMessage(assistantMessageId, {
+        content: `Run cancelled: ${reason}`,
+        metadata: { status: "cancelled", runId },
+      });
+    }
     this.cancelledRunIds.delete(runId);
     return { run: finalRun };
   }
@@ -588,6 +627,20 @@ function renderCreativeTemplate(template: DocumentTemplate) {
     <ul><li>Confirm owner and deadline.</li><li>Draft assets and review materials.</li><li>Prepare final handoff.</li></ul>
   </section>`,
   );
+}
+
+function conversationMessageMetadata(request: AiEditRequest) {
+  return {
+    mode: request.mode,
+    selectionPath: request.selectionPath ?? "",
+    selectionType: request.selectionType ?? "write",
+    selectedText: request.selectedText ?? "",
+  };
+}
+
+function assistantConversationContent(runtimeProfile: RuntimeProfile, generatedText: string, resultPreview: string) {
+  if (runtimeProfile.kind === "local-agent") return generatedText.trim() || resultPreview.trim() || "Run completed.";
+  return resultPreview.trim() || previewText(generatedText) || "Run completed.";
 }
 
 function previewText(value: string) {

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
-import { ArtifactEditorFrame, ArtifactWorkspaceHeader, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
+import { ArtifactAgentProcessingOverlay, ArtifactEditorFrame, ArtifactWorkspaceHeader, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
 import { type ToolbarLayoutValue } from "@ai-app/ui/toolbar";
 import type { DocumentRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
 import type { AdjacentInsertPosition, Alignment, ElementStyleAttributes, HeadingTag, ImageAttributes, InlineFormatTag, ListKind } from "../artifact/runtime/operations";
@@ -71,6 +71,8 @@ export type HtmlEditorScreenProps = {
   operationWrapperTag: string;
   runtime: RuntimeState | null;
   saveState: WorkspaceSaveState;
+  agentProcessing: boolean;
+  readOnly: boolean;
   toolbarDisabled: boolean;
   toolbarState: ToolbarState;
   onAlignment: (alignment: Alignment) => void;
@@ -121,7 +123,7 @@ export type HtmlEditorScreenProps = {
 export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
   const canUndo = Boolean(props.runtime && props.runtime.history.currentIndex > 0);
   const canRedo = Boolean(props.runtime && props.runtime.history.currentIndex < props.runtime.history.snapshots.length - 1);
-  const toolbarDisabled = props.toolbarDisabled;
+  const toolbarDisabled = props.toolbarDisabled || props.readOnly;
   const [spacingMenuOpen, setSpacingMenuOpen] = useState(false);
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
   const [frameHeight, setFrameHeight] = useState(minimumHtmlFrameHeight);
@@ -354,46 +356,49 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
           ]}
         />
 
-        <div ref={frameScrollContainerRef} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-[#2a2a2a] px-3 py-5 md:px-6 md:py-7">
-          <HtmlEditorToolbar
-            canCreateLink={canCreateLink}
-            canRedo={canRedo}
-            canUndo={canUndo}
-            layoutMenuOpen={layoutMenuOpen}
-            linkEditorRef={linkEditorRef}
-            props={props}
-            spacingMenuOpen={spacingMenuOpen}
-            toolbarDisabled={toolbarDisabled}
-            onLayoutMenuOpenChange={setLayoutMenuOpen}
-            onSpacingMenuOpenChange={setSpacingMenuOpen}
-          />
-
-          {props.frameSrcDoc ? (
-            <iframe
-              key={props.frameRevision}
-              ref={props.iframeRef}
-              className="mx-auto block min-h-[860px] w-full max-w-[980px] overflow-clip rounded-[2px] border border-black/30 bg-white shadow-[0_30px_90px_rgba(0,0,0,0.55)]"
-              style={{ height: frameHeight }}
-              title={props.runtime?.title ?? "Runtime doc"}
-              sandbox="allow-scripts allow-same-origin"
-              scrolling="no"
-              srcDoc={props.frameSrcDoc}
-              onLoad={() => {
-                props.onFrameLoad();
-                scheduleHtmlFrameResize();
-              }}
-              onInput={() => {
-                props.onMutation("input", "User edited doc body");
-                scheduleHtmlFrameResize();
-              }}
-              onKeyUp={props.onSelection}
-              onMouseUp={props.onSelection}
+        <div className="relative min-h-0 flex-1">
+          <div ref={frameScrollContainerRef} className="h-full overflow-x-hidden overflow-y-auto bg-[#2a2a2a] px-3 py-5 md:px-6 md:py-7">
+            <HtmlEditorToolbar
+              canCreateLink={canCreateLink}
+              canRedo={canRedo}
+              canUndo={canUndo}
+              layoutMenuOpen={layoutMenuOpen}
+              linkEditorRef={linkEditorRef}
+              props={props}
+              spacingMenuOpen={spacingMenuOpen}
+              toolbarDisabled={toolbarDisabled}
+              onLayoutMenuOpenChange={setLayoutMenuOpen}
+              onSpacingMenuOpenChange={setSpacingMenuOpen}
             />
-          ) : (
-            <div className="mx-auto grid min-h-[620px] max-w-[860px] place-items-center rounded border border-white/10 bg-[#202020] text-center text-white/42">
-              Loading doc...
-            </div>
-          )}
+
+            {props.frameSrcDoc ? (
+              <iframe
+                key={props.frameRevision}
+                ref={props.iframeRef}
+                className="mx-auto block min-h-[860px] w-full max-w-[980px] overflow-clip rounded-[2px] border border-black/30 bg-white shadow-[0_30px_90px_rgba(0,0,0,0.55)]"
+                style={{ height: frameHeight }}
+                title={props.runtime?.title ?? "Runtime doc"}
+                sandbox="allow-scripts allow-same-origin"
+                scrolling="no"
+                srcDoc={props.frameSrcDoc}
+                onLoad={() => {
+                  props.onFrameLoad();
+                  scheduleHtmlFrameResize();
+                }}
+                onInput={() => {
+                  props.onMutation("input", "User edited doc body");
+                  scheduleHtmlFrameResize();
+                }}
+                onKeyUp={props.onSelection}
+                onMouseUp={props.onSelection}
+              />
+            ) : (
+              <div className="mx-auto grid min-h-[620px] max-w-[860px] place-items-center rounded border border-white/10 bg-[#202020] text-center text-white/42">
+                Loading doc...
+              </div>
+            )}
+          </div>
+          <ArtifactAgentProcessingOverlay active={props.agentProcessing} />
         </div>
       </section>
     </ArtifactEditorFrame>

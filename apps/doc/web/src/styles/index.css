@@ -16,6 +16,23 @@
   outline: none;
 }
 
+::highlight(ai-agent-markdown-selection) {
+  background-color: rgba(148, 163, 184, 0.36);
+  color: inherit;
+}
+
+.ai-markdown-editor-page .mdxeditor-root-contenteditable {
+  width: 100%;
+  max-width: 980px;
+  min-height: 780px;
+  margin-inline: auto;
+  overflow: visible;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
+}
+
 .markdown-preview h1,
 .markdown-preview h2,
 .markdown-preview h3,

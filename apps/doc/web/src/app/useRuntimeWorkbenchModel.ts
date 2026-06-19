@@ -44,6 +44,7 @@ import { cancelRun, clearProjectHistory, createProject, getProject, listProjects
 import { fetchGensparkStudyPlanFixture } from "../api/fixtures";
 import { fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, fetchTemplates, installOfficeCli } from "../api/runtime";
 import type { DocumentProject, DocumentType, LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
+import { editableArtifactInteraction, isArtifactReadOnly, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
 import { DocxArtifactRuntimeAdapter } from "../artifact/docxArtifactAdapter";
 import { HtmlArtifactRuntimeAdapter } from "../artifact/htmlArtifactAdapter";
 import { MarkdownArtifactRuntimeAdapter } from "../artifact/markdownArtifactAdapter";
@@ -52,7 +53,7 @@ import { useHtmlArtifactRuntime } from "../artifact/useHtmlArtifactRuntime";
 import { useMarkdownArtifactRuntime } from "../artifact/useMarkdownArtifactRuntime";
 import { RuntimeApplier } from "../artifact/runtime/applier";
 import { runtimeDocumentFromFrame } from "../artifact/runtime/document";
-import { enableEditableFrame } from "../artifact/runtime/frame";
+import { enableEditableFrame, setEditableFrameInteraction } from "../artifact/runtime/frame";
 import {
   applyInlineFormat,
   appendToElement,
@@ -141,6 +142,7 @@ export function useRuntimeWorkbenchModel() {
   const lastSelectionRef = useRef<SelectionState | null>(null);
   const activeImageRef = useRef<ImageObjectElement | null>(null);
   const pendingImageTargetRef = useRef<ImageObjectElement | null>(null);
+  const artifactReadOnlyRef = useRef(false);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const initializedFrameDocsRef = useRef<WeakSet<Document>>(new WeakSet());
   const toolbarSelectionPreserveTimestampRef = useRef(0);
@@ -255,6 +257,7 @@ export function useRuntimeWorkbenchModel() {
         lastResolvedTargetRef,
         lastSelectionRef,
         toolbarSelectionPreserveTimestampRef,
+        isReadOnly: () => artifactReadOnlyRef.current,
         setEditorStats,
         setRuntime,
         setToolbarState,
@@ -695,6 +698,23 @@ export function useRuntimeWorkbenchModel() {
     },
   });
   const agentBusy = agentSending || agentConversation.items.some((item) => item.run.status === "accepted" || item.run.status === "running");
+  const artifactInteraction: ArtifactInteractionPolicy = useMemo(
+    () => (agentBusy ? { mode: "read-only", readOnlyReason: "agent-running" } : editableArtifactInteraction),
+    [agentBusy],
+  );
+  const artifactReadOnly = isArtifactReadOnly(artifactInteraction);
+  artifactReadOnlyRef.current = artifactReadOnly;
+
+  useEffect(() => {
+    const doc = iframeRef.current?.contentDocument;
+    if (doc?.body) setEditableFrameInteraction(doc, artifactInteraction);
+    if (artifactReadOnly) {
+      setLinkEditorOpen(false);
+      setOperationPanelMode(null);
+      pendingImageTargetRef.current = null;
+      if (doc) removeImageSelectionOverlay(doc);
+    }
+  }, [artifactInteraction, artifactReadOnly]);
 
   const sendAgentPrompt = async (userPrompt: string) => {
     if (!currentProjectId) throw new Error("Project is not open");
@@ -750,7 +770,7 @@ export function useRuntimeWorkbenchModel() {
     if (!doc) return;
     if (initializedFrameDocsRef.current.has(doc)) return;
     initializedFrameDocsRef.current.add(doc);
-    enableEditableFrame(doc);
+    enableEditableFrame(doc, artifactInteraction);
     setEditorStats(getEditorStats(doc));
     const queueSelectionSync = (fallbackNode?: Node | null) => {
       htmlEditorController.syncSelection(fallbackNode);
@@ -951,6 +971,7 @@ export function useRuntimeWorkbenchModel() {
   const beginResizeImage = (handle: ResizeHandle, image: ImageObjectElement, overlay: HTMLElement, event: globalThis.PointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
+    if (artifactReadOnlyRef.current) return;
     if (!image.ownerDocument.body.contains(image)) return;
     const initial = image.getBoundingClientRect();
     const startClientX = event.clientX;
@@ -996,6 +1017,7 @@ export function useRuntimeWorkbenchModel() {
   };
 
   const requestImageFileSelection = (image?: ImageObjectElement | null) => {
+    if (artifactReadOnlyRef.current) return;
     const doc = iframeRef.current?.contentDocument ?? null;
     const currentImage =
       image ??
@@ -1017,6 +1039,7 @@ export function useRuntimeWorkbenchModel() {
     const input = event.currentTarget;
     const file = input.files?.[0] ?? null;
     input.value = "";
+    if (artifactReadOnlyRef.current) return;
     if (!file) return;
     if (!file.type.startsWith("image/")) {
       setError("Please choose an image file.");
@@ -1192,6 +1215,8 @@ export function useRuntimeWorkbenchModel() {
     activeSelectionText,
     agentBusy,
     agentConversation,
+    artifactInteraction,
+    artifactReadOnly,
     applyAlignment,
     applyBackColor,
     applyFontFamily,
