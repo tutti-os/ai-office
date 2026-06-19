@@ -4,14 +4,8 @@ import { join, resolve } from "node:path";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import Fastify from "fastify";
-import type {
-  AiEditRequest,
-  ApplyTemplateRequest,
-  CreateProjectRequest,
-  UpdateProjectRequest,
-  WsClientMessage,
-  WsServerMessage,
-} from "@ai-doc/shared";
+import { ArtifactAppHttpRoutes } from "@ai-app/shared/server-routes";
+import type { ApplyTemplateRequest } from "@ai-doc/shared";
 import { DocumentRepository } from "./artifact/document-repository.js";
 import { DocumentService } from "./artifact/document-service.js";
 import { listTemplates } from "./templates/template-service.js";
@@ -38,8 +32,6 @@ if (existsSync(webDist)) {
   });
 }
 
-server.get("/api/health", async () => ({ ok: true, app: "ai-doc" }));
-
 server.get("/api/dev/fixtures/genspark-study-plan", async (request, reply) => {
   const fixturePath = process.env.AI_DOC_GENSPARK_TEST_HTML ?? "/Users/niuma/code/genspark/doc/test.html";
   try {
@@ -56,62 +48,27 @@ server.get("/api/dev/fixtures/genspark-study-plan", async (request, reply) => {
   }
 });
 
-server.get("/api/bootstrap", async () => documents.bootstrap());
-
-server.get("/api/templates", async () => ({ templates: listTemplates() }));
-
-server.get("/api/local-agent/providers", async () => documents.listLocalAgentProviders());
-
-server.get("/api/toolchains/officecli", async () => {
-  try {
-    return { officecli: await getOfficeCliStatus() };
-  } catch (error) {
-    return {
-      officecli: {
-        available: false,
-        source: "missing",
-        canInstall: false,
-        installing: false,
-        reason: error instanceof Error ? error.message : "Unable to check OfficeCLI status.",
-      },
-    };
-  }
-});
-
-server.post("/api/toolchains/officecli/install", async (_request, reply) => {
-  const officecli = await installOfficeCli();
-  if (!officecli.available) return reply.code(400).send({ officecli, error: officecli.reason ?? "Unable to install OfficeCLI" });
-  return { officecli };
-});
-
-server.get("/api/projects", async () => documents.listProjects());
-
-server.post<{ Body: CreateProjectRequest }>("/api/projects", async (request, reply) => {
-  try {
-    return await documents.createProject(request.body ?? {});
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to create project";
-    return reply.code(400).send({ error: message });
-  }
-});
-
-server.delete("/api/projects", async () => documents.clearProjectHistory());
-
-server.get<{ Params: { projectId: string } }>("/api/projects/:projectId/runs", async (request, reply) => {
-  try {
-    return documents.listProjectRuns(request.params.projectId);
-  } catch {
-    return reply.code(404).send({ error: "Project not found" });
-  }
-});
-
-server.get<{ Params: { projectId: string } }>("/api/projects/:projectId", async (request, reply) => {
-  try {
-    return documents.getProject(request.params.projectId);
-  } catch {
-    return reply.code(404).send({ error: "Project not found" });
-  }
-});
+new ArtifactAppHttpRoutes({
+  appId: "ai-doc",
+  service: documents,
+  events,
+  listTemplates,
+  requireAiPrompt: true,
+  toolchain: {
+    responseKey: "officecli",
+    getStatus: getOfficeCliStatus,
+    install: installOfficeCli,
+    isAvailable: (officecli) => officecli.available,
+    errorMessage: (officecli) => officecli.reason ?? "Unable to install OfficeCLI",
+    errorStatus: (error) => ({
+      available: false,
+      source: "missing" as const,
+      canInstall: false,
+      installing: false,
+      reason: error instanceof Error ? error.message : "Unable to check OfficeCLI status.",
+    }),
+  },
+}).register(server);
 
 server.get<{ Params: { projectId: string } }>("/api/projects/:projectId/files/document.docx", async (request, reply) => {
   try {
@@ -126,22 +83,6 @@ server.get<{ Params: { projectId: string } }>("/api/projects/:projectId/files/do
   }
 });
 
-server.patch<{ Params: { projectId: string }; Body: UpdateProjectRequest }>("/api/projects/:projectId", async (request, reply) => {
-  const result = documents.updateProject(request.params.projectId, request.body ?? {});
-  if (!result) return reply.code(404).send({ error: "Project not found" });
-  return result;
-});
-
-server.post<{ Params: { projectId: string }; Body: AiEditRequest }>("/api/projects/:projectId/ai-edit", async (request, reply) => {
-  try {
-    if (!request.body?.userPrompt?.trim()) return reply.code(400).send({ error: "userPrompt is required" });
-    return await documents.startAiEdit(request.params.projectId, request.body);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to start AI edit";
-    return reply.code(message.includes("not found") ? 404 : 400).send({ error: message });
-  }
-});
-
 server.post<{ Params: { projectId: string }; Body: ApplyTemplateRequest }>(
   "/api/projects/:projectId/apply-template",
   async (request, reply) => {
@@ -153,38 +94,6 @@ server.post<{ Params: { projectId: string }; Body: ApplyTemplateRequest }>(
     }
   },
 );
-
-server.post<{ Params: { runId: string } }>("/api/runs/:runId/cancel", async (request, reply) => {
-  const result = await documents.cancelRun(request.params.runId);
-  if (!result) return reply.code(404).send({ error: "Run not found" });
-  return result;
-});
-
-server.get("/api/ws", { websocket: true }, (socket) => {
-  const dispose = events.addClient(socket);
-  const hello: WsServerMessage = { type: "hello", lastSeq: events.lastSeq() };
-  socket.send(JSON.stringify(hello));
-
-  socket.on("message", (raw: Buffer) => {
-    let message: WsClientMessage | null = null;
-    try {
-      message = JSON.parse(raw.toString()) as WsClientMessage;
-    } catch {
-      return;
-    }
-    if (message.type === "hello" && typeof message.lastSeq === "number") {
-      const replay = events.replaySince(message.lastSeq);
-      const response: WsServerMessage = {
-        type: "replay",
-        events: replay,
-        lastSeq: replay.at(-1)?.seq ?? events.lastSeq(),
-      };
-      socket.send(JSON.stringify(response));
-    }
-  });
-
-  socket.on("close", dispose);
-});
 
 server.setNotFoundHandler((request, reply) => {
   if (request.raw.url?.startsWith("/api/") || request.raw.url?.startsWith("/local-assets/")) {

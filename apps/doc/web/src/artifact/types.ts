@@ -1,4 +1,5 @@
 import type { AgentArtifactContext, AiEditRequest, ArtifactSelection, ArtifactType } from "@ai-doc/shared";
+import type { AgentEditRequestInputBase, ArtifactRuntimeAdapterBase } from "@ai-app/shared/artifact-runtime";
 
 export type ArtifactSource = "imported-html" | "blank" | "fixture";
 
@@ -8,18 +9,18 @@ export type ArtifactRuntimeParseInput = {
   source?: ArtifactSource;
 };
 
-export type AgentEditRequestInput<TRuntime> = {
-  projectId: string;
-  runtime: TRuntime;
-  userPrompt: string;
-  runtimeProfileId?: string | null;
-};
+export type AgentEditRequestInput<TRuntime> = AgentEditRequestInputBase<TRuntime>;
 
-export interface ArtifactRuntimeAdapter<TRuntime> {
-  type: ArtifactType;
+export interface ArtifactRuntimeAdapter<TRuntime>
+  extends ArtifactRuntimeAdapterBase<
+    ArtifactType,
+    TRuntime,
+    ArtifactSelection,
+    AgentArtifactContext,
+    AiEditRequest,
+    ArtifactRuntimeParseInput,
+    AgentEditRequestInput<TRuntime>
+  > {
   parse(input: ArtifactRuntimeParseInput): TRuntime;
   serialize(runtime: TRuntime): string;
-  getSelection(runtime: TRuntime): ArtifactSelection | null;
-  getAgentContext(projectId: string, runtime: TRuntime): AgentArtifactContext;
-  createAiEditRequest(input: AgentEditRequestInput<TRuntime>): AiEditRequest;
 }

@@ -1,0 +1,309 @@
+import { HomePage } from "./HomePage";
+import { DocxDocumentScreen, MarkdownDocumentScreen } from "./DocumentFormatScreens";
+import { DocumentLoadingScreen, HtmlEditorScreen } from "./HtmlEditorScreen";
+import { markdownParagraphCount, markdownWordCount } from "./documentWorkbenchContent";
+import { indentBlock, outdentBlock, setElementStyle, toggleChecklist } from "../artifact/runtime/operations";
+import type { useRuntimeWorkbenchModel } from "./useRuntimeWorkbenchModel";
+
+export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntimeWorkbenchModel> }) {
+  const {
+    activeDirty,
+    activeSelectionText,
+    agentBusy,
+    agentConversation,
+    applyAlignment,
+    applyBackColor,
+    applyFontFamily,
+    applyFontSize,
+    applyForeColor,
+    applyFormat,
+    applyHeading,
+    applyLink,
+    applyList,
+    applyOperationPanel,
+    applyRemoveLink,
+    applyToolbarMoreAction,
+    attributeDraft,
+    cancelAgentRun,
+    clearHistory,
+    currentDocumentType,
+    currentProjectId,
+    docxError,
+    docxLoading,
+    docxRuntime,
+    downloadOfficeCli,
+    editorOpen,
+    editorStats,
+    error,
+    filteredTemplates,
+    frameRevision,
+    frameSrcDoc,
+    handleFrameLoad,
+    handleImageFileInputChange,
+    historyProjects,
+    homeAttachments,
+    homePanel,
+    htmlEditorController,
+    htmlToolbarActive,
+    iframeRef,
+    imageFileInputRef,
+    imageDraft,
+    linkDraft,
+    linkEditorOpen,
+    loadBlankDocument,
+    loadFixture,
+    loadPromptDocument,
+    loadTemplate,
+    loading,
+    localAgentProviders,
+    markdownRuntime,
+    markdownSaveState,
+    officeCliInstalling,
+    officeCliStatus,
+    openHistoryProject,
+    openLinkEditor,
+    operationDraft,
+    operationIsHtml,
+    operationPanelMode,
+    operationPosition,
+    operationWrapperTag,
+    outputType,
+    prompt,
+    redoMarkdown,
+    requestHomeRoute,
+    requestImageFileSelection,
+    resetFrameFromRuntime,
+    runtime,
+    runtimeProfiles,
+    saveState,
+    selectedRuntimeProfileId,
+    selectedTemplateCategory,
+    sendAgentPrompt,
+    setAttributeDraft,
+    setEditorStats,
+    setHomePanel,
+    setImageDraft,
+    setLinkDraft,
+    setLinkEditorOpen,
+    setMarkdownTableCellCommitter,
+    setMarkdownTableCellEditPending,
+    setOperationDraft,
+    setOperationIsHtml,
+    setOperationPanelMode,
+    setOperationPosition,
+    setOperationWrapperTag,
+    setOutputType,
+    setPrompt,
+    setSelectedRuntimeProfileId,
+    setSelectedTemplateCategory,
+    setStyleDraft,
+    setTableDraft,
+    styleDraft,
+    tableDraft,
+    templateCategories,
+    templateCounts,
+    toolbarState,
+    undoMarkdown,
+    updateDocxSelection,
+    updateMarkdownContent,
+    updateMarkdownSelection,
+  } = props.model;
+  return (
+    <main className="h-screen overflow-hidden bg-[#1f1f1f] font-sans text-white">
+      <input
+        ref={imageFileInputRef}
+        className="hidden"
+        type="file"
+        accept="image/*"
+        onChange={(event) => void handleImageFileInputChange(event)}
+      />
+      {!editorOpen ? (
+        <HomePage
+          attachments={homeAttachments.attachments}
+          categories={templateCategories}
+          activePanel={homePanel}
+          historyProjects={historyProjects}
+          localAgentProviders={localAgentProviders}
+          officeCliInstalling={officeCliInstalling}
+          officeCliStatus={officeCliStatus}
+          outputType={outputType}
+          selectedCategory={selectedTemplateCategory}
+          selectedRuntimeProfileId={selectedRuntimeProfileId}
+          runtimeProfiles={runtimeProfiles}
+          templateCounts={templateCounts}
+          templates={filteredTemplates}
+          error={error}
+          loading={loading}
+          prompt={prompt}
+          onActivePanelChange={setHomePanel}
+          onAddFiles={homeAttachments.addFiles}
+          onPromptChange={setPrompt}
+          onCategoryChange={setSelectedTemplateCategory}
+          onCreateBlank={loadBlankDocument}
+          onCreateFromPrompt={loadPromptDocument}
+          onClearHistory={clearHistory}
+          onOpenHistoryProject={openHistoryProject}
+          onInstallOfficeCli={downloadOfficeCli}
+          onOutputTypeChange={setOutputType}
+          onRemoveAttachment={homeAttachments.removeAttachment}
+          onRuntimeProfileChange={setSelectedRuntimeProfileId}
+          onSelectTemplate={loadTemplate}
+        />
+      ) : currentDocumentType === "markdown" && markdownRuntime ? (
+        <MarkdownDocumentScreen
+          activeSelectionText={activeSelectionText}
+          agentConversationError={agentConversation.error}
+          agentConversationItems={agentConversation.items}
+          agentConversationLoading={agentConversation.loading}
+          agentSending={agentBusy}
+          dirty={activeDirty}
+          error={error}
+          localAgentProviders={localAgentProviders}
+          loading={loading}
+          runtime={markdownRuntime}
+          runtimeProfiles={runtimeProfiles}
+          saveState={activeDirty && markdownSaveState === "saved" ? "saving" : markdownSaveState}
+          selectedRuntimeProfileId={selectedRuntimeProfileId}
+          onBackHome={requestHomeRoute}
+          onCancelAgentRun={cancelAgentRun}
+          onChange={(content, selection) => {
+            updateMarkdownContent(content, selection);
+            setEditorStats({ characterCount: content.length, wordCount: markdownWordCount(content), paragraphCount: markdownParagraphCount(content), elementCount: 0 });
+          }}
+          onPendingTableCellEditChange={setMarkdownTableCellEditPending}
+          onRedo={redoMarkdown}
+          onRuntimeProfileChange={setSelectedRuntimeProfileId}
+          onSelectionChange={updateMarkdownSelection}
+          onSendAgentPrompt={sendAgentPrompt}
+          onTableCellCommitterChange={setMarkdownTableCellCommitter}
+          onUndo={undoMarkdown}
+        />
+      ) : currentDocumentType === "docx" && docxRuntime ? (
+        <DocxDocumentScreen
+          activeSelectionText={activeSelectionText}
+          agentConversationError={agentConversation.error}
+          agentConversationItems={agentConversation.items}
+          agentConversationLoading={agentConversation.loading}
+          agentSending={agentBusy}
+          dirty={activeDirty}
+          error={error || docxError}
+          localAgentProviders={localAgentProviders}
+          loading={loading || docxLoading}
+          projectId={currentProjectId}
+          runtime={docxRuntime}
+          runtimeProfiles={runtimeProfiles}
+          selectedRuntimeProfileId={selectedRuntimeProfileId}
+          onBackHome={requestHomeRoute}
+          onCancelAgentRun={cancelAgentRun}
+          onRuntimeProfileChange={setSelectedRuntimeProfileId}
+          onSelectionChange={updateDocxSelection}
+          onSendAgentPrompt={sendAgentPrompt}
+        />
+      ) : !currentDocumentType ? (
+        <DocumentLoadingScreen error={error} loading={loading} />
+      ) : currentDocumentType === "html" && runtime ? (
+        <HtmlEditorScreen
+          activeSelectionText={activeSelectionText}
+          dirty={activeDirty}
+          error={error}
+          frameRevision={frameRevision}
+          frameSrcDoc={frameSrcDoc}
+          iframeRef={iframeRef}
+          loading={loading}
+          agentConversationItems={agentConversation.items}
+          agentConversationLoading={agentConversation.loading}
+          agentConversationError={agentConversation.error}
+          agentSending={agentBusy}
+          localAgentProviders={localAgentProviders}
+          runtimeProfiles={runtimeProfiles}
+          selectedRuntimeProfileId={selectedRuntimeProfileId}
+          editorStats={editorStats}
+          runtime={runtime}
+          saveState={saveState}
+          toolbarDisabled={!htmlToolbarActive}
+          toolbarState={toolbarState}
+          linkDraft={linkDraft}
+          linkEditorOpen={linkEditorOpen}
+          operationDraft={operationDraft}
+          operationIsHtml={operationIsHtml}
+          operationPanelMode={operationPanelMode}
+          operationPosition={operationPosition}
+          operationWrapperTag={operationWrapperTag}
+          attributeDraft={attributeDraft}
+          imageDraft={imageDraft}
+          tableDraft={tableDraft}
+          styleDraft={styleDraft}
+          onBackHome={requestHomeRoute}
+          onApplyLink={applyLink}
+          onCloseLinkEditor={() => setLinkEditorOpen(false)}
+          onCreateLink={openLinkEditor}
+          onLinkDraftChange={setLinkDraft}
+          onApplyOperation={applyOperationPanel}
+          onAttributeDraftChange={setAttributeDraft}
+          onCloseOperation={() => setOperationPanelMode(null)}
+          onOperationDraftChange={setOperationDraft}
+          onOperationHtmlChange={setOperationIsHtml}
+          onImageDraftChange={setImageDraft}
+          onPickImage={requestImageFileSelection}
+          onTableDraftChange={setTableDraft}
+          onStyleDraftChange={setStyleDraft}
+          onBackColor={applyBackColor}
+          onForeColor={applyForeColor}
+          onLineHeight={(lineHeight) => htmlEditorController.executeOperation(runtime, {
+            operationType: "setLineHeight",
+            description: `Set line height ${lineHeight || "normal"}`,
+            mutate: (doc, target) => setElementStyle(doc, target, { lineHeight }),
+          })}
+          onLetterSpacing={(letterSpacing) => htmlEditorController.executeOperation(runtime, {
+            operationType: "setLetterSpacing",
+            description: `Set letter spacing ${letterSpacing || "normal"}`,
+            mutate: (doc, target) => setElementStyle(doc, target, { letterSpacing }),
+          })}
+          onLayoutChange={(attributes) => htmlEditorController.executeOperation(runtime, {
+            operationType: "setLayout",
+            description: "Set layout",
+            mutate: (doc, target) => setElementStyle(doc, target, attributes),
+          })}
+          onOperationPositionChange={setOperationPosition}
+          onOperationWrapperTagChange={setOperationWrapperTag}
+          onRemoveLink={applyRemoveLink}
+          onAlignment={applyAlignment}
+          onFontFamily={applyFontFamily}
+          onFontSize={applyFontSize}
+          onFormat={applyFormat}
+          onHeading={applyHeading}
+          onIndent={() => htmlEditorController.executeOperation(runtime, {
+            operationType: "indent",
+            description: "Indent block",
+            mutate: (doc, target) => indentBlock(doc, target),
+          })}
+          onChecklist={() => htmlEditorController.executeOperation(runtime, {
+            operationType: "toggleChecklist",
+            description: "Toggle checklist",
+            mutate: (doc, target) => toggleChecklist(doc, target),
+          })}
+          onList={applyList}
+          onLoadFixture={() => void loadFixture()}
+          onMoreAction={applyToolbarMoreAction}
+          onMutation={(operationType, description) => htmlEditorController.syncMutation(operationType, description)}
+          onOutdent={() => htmlEditorController.executeOperation(runtime, {
+            operationType: "outdent",
+            description: "Outdent block",
+            mutate: (doc, target) => outdentBlock(doc, target),
+          })}
+          onSendAgentPrompt={sendAgentPrompt}
+          onRuntimeProfileChange={setSelectedRuntimeProfileId}
+          onCancelAgentRun={cancelAgentRun}
+          onRedo={() => htmlEditorController.applyHistoryOffset(runtime, 1)}
+          onResetFrame={resetFrameFromRuntime}
+          onSelection={() => htmlEditorController.syncSelection()}
+          onToolbarInteractionStart={() => htmlEditorController.preserveSelection(runtime)}
+          onUndo={() => htmlEditorController.applyHistoryOffset(runtime, -1)}
+          onFrameLoad={handleFrameLoad}
+        />
+      ) : (
+        <DocumentLoadingScreen error={error} loading={loading} />
+      )}
+    </main>
+  );
+}

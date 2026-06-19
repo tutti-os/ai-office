@@ -31,6 +31,7 @@ export type ArtifactExportItem = {
 export function ArtifactWorkspaceHeader(props: {
   title: string;
   saveState: ArtifactSaveState;
+  stats?: string[];
   exportItems: ArtifactExportItem[];
 }) {
   const [open, setOpen] = useState(false);
@@ -57,6 +58,16 @@ export function ArtifactWorkspaceHeader(props: {
       <div className="flex min-w-0 items-center gap-2">
         <div className="min-w-0 truncate text-[13px] font-semibold text-white">{props.title}</div>
         <SaveStateBadge state={props.saveState} />
+        {props.stats?.length ? (
+          <div className="hidden min-w-0 items-center gap-1.5 text-[11px] font-semibold text-white/32 md:flex">
+            {props.stats.map((stat, index) => (
+              <span className="shrink-0" key={stat}>
+                {index > 0 ? <span className="mr-1.5 text-white/18">/</span> : null}
+                {stat}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
       <div ref={rootRef} className="relative shrink-0">
         <button

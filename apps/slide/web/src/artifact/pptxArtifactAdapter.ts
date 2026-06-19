@@ -1,4 +1,5 @@
 import type { AiEditRequest, PptxManifest, SlideArtifactSelection } from "@ai-slide/shared";
+import type { AgentEditRequestInputBase, ArtifactRuntimeAdapterBase } from "@ai-app/shared/artifact-runtime";
 import type { OoxmlPptxPreview } from "@tutti-os/office-preview/pptx";
 
 export type PptxSelection = {
@@ -20,15 +21,22 @@ export type PptxRuntimeParseInput = {
   manifest: PptxManifest;
 };
 
-export type PptxAgentEditRequestInput = {
-  projectId: string;
-  runtime: PptxRuntimeState;
-  userPrompt: string;
-  runtimeProfileId?: string | null;
-};
+export type PptxAgentEditRequestInput = AgentEditRequestInputBase<PptxRuntimeState>;
 
-export class PptxArtifactRuntimeAdapter {
+export class PptxArtifactRuntimeAdapter
+  implements
+    ArtifactRuntimeAdapterBase<
+      "pptx",
+      PptxRuntimeState,
+      SlideArtifactSelection,
+      { projectId: string; artifactId: string; type: "pptx"; fileRef: string; selection: SlideArtifactSelection | null; revision: number },
+      AiEditRequest,
+      PptxRuntimeParseInput,
+      PptxAgentEditRequestInput
+    >
+{
   readonly type = "pptx" as const;
+  readonly capabilities = { officePreview: true };
 
   parse(input: PptxRuntimeParseInput): PptxRuntimeState {
     return {
@@ -56,6 +64,17 @@ export class PptxArtifactRuntimeAdapter {
       text: runtime.selection.selectedText,
       html: "",
       path: runtime.selection.selectedText ? "pptx:text-selection" : "",
+    };
+  }
+
+  getAgentContext(projectId: string, runtime: PptxRuntimeState) {
+    return {
+      projectId,
+      artifactId: projectId,
+      type: this.type,
+      fileRef: runtime.manifest.fileName,
+      selection: this.getSelection(runtime),
+      revision: runtime.revision,
     };
   }
 

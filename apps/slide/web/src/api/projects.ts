@@ -2,6 +2,7 @@ import type {
   CreateProjectRequest,
   AiEditRequest,
   AiEditResponse,
+  AppSnapshot,
   DeckSlideHtmlResponse,
   LocalAgentProviderStatusResponse,
   OfficeCliStatusResponse,
@@ -14,6 +15,11 @@ import type {
   UpdateProjectRequest,
   UpdateDeckSlideHtmlRequest,
 } from "@ai-slide/shared";
+import { requestArrayBuffer, requestJson } from "@ai-app/shared/api-client";
+
+export async function fetchBootstrapSnapshot() {
+  return requestJson<AppSnapshot>("/api/bootstrap");
+}
 
 export async function createProject(input: CreateProjectRequest) {
   return requestJson<ProjectResponse>("/api/projects", {
@@ -56,12 +62,7 @@ export async function updateProject(projectId: string, input: UpdateProjectReque
 }
 
 export async function getProjectPptxFile(projectId: string) {
-  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/files/slides.pptx`);
-  if (!response.ok) {
-    const data = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(data?.error ?? `Request failed: ${response.status}`);
-  }
-  return response.arrayBuffer();
+  return requestArrayBuffer(`/api/projects/${encodeURIComponent(projectId)}/files/slides.pptx`);
 }
 
 export async function listProjectRuns(projectId: string) {
@@ -100,20 +101,4 @@ export async function clearProjectHistory(): Promise<SlideProject[]> {
     method: "DELETE",
   });
   return response.projects;
-}
-
-async function requestJson<T>(path: string, init: RequestInit = {}) {
-  const headers = new Headers(init.headers);
-  if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
-  const response = await fetch(path, {
-    ...init,
-    headers,
-  });
-  const data = (await response.json().catch(() => null)) as T | { error?: string } | null;
-  if (!response.ok) {
-    const message = data && typeof data === "object" && "error" in data ? data.error : `Request failed: ${response.status}`;
-    throw new Error(message);
-  }
-  if (!data) throw new Error("Response is empty");
-  return data as T;
 }

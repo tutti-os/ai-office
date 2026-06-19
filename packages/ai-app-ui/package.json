@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./editor-frame": "./src/editor-frame/index.tsx",
+    "./office-preview-runtime": "./src/office-preview-runtime/index.ts",
     "./prompt-composer": "./src/prompt-composer/index.tsx",
     "./rich-text": "./src/rich-text/index.ts",
     "./toolbar": "./src/toolbar/index.tsx"

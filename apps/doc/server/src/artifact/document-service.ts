@@ -10,27 +10,36 @@ import {
   type CreateProjectRequest,
   type DocumentTemplate,
   type DocumentProject,
+  type DocumentRun,
+  type DocumentRunEvent,
   parseDocxDocumentManifest,
   type RuntimeProfile,
   serializeDocxDocumentManifest,
   type UpdateProjectRequest,
 } from "@ai-doc/shared";
+import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { DocumentRepository } from "./document-repository.js";
 import { documentTemplates, getTemplate } from "./templates.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
-import { RuntimeProviderUnsupportedError, type RuntimeStreamEvent } from "../runtimes/runtime-provider.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
 import { EventHub } from "../ws/event-hub.js";
 
 export class DocumentService {
   private readonly runtimes = createRuntimeProviderRegistry();
   private readonly cancelledRunIds = new Set<string>();
+  private readonly runExecutor: RuntimeRunExecutor<DocumentRun, DocumentRunEvent, DocumentProject, AiEditRequest>;
 
   constructor(
     private readonly repo: DocumentRepository,
     private readonly events: EventHub,
-  ) {}
+  ) {
+    this.runExecutor = new RuntimeRunExecutor({
+      repo,
+      events,
+      runtimes: this.runtimes,
+    });
+  }
 
   bootstrap() {
     this.repo.ensureSeedData();
@@ -173,179 +182,89 @@ export class DocumentService {
     request: AiEditRequest,
     runId: string,
   ) {
-    const run = this.repo.getRun(runId);
-    if (!run) return;
-    const provider = this.runtimes.getProvider(runtimeProfile);
-    let sortOrder = 0;
-    let generatedText = "";
     let refreshedFromWorkspace = false;
 
-    const createRunEvent = (
-      type: RuntimeStreamEvent["type"] extends infer T ? Extract<T, string> : never,
-      input: { content?: string; status?: "pending" | "streaming" | "success" | "error"; metadata?: Record<string, unknown> | null } = {},
-    ) => {
-      const eventType =
-        type === "text_delta"
-          ? "text_delta"
-          : type === "thinking_delta"
-          ? "thinking_delta"
-          : type === "tool_call"
-            ? "tool_call"
-            : type === "tool_result"
-              ? "tool_result"
-              : type;
-      const event = this.repo.createRunEvent({
-        runId,
-        projectId: initialProject.id,
-        type: eventType as any,
-        content: input.content,
-        status: input.status,
-        metadata: input.metadata,
-        sortOrder: sortOrder++,
-      });
-      this.events.emit({ type: "run.event.created", projectId: initialProject.id, runId, payload: { event } });
-      return event;
-    };
+    await this.runExecutor.execute({
+      project: initialProject,
+      request,
+      runtimeProfile,
+      runId,
+      isCancelled: () => this.cancelledRunIds.has(runId),
+      finalizeCancellation: (id, reason) => this.finalizeCancellation(id, reason),
+      onWorkspaceEvent: async () => {
+        refreshedFromWorkspace = Boolean(await this.refreshProjectFromWorkspace(initialProject.id, runId)) || refreshedFromWorkspace;
+      },
+      complete: async ({ generatedText }) => {
+        refreshedFromWorkspace = Boolean(await this.refreshProjectFromWorkspace(initialProject.id, runId)) || refreshedFromWorkspace;
+        await this.completeRun(initialProject, runtimeProfile, runId, generatedText, refreshedFromWorkspace);
+      },
+      onFinally: () => {
+        this.cancelledRunIds.delete(runId);
+      },
+    });
+  }
 
-    try {
-      this.repo.updateRun(runId, { status: "running" });
-      this.events.emit({
-        type: "run.started",
-        projectId: initialProject.id,
-        runId,
-        payload: { run: this.repo.getRun(runId) },
-      });
-
-      const readiness = await provider.detect(runtimeProfile);
-      if (!readiness.available) throw new RuntimeProviderUnsupportedError(readiness.reason ?? "Runtime provider is unavailable");
-
-      for await (const rawEvent of provider.streamEdit({
-        run,
-        project: initialProject,
-        runtimeProfile,
-        request,
-      })) {
-        if (this.cancelledRunIds.has(runId)) {
-          await this.finalizeCancellation(runId, "Cancelled by user");
-          return;
-        }
-        const event = typeof rawEvent === "string" ? ({ type: "text_delta", text: rawEvent } as const) : rawEvent;
-        if (event.type === "text_delta") {
-          generatedText += event.text;
-          createRunEvent(event.type, { content: event.text, status: "streaming" });
-          continue;
-        }
-        if (event.type === "thinking_delta") {
-          createRunEvent(event.type, { content: event.text, status: "streaming" });
-        } else if (event.type === "tool_call") {
-          createRunEvent(event.type, {
-            content: `Calling ${event.name}`,
-            status: "streaming",
-            metadata: { toolCallId: event.id, toolName: event.name, input: event.input ?? null },
-          });
-        } else if (event.type === "tool_result") {
-          createRunEvent(event.type, {
-            content: event.error ?? event.summary ?? previewJson(event.output) ?? "Tool completed",
-            status: event.isError || event.status === "failed" ? "error" : "success",
-            metadata: { toolCallId: event.id, toolName: event.name ?? null, output: event.output ?? null },
-          });
-          refreshedFromWorkspace = Boolean(await this.refreshProjectFromWorkspace(initialProject.id, runId)) || refreshedFromWorkspace;
-        } else if (event.type === "file_write") {
-          createRunEvent(event.type, { content: `Wrote file: ${event.path}`, metadata: { path: event.path } });
-          refreshedFromWorkspace = Boolean(await this.refreshProjectFromWorkspace(initialProject.id, runId)) || refreshedFromWorkspace;
-        } else if (event.type === "status") {
-          createRunEvent(event.type, { content: event.message ?? event.status ?? "", metadata: { status: event.status ?? null } });
-        } else if (event.type === "stderr" && event.text.trim()) {
-          createRunEvent(event.type, { content: event.text.trim(), status: "error" });
-        }
-      }
-
-      if (this.cancelledRunIds.has(runId)) {
-        await this.finalizeCancellation(runId, "Cancelled by user");
-        return;
-      }
-
-      refreshedFromWorkspace = Boolean(await this.refreshProjectFromWorkspace(initialProject.id, runId)) || refreshedFromWorkspace;
-
-      if (initialProject.type === "docx") {
-        const project = this.repo.getProject(initialProject.id);
-        const finalRun = this.repo.updateRun(runId, {
-          status: "completed",
-          resultPreview: previewText(generatedText || docxRunPreview(project?.content ?? "")),
-        });
-        this.events.emit({ type: "run.completed", projectId: initialProject.id, runId, payload: { run: finalRun } });
-        return;
-      }
-
-      if (runtimeProfile.kind === "local-agent") {
-        const finalRun = this.repo.updateRun(runId, {
-          status: "completed",
-          resultPreview:
-            previewText(generatedText) ||
-            (refreshedFromWorkspace ? "Workspace file changes were applied." : "Run completed. No workspace file changes were detected."),
-        });
-        this.events.emit({ type: "run.completed", projectId: initialProject.id, runId, payload: { run: finalRun } });
-        return;
-      }
-
-      if (initialProject.type === "markdown") {
-        const finalMarkdown = extractMarkdownDocument(generatedText);
-        let project = this.repo.getProject(initialProject.id);
-        if (!refreshedFromWorkspace && finalMarkdown) {
-          project = this.repo.updateProject(initialProject.id, {
-            content: finalMarkdown,
-            type: "markdown",
-            updatedBy: "ai",
-          });
-          if (project) this.events.emit({ type: "project.updated", projectId: project.id, runId, payload: { project } });
-        } else if (!project || project.updatedBy !== "ai") {
-          throw new Error("AI did not return a complete Markdown doc.");
-        }
-        const finalRun = this.repo.updateRun(runId, {
-          status: "completed",
-          resultPreview: previewText(finalMarkdown || project?.content || ""),
-        });
-        this.events.emit({ type: "run.completed", projectId: initialProject.id, runId, payload: { run: finalRun } });
-        return;
-      }
-
-      const finalHtml = extractHtmlDocument(generatedText);
-      let project = this.repo.getProject(initialProject.id);
-      if (!refreshedFromWorkspace && finalHtml) {
-        project = this.repo.updateProject(initialProject.id, {
-          content: finalHtml,
-          updatedBy: "ai",
-        });
-        if (project) this.events.emit({ type: "project.updated", projectId: project.id, runId, payload: { project } });
-      } else if (!project || project.updatedBy !== "ai") {
-        throw new Error("AI did not return a complete HTML doc.");
-      }
-
-      const finalRun = this.repo.updateRun(runId, {
-        status: "completed",
-        resultPreview: previewText(finalHtml || project?.content || ""),
-      });
-      this.events.emit({ type: "run.completed", projectId: initialProject.id, runId, payload: { run: finalRun } });
-    } catch (error) {
-      if (this.cancelledRunIds.has(runId)) {
-        await this.finalizeCancellation(runId, "Cancelled by user");
-        return;
-      }
-      const message = error instanceof Error ? error.message : "AI edit failed";
-      const event = this.repo.createRunEvent({
-        runId,
-        projectId: initialProject.id,
-        type: "error",
-        content: message,
-        status: "error",
-        sortOrder: sortOrder++,
-      });
-      this.events.emit({ type: "run.event.created", projectId: initialProject.id, runId, payload: { event } });
-      const finalRun = this.repo.updateRun(runId, { status: "failed", error: message });
-      this.events.emit({ type: "run.failed", projectId: initialProject.id, runId, payload: { run: finalRun } });
-    } finally {
-      this.cancelledRunIds.delete(runId);
+  private async completeRun(
+    initialProject: DocumentProject,
+    runtimeProfile: RuntimeProfile,
+    runId: string,
+    generatedText: string,
+    refreshedFromWorkspace: boolean,
+  ) {
+    if (initialProject.type === "docx") {
+      const project = this.repo.getProject(initialProject.id);
+      return this.emitRunCompleted(initialProject.id, runId, previewText(generatedText || docxRunPreview(project?.content ?? "")));
     }
+
+    if (runtimeProfile.kind === "local-agent") {
+      const preview =
+        previewText(generatedText) ||
+        (refreshedFromWorkspace ? "Workspace file changes were applied." : "Run completed. No workspace file changes were detected.");
+      return this.emitRunCompleted(initialProject.id, runId, preview);
+    }
+
+    if (initialProject.type === "markdown") {
+      return this.completeMarkdownRun(initialProject, runId, generatedText, refreshedFromWorkspace);
+    }
+
+    return this.completeHtmlRun(initialProject, runId, generatedText, refreshedFromWorkspace);
+  }
+
+  private completeMarkdownRun(initialProject: DocumentProject, runId: string, generatedText: string, refreshedFromWorkspace: boolean) {
+    const finalMarkdown = extractMarkdownDocument(generatedText);
+    let project = this.repo.getProject(initialProject.id);
+    if (!refreshedFromWorkspace && finalMarkdown) {
+      project = this.repo.updateProject(initialProject.id, {
+        content: finalMarkdown,
+        type: "markdown",
+        updatedBy: "ai",
+      });
+      if (project) this.events.emit({ type: "project.updated", projectId: project.id, runId, payload: { project } });
+    } else if (!project || project.updatedBy !== "ai") {
+      throw new Error("AI did not return a complete Markdown doc.");
+    }
+    return this.emitRunCompleted(initialProject.id, runId, previewText(finalMarkdown || project?.content || ""));
+  }
+
+  private completeHtmlRun(initialProject: DocumentProject, runId: string, generatedText: string, refreshedFromWorkspace: boolean) {
+    const finalHtml = extractHtmlDocument(generatedText);
+    let project = this.repo.getProject(initialProject.id);
+    if (!refreshedFromWorkspace && finalHtml) {
+      project = this.repo.updateProject(initialProject.id, {
+        content: finalHtml,
+        updatedBy: "ai",
+      });
+      if (project) this.events.emit({ type: "project.updated", projectId: project.id, runId, payload: { project } });
+    } else if (!project || project.updatedBy !== "ai") {
+      throw new Error("AI did not return a complete HTML doc.");
+    }
+    return this.emitRunCompleted(initialProject.id, runId, previewText(finalHtml || project?.content || ""));
+  }
+
+  private emitRunCompleted(projectId: string, runId: string, resultPreview: string) {
+    const finalRun = this.repo.updateRun(runId, { status: "completed", resultPreview });
+    this.events.emit({ type: "run.completed", projectId, runId, payload: { run: finalRun } });
+    return finalRun;
   }
 
   private async finalizeCancellation(runId: string, reason: string) {
@@ -669,16 +588,6 @@ function renderCreativeTemplate(template: DocumentTemplate) {
     <ul><li>Confirm owner and deadline.</li><li>Draft assets and review materials.</li><li>Prepare final handoff.</li></ul>
   </section>`,
   );
-}
-
-function previewJson(value: unknown) {
-  if (value === undefined || value === null) return "";
-  if (typeof value === "string") return previewText(value);
-  try {
-    return previewText(JSON.stringify(value, null, 2));
-  } catch {
-    return previewText(String(value));
-  }
 }
 
 function previewText(value: string) {

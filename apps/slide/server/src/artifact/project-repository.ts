@@ -22,7 +22,8 @@ import {
   type SlideProject,
   type UpdateProjectRequest,
 } from "@ai-slide/shared";
-import { getDb, json, parseJson, rowOrNull, rows } from "../db/database.js";
+import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteRunStore } from "@ai-app/shared/project-store";
+import { getDb, rowOrNull, rows } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
 
 const templateRoots = templateSourceRoots();
@@ -36,17 +37,32 @@ type TemplateDeckSource = {
 };
 
 export class ProjectRepository {
+  private readonly runs = new SqliteRunStore<SlideRun, SlideRunEvent>(getDb, {
+    runsTable: "slide_runs",
+    eventsTable: "slide_run_events",
+    createRunId: randomUUID,
+    createEventId: randomUUID,
+  });
+  private readonly runtimeProfiles = new RuntimeProfileStore(getDb, {
+    defaultProfiles: defaultRuntimeProfiles({
+      demoModel: "slide-demo",
+      demoDisplayName: "Demo slide editor",
+    }),
+  });
+
+  ensureSeedData() {
+    this.runtimeProfiles.ensureSeedData();
+  }
+
   snapshot() {
+    this.ensureSeedData();
     const db = getDb();
     return {
       projects: rows<ProjectRow>(db.prepare(`SELECT * FROM projects ORDER BY updated_at DESC`).all()).map(rowToProject),
       artifacts: rows<ArtifactRow>(db.prepare(`SELECT * FROM artifacts ORDER BY updated_at DESC`).all()).map(rowToArtifact),
-      activeRuns: rows<SlideRunRow>(
-        db.prepare(`SELECT * FROM slide_runs WHERE status IN ('accepted', 'running') ORDER BY created_at ASC`).all(),
-      ).map(rowToRun),
-      runEvents: rows<SlideRunEventRow>(
-        db.prepare(`SELECT * FROM slide_run_events ORDER BY created_at ASC LIMIT 300`).all(),
-      ).map(rowToRunEvent),
+      runtimeProfiles: this.runtimeProfiles.list(),
+      activeRuns: this.runs.listActiveRuns(),
+      runEvents: this.runs.listRecentRunEvents(),
       lastSeq: (db.prepare(`SELECT COALESCE(MAX(seq), 0) AS seq FROM stream_events`).get() as { seq: number }).seq,
     };
   }
@@ -56,13 +72,7 @@ export class ProjectRepository {
   }
 
   interruptActiveRuns(reason: string) {
-    const activeRuns = rows<SlideRunRow>(
-      getDb().prepare(`SELECT * FROM slide_runs WHERE status IN ('accepted', 'running') ORDER BY created_at ASC`).all(),
-    ).map(rowToRun);
-    for (const run of activeRuns) {
-      this.updateRun(run.id, { status: "failed", error: reason });
-    }
-    return activeRuns;
+    return this.runs.interruptActiveRuns(reason);
   }
 
   getProject(projectId: string) {
@@ -79,6 +89,16 @@ export class ProjectRepository {
     const project = this.getProject(projectId);
     if (!project) return null;
     return this.getArtifact(project.activeArtifactId);
+  }
+
+  getRuntimeProfile(profileId: string | null | undefined) {
+    this.ensureSeedData();
+    return this.runtimeProfiles.get(profileId);
+  }
+
+  getRuntimeProfileForRun(run: Pick<SlideRun, "runtime" | "provider" | "model">) {
+    this.ensureSeedData();
+    return this.runtimeProfiles.getForRun(run);
   }
 
   createProject(input: CreateProjectRequest) {
@@ -170,60 +190,19 @@ export class ProjectRepository {
     selectedText: string;
     selectedHtml: string;
   }) {
-    const id = randomUUID();
-    const now = new Date().toISOString();
-    getDb()
-      .prepare(
-        `INSERT INTO slide_runs
-         (id, project_id, runtime, provider, model, status, mode, instruction, selection_type, selection_path, selected_text, selected_html, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'accepted', ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        id,
-        input.projectId,
-        input.runtime,
-        input.provider,
-        input.model,
-        input.mode,
-        input.instruction,
-        input.selectionType,
-        input.selectionPath,
-        input.selectedText,
-        input.selectedHtml,
-        now,
-        now,
-      );
-    const run = this.getRun(id);
-    if (!run) throw new Error("Unable to create run");
-    return run;
+    return this.runs.createRun(input);
   }
 
   getRun(runId: string) {
-    const row = rowOrNull<SlideRunRow>(getDb().prepare(`SELECT * FROM slide_runs WHERE id = ?`).get(runId));
-    return row ? rowToRun(row) : null;
+    return this.runs.getRun(runId);
   }
 
   listProjectRuns(projectId: string) {
-    return rows<SlideRunRow>(
-      getDb()
-        .prepare(`SELECT * FROM slide_runs WHERE project_id = ? ORDER BY created_at ASC, id ASC`)
-        .all(projectId),
-    ).map(rowToRun);
+    return this.runs.listProjectRuns(projectId);
   }
 
   updateRun(runId: string, input: Partial<Pick<SlideRun, "status" | "error" | "resultPreview">>) {
-    const current = this.getRun(runId);
-    if (!current) return null;
-    const now = new Date().toISOString();
-    const completedAt = input.status && ["completed", "failed", "cancelled"].includes(input.status) ? now : current.completedAt;
-    getDb()
-      .prepare(
-        `UPDATE slide_runs
-         SET status = ?, error = ?, result_preview = ?, updated_at = ?, completed_at = ?
-         WHERE id = ?`,
-      )
-      .run(input.status ?? current.status, input.error ?? current.error, input.resultPreview ?? current.resultPreview, now, completedAt, runId);
-    return this.getRun(runId);
+    return this.runs.updateRun(runId, input);
   }
 
   createRunEvent(input: {
@@ -235,35 +214,11 @@ export class ProjectRepository {
     metadata?: Record<string, unknown> | null;
     sortOrder: number;
   }) {
-    const id = randomUUID();
-    const now = new Date().toISOString();
-    getDb()
-      .prepare(
-        `INSERT INTO slide_run_events (id, run_id, project_id, type, content, status, metadata, sort_order, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        id,
-        input.runId,
-        input.projectId,
-        input.type,
-        input.content ?? "",
-        input.status ?? "success",
-        input.metadata ? json(input.metadata) : null,
-        input.sortOrder,
-        now,
-      );
-    const row = rowOrNull<SlideRunEventRow>(getDb().prepare(`SELECT * FROM slide_run_events WHERE id = ?`).get(id));
-    if (!row) throw new Error("Unable to create run event");
-    return rowToRunEvent(row);
+    return this.runs.createRunEvent(input);
   }
 
   listRunEvents(runId: string) {
-    return rows<SlideRunEventRow>(
-      getDb()
-        .prepare(`SELECT * FROM slide_run_events WHERE run_id = ? ORDER BY sort_order ASC, created_at ASC`)
-        .all(runId),
-    ).map(rowToRunEvent);
+    return this.runs.listRunEvents(runId);
   }
 
   async readDeckManifest(projectId: string, artifact: SlideArtifact): Promise<DeckManifest | null> {
@@ -732,42 +687,6 @@ function resolveDeckSlidePath(projectId: string, artifact: SlideArtifact, file: 
   return join(deckRoot, normalizedFile);
 }
 
-function rowToRun(row: SlideRunRow): SlideRun {
-  return {
-    id: row.id,
-    projectId: row.project_id,
-    runtime: row.runtime,
-    provider: row.provider,
-    model: row.model,
-    status: row.status,
-    mode: row.mode,
-    instruction: row.instruction,
-    selectionType: row.selection_type,
-    selectionPath: row.selection_path,
-    selectedText: row.selected_text,
-    selectedHtml: row.selected_html,
-    resultPreview: row.result_preview,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    completedAt: row.completed_at,
-    error: row.error,
-  };
-}
-
-function rowToRunEvent(row: SlideRunEventRow): SlideRunEvent {
-  return {
-    id: row.id,
-    runId: row.run_id,
-    projectId: row.project_id,
-    type: row.type,
-    content: row.content,
-    status: row.status,
-    metadata: parseJson<Record<string, unknown> | null>(row.metadata, null),
-    sortOrder: row.sort_order,
-    createdAt: row.created_at,
-  };
-}
-
 interface ProjectRow {
   id: string;
   title: string;
@@ -789,36 +708,4 @@ interface ArtifactRow {
   updated_by: "human" | "ai" | "system";
   created_at: string;
   updated_at: string;
-}
-
-interface SlideRunRow {
-  id: string;
-  project_id: string;
-  runtime: string;
-  provider: string;
-  model: string;
-  status: SlideRun["status"];
-  mode: "rewrite" | "write";
-  instruction: string;
-  selection_type: SlideRun["selectionType"];
-  selection_path: string;
-  selected_text: string;
-  selected_html: string;
-  result_preview: string;
-  created_at: string;
-  updated_at: string;
-  completed_at: string | null;
-  error: string | null;
-}
-
-interface SlideRunEventRow {
-  id: string;
-  run_id: string;
-  project_id: string;
-  type: SlideRunEvent["type"];
-  content: string;
-  status: SlideRunEvent["status"];
-  metadata: string | null;
-  sort_order: number;
-  created_at: string;
 }

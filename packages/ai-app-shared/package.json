@@ -7,7 +7,11 @@
     "./types": "./src/types/index.ts",
     "./local-paths": "./src/local-paths/index.ts",
     "./event-hub": "./src/event-hub/index.ts",
-    "./project-store": "./src/project-store/index.ts"
+    "./project-store": "./src/project-store/index.ts",
+    "./artifact-runtime": "./src/artifact-runtime/index.ts",
+    "./server-routes": "./src/server-routes/index.ts",
+    "./toolchains/officecli": "./src/toolchains/officecli/index.ts",
+    "./api-client": "./src/api-client/index.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

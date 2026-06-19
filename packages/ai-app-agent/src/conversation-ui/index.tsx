@@ -1,18 +1,18 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   CheckCircle2,
-  ChevronDown,
   CircleDashed,
   Loader2,
   Sparkles,
   Square,
-  TerminalSquare,
   WandSparkles,
   XCircle,
 } from "lucide-react";
 import type { BaseRun, BaseRunEvent, BaseRunTimelineItem } from "@ai-app/shared/types";
 import { timelineToMessages, type AgentConversationBlock, type AgentConversationMessage } from "@ai-app/agent/conversation";
+import { MarkdownText } from "./markdown.js";
+import { ToolGroupBlock } from "./toolGroup.js";
 
 export type AgentConversationVariant = "document" | "slide";
 
@@ -90,6 +90,12 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
         <IntroCard copy={props.copy} cx={cx} />
 
         {props.error ? <div className={cx.error}>{props.error}</div> : null}
+        {props.activeSelectionText.trim() ? (
+          <div className={cx.activeSelection}>
+            <div className={cx.activeSelectionLabel}>Selected text</div>
+            <div className={cx.activeSelectionText}>{props.activeSelectionText}</div>
+          </div>
+        ) : null}
 
         <div className={cx.messages}>
           {messages.map((message) => <ConversationMessage cx={cx} key={message.id} message={message} />)}
@@ -220,312 +226,7 @@ function ConversationBlock(props: { cx: ConversationClassNames; block: AgentConv
   return <div className={props.cx.statusBlock}>{block.text}</div>;
 }
 
-function MarkdownText(props: { className: string; text: string }) {
-  return <div className={classNames(props.className, "ai-agent-markdown")}>{renderMarkdownBlocks(props.text)}</div>;
-}
-
-function renderMarkdownBlocks(text: string) {
-  const lines = text.replace(/\r\n/g, "\n").split("\n");
-  const blocks: ReactNode[] = [];
-  let index = 0;
-
-  while (index < lines.length) {
-    const line = lines[index] ?? "";
-    if (!line.trim()) {
-      index += 1;
-      continue;
-    }
-
-    if (line.startsWith("```")) {
-      const language = line.slice(3).trim();
-      const codeLines: string[] = [];
-      index += 1;
-      while (index < lines.length && !lines[index].startsWith("```")) {
-        codeLines.push(lines[index]);
-        index += 1;
-      }
-      if (lines[index]?.startsWith("```")) index += 1;
-      blocks.push(
-        <pre key={`code:${index}`}>
-          <code data-language={language || undefined}>{codeLines.join("\n")}</code>
-        </pre>,
-      );
-      continue;
-    }
-
-    const heading = line.match(/^(#{1,6})\s+(.+)$/);
-    if (heading) {
-      const level = heading[1].length;
-      blocks.push(renderMarkdownHeading(level, heading[2], `heading:${index}`));
-      index += 1;
-      continue;
-    }
-
-    if (/^\s*[-*+]\s+/.test(line)) {
-      const items: ReactNode[] = [];
-      while (index < lines.length && /^\s*[-*+]\s+/.test(lines[index])) {
-        items.push(<li key={`ul:${index}`}>{renderInlineMarkdown(lines[index].replace(/^\s*[-*+]\s+/, ""))}</li>);
-        index += 1;
-      }
-      blocks.push(<ul key={`ul:${index}`}>{items}</ul>);
-      continue;
-    }
-
-    if (/^\s*\d+\.\s+/.test(line)) {
-      const items: ReactNode[] = [];
-      while (index < lines.length && /^\s*\d+\.\s+/.test(lines[index])) {
-        items.push(<li key={`ol:${index}`}>{renderInlineMarkdown(lines[index].replace(/^\s*\d+\.\s+/, ""))}</li>);
-        index += 1;
-      }
-      blocks.push(<ol key={`ol:${index}`}>{items}</ol>);
-      continue;
-    }
-
-    if (/^>\s?/.test(line)) {
-      const quoteLines: string[] = [];
-      while (index < lines.length && /^>\s?/.test(lines[index])) {
-        quoteLines.push(lines[index].replace(/^>\s?/, ""));
-        index += 1;
-      }
-      blocks.push(<blockquote key={`quote:${index}`}>{quoteLines.map((quote, quoteIndex) => <p key={quoteIndex}>{renderInlineMarkdown(quote)}</p>)}</blockquote>);
-      continue;
-    }
-
-    if (/^\s*---+\s*$/.test(line)) {
-      blocks.push(<hr key={`hr:${index}`} />);
-      index += 1;
-      continue;
-    }
-
-    const paragraph = [line];
-    index += 1;
-    while (index < lines.length && lines[index].trim() && !isMarkdownBlockStart(lines[index])) {
-      paragraph.push(lines[index]);
-      index += 1;
-    }
-    blocks.push(<p key={`p:${index}`}>{renderInlineMarkdown(paragraph.join(" "))}</p>);
-  }
-
-  return blocks.length ? blocks : null;
-}
-
-function isMarkdownBlockStart(line: string) {
-  return (
-    line.startsWith("```") ||
-    /^(#{1,6})\s+/.test(line) ||
-    /^\s*[-*+]\s+/.test(line) ||
-    /^\s*\d+\.\s+/.test(line) ||
-    /^>\s?/.test(line) ||
-    /^\s*---+\s*$/.test(line)
-  );
-}
-
-function renderInlineMarkdown(value: string) {
-  const nodes: ReactNode[] = [];
-  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*]+\*|_[^_]+_|\[[^\]]+\]\([^)]+\))/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = pattern.exec(value))) {
-    if (match.index > lastIndex) nodes.push(value.slice(lastIndex, match.index));
-    nodes.push(renderInlineToken(match[0], nodes.length));
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < value.length) nodes.push(value.slice(lastIndex));
-  return nodes;
-}
-
-function renderMarkdownHeading(level: number, text: string, key: string) {
-  if (level === 1) return <h1 key={key}>{renderInlineMarkdown(text)}</h1>;
-  if (level === 2) return <h2 key={key}>{renderInlineMarkdown(text)}</h2>;
-  if (level === 3) return <h3 key={key}>{renderInlineMarkdown(text)}</h3>;
-  if (level === 4) return <h4 key={key}>{renderInlineMarkdown(text)}</h4>;
-  if (level === 5) return <h5 key={key}>{renderInlineMarkdown(text)}</h5>;
-  return <h6 key={key}>{renderInlineMarkdown(text)}</h6>;
-}
-
-function renderInlineToken(token: string, key: number) {
-  if (token.startsWith("`") && token.endsWith("`")) return <code key={key}>{token.slice(1, -1)}</code>;
-  if (token.startsWith("**") && token.endsWith("**")) return <strong key={key}>{token.slice(2, -2)}</strong>;
-  if (token.startsWith("__") && token.endsWith("__")) return <strong key={key}>{token.slice(2, -2)}</strong>;
-  if (token.startsWith("~~") && token.endsWith("~~")) return <s key={key}>{token.slice(2, -2)}</s>;
-  if (token.startsWith("*") && token.endsWith("*")) return <em key={key}>{token.slice(1, -1)}</em>;
-  if (token.startsWith("_") && token.endsWith("_")) return <em key={key}>{token.slice(1, -1)}</em>;
-  const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-  if (link) {
-    const href = safeMarkdownHref(link[2]);
-    return href ? (
-      <a key={key} href={href} target="_blank" rel="noreferrer">
-        {link[1]}
-      </a>
-    ) : (
-      <span key={key}>{link[1]}</span>
-    );
-  }
-  return token;
-}
-
-function safeMarkdownHref(href: string) {
-  const trimmed = href.trim();
-  if (/^(https?:|mailto:|\/|#)/i.test(trimmed)) return trimmed;
-  return "";
-}
-
-function classNames(...values: Array<string | false | null | undefined>) {
-  return values.filter(Boolean).join(" ");
-}
-
-function ToolGroupBlock(props: { cx: ConversationClassNames; block: Extract<AgentConversationBlock, { type: "tool_group" }> }) {
-  const { block, cx } = props;
-  const primaryCall = block.calls[0];
-  const title = primaryCall ? toolDisplayName(primaryCall.name) : "Tool result";
-  const summary = summarizeToolBlock(block);
-  const resultById = new Map(block.results.map((result) => [result.id, result]));
-
-  return (
-    <details className={cx.toolGroup(block.status)}>
-      <summary className={cx.toolSummary}>
-        <div className={cx.toolSummaryMain}>
-          <TerminalSquare size={13} />
-          <span>{title}</span>
-          {block.calls.length > 1 ? <span className={cx.toolCount}>{block.calls.length}</span> : null}
-        </div>
-        <div className={cx.toolSummaryMeta}>
-          {summary ? <span className={cx.toolPreview}>{summary}</span> : null}
-          <span className={cx.toolStatus(block.status)}>{toolStatusLabel(block.status)}</span>
-          <ChevronDown className={cx.toolChevron} size={13} />
-        </div>
-      </summary>
-      <div className={cx.toolRows}>
-        {block.calls.map((call) => (
-          <ToolCallRow call={call} cx={cx} key={call.id} result={resultById.get(call.id)} />
-        ))}
-        {block.calls.length === 0
-          ? block.results.map((result) => <ToolResultRow cx={cx} key={result.id} result={result} />)
-          : null}
-      </div>
-    </details>
-  );
-}
-
-function summarizeToolBlock(block: Extract<AgentConversationBlock, { type: "tool_group" }>) {
-  const failedResult = block.results.find((result) => result.status === "error" && result.content.trim());
-  if (failedResult) return truncateMiddle(failedResult.content.trim(), 96);
-  if (block.calls.length > 0) return block.calls.map((call) => summarizeToolInput(call.input)).find(Boolean) || "";
-  return block.results.map((result) => result.content).find(Boolean) || "";
-}
-
-function ToolCallRow(props: {
-  call: Extract<AgentConversationBlock, { type: "tool_group" }>["calls"][number];
-  cx: ConversationClassNames;
-  result?: Extract<AgentConversationBlock, { type: "tool_group" }>["results"][number];
-}) {
-  return (
-    <div className={props.cx.toolRow}>
-      <div className={props.cx.toolRowHead}>
-        <span className={props.cx.toolName}>{toolDisplayName(props.call.name)}</span>
-        <span className={props.cx.toolRowStatus(props.result?.status ?? "streaming")}>
-          {props.result ? toolStatusLabel(props.result.status) : "running"}
-        </span>
-      </div>
-      <ToolPayload label="Input" value={props.call.input} cx={props.cx} />
-      {props.result ? <ToolPayload label={props.result.status === "error" ? "Error" : "Result"} value={props.result.content} cx={props.cx} /> : null}
-    </div>
-  );
-}
-
-function ToolResultRow(props: {
-  cx: ConversationClassNames;
-  result: Extract<AgentConversationBlock, { type: "tool_group" }>["results"][number];
-}) {
-  return (
-    <div className={props.cx.toolRow}>
-      <div className={props.cx.toolRowHead}>
-        <span className={props.cx.toolName}>{toolDisplayName(props.result.name)}</span>
-        <span className={props.cx.toolRowStatus(props.result.status)}>{toolStatusLabel(props.result.status)}</span>
-      </div>
-      <ToolPayload label={props.result.status === "error" ? "Error" : "Result"} value={props.result.content} cx={props.cx} />
-    </div>
-  );
-}
-
-function ToolPayload(props: { cx: ConversationClassNames; label: string; value: unknown }) {
-  const value = formatToolPayload(props.value);
-  if (!value) return null;
-  return (
-    <div className={props.cx.toolPayload}>
-      <span className={props.cx.toolPayloadLabel}>{props.label}</span>
-      <span className={props.cx.toolPayloadText}>{value}</span>
-    </div>
-  );
-}
-
-function toolDisplayName(name: string) {
-  const normalized = name.trim();
-  if (normalized === "ai_document_get_document") return "Read doc";
-  if (normalized === "ai_document_save_document") return "Save doc";
-  if (normalized === "ai_slide_get_project") return "Read slide";
-  if (normalized === "ai_slide_save_project") return "Save slide";
-  return normalized.replace(/^mcp__/, "").replace(/__/g, " / ").replace(/_/g, " ");
-}
-
-function toolStatusLabel(status: "streaming" | "success" | "error") {
-  if (status === "streaming") return "running";
-  if (status === "success") return "done";
-  return "failed";
-}
-
-function summarizeToolInput(input: unknown) {
-  if (isEmptyToolInput(input)) return "";
-  const record = isRecord(input) ? input : null;
-  const preferred =
-    readString(record?.cmd) ??
-    readString(record?.command) ??
-    readString(record?.title) ??
-    readString(record?.path) ??
-    readString(record?.filePath) ??
-    readString(record?.file_path) ??
-    readString(record?.query) ??
-    readString(record?.pattern) ??
-    readString(record?.htmlContent);
-  return truncateMiddle(preferred ?? formatToolPayload(input), 96);
-}
-
-function formatToolPayload(value: unknown) {
-  if (value == null || value === "") return "";
-  if (isEmptyToolInput(value)) return "";
-  if (typeof value === "string") return truncateText(value.trim(), 1600);
-  try {
-    return truncateText(JSON.stringify(value, null, 2), 1600);
-  } catch {
-    return String(value);
-  }
-}
-
-function truncateText(value: string, maxLength: number) {
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength - 1)}…`;
-}
-
-function truncateMiddle(value: string, maxLength: number) {
-  if (value.length <= maxLength) return value;
-  const keep = Math.max(8, Math.floor((maxLength - 1) / 2));
-  return `${value.slice(0, keep)}…${value.slice(-keep)}`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function isEmptyToolInput(value: unknown) {
-  return isRecord(value) && Object.keys(value).length === 0;
-}
-
-function readString(value: unknown) {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-type ConversationClassNames = {
+export type ConversationClassNames = {
   root: string;
   header: string;
   homeButton: string;
@@ -539,6 +240,9 @@ type ConversationClassNames = {
   quickPrompts: string;
   quickButton: string;
   error: string;
+  activeSelection: string;
+  activeSelectionLabel: string;
+  activeSelectionText: string;
   messages: string;
   composerWrap: string;
   composer: string;
@@ -593,6 +297,9 @@ const classes: Record<AgentConversationVariant, ConversationClassNames> = {
     quickPrompts: "mb-3 flex flex-wrap gap-2 px-1",
     quickButton: "flex h-8 items-center gap-1.5 rounded-full border border-white/8 bg-[#252525] px-3 text-left text-[12px] text-white/58 hover:bg-[#2d2d2d] hover:text-white",
     error: "mt-4 rounded-xl bg-[#3a241f] p-3 text-[12px] leading-5 text-[#ffad9f]",
+    activeSelection: "mt-4 rounded-2xl border border-white/8 bg-white/[0.04] p-3",
+    activeSelectionLabel: "mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/28",
+    activeSelectionText: "max-h-28 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-4 text-white/58",
     messages: "mt-5 space-y-4",
     composerWrap: "p-3",
     composer: "rounded-2xl border border-white/12 bg-[#2b2b2b] p-3 shadow-[0_14px_40px_rgba(0,0,0,0.35)]",
@@ -664,6 +371,9 @@ const classes: Record<AgentConversationVariant, ConversationClassNames> = {
     quickPrompts: "mb-3 flex flex-wrap gap-2 px-1",
     quickButton: "inline-flex h-8 items-center gap-1.5 rounded-full border border-white/8 bg-[#252525] px-3 text-[12px] text-white/58 hover:bg-[#2d2d2d] hover:text-white",
     error: "mt-4 rounded-xl bg-[#3a241f] px-3 py-2.5 text-[12px] leading-5 text-[#ffad9f]",
+    activeSelection: "mt-4 rounded-2xl border border-white/8 bg-white/[0.04] p-3",
+    activeSelectionLabel: "mb-1.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-white/28",
+    activeSelectionText: "max-h-28 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-4 text-white/58",
     messages: "mt-5 grid gap-4",
     composerWrap: "shrink-0 p-3",
     composer: "rounded-2xl border border-white/12 bg-[#2b2b2b] p-3 shadow-[0_14px_40px_rgba(0,0,0,0.35)]",

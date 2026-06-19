@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@ai-app/agent": "workspace:*",
+    "@ai-app/shared": "workspace:*",
     "@ai-app/ui": "workspace:*",
     "@ai-slide/shared": "workspace:*",
     "@tutti-os/office-preview": "0.0.0-test.20260616183444.f506a6bec39c",

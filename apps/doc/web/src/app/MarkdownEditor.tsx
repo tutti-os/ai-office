@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type FC } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type FC, type KeyboardEvent, type MouseEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import {
   IS_BOLD,
@@ -7,9 +7,12 @@ import {
   IS_STRIKETHROUGH,
   MDXEditor,
   $isImageNode,
+  NESTED_EDITOR_UPDATED_COMMAND,
   type MDXEditorMethods,
   activeEditor$,
   addTopAreaChild$,
+  createActiveEditorSubscription$,
+  editorInTable$,
   applyFormat$,
   applyListType$,
   codeBlockPlugin,
@@ -46,6 +49,7 @@ import { ArtifactWorkspaceHeader } from "@ai-app/ui/editor-frame";
 import type { ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { IconButtonLight, Toolbar, ToolbarDivider, ToolbarGroup, ToolbarRow, ToolbarSelect } from "@ai-app/ui/toolbar";
 import type { MarkdownRuntimeState, MarkdownSelection } from "../artifact/markdownArtifactAdapter";
+import { markdownParagraphCount, markdownWordCount } from "./documentWorkbenchContent";
 
 type MarkdownEditorProps = {
   runtime: MarkdownRuntimeState;
@@ -55,7 +59,9 @@ type MarkdownEditorProps = {
   onUndo: () => void;
   onRedo: () => void;
   onChange: (content: string, selection: MarkdownSelection) => void;
+  onPendingTableCellEditChange: (pending: boolean) => void;
   onSelectionChange: (selection: MarkdownSelection) => void;
+  onTableCellCommitterChange: (committer: (() => boolean) | null) => void;
 };
 
 type MarkdownLinkDraft = {
@@ -72,16 +78,62 @@ type MarkdownLinkPosition = {
 const markdownLinkPanelWidth = 300;
 const markdownLinkViewportMargin = 8;
 const markdownLinkAnchorGap = 8;
-const MarkdownToolbarActiveContext = createContext(false);
+type MarkdownEditorStateSnapshot = {
+  toJSON: () => { root: unknown };
+};
+type MarkdownTableCellEditor = {
+  dispatchCommand: (command: typeof NESTED_EDITOR_UPDATED_COMMAND, payload: undefined) => boolean;
+  getEditorState: () => MarkdownEditorStateSnapshot;
+  getRootElement: () => HTMLElement | null;
+  registerUpdateListener: (listener: (payload: { editorState: MarkdownEditorStateSnapshot }) => void) => () => void;
+};
+const MarkdownToolbarContext = createContext<{
+  active: boolean;
+  canRedo: boolean;
+  canUndo: boolean;
+  onBlockChange: (kind: MarkdownBlockKind) => void;
+  onRedo: () => void;
+  onUndo: () => void;
+}>({
+  active: false,
+  canRedo: false,
+  canUndo: false,
+  onBlockChange: () => undefined,
+  onRedo: () => undefined,
+  onUndo: () => undefined,
+});
 
 export function MarkdownEditor(props: MarkdownEditorProps) {
   const editorRef = useRef<MDXEditorMethods | null>(null);
   const markdownRef = useRef(props.runtime.content);
+  const activeTableCellEditorRef = useRef<MarkdownTableCellEditor | null>(null);
+  const pendingTableCellEditRef = useRef(false);
   const [toolbarActive, setToolbarActive] = useState(false);
+
+  const setPendingTableCellEdit = useCallback(
+    (pending: boolean) => {
+      if (pendingTableCellEditRef.current === pending) return;
+      pendingTableCellEditRef.current = pending;
+      props.onPendingTableCellEditChange(pending);
+    },
+    [props.onPendingTableCellEditChange],
+  );
+
+  const commitPendingTableCellEdit = useCallback(() => {
+    const editor = activeTableCellEditorRef.current;
+    if (!editor || !pendingTableCellEditRef.current) return false;
+    editor.dispatchCommand(NESTED_EDITOR_UPDATED_COMMAND, undefined);
+    setPendingTableCellEdit(false);
+    return true;
+  }, [setPendingTableCellEdit]);
 
   const plugins = useMemo(
     () => [
       markdownToolbarPlugin(),
+      markdownTableCellPendingPlugin({
+        activeTableCellEditorRef,
+        onPendingChange: setPendingTableCellEdit,
+      }),
       headingsPlugin({ allowedHeadingLevels: [1, 2, 3, 4, 5, 6] }),
       listsPlugin(),
       quotePlugin(),
@@ -102,8 +154,13 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       }),
       markdownShortcutPlugin(),
     ],
-    [],
+    [setPendingTableCellEdit],
   );
+
+  useEffect(() => {
+    props.onTableCellCommitterChange(commitPendingTableCellEdit);
+    return () => props.onTableCellCommitterChange(null);
+  }, [commitPendingTableCellEdit, props.onTableCellCommitterChange]);
 
   useEffect(() => {
     markdownRef.current = props.runtime.content;
@@ -118,16 +175,59 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     props.onSelectionChange(selectionFromEditor(editor, markdown));
   }, [props]);
 
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = document.getSelection();
+      const anchorNode = selection?.anchorNode ?? null;
+      if (!anchorNode) return;
+      const anchorElement = anchorNode instanceof Element ? anchorNode : anchorNode.parentElement;
+      if (!anchorElement?.closest(".markdown-preview")) return;
+      syncSelection();
+    };
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () => document.removeEventListener("selectionchange", handleSelectionChange);
+  }, [syncSelection]);
+
   const activateToolbar = useCallback(() => setToolbarActive(true), []);
+  const handleEditorKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    activateToolbar();
+    if (event.key !== "Tab") return;
+    event.preventDefault();
+    const markdown = editorRef.current?.getMarkdown() ?? markdownRef.current;
+    const selection = selectionFromEditor(editorRef.current, markdown);
+    const nextMarkdown = applyMarkdownLineIndent(markdown, selection, event.shiftKey);
+    if (nextMarkdown === markdown) return;
+    markdownRef.current = nextMarkdown;
+    editorRef.current?.setMarkdown(nextMarkdown);
+    props.onChange(nextMarkdown, selectionFromOffsets(nextMarkdown, selection.start, selection.end));
+  }, [activateToolbar, props]);
+  const handleEditorClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    focusMarkdownTableCellEditor(event);
+  }, []);
 
   const handleChange = useCallback(
     (markdown: string, initialMarkdownNormalize: boolean) => {
-      markdownRef.current = markdown;
-      const selection = selectionFromEditor(editorRef.current, markdown);
+      const normalizedMarkdown = normalizeMarkdownEditorOutput(markdown);
+      markdownRef.current = normalizedMarkdown;
+      const selection = selectionFromEditor(editorRef.current, normalizedMarkdown);
       props.onSelectionChange(selection);
       if (!initialMarkdownNormalize) {
-        props.onChange(markdown, selection);
+        setPendingTableCellEdit(false);
+        props.onChange(normalizedMarkdown, selection);
       }
+    },
+    [props, setPendingTableCellEdit],
+  );
+
+  const applyBlockChange = useCallback(
+    (kind: MarkdownBlockKind) => {
+      const markdown = editorRef.current?.getMarkdown() ?? markdownRef.current;
+      const selection = selectionFromEditor(editorRef.current, markdown);
+      const nextMarkdown = applyMarkdownBlockToContent(markdown, selection, kind);
+      if (nextMarkdown === markdown) return;
+      markdownRef.current = nextMarkdown;
+      editorRef.current?.setMarkdown(nextMarkdown);
+      props.onChange(nextMarkdown, selectionFromOffsets(nextMarkdown, selection.start, selection.end));
     },
     [props],
   );
@@ -137,6 +237,10 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       <ArtifactWorkspaceHeader
         title={props.runtime.title || "Untitled Markdown"}
         saveState={props.saveState}
+        stats={[
+          `${markdownWordCount(props.runtime.content)} words`,
+          `${markdownParagraphCount(props.runtime.content)} blocks`,
+        ]}
         exportItems={[
           {
             label: "HTML",
@@ -150,13 +254,23 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         <div
           className="mx-auto min-h-[760px] w-full max-w-[1120px]"
           onBlurCapture={syncSelection}
+          onClickCapture={handleEditorClick}
           onFocusCapture={activateToolbar}
-          onKeyDownCapture={activateToolbar}
+          onKeyDownCapture={handleEditorKeyDown}
           onKeyUpCapture={syncSelection}
           onMouseDownCapture={activateToolbar}
           onMouseUpCapture={syncSelection}
         >
-          <MarkdownToolbarActiveContext.Provider value={toolbarActive}>
+          <MarkdownToolbarContext.Provider
+            value={{
+              active: toolbarActive,
+              canRedo: props.runtime.history.currentIndex < props.runtime.history.entries.length - 1,
+              canUndo: props.runtime.history.currentIndex > 0,
+              onBlockChange: applyBlockChange,
+              onRedo: props.onRedo,
+              onUndo: props.onUndo,
+            }}
+          >
             <MDXEditor
               ref={editorRef}
               markdown={props.runtime.content}
@@ -166,7 +280,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
               plugins={plugins}
               spellCheck
             />
-          </MarkdownToolbarActiveContext.Provider>
+          </MarkdownToolbarContext.Provider>
         </div>
       </div>
     </section>
@@ -183,11 +297,54 @@ function markdownToolbarPlugin() {
   })();
 }
 
+function markdownTableCellPendingPlugin(params: {
+  activeTableCellEditorRef: RefObject<MarkdownTableCellEditor | null>;
+  onPendingChange: (pending: boolean) => void;
+}) {
+  return realmPlugin<typeof params>({
+    init(realm, pluginParams) {
+      if (!pluginParams) return;
+      realm.pub(createActiveEditorSubscription$, (editor) => {
+        let previousRootJson = editorRootJson(editor.getEditorState());
+        const updateActiveTableEditor = () => {
+          const inTableCell = isMarkdownTableCellEditor(editor) || Boolean(realm.getValue(editorInTable$));
+          if (inTableCell) {
+            pluginParams.activeTableCellEditorRef.current = editor;
+          } else if (pluginParams.activeTableCellEditorRef.current === editor) {
+            pluginParams.activeTableCellEditorRef.current = null;
+          }
+          return inTableCell;
+        };
+        updateActiveTableEditor();
+        return editor.registerUpdateListener(({ editorState }) => {
+          const nextRootJson = editorRootJson(editorState);
+          const inTableCell = updateActiveTableEditor();
+          if (inTableCell && previousRootJson && nextRootJson !== previousRootJson) {
+            pluginParams.onPendingChange(true);
+          }
+          previousRootJson = nextRootJson;
+        });
+      });
+    },
+  })(params);
+}
+
+function isMarkdownTableCellEditor(editor: MarkdownTableCellEditor) {
+  const root = editor.getRootElement();
+  const parentName = root?.parentNode?.nodeName.toLowerCase() ?? "";
+  return parentName === "td" || parentName === "th";
+}
+
+function editorRootJson(editorState: MarkdownEditorStateSnapshot) {
+  return JSON.stringify(editorState.toJSON().root);
+}
+
 function MarkdownToolbarAdapter() {
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const linkButtonRef = useRef<HTMLDivElement | null>(null);
   const linkPanelRef = useRef<HTMLFormElement | null>(null);
-  const toolbarDisabled = !useContext(MarkdownToolbarActiveContext);
+  const toolbarContext = useContext(MarkdownToolbarContext);
+  const toolbarDisabled = !toolbarContext.active;
   const activeEditor = useCellValue(activeEditor$);
   const [currentFormat, currentListType, currentBlockType] = useCellValues(currentFormat$, currentListType$, currentBlockType$);
   const applyFormat = usePublisher(applyFormat$);
@@ -199,39 +356,9 @@ function MarkdownToolbarAdapter() {
   const insertThematicBreak = usePublisher(insertThematicBreak$);
   const removeLink = usePublisher(removeLink$);
   const linkDialogState = useCellValue(linkDialogState$);
-  const [canUndo, setCanUndo] = useState(false);
-  const [canRedo, setCanRedo] = useState(false);
   const [linkPanelOpen, setLinkPanelOpen] = useState(false);
   const [linkDraft, setLinkDraft] = useState<MarkdownLinkDraft>({ text: "", href: "https://" });
   const [linkPosition, setLinkPosition] = useState<MarkdownLinkPosition | null>(null);
-
-  useEffect(() => {
-    if (!activeEditor) {
-      setCanUndo(false);
-      setCanRedo(false);
-      return;
-    }
-    const unregisterUndo = activeEditor.registerCommand(
-      lexical.CAN_UNDO_COMMAND,
-      (payload) => {
-        setCanUndo(payload);
-        return false;
-      },
-      lexical.COMMAND_PRIORITY_CRITICAL,
-    );
-    const unregisterRedo = activeEditor.registerCommand(
-      lexical.CAN_REDO_COMMAND,
-      (payload) => {
-        setCanRedo(payload);
-        return false;
-      },
-      lexical.COMMAND_PRIORITY_CRITICAL,
-    );
-    return () => {
-      unregisterUndo();
-      unregisterRedo();
-    };
-  }, [activeEditor]);
 
   const blockType = markdownBlockTypeFromEditor(currentBlockType);
   const listType = markdownListTypeFromEditor(currentListType);
@@ -332,7 +459,10 @@ function MarkdownToolbarAdapter() {
             <input
               className="h-7 w-full rounded-md border border-black/10 bg-white px-2 text-[11px] font-medium text-[#333] outline-none"
               value={linkDraft.text}
-              onChange={(event) => setLinkDraft((current) => ({ ...current, text: event.currentTarget.value }))}
+              onChange={(event) => {
+                const text = event.currentTarget.value;
+                setLinkDraft((current) => ({ ...current, text }));
+              }}
               placeholder="Text"
               aria-label="Link text"
             />
@@ -340,7 +470,10 @@ function MarkdownToolbarAdapter() {
               <input
                 className="h-7 min-w-0 flex-1 rounded-md border border-black/10 bg-white px-2 text-[11px] font-medium text-[#333] outline-none"
                 value={linkDraft.href}
-                onChange={(event) => setLinkDraft((current) => ({ ...current, href: event.currentTarget.value }))}
+                onChange={(event) => {
+                  const href = event.currentTarget.value;
+                  setLinkDraft((current) => ({ ...current, href }));
+                }}
                 placeholder="https://"
                 aria-label="Link URL"
               />
@@ -370,12 +503,12 @@ function MarkdownToolbarAdapter() {
       <input ref={imageFileInputRef} className="hidden" type="file" accept="image/*" onChange={handleImageFileInputChange} />
       <ToolbarRow wrap className="gap-y-1.5">
         <ToolbarGroup>
-          <IconButtonLight disabled={!canUndo} title="Undo" onClick={() => activeEditor?.dispatchCommand(lexical.UNDO_COMMAND, undefined)}><Undo2 size={18} /></IconButtonLight>
-          <IconButtonLight disabled={!canRedo} title="Redo" onClick={() => activeEditor?.dispatchCommand(lexical.REDO_COMMAND, undefined)}><Redo2 size={18} /></IconButtonLight>
+          <IconButtonLight disabled={!toolbarContext.canUndo} title="Undo" onClick={toolbarContext.onUndo}><Undo2 size={18} /></IconButtonLight>
+          <IconButtonLight disabled={!toolbarContext.canRedo} title="Redo" onClick={toolbarContext.onRedo}><Redo2 size={18} /></IconButtonLight>
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup className="[column-gap:4px]">
-          <ToolbarSelect disabled={toolbarDisabled} title="Block style" value={blockType} onChange={(value) => applyMarkdownBlock(value as MarkdownBlockKind, insertMarkdown)}>
+          <ToolbarSelect disabled={toolbarDisabled} title="Block style" value={blockType} onChange={(value) => toolbarContext.onBlockChange(value as MarkdownBlockKind)}>
             <option value="p">Normal Text</option>
             <option value="h1">Heading 1</option>
             <option value="h2">Heading 2</option>
@@ -407,7 +540,7 @@ function MarkdownToolbarAdapter() {
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup>
-          <IconButtonLight active={blockType === "blockquote"} disabled={toolbarDisabled} title="Quote" onClick={() => applyMarkdownBlock("blockquote", insertMarkdown)}><Quote size={18} /></IconButtonLight>
+          <IconButtonLight active={blockType === "blockquote"} disabled={toolbarDisabled} title="Quote" onClick={() => toolbarContext.onBlockChange("blockquote")}><Quote size={18} /></IconButtonLight>
           <IconButtonLight disabled={toolbarDisabled} title="Thematic break" onClick={insertThematicBreak}><Minus size={18} /></IconButtonLight>
           <IconButtonLight disabled={toolbarDisabled} title="Code block" onClick={() => insertCodeBlock({})}><Code2 size={18} /></IconButtonLight>
         </ToolbarGroup>
@@ -460,18 +593,6 @@ function markdownListTypeFromEditor(listType: string) {
   return "";
 }
 
-function applyMarkdownBlock(kind: MarkdownBlockKind, insertMarkdown: (markdown: string) => void) {
-  if (kind === "p") {
-    insertMarkdown("Text");
-    return;
-  }
-  if (kind === "blockquote") {
-    insertMarkdown("> Quote");
-    return;
-  }
-  insertMarkdown(`${"#".repeat(Number(kind.slice(1)))} Heading`);
-}
-
 function replaceSelectedImage(editor: { update: (fn: () => void) => void } | null, src: string, altText: string) {
   let replaced = false;
   editor?.update(() => {
@@ -484,6 +605,14 @@ function replaceSelectedImage(editor: { update: (fn: () => void) => void } | nul
     replaced = true;
   });
   return replaced;
+}
+
+function focusMarkdownTableCellEditor(event: MouseEvent<HTMLDivElement>) {
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target || target.closest("button")) return;
+  const cell = target.closest("td:not([data-tool-cell]), th:not([data-tool-cell])");
+  const nestedEditor = cell?.querySelector<HTMLElement>('[contenteditable="true"][role="textbox"]');
+  nestedEditor?.focus();
 }
 
 function replaceImageByNodeKey(editor: { update: (fn: () => void) => void } | null, nodeKey: string, src: string, altText: string) {
@@ -509,7 +638,7 @@ function PlainMarkdownCodeBlockEditor(props: CodeBlockEditorProps) {
 }
 
 function selectionFromEditor(editor: MDXEditorMethods | null, markdown: string): MarkdownSelection {
-  const selectedText = editor?.getSelectionMarkdown() ?? "";
+  const selectedText = editor?.getSelectionMarkdown() || document.getSelection()?.toString() || "";
   if (!selectedText) {
     return {
       start: markdown.length,
@@ -524,6 +653,70 @@ function selectionFromEditor(editor: MDXEditorMethods | null, markdown: string):
     end: safeStart + selectedText.length,
     selectedText,
   };
+}
+
+function selectionFromOffsets(markdown: string, start: number, end: number): MarkdownSelection {
+  const safeStart = clampNumber(start, 0, markdown.length);
+  const safeEnd = clampNumber(end, safeStart, markdown.length);
+  return {
+    start: safeStart,
+    end: safeEnd,
+    selectedText: markdown.slice(safeStart, safeEnd),
+  };
+}
+
+function applyMarkdownBlockToContent(markdown: string, selection: MarkdownSelection, kind: MarkdownBlockKind) {
+  const lines = markdown.split("\n");
+  const targetIndex = markdownLineIndexForSelection(markdown, lines, selection);
+  if (targetIndex < 0) return markdown;
+  const line = lines[targetIndex] ?? "";
+  const indent = line.match(/^\s*/)?.[0] ?? "";
+  const body = line
+    .slice(indent.length)
+    .replace(/^(#{1,6})\s+/, "")
+    .replace(/^>\s?/, "");
+  if (kind === "p") {
+    lines[targetIndex] = `${indent}${body}`;
+  } else if (kind === "blockquote") {
+    lines[targetIndex] = `${indent}> ${body || "Quote"}`;
+  } else {
+    lines[targetIndex] = `${indent}${"#".repeat(Number(kind.slice(1)))} ${body || "Heading"}`;
+  }
+  return lines.join("\n");
+}
+
+function applyMarkdownLineIndent(markdown: string, selection: MarkdownSelection, outdent: boolean) {
+  const lines = markdown.split("\n");
+  const targetIndex = markdownLineIndexForSelection(markdown, lines, selection);
+  if (targetIndex < 0) return markdown;
+  const line = lines[targetIndex] ?? "";
+  if (!line.trim()) return markdown;
+  if (outdent) {
+    lines[targetIndex] = line.replace(/^ {1,2}/, "");
+  } else {
+    lines[targetIndex] = `  ${line}`;
+  }
+  return lines.join("\n");
+}
+
+function markdownLineIndexForSelection(markdown: string, lines: string[], selection: MarkdownSelection) {
+  if (selection.selectedText) {
+    const offset = Math.max(0, markdown.indexOf(selection.selectedText));
+    if (offset >= 0) return lineIndexAtOffset(markdown, offset);
+  }
+  if (selection.start >= 0 && selection.start < markdown.length) return lineIndexAtOffset(markdown, selection.start);
+  const firstContentLine = lines.findIndex((line) => line.trim());
+  return firstContentLine >= 0 ? firstContentLine : 0;
+}
+
+function lineIndexAtOffset(markdown: string, offset: number) {
+  return markdown.slice(0, offset).split("\n").length - 1;
+}
+
+function normalizeMarkdownEditorOutput(markdown: string) {
+  return markdown
+    .replace(/(^|\n)\\(#{1,6}\s+)/g, "$1$2")
+    .replace(/^(\s*)([-*+]|\d+\.)\s+(.+?)(?:&#x9;|\t)$/gm, "$1  $2 $3");
 }
 
 function editorHtml(editor: MDXEditorMethods | null) {

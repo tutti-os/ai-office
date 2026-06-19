@@ -1,11 +1,6 @@
 import { AgentConversationPanel as SharedAgentConversationPanel } from "@ai-app/agent/conversation-ui";
 import type { ArtifactEditorKind } from "@ai-app/ui/editor-frame";
-import type { LocalAgentProviderStatus, SlideRun, SlideRunEvent, SlideRunTimelineItem } from "@ai-slide/shared";
-
-const slideAgentProfiles = [
-  { id: "local-agent:codex", provider: "codex", label: "Codex" },
-  { id: "local-agent:claude", provider: "claude", label: "Claude Code" },
-];
+import type { LocalAgentProviderStatus, RuntimeProfile, SlideRun, SlideRunEvent, SlideRunTimelineItem } from "@ai-slide/shared";
 
 type AgentConversationPanelProps = {
   activeSelectionText: string;
@@ -15,6 +10,7 @@ type AgentConversationPanelProps = {
   items: SlideRunTimelineItem[];
   localAgentProviders: LocalAgentProviderStatus[];
   loading: boolean;
+  runtimeProfiles: RuntimeProfile[];
   selectedAgent: string;
   sending: boolean;
   onBackHome: () => void;
@@ -27,12 +23,12 @@ export function AgentConversationPanel(props: AgentConversationPanelProps) {
   return (
     <SharedAgentConversationPanel<SlideRun, SlideRunEvent>
       {...props}
-      agentOptions={slideAgentProfiles.map((profile) => {
-        const status = props.localAgentProviders.find((provider) => provider.provider === profile.provider);
-        const available = status?.available ?? props.localAgentProviders.length === 0;
+      agentOptions={props.runtimeProfiles.map((profile) => {
+        const status = profile.kind === "local-agent" ? props.localAgentProviders.find((provider) => provider.provider === profile.provider) : null;
+        const available = status?.available ?? true;
         return {
           id: profile.id,
-          label: `${profile.label}${available ? "" : " unavailable"}`,
+          label: available ? profile.displayName : `${profile.displayName} unavailable`,
           disabled: !available,
         };
       })}

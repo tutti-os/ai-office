@@ -1,4 +1,5 @@
 import type { AgentArtifactContext, AiEditRequest, DeckManifestSlide, SlideArtifactSelection } from "@ai-slide/shared";
+import type { AgentEditRequestInputBase, ArtifactRuntimeAdapterBase } from "@ai-app/shared/artifact-runtime";
 
 export type DeckAgentRuntimeState = {
   title: string;
@@ -13,21 +14,29 @@ export type DeckAgentRuntimeState = {
 
 export type DeckAgentRuntimeProvider = () => DeckAgentRuntimeState | null;
 
-export type DeckAgentEditRequestInput = {
-  projectId: string;
-  runtime: DeckAgentRuntimeState;
-  userPrompt: string;
-  runtimeProfileId?: string | null;
-};
+export type DeckAgentEditRequestInput = AgentEditRequestInputBase<DeckAgentRuntimeState>;
+type DeckAgentArtifactContext = AgentArtifactContext & { type: "deck" };
 
-export class DeckArtifactRuntimeAdapter {
+export class DeckArtifactRuntimeAdapter
+  implements
+    ArtifactRuntimeAdapterBase<
+      "deck",
+      DeckAgentRuntimeState,
+      SlideArtifactSelection,
+      DeckAgentArtifactContext,
+      AiEditRequest,
+      never,
+      DeckAgentEditRequestInput
+    >
+{
   readonly type = "deck" as const;
+  readonly capabilities = { inlineEditing: true };
 
   getSelection(runtime: DeckAgentRuntimeState): SlideArtifactSelection | null {
     return runtime.selection;
   }
 
-  getAgentContext(projectId: string, runtime: DeckAgentRuntimeState): AgentArtifactContext {
+  getAgentContext(projectId: string, runtime: DeckAgentRuntimeState): DeckAgentArtifactContext {
     return {
       projectId,
       artifactId: runtime.artifactId,

@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { AiEditRequest, CreateProjectRequest, RuntimeProfile, UpdateDeckSlideHtmlRequest, UpdateProjectRequest } from "@ai-slide/shared";
+import type { AiEditRequest, CreateProjectRequest, RuntimeProfile, SlideRun, SlideRunEvent, UpdateDeckSlideHtmlRequest, UpdateProjectRequest } from "@ai-slide/shared";
+import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
-import { RuntimeProviderUnsupportedError, type RuntimeStreamEvent, type SlideRuntimeProject } from "../runtimes/runtime-provider.js";
+import type { SlideRuntimeProject } from "../runtimes/runtime-provider.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
 import { EventHub } from "../ws/event-hub.js";
 import { ProjectRepository } from "./project-repository.js";
@@ -12,11 +13,18 @@ import { ProjectRepository } from "./project-repository.js";
 export class ProjectService {
   private readonly runtimes = createRuntimeProviderRegistry();
   private readonly cancelledRunIds = new Set<string>();
+  private readonly runExecutor: RuntimeRunExecutor<SlideRun, SlideRunEvent, SlideRuntimeProject, AiEditRequest>;
 
   constructor(
     private readonly repo: ProjectRepository,
     private readonly events: EventHub,
-  ) {}
+  ) {
+    this.runExecutor = new RuntimeRunExecutor({
+      repo,
+      events,
+      runtimes: this.runtimes,
+    });
+  }
 
   bootstrap() {
     return this.repo.snapshot();
@@ -107,7 +115,7 @@ export class ProjectService {
     const runtimeProject = await this.createRuntimeProject(projectId);
     if (runtimeProject.artifact.type === "pptx") await requireOfficeCli();
     this.repo.syncProjectAgentInstructions(projectId);
-    const runtimeProfile = runtimeProfileFromId(request.runtimeProfileId);
+    const runtimeProfile = this.repo.getRuntimeProfile(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);
     const run = this.repo.createRun({
@@ -136,7 +144,7 @@ export class ProjectService {
     if (!run) return null;
     if (!["accepted", "running"].includes(run.status)) return { run };
     this.cancelledRunIds.add(runId);
-    await this.runtimes.getProvider(runtimeProfileFromRun(run)).cancel(runId).catch(() => undefined);
+    await this.runtimes.getProvider(this.repo.getRuntimeProfileForRun(run)).cancel(runId).catch(() => undefined);
     return this.finalizeCancellation(runId, "Cancelled by user");
   }
 
@@ -146,126 +154,37 @@ export class ProjectService {
     request: AiEditRequest,
     runId: string,
   ) {
-    const run = this.repo.getRun(runId);
-    if (!run) return;
-    const provider = this.runtimes.getProvider(runtimeProfile);
-    let sortOrder = 0;
-    let generatedText = "";
     let refreshedArtifact = false;
     let workspaceFingerprint = "";
 
-    const createRunEvent = (
-      type: RuntimeStreamEvent["type"] extends infer T ? Extract<T, string> : never,
-      input: { content?: string; status?: "pending" | "streaming" | "success" | "error"; metadata?: Record<string, unknown> | null } = {},
-    ) => {
-      const eventType =
-        type === "text_delta"
-          ? "text_delta"
-          : type === "thinking_delta"
-          ? "thinking_delta"
-          : type === "tool_call"
-            ? "tool_call"
-            : type === "tool_result"
-              ? "tool_result"
-              : type;
-      const event = this.repo.createRunEvent({
-        runId,
-        projectId: runtimeProject.id,
-        type: eventType as any,
-        content: input.content,
-        status: input.status,
-        metadata: input.metadata,
-        sortOrder: sortOrder++,
-      });
-      this.events.emit({ type: "run.event.created", projectId: runtimeProject.id, runId, payload: { event } });
-      return event;
-    };
-
-    try {
-      workspaceFingerprint = await this.workspaceFingerprint(runtimeProject.id);
-      this.repo.updateRun(runId, { status: "running" });
-      this.events.emit({ type: "run.started", projectId: runtimeProject.id, runId, payload: { run: this.repo.getRun(runId) } });
-
-      const readiness = await provider.detect(runtimeProfile);
-      if (!readiness.available) throw new RuntimeProviderUnsupportedError(readiness.reason ?? "Runtime provider is unavailable");
-
-      for await (const rawEvent of provider.streamEdit({
-        run,
-        project: runtimeProject,
-        runtimeProfile,
-        request,
-      })) {
-        if (this.cancelledRunIds.has(runId)) {
-          await this.finalizeCancellation(runId, "Cancelled by user");
-          return;
-        }
-        const event = typeof rawEvent === "string" ? ({ type: "text_delta", text: rawEvent } as const) : rawEvent;
-        if (event.type === "text_delta") {
-          generatedText += event.text;
-          createRunEvent(event.type, { content: event.text, status: "streaming" });
-          continue;
-        }
-        if (event.type === "thinking_delta") {
-          createRunEvent(event.type, { content: event.text, status: "streaming" });
-        } else if (event.type === "tool_call") {
-          createRunEvent(event.type, {
-            content: `Calling ${event.name}`,
-            status: "streaming",
-            metadata: { toolCallId: event.id, toolName: event.name, input: event.input ?? null },
-          });
-        } else if (event.type === "tool_result") {
-          createRunEvent(event.type, {
-            content: event.error ?? event.summary ?? previewJson(event.output) ?? "Tool completed",
-            status: event.isError || event.status === "failed" ? "error" : "success",
-            metadata: { toolCallId: event.id, toolName: event.name ?? null, output: event.output ?? null },
-          });
-          const refresh = await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
-          workspaceFingerprint = refresh.fingerprint;
-          refreshedArtifact = refresh.changed || refreshedArtifact;
-        } else if (event.type === "file_write") {
-          createRunEvent(event.type, { content: `Wrote file: ${event.path}`, metadata: { path: event.path } });
-          const refresh = await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
-          workspaceFingerprint = refresh.fingerprint;
-          refreshedArtifact = refresh.changed || refreshedArtifact;
-        } else if (event.type === "status") {
-          createRunEvent(event.type, { content: event.message ?? event.status ?? "", metadata: { status: event.status ?? null } });
-        } else if (event.type === "stderr" && event.text.trim()) {
-          createRunEvent(event.type, { content: event.text.trim(), status: "error" });
-        }
-      }
-
-      if (this.cancelledRunIds.has(runId)) {
-        await this.finalizeCancellation(runId, "Cancelled by user");
-        return;
-      }
-
-      if (!refreshedArtifact) await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
-      const detail = await this.getProject(runtimeProject.id);
-      const finalRun = this.repo.updateRun(runId, {
-        status: "completed",
-        resultPreview: previewText(generatedText || runPreview(detail.artifact.type, detail.pptxManifest)),
-      });
-      this.events.emit({ type: "run.completed", projectId: runtimeProject.id, runId, payload: { run: finalRun } });
-    } catch (error) {
-      if (this.cancelledRunIds.has(runId)) {
-        await this.finalizeCancellation(runId, "Cancelled by user");
-        return;
-      }
-      const message = error instanceof Error ? error.message : "AI edit failed";
-      const event = this.repo.createRunEvent({
-        runId,
-        projectId: runtimeProject.id,
-        type: "error",
-        content: message,
-        status: "error",
-        sortOrder: sortOrder++,
-      });
-      this.events.emit({ type: "run.event.created", projectId: runtimeProject.id, runId, payload: { event } });
-      const finalRun = this.repo.updateRun(runId, { status: "failed", error: message });
-      this.events.emit({ type: "run.failed", projectId: runtimeProject.id, runId, payload: { run: finalRun } });
-    } finally {
-      this.cancelledRunIds.delete(runId);
-    }
+    await this.runExecutor.execute({
+      project: runtimeProject,
+      request,
+      runtimeProfile,
+      runId,
+      isCancelled: () => this.cancelledRunIds.has(runId),
+      finalizeCancellation: (id, reason) => this.finalizeCancellation(id, reason),
+      beforeRun: async () => {
+        workspaceFingerprint = await this.workspaceFingerprint(runtimeProject.id);
+      },
+      onWorkspaceEvent: async () => {
+        const refresh = await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
+        workspaceFingerprint = refresh.fingerprint;
+        refreshedArtifact = refresh.changed || refreshedArtifact;
+      },
+      complete: async ({ generatedText }) => {
+        if (!refreshedArtifact) await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
+        const detail = await this.getProject(runtimeProject.id);
+        const finalRun = this.repo.updateRun(runId, {
+          status: "completed",
+          resultPreview: previewText(generatedText || runPreview(detail.artifact.type, detail.pptxManifest)),
+        });
+        this.events.emit({ type: "run.completed", projectId: runtimeProject.id, runId, payload: { run: finalRun } });
+      },
+      onFinally: () => {
+        this.cancelledRunIds.delete(runId);
+      },
+    });
   }
 
   private async createRuntimeProject(projectId: string): Promise<SlideRuntimeProject> {
@@ -383,63 +302,6 @@ function runPreview(artifactType: "deck" | "pptx", manifest: { exists: boolean; 
   if (artifactType === "deck") return "Deck files updated.";
   if (!manifest?.exists) return "PPTX run completed. No slides.pptx change was detected.";
   return `PPTX preview refreshed: ${manifest.sizeBytes} bytes`;
-}
-
-function runtimeProfileFromId(profileId: string | null | undefined): RuntimeProfile {
-  const now = new Date(0).toISOString();
-  if (profileId === "local-agent:claude") {
-    return {
-      id: "local-agent:claude",
-      kind: "local-agent",
-      provider: "claude",
-      model: "claude:default",
-      displayName: "Claude Code",
-      enabled: true,
-      capabilities: { streaming: true, toolUse: true, reasoning: true, resume: true },
-      createdAt: now,
-      updatedAt: now,
-    };
-  }
-  if (profileId === "server-demo") {
-    return {
-      id: "server-demo",
-      kind: "server-demo",
-      provider: "demo",
-      model: "slide-demo",
-      displayName: "Demo slide editor",
-      enabled: true,
-      capabilities: { streaming: false, toolUse: false, reasoning: false, resume: false },
-      createdAt: now,
-      updatedAt: now,
-    };
-  }
-  return {
-    id: "local-agent:codex",
-    kind: "local-agent",
-    provider: "codex",
-    model: "codex:default",
-    displayName: "Codex",
-    enabled: true,
-    capabilities: { streaming: true, toolUse: true, reasoning: true, resume: true },
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-function runtimeProfileFromRun(run: { runtime: string; provider: string; model: string }) {
-  if (run.runtime === "server-demo") return runtimeProfileFromId("server-demo");
-  if (run.provider === "claude") return runtimeProfileFromId("local-agent:claude");
-  return runtimeProfileFromId("local-agent:codex");
-}
-
-function previewJson(value: unknown) {
-  if (value === undefined || value === null) return "";
-  if (typeof value === "string") return previewText(value);
-  try {
-    return previewText(JSON.stringify(value, null, 2));
-  } catch {
-    return previewText(String(value));
-  }
 }
 
 function previewText(value: string) {

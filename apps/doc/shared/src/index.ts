@@ -9,6 +9,7 @@ import type {
   StreamEvent as BaseStreamEvent,
   WsServerMessage as BaseWsServerMessage,
 } from "@ai-app/shared/types";
+import type { AgentArtifactContextBase, ArtifactSelectionBase } from "@ai-app/shared/artifact-runtime";
 
 export type {
   AiEditMode,
@@ -52,15 +53,9 @@ export interface ArtifactRecord {
   updatedAt: string;
 }
 
-export interface ArtifactSelection {
-  type: "none" | SelectionType | "block" | "range";
-  text: string;
-  html: string;
-  path: string;
-  range?: unknown;
-}
+export interface ArtifactSelection extends ArtifactSelectionBase<SelectionType | "block"> {}
 
-export interface AgentArtifactContext {
+export interface AgentArtifactContext extends AgentArtifactContextBase<ArtifactType, ArtifactSelection> {
   projectId: Id;
   artifactId: Id;
   type: ArtifactType;

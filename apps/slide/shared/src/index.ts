@@ -10,6 +10,7 @@ import type {
   StreamEvent as BaseStreamEvent,
   WsServerMessage as BaseWsServerMessage,
 } from "@ai-app/shared/types";
+import type { AgentArtifactContextBase, ArtifactSelectionBase } from "@ai-app/shared/artifact-runtime";
 
 export type {
   AiEditMode,
@@ -52,16 +53,11 @@ export interface SlideArtifact {
   updatedAt: string;
 }
 
-export interface SlideArtifactSelection {
-  type: "none" | SlideSelectionType | "range";
-  text: string;
-  html: string;
-  path: string;
+export interface SlideArtifactSelection extends ArtifactSelectionBase<SlideSelectionType> {
   slideId?: string | null;
-  range?: unknown;
 }
 
-export interface AgentArtifactContext {
+export interface AgentArtifactContext extends AgentArtifactContextBase<SlideArtifactType, SlideArtifactSelection> {
   projectId: Id;
   artifactId: Id;
   type: SlideArtifactType;
@@ -203,6 +199,7 @@ export interface SlideProjectDetail extends SlideProjectRecord {
 export interface AppSnapshot {
   projects: SlideProject[];
   artifacts: SlideArtifact[];
+  runtimeProfiles: RuntimeProfile[];
   activeRuns: SlideRun[];
   runEvents: SlideRunEvent[];
   lastSeq: number;

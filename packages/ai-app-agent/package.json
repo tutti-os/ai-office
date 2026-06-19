@@ -5,8 +5,10 @@
   "type": "module",
   "exports": {
     "./runtime": "./src/runtime/index.ts",
+    "./run-executor": "./src/run-executor/index.ts",
     "./local-agent-runtime": "./src/local-agent-runtime/index.ts",
     "./conversation": "./src/conversation/index.ts",
+    "./conversation-hooks": "./src/conversation-hooks/index.ts",
     "./conversation-ui": "./src/conversation-ui/index.tsx"
   },
   "scripts": {

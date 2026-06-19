@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@ai-app/agent": "workspace:*",
+    "@ai-app/shared": "workspace:*",
     "@ai-app/ui": "workspace:*",
     "@ai-doc/shared": "workspace:*",
     "@mdxeditor/editor": "^4.0.3",

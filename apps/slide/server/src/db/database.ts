@@ -36,6 +36,18 @@ function migrate(database: DatabaseSync) {
 
     CREATE INDEX IF NOT EXISTS idx_artifacts_project ON artifacts(project_id, updated_at);
 
+    CREATE TABLE IF NOT EXISTS runtime_profiles (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      model TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      capabilities TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS slide_runs (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
