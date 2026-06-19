@@ -7,6 +7,7 @@ import {
   type LocalAgentProviderPlugin,
   type RawAgentEvent,
   type RawAgentStream,
+  type SkillMaterializationRecord,
 } from "@nextop-os/agent-acp-kit";
 import type { BaseAiEditRequest, BaseRun, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { safePathSegment } from "@ai-app/shared/local-paths";
@@ -30,6 +31,7 @@ export interface LocalAgentRuntimeProviderOptions<
   workspaceRoot(context: RuntimeEditContext<TRun, TProject, TRequest>): string;
   buildPrompt(context: RuntimeEditContext<TRun, TProject, TRequest>): string;
   buildSystemPrompt(context: RuntimeEditContext<TRun, TProject, TRequest>): string;
+  buildSkillManifest?: (context: RuntimeEditContext<TRun, TProject, TRequest>, workspaceRoot: string) => SkillMaterializationRecord[] | Promise<SkillMaterializationRecord[]>;
   buildMcpServers?: (context: RuntimeEditContext<TRun, TProject, TRequest>) => LocalAgentMcpServer[];
   buildEnv?: (context: RuntimeEditContext<TRun, TProject, TRequest>, workspaceRoot: string) => Record<string, string>;
   timeoutMs?: () => number;
@@ -161,6 +163,7 @@ export class LocalAgentRuntimeProvider<
   }) {
     const { context, controller, provider, resume, sessionStore, workspaceRoot } = input;
     let lastError: Extract<AgentEvent, { type: "error" }> | undefined;
+    const skillManifest = (await this.options.buildSkillManifest?.(context, workspaceRoot)) ?? [];
     for await (const event of this.localAgentRuntime.run({
       runId: context.run.id,
       conversationId: context.project.id,
@@ -175,6 +178,7 @@ export class LocalAgentRuntimeProvider<
       model: stripProviderPrefix(context.runtimeProfile.model, provider),
       reasoning: context.request.reasoningEffort ?? undefined,
       mcpServers: this.options.buildMcpServers?.(context) ?? [],
+      skillManifest,
       env: this.options.buildEnv?.(context, workspaceRoot) ?? {},
       timeoutMs: this.options.timeoutMs?.() ?? DEFAULT_TIMEOUT_MS,
       extraAllowedDirs: this.options.extraAllowedDirs?.(context, workspaceRoot) ?? [workspaceRoot],

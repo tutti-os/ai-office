@@ -1,6 +1,8 @@
-import { resolve } from "node:path";
+import { readdir, readFile } from "node:fs/promises";
+import { extname, join, relative, resolve } from "node:path";
 import { LocalAgentRuntimeProvider as SharedLocalAgentRuntimeProvider } from "@ai-app/agent/local-agent-runtime";
 import type { AiEditRequest, SlideRun } from "@ai-slide/shared";
+import type { SkillMaterializationFile, SkillMaterializationRecord } from "@nextop-os/agent-acp-kit";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { extractOoxmlTextPreview } from "../artifact/ooxml-text.js";
 import type { RuntimeEditContext, SlideRuntimeProject } from "./runtime-provider.js";
@@ -14,6 +16,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       workspaceRoot: (context) => projectWorkspaceRoot(context.project.id),
       buildPrompt: buildEditPrompt,
       buildSystemPrompt,
+      buildSkillManifest: buildProjectSkillManifest,
       buildEnv: (context, workspaceRoot) => ({
         AI_SLIDE_WORKSPACE: workspaceRoot,
         AI_SLIDE_PROJECT_ID: context.project.id,
@@ -23,6 +26,71 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       sessionDirName: ".ai-slide",
     });
   }
+}
+
+async function buildProjectSkillManifest(context: RuntimeEditContext, workspaceRoot: string): Promise<SkillMaterializationRecord[]> {
+  if (context.project.artifact.type !== "deck") return [];
+  const skillsRoot = join(workspaceRoot, ".ai-slide", "skills");
+  let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
+  try {
+    entries = await readdir(skillsRoot, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const skills: SkillMaterializationRecord[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const slug = entry.name;
+    const root = join(skillsRoot, slug);
+    let content = "";
+    try {
+      content = await readFile(join(root, "SKILL.md"), "utf8");
+    } catch {
+      continue;
+    }
+    skills.push({
+      skillId: `ai-slide-template:${slug}`,
+      slug,
+      content,
+      deliveryMode: "materialized-files",
+      materializedPath: join(".local-agent", "skills", slug),
+      files: await readSkillMaterializationFiles(root),
+    });
+  }
+  return skills;
+}
+
+async function readSkillMaterializationFiles(root: string): Promise<SkillMaterializationFile[]> {
+  const files: SkillMaterializationFile[] = [];
+  await readSkillMaterializationFilesInto(root, root, files);
+  return files;
+}
+
+async function readSkillMaterializationFilesInto(root: string, dir: string, files: SkillMaterializationFile[]) {
+  let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const absolutePath = join(dir, entry.name);
+    const relativePath = relative(root, absolutePath);
+    if (entry.isDirectory()) {
+      await readSkillMaterializationFilesInto(root, absolutePath, files);
+      continue;
+    }
+    if (!entry.isFile() || relativePath === "SKILL.md" || !isTextSkillFile(entry.name)) continue;
+    files.push({
+      path: relativePath,
+      content: await readFile(absolutePath, "utf8"),
+    });
+  }
+}
+
+function isTextSkillFile(fileName: string) {
+  return new Set([".md", ".mdx", ".txt", ".json", ".yaml", ".yml"]).has(extname(fileName).toLowerCase());
 }
 
 function buildSystemPrompt(context: RuntimeEditContext) {
@@ -39,10 +107,28 @@ function buildSystemPrompt(context: RuntimeEditContext) {
 
   return [
     "You are an AI slide editing agent inside a local presentation app.",
-    "The canonical editable deck is the `deck.slides/` directory in the current working directory.",
-    "Read `deck.slides/manifest.json` for deck structure and edit individual slide HTML files under `deck.slides/slides/`.",
-    "Preserve the 1920x1080 canvas, existing asset paths, and slide-level HTML structure unless the user explicitly asks for a redesign.",
-    "Do not collapse the deck into one HTML file. Make direct file edits in the deck directory.",
+    "You are working in a project workspace on the local filesystem. The app refreshes the deck from workspace files after you edit them, so the primary way to change the artifact is to read and write files directly in this workspace.",
+    "The current artifact is an HTML-based slide deck, not a PowerPoint `.pptx` file and not a single HTML document.",
+    [
+      "The canonical editable deck is the `deck.slides/` directory in the current working directory.",
+      "",
+      "Deck structure:",
+      "- `deck.slides/manifest.json` is the source of truth for deck metadata, canvas size, and slide ordering.",
+      "- `deck.slides/slides/*.html` contains the editable HTML for individual slides.",
+      "- `deck.slides/assets/` contains shared images, stylesheets, fonts, and other assets referenced by slide HTML.",
+      "- `deck.slides/previews/` and `deck.slides/thumbnails/` are generated preview assets and should not be treated as the primary editable source.",
+      "",
+      "Editing rules:",
+      "- Edit the deck files directly under `deck.slides/`.",
+      "- Do not collapse the deck into a single HTML file.",
+      "- Do not convert the deck to Markdown or PPTX unless the user explicitly asks for an export or conversion.",
+      "- Preserve the canvas size from `manifest.json` unless the user explicitly asks to change the deck format.",
+      "- Preserve existing relative asset paths when possible.",
+      "- When adding a new slide, create a slide HTML file under `deck.slides/slides/` and update `manifest.json`.",
+      "- When deleting or reordering slides, update `manifest.json` consistently.",
+      "- Do not create orphan slide files that are not referenced by `manifest.json`.",
+      "- Do not edit generated previews or thumbnails as the source of truth.",
+    ].join("\n"),
     noBrowserRenderVerification,
   ].join("\n\n");
 }

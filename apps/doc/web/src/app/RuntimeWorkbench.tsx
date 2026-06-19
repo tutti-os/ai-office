@@ -426,6 +426,7 @@ export function RuntimeWorkbench() {
   const [templates, setTemplates] = useState<GensparkTemplate[]>([]);
   const [selectedTemplateCategory, setSelectedTemplateCategory] = useState(allTemplatesLabel);
   const [toolbarState, setToolbarState] = useState<ToolbarState>(defaultToolbarState);
+  const [htmlToolbarActive, setHtmlToolbarActive] = useState(false);
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
   const [linkDraft, setLinkDraft] = useState<LinkDraft>({ text: "", href: "https://" });
   const [operationPanelMode, setOperationPanelMode] = useState<OperationPanelMode>(null);
@@ -550,6 +551,7 @@ export function RuntimeWorkbench() {
     clearMarkdownArtifact();
     clearDocxArtifact();
     setToolbarState(defaultToolbarState);
+    setHtmlToolbarActive(false);
     lastEditorTargetRef.current = null;
     lastResolvedTargetRef.current = null;
     lastSelectionRef.current = null;
@@ -562,6 +564,7 @@ export function RuntimeWorkbench() {
     clearArtifact();
     clearDocxArtifact();
     setToolbarState(defaultToolbarState);
+    setHtmlToolbarActive(false);
     lastEditorTargetRef.current = null;
     lastResolvedTargetRef.current = null;
     lastSelectionRef.current = null;
@@ -573,6 +576,7 @@ export function RuntimeWorkbench() {
     clearArtifact();
     clearMarkdownArtifact();
     setToolbarState(defaultToolbarState);
+    setHtmlToolbarActive(false);
     lastEditorTargetRef.current = null;
     lastResolvedTargetRef.current = null;
     lastSelectionRef.current = null;
@@ -704,6 +708,7 @@ export function RuntimeWorkbench() {
       clearMarkdownArtifact();
       clearDocxArtifact();
       setToolbarState(defaultToolbarState);
+      setHtmlToolbarActive(false);
       void refreshProjectHistory().catch((err) => setError(err instanceof Error ? err.message : String(err)));
       return;
     }
@@ -865,12 +870,18 @@ export function RuntimeWorkbench() {
         doc.defaultView?.setTimeout(run, 0);
       }
     };
-    doc.addEventListener("selectionchange", () => queueSelectionSync(lastEditorTargetRef.current));
+    const activateToolbarFromFrame = () => setHtmlToolbarActive(true);
+    doc.addEventListener("selectionchange", () => {
+      if (doc.hasFocus() && doc.getSelection()?.rangeCount) activateToolbarFromFrame();
+      queueSelectionSync(lastEditorTargetRef.current);
+    });
     const syncFromFrameEvent = (event: Event) => {
+      activateToolbarFromFrame();
       lastEditorTargetRef.current = frameEventTarget(doc, event);
       queueSelectionSync(lastEditorTargetRef.current);
     };
     const syncClickFromFrameEvent = (event: Event) => {
+      activateToolbarFromFrame();
       const target = frameEventTarget(doc, event);
       const image = imageFromNode(target, doc);
       if (image) {
@@ -885,9 +896,14 @@ export function RuntimeWorkbench() {
     };
     clearTableCellSelection(doc);
     removeImageSelectionOverlay(doc);
+    doc.addEventListener("focusin", activateToolbarFromFrame, true);
+    doc.addEventListener("pointerdown", activateToolbarFromFrame, true);
     doc.addEventListener("keyup", syncFromFrameEvent, true);
     doc.addEventListener("click", syncClickFromFrameEvent, true);
-    doc.addEventListener("input", () => syncMutation("input", "User edited doc body"));
+    doc.addEventListener("input", () => {
+      activateToolbarFromFrame();
+      syncMutation("input", "User edited doc body");
+    });
     setRuntime((current) => {
       if (!current) return current;
       const loaded = applier.apply(current, {
@@ -1728,6 +1744,7 @@ export function RuntimeWorkbench() {
           editorStats={editorStats}
           runtime={runtime}
           saveState={saveState}
+          toolbarDisabled={!htmlToolbarActive}
           toolbarState={toolbarState}
           linkDraft={linkDraft}
           linkEditorOpen={linkEditorOpen}
@@ -1866,6 +1883,7 @@ function EditorScreen(props: {
   operationWrapperTag: string;
   runtime: RuntimeState | null;
   saveState: WorkspaceSaveState;
+  toolbarDisabled: boolean;
   toolbarState: ToolbarState;
   onAlignment: (alignment: Alignment) => void;
   onApplyLink: (draft: LinkDraft) => void;
@@ -1913,6 +1931,7 @@ function EditorScreen(props: {
 }) {
   const canUndo = Boolean(props.runtime && props.runtime.history.currentIndex > 0);
   const canRedo = Boolean(props.runtime && props.runtime.history.currentIndex < props.runtime.history.snapshots.length - 1);
+  const toolbarDisabled = props.toolbarDisabled;
   const [spacingMenuOpen, setSpacingMenuOpen] = useState(false);
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
   const [frameHeight, setFrameHeight] = useState(minimumHtmlFrameHeight);
@@ -1924,7 +1943,7 @@ function EditorScreen(props: {
   const hasPreservedRangeSelection = Boolean(props.runtime?.activeSelection && props.runtime.activeSelection.selectionType !== "write");
   const hasPreservedWriteSelection = Boolean(props.runtime?.activeSelection?.selectionType === "write" && props.runtime.activeSelection.commonAncestorPath);
   const canUseRangeSelection = props.toolbarState.rangeSelection || hasPreservedRangeSelection;
-  const canCreateLink = canUseRangeSelection || hasPreservedWriteSelection || props.toolbarState.table || props.toolbarState.contentElement;
+  const canCreateLink = !toolbarDisabled && (canUseRangeSelection || hasPreservedWriteSelection || props.toolbarState.table || props.toolbarState.contentElement);
 
   const updateHtmlFrameHeight = (pass = 0) => {
     const frame = props.iframeRef.current;
@@ -2154,7 +2173,7 @@ function EditorScreen(props: {
               </ToolbarGroup>
               <ToolbarDivider />
               <ToolbarGroup className="[column-gap:4px]">
-                <ToolbarSelect title="Block style" value={props.toolbarState.block} onChange={(value) => props.onHeading(value as HeadingTag)}>
+                <ToolbarSelect disabled={toolbarDisabled} title="Block style" value={props.toolbarState.block} onChange={(value) => props.onHeading(value as HeadingTag)}>
                   <option value="p">Normal Text</option>
                   <option value="h1">Heading 1</option>
                   <option value="h2">Heading 2</option>
@@ -2162,29 +2181,30 @@ function EditorScreen(props: {
                   <option value="h4">Heading 4</option>
                   <option value="blockquote">Quote</option>
                 </ToolbarSelect>
-                <ToolbarSelect title="Font family" value={props.toolbarState.fontFamily} onChange={props.onFontFamily}>
+                <ToolbarSelect disabled={toolbarDisabled} title="Font family" value={props.toolbarState.fontFamily} onChange={props.onFontFamily}>
                   <option value="Arial, sans-serif">Arial</option>
                   <option value="Inter, sans-serif">Inter</option>
                   <option value="Georgia, serif">Georgia</option>
                   <option value="'Times New Roman', serif">Times</option>
                   <option value="'Courier New', monospace">Courier</option>
                 </ToolbarSelect>
-                <FontSizeControl value={props.toolbarState.fontSize || "14px"} onChange={props.onFontSize} />
+                <FontSizeControl disabled={toolbarDisabled} value={props.toolbarState.fontSize || "14px"} onChange={props.onFontSize} />
               </ToolbarGroup>
               <ToolbarDivider />
               <ToolbarGroup>
-                <IconButtonLight active={props.toolbarState.bold} title="Bold" onClick={() => props.onFormat("strong")}><Bold size={19} /></IconButtonLight>
-                <IconButtonLight active={props.toolbarState.italic} title="Italic" onClick={() => props.onFormat("em")}><Italic size={19} /></IconButtonLight>
-                <IconButtonLight active={props.toolbarState.underline} title="Underline" onClick={() => props.onFormat("u")}><Underline size={19} /></IconButtonLight>
-                <IconButtonLight active={props.toolbarState.strikethrough} title="Strikethrough" onClick={() => props.onFormat("s")}><Strikethrough size={19} /></IconButtonLight>
+                <IconButtonLight active={props.toolbarState.bold} disabled={toolbarDisabled} title="Bold" onClick={() => props.onFormat("strong")}><Bold size={19} /></IconButtonLight>
+                <IconButtonLight active={props.toolbarState.italic} disabled={toolbarDisabled} title="Italic" onClick={() => props.onFormat("em")}><Italic size={19} /></IconButtonLight>
+                <IconButtonLight active={props.toolbarState.underline} disabled={toolbarDisabled} title="Underline" onClick={() => props.onFormat("u")}><Underline size={19} /></IconButtonLight>
+                <IconButtonLight active={props.toolbarState.strikethrough} disabled={toolbarDisabled} title="Strikethrough" onClick={() => props.onFormat("s")}><Strikethrough size={19} /></IconButtonLight>
               </ToolbarGroup>
               <ToolbarDivider />
               <ToolbarGroup>
-                <IconButtonLight active={props.toolbarState.alignment === "left"} title="Align left" onClick={() => props.onAlignment("left")}><AlignLeft size={19} /></IconButtonLight>
-                <IconButtonLight active={props.toolbarState.alignment === "center"} title="Align center" onClick={() => props.onAlignment("center")}><AlignCenter size={19} /></IconButtonLight>
-                <IconButtonLight active={props.toolbarState.alignment === "right"} title="Align right" onClick={() => props.onAlignment("right")}><AlignRight size={19} /></IconButtonLight>
-                <IconButtonLight active={props.toolbarState.alignment === "justify"} title="Justify" onClick={() => props.onAlignment("justify")}><AlignJustify size={19} /></IconButtonLight>
+                <IconButtonLight active={props.toolbarState.alignment === "left"} disabled={toolbarDisabled} title="Align left" onClick={() => props.onAlignment("left")}><AlignLeft size={19} /></IconButtonLight>
+                <IconButtonLight active={props.toolbarState.alignment === "center"} disabled={toolbarDisabled} title="Align center" onClick={() => props.onAlignment("center")}><AlignCenter size={19} /></IconButtonLight>
+                <IconButtonLight active={props.toolbarState.alignment === "right"} disabled={toolbarDisabled} title="Align right" onClick={() => props.onAlignment("right")}><AlignRight size={19} /></IconButtonLight>
+                <IconButtonLight active={props.toolbarState.alignment === "justify"} disabled={toolbarDisabled} title="Justify" onClick={() => props.onAlignment("justify")}><AlignJustify size={19} /></IconButtonLight>
                 <ToolbarSpacingMenu
+                  disabled={toolbarDisabled}
                   lineHeight={props.toolbarState.lineHeight}
                   letterSpacing={props.toolbarState.letterSpacing}
                   open={spacingMenuOpen}
@@ -2196,6 +2216,7 @@ function EditorScreen(props: {
                   }}
                 />
                 <ToolbarLayoutMenu
+                  disabled={toolbarDisabled}
                   open={layoutMenuOpen}
                   targetLabel={props.toolbarState.targetLabel}
                   value={props.toolbarState.layout}
@@ -2208,20 +2229,22 @@ function EditorScreen(props: {
               </ToolbarGroup>
               <ToolbarDivider />
               <ToolbarGroup>
-                <IconButtonLight active={props.toolbarState.list === "ordered"} title="Numbered list" onClick={() => props.onList("ordered")}><ListOrdered size={19} /></IconButtonLight>
-                <IconButtonLight active={props.toolbarState.list === "unordered"} title="Bulleted list" onClick={() => props.onList("unordered")}><List size={19} /></IconButtonLight>
-                <IconButtonLight active={props.toolbarState.checklist} title="Checklist" onClick={props.onChecklist}><ListTodo size={19} /></IconButtonLight>
-                <IconButtonLight title="Indent" onClick={props.onIndent}><IndentIncrease size={19} /></IconButtonLight>
-                <IconButtonLight title="Outdent" onClick={props.onOutdent}><IndentDecrease size={19} /></IconButtonLight>
+                <IconButtonLight active={props.toolbarState.list === "ordered"} disabled={toolbarDisabled} title="Numbered list" onClick={() => props.onList("ordered")}><ListOrdered size={19} /></IconButtonLight>
+                <IconButtonLight active={props.toolbarState.list === "unordered"} disabled={toolbarDisabled} title="Bulleted list" onClick={() => props.onList("unordered")}><List size={19} /></IconButtonLight>
+                <IconButtonLight active={props.toolbarState.checklist} disabled={toolbarDisabled} title="Checklist" onClick={props.onChecklist}><ListTodo size={19} /></IconButtonLight>
+                <IconButtonLight disabled={toolbarDisabled} title="Indent" onClick={props.onIndent}><IndentIncrease size={19} /></IconButtonLight>
+                <IconButtonLight disabled={toolbarDisabled} title="Outdent" onClick={props.onOutdent}><IndentDecrease size={19} /></IconButtonLight>
               </ToolbarGroup>
               <ToolbarDivider />
               <ToolbarGroup>
                 <ToolbarColorInput
+                  disabled={toolbarDisabled}
                   title="Text color"
                   color={props.toolbarState.foreColor}
                   onChange={props.onForeColor}
                 />
                 <ToolbarColorInput
+                  disabled={toolbarDisabled}
                   title="Fill color"
                   color={props.toolbarState.backColor}
                   icon={<PaintBucket size={17} />}
@@ -2230,39 +2253,39 @@ function EditorScreen(props: {
               </ToolbarGroup>
               <ToolbarDivider />
               <ToolbarGroup>
-                <IconButtonLight active={props.toolbarState.image} title="Image" onClick={props.onPickImage}><Image size={18} /></IconButtonLight>
+                <IconButtonLight active={props.toolbarState.image} disabled={toolbarDisabled} title="Image" onClick={props.onPickImage}><Image size={18} /></IconButtonLight>
                 <div ref={linkEditorRef} className="relative inline-grid">
                   <IconButtonLight
                     active={props.toolbarState.link}
-                    disabled={!props.toolbarState.link && !canCreateLink}
+                    disabled={toolbarDisabled || (!props.toolbarState.link && !canCreateLink)}
                     title="Create link"
                     onClick={props.toolbarState.link ? props.onRemoveLink : props.onCreateLink}
                   >
                     <Link2 size={18} />
                   </IconButtonLight>
                 </div>
-                <IconButtonLight title="Insert table" onClick={() => props.onMoreAction("insertTable")}><Table2 size={18} /></IconButtonLight>
+                <IconButtonLight disabled={toolbarDisabled} title="Insert table" onClick={() => props.onMoreAction("insertTable")}><Table2 size={18} /></IconButtonLight>
               </ToolbarGroup>
               {props.toolbarState.table ? (
                 <>
                   <ToolbarDivider />
                   <ToolbarGroup>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.addColumnAfter} title="Add column" onClick={() => props.onMoreAction("addColumnAfter")}><Columns2 size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.deleteColumn} title="Delete column" onClick={() => props.onMoreAction("deleteColumn")}><BetweenHorizontalEnd size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.addRowAfter} title="Add row" onClick={() => props.onMoreAction("addRowAfter")}><Rows3 size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.deleteRow} title="Delete row" onClick={() => props.onMoreAction("deleteRow")}><Minus size={18} /></IconButtonLight>
+                    <IconButtonLight disabled={toolbarDisabled || !props.toolbarState.tableActions.addColumnAfter} title="Add column" onClick={() => props.onMoreAction("addColumnAfter")}><Columns2 size={18} /></IconButtonLight>
+                    <IconButtonLight disabled={toolbarDisabled || !props.toolbarState.tableActions.deleteColumn} title="Delete column" onClick={() => props.onMoreAction("deleteColumn")}><BetweenHorizontalEnd size={18} /></IconButtonLight>
+                    <IconButtonLight disabled={toolbarDisabled || !props.toolbarState.tableActions.addRowAfter} title="Add row" onClick={() => props.onMoreAction("addRowAfter")}><Rows3 size={18} /></IconButtonLight>
+                    <IconButtonLight disabled={toolbarDisabled || !props.toolbarState.tableActions.deleteRow} title="Delete row" onClick={() => props.onMoreAction("deleteRow")}><Minus size={18} /></IconButtonLight>
                   </ToolbarGroup>
                   <ToolbarDivider />
                   <ToolbarGroup>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.copyRow} title="Copy row" onClick={() => props.onMoreAction("copyRow")}><Copy size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.copyColumn} title="Copy column" onClick={() => props.onMoreAction("copyColumn")}><Copy className="rotate-90" size={18} /></IconButtonLight>
+                    <IconButtonLight disabled={toolbarDisabled || !props.toolbarState.tableActions.copyRow} title="Copy row" onClick={() => props.onMoreAction("copyRow")}><Copy size={18} /></IconButtonLight>
+                    <IconButtonLight disabled={toolbarDisabled || !props.toolbarState.tableActions.copyColumn} title="Copy column" onClick={() => props.onMoreAction("copyColumn")}><Copy className="rotate-90" size={18} /></IconButtonLight>
                   </ToolbarGroup>
                   <ToolbarDivider />
                   <ToolbarGroup>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.moveColumnLeft} title="Move column left" onClick={() => props.onMoreAction("moveColumnLeft")}><ArrowLeft size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.moveColumnRight} title="Move column right" onClick={() => props.onMoreAction("moveColumnRight")}><ArrowRight size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.moveRowUp} title="Move row up" onClick={() => props.onMoreAction("moveRowUp")}><ArrowUp size={18} /></IconButtonLight>
-                    <IconButtonLight disabled={!props.toolbarState.tableActions.moveRowDown} title="Move row down" onClick={() => props.onMoreAction("moveRowDown")}><ArrowUp className="rotate-180" size={18} /></IconButtonLight>
+                    <IconButtonLight disabled={toolbarDisabled || !props.toolbarState.tableActions.moveColumnLeft} title="Move column left" onClick={() => props.onMoreAction("moveColumnLeft")}><ArrowLeft size={18} /></IconButtonLight>
+                    <IconButtonLight disabled={toolbarDisabled || !props.toolbarState.tableActions.moveColumnRight} title="Move column right" onClick={() => props.onMoreAction("moveColumnRight")}><ArrowRight size={18} /></IconButtonLight>
+                    <IconButtonLight disabled={toolbarDisabled || !props.toolbarState.tableActions.moveRowUp} title="Move row up" onClick={() => props.onMoreAction("moveRowUp")}><ArrowUp size={18} /></IconButtonLight>
+                    <IconButtonLight disabled={toolbarDisabled || !props.toolbarState.tableActions.moveRowDown} title="Move row down" onClick={() => props.onMoreAction("moveRowDown")}><ArrowUp className="rotate-180" size={18} /></IconButtonLight>
                   </ToolbarGroup>
                 </>
               ) : null}

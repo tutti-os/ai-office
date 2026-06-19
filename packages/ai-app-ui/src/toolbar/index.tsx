@@ -245,7 +245,7 @@ export function ToolbarIconButton(props: {
   return (
     <button
       aria-label={props.title}
-      className={cx(toolbarIconButton, toolbarTooltip, props.active ? "!bg-black/[0.07] !text-black" : "", props.className)}
+      className={cx(toolbarIconButton, toolbarTooltip, props.active && !props.disabled ? "!bg-black/[0.07] !text-black" : "", props.className)}
       data-testid={props.dataTestId}
       data-tip={props.tip ?? toolbarTip(props.title)}
       type="button"
@@ -568,6 +568,7 @@ export function ToolbarLetterSpacingMenu(props: {
 }
 
 export function ToolbarSpacingMenu(props: {
+  disabled?: boolean;
   lineHeight: string;
   letterSpacing: string;
   open: boolean;
@@ -600,12 +601,14 @@ export function ToolbarSpacingMenu(props: {
         aria-label="Spacing"
         className={cx(toolbarIconButton, toolbarTooltip, props.open ? "!bg-black/[0.07] !text-black" : "")}
         data-tip={toolbarTip("Spacing")}
+        disabled={props.disabled}
         type="button"
         title="Spacing"
         aria-haspopup="menu"
         aria-expanded={props.open}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => {
+          if (props.disabled) return;
           updatePosition();
           props.onOpenChange(!props.open);
         }}
@@ -664,6 +667,7 @@ export function ToolbarParagraphSpacingMenu(props: {
 }
 
 export function ToolbarLayoutMenu(props: {
+  disabled?: boolean;
   open: boolean;
   targetLabel: string;
   value: ToolbarLayoutValue;
@@ -693,12 +697,14 @@ export function ToolbarLayoutMenu(props: {
         aria-label="Layout"
         className={cx(toolbarIconButton, toolbarTooltip, props.open ? "!bg-black/[0.07] !text-black" : "")}
         data-tip={toolbarTip("Layout")}
+        disabled={props.disabled}
         type="button"
         title="Layout"
         aria-haspopup="menu"
         aria-expanded={props.open}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => {
+          if (props.disabled) return;
           updatePosition();
           props.onOpenChange(!props.open);
         }}

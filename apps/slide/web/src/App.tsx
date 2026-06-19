@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent } from "react";
 import {
   AlignCenter,
   AlignLeft,
@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Clock3,
   Copy,
+  Crosshair,
   FileCode2,
   FileText,
   History,
@@ -18,12 +19,12 @@ import {
   Italic,
   Layers3,
   Loader2,
-  Move,
   PaintBucket,
   Plus,
   Redo2,
   Search,
   Sparkles,
+  Strikethrough,
   Trash2,
   Underline,
   Undo2,
@@ -31,6 +32,17 @@ import {
   X,
 } from "lucide-react";
 import { ArtifactEditorFrame, ArtifactWorkspaceHeader, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
+import {
+  applyInlineFormat,
+  applyPresentationStyle,
+  captureRichTextSelection,
+  restoreRichTextSelection,
+  selectionBelongsToElement,
+  selectedElementFromRange,
+  type InlineFormatTag,
+  type RichTextSelectionState,
+  type RichTextStyle,
+} from "@ai-app/ui/rich-text";
 import {
   Toolbar,
   ToolbarColorInput,
@@ -45,12 +57,32 @@ import { allCategoriesForTemplates, categoryCountsForTemplates, type OutputType,
 import { AgentConversationPanel } from "./app/AgentConversationPanel";
 import { PptxPreview } from "./app/PptxPreview";
 import { SlideFilmstrip } from "./app/SlideFilmstrip";
-import { fitScale, nextSlideIndex, scaledHeight, shouldIgnoreSlideNavigationEvent, slideDirectionFromKey, thumbnailMetrics, useElementSize } from "./app/slideView";
+import { fitScale, nextSlideIndex, scaledHeight, slideDirectionFromKey, thumbnailMetrics, useElementSize } from "./app/slideView";
 import { useAgentConversation } from "./app/useAgentConversation";
 import { cancelRun, clearProjectHistory, createProject, fetchLocalAgentProviders, getProject, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
+import { DeckArtifactRuntimeAdapter, type DeckAgentRuntimeProvider } from "./artifact/deckArtifactAdapter";
+import { DeckInteractionLayer } from "./artifact/deckInteractionLayerView";
+import {
+  alignedDeckObjectRect,
+  applyDeckObjectRect,
+  applyDeckObjectRotation,
+  collectDeckSnapTargets,
+  isMovableDeckObject,
+  movedDeckRectForDelta,
+  readDeckObjectGeometry,
+  readDeckObjectRect,
+  resizedDeckRectForHandle,
+  snappedDeckDragRect,
+  type DeckObjectAlignment,
+  type DeckObjectElement,
+  type DeckObjectGeometry,
+  type DeckObjectGeometryPatch,
+  type DeckResizeHandle,
+  type DeckSnapGuide,
+} from "./artifact/deckInteractionLayer";
 import { PptxArtifactRuntimeAdapter } from "./artifact/pptxArtifactAdapter";
 import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
-import type { DeckManifestSlide, LocalAgentProviderStatus, ProjectDetailResponse, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
+import type { DeckManifestSlide, LocalAgentProviderStatus, ProjectDetailResponse, SlideArtifactSelection, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
 
 const agentProfiles: Array<{ id: string; provider: string; model: string; label: string }> = [
   { id: "local-agent:codex", provider: "codex", model: "codex:default", label: "Codex" },
@@ -65,16 +97,6 @@ const scrollbarHidden = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 const slideFilmstripClass = cn("flex min-h-32 min-w-0 shrink-0 items-center gap-3 overflow-x-auto overflow-y-hidden border-t border-white/8 bg-[#242424] px-5 pb-4 pt-3.5", scrollbarHidden);
 const slideFilmstripThumbClass =
   "relative w-36 shrink-0 rounded-lg border border-white/10 bg-[#303030] p-[7px] text-white/70 aria-selected:border-violet-500/90 aria-selected:shadow-[0_0_0_2px_rgba(139,92,246,0.24)]";
-const resizeHandlePosition: Record<ResizeHandle, string> = {
-  "top-left": "-left-1 -top-1 cursor-nwse-resize",
-  top: "-top-1 left-1/2 -translate-x-1/2 cursor-ns-resize",
-  "top-right": "-right-1 -top-1 cursor-nesw-resize",
-  right: "-right-1 top-1/2 -translate-y-1/2 cursor-ew-resize",
-  "bottom-right": "-bottom-1 -right-1 cursor-nwse-resize",
-  bottom: "-bottom-1 left-1/2 -translate-x-1/2 cursor-ns-resize",
-  "bottom-left": "-bottom-1 -left-1 cursor-nesw-resize",
-  left: "-left-1 top-1/2 -translate-y-1/2 cursor-ew-resize",
-};
 
 type AppRoute = { name: "home" } | { name: "slide"; projectId: string };
 
@@ -118,6 +140,8 @@ export function App() {
   const [selectedSlideIndex, setSelectedSlideIndex] = useState(0);
   const [agentSending, setAgentSending] = useState(false);
   const currentProjectId = route.name === "slide" ? route.projectId : null;
+  const deckAgentRuntimeProviderRef = useRef<DeckAgentRuntimeProvider | null>(null);
+  const [deckActiveSelectionText, setDeckActiveSelectionText] = useState("");
   const agentConversation = useAgentConversation({
     projectId: currentProjectId,
     onProjectUpdated: (detail) => {
@@ -126,6 +150,7 @@ export function App() {
       setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
     },
   });
+  const deckArtifactAdapter = useMemo(() => new DeckArtifactRuntimeAdapter(), []);
   const pptxArtifactAdapter = useMemo(() => new PptxArtifactRuntimeAdapter(), []);
   const {
     runtime: pptxRuntime,
@@ -138,6 +163,10 @@ export function App() {
   } = usePptxArtifactRuntime(pptxArtifactAdapter);
   const allCategories = useMemo(() => allCategoriesForTemplates(slideTemplates), [slideTemplates]);
   const categoryCounts = useMemo(() => categoryCountsForTemplates(slideTemplates), [slideTemplates]);
+
+  const setDeckAgentRuntimeProvider = useCallback((provider: DeckAgentRuntimeProvider | null) => {
+    deckAgentRuntimeProviderRef.current = provider;
+  }, []);
 
   const visibleTemplates = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -195,6 +224,8 @@ export function App() {
   useEffect(() => {
     if (route.name !== "slide") {
       setProjectDetail(null);
+      setDeckActiveSelectionText("");
+      deckAgentRuntimeProviderRef.current = null;
       clearPptxArtifact();
       return;
     }
@@ -297,13 +328,20 @@ export function App() {
         );
         setProjectDetail(await getProject(currentProjectId));
       } else {
-        await startAiEdit(currentProjectId, {
-          userPrompt,
-          mode: "write",
-          artifactType: projectDetail?.artifact.type,
-          selectionType: "write",
-          runtimeProfileId: selectedAgent || null,
-        });
+        const deckRuntime = deckAgentRuntimeProviderRef.current?.() ?? null;
+        if (!deckRuntime) throw new Error("Deck runtime is not ready");
+        if (deckRuntime.activeSlide?.id && deckRuntime.currentSlideHtml.trim()) {
+          await updateDeckSlideHtml(currentProjectId, deckRuntime.activeSlide.id, { html: deckRuntime.currentSlideHtml });
+        }
+        await startAiEdit(
+          currentProjectId,
+          deckArtifactAdapter.createAiEditRequest({
+            projectId: currentProjectId,
+            runtime: deckRuntime,
+            userPrompt,
+            runtimeProfileId: selectedAgent || null,
+          }),
+        );
       }
       await agentConversation.reload();
     } catch (err) {
@@ -335,7 +373,7 @@ export function App() {
         conversationLoading={agentConversation.loading}
         detail={projectDetail}
         error={error}
-        activeSelectionText={projectDetail?.artifact.type === "pptx" ? pptxRuntime?.selection.selectedText ?? "" : ""}
+        activeSelectionText={projectDetail?.artifact.type === "pptx" ? pptxRuntime?.selection.selectedText ?? "" : deckActiveSelectionText}
         localAgentProviders={localAgentProviders}
         selectedAgent={selectedAgent}
         sending={agentBusy}
@@ -346,6 +384,8 @@ export function App() {
         onBackHome={() => setRoute(pushHomeRoute())}
         onCancel={cancelAgentRun}
         onPptxSelectionChange={updatePptxSelection}
+        onDeckAgentRuntimeProviderChange={setDeckAgentRuntimeProvider}
+        onDeckSelectionTextChange={setDeckActiveSelectionText}
         onSelectedAgentChange={setSelectedAgent}
         onSend={sendAgentPrompt}
       />
@@ -690,6 +730,8 @@ function EditorPlaceholder(props: {
   sending: boolean;
   onBackHome: () => void;
   onCancel: (runId: string) => Promise<void>;
+  onDeckAgentRuntimeProviderChange: (provider: DeckAgentRuntimeProvider | null) => void;
+  onDeckSelectionTextChange: (text: string) => void;
   onPptxSelectionChange: ReturnType<typeof usePptxArtifactRuntime>["updateSelection"];
   onSelectedAgentChange: (value: string) => void;
   onSend: (prompt: string) => Promise<void>;
@@ -729,7 +771,13 @@ function EditorPlaceholder(props: {
         ) : props.error ? (
           <EditorInfoPanel detail={props.error} title="Presentation not found" />
         ) : props.detail?.artifact.type === "deck" ? (
-          <DeckEditor detail={props.detail} projectId={props.projectId} onSaveStateChange={setDeckSaveState} />
+          <DeckEditor
+            detail={props.detail}
+            projectId={props.projectId}
+            onAgentRuntimeProviderChange={props.onDeckAgentRuntimeProviderChange}
+            onAgentSelectionTextChange={props.onDeckSelectionTextChange}
+            onSaveStateChange={setDeckSaveState}
+          />
         ) : props.detail?.artifact.type === "pptx" && props.pptxRuntime ? (
           <PptxPreview
             runtime={props.pptxRuntime}
@@ -752,6 +800,7 @@ type ActiveDeckObject = {
   objectId: string;
   objectType: string;
   label: string;
+  movable: boolean;
 };
 
 type ActiveDeckSelectionBox = {
@@ -760,6 +809,7 @@ type ActiveDeckSelectionBox = {
   top: number;
   width: number;
   height: number;
+  rotation: number;
 };
 
 type ActiveTextEdit = {
@@ -768,19 +818,31 @@ type ActiveTextEdit = {
   textTargetId: string;
 };
 
+type ActiveTextSelection = ActiveTextEdit & {
+  selection: RichTextSelectionState;
+};
+
+type TextEditEntryOptions = {
+  caretPoint?: { x: number; y: number };
+  deferToNativeSelection?: boolean;
+  selectContents?: boolean;
+  useObjectTextRoot?: boolean;
+};
+
 type DeckSelectionMode = "idle" | "object" | "text";
 
-type ResizeHandle =
-  | "top-left"
-  | "top"
-  | "top-right"
-  | "right"
-  | "bottom-right"
-  | "bottom"
-  | "bottom-left"
-  | "left";
+type ResizeHandle = DeckResizeHandle;
 
-type DeckObjectElement = HTMLElement | SVGElement;
+type SlideNavigationKeyboardEvent = {
+  altKey: boolean;
+  ctrlKey: boolean;
+  key: string;
+  metaKey: boolean;
+  shiftKey: boolean;
+  target: EventTarget | null;
+  preventDefault: () => void;
+  stopPropagation: () => void;
+};
 
 type DeckToolbarState = {
   block: "normal" | "heading" | "shape" | "image";
@@ -803,13 +865,6 @@ type FrameRecord = {
 type DeckSlideHistory = {
   entries: string[];
   currentIndex: number;
-};
-
-type ResizeRect = {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
 };
 
 const defaultDeckToolbarState: DeckToolbarState = {
@@ -850,17 +905,30 @@ const deckFontOptions = [
   { value: "'Times New Roman', serif", label: "Times" },
 ];
 
-const resizeHandles: ResizeHandle[] = ["top-left", "top", "top-right", "right", "bottom-right", "bottom", "bottom-left", "left"];
 const maxDeckHistoryEntries = 100;
 
-function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; onSaveStateChange: (state: ArtifactSaveState) => void }) {
+function DeckEditor(props: {
+  detail: ProjectDetailResponse;
+  projectId: string;
+  onAgentRuntimeProviderChange: (provider: DeckAgentRuntimeProvider | null) => void;
+  onAgentSelectionTextChange: (text: string) => void;
+  onSaveStateChange: (state: ArtifactSaveState) => void;
+}) {
   const { onSaveStateChange } = props;
   const { ref: hostRef, width: hostWidth, height: hostHeight } = useElementSize<HTMLDivElement>();
   const frameRecordsRef = useRef(new Map<string, FrameRecord>());
   const initializedFramesRef = useRef(new WeakSet<Document>());
   const deckHistoryRef = useRef(new Map<string, DeckSlideHistory>());
   const applyingHistoryRef = useRef(new Set<string>());
+  const activeTextSelectionRef = useRef<ActiveTextSelection | null>(null);
+  const directTextEditModeRef = useRef(false);
+  const agentRuntimeSnapshotRef = useRef<DeckAgentRuntimeProvider>(() => null);
+  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
+  const activeObjectRef = useRef<ActiveDeckObject | null>(null);
+  const activeTextEditRef = useRef<ActiveTextEdit | null>(null);
+  const selectionModeRef = useRef<DeckSelectionMode>("idle");
   const [activeObject, setActiveObject] = useState<ActiveDeckObject | null>(null);
+  const [activeObjectGeometry, setActiveObjectGeometry] = useState<DeckObjectGeometry | null>(null);
   const [activeSelectionBox, setActiveSelectionBox] = useState<ActiveDeckSelectionBox | null>(null);
   const [activeTextEdit, setActiveTextEdit] = useState<ActiveTextEdit | null>(null);
   const [activeSlideId, setActiveSlideId] = useState<string | null>(null);
@@ -868,6 +936,9 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
   const [toolbarState, setToolbarState] = useState<DeckToolbarState>(defaultDeckToolbarState);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const [historyVersion, setHistoryVersion] = useState(0);
+  const [directTextEditMode, setDirectTextEditMode] = useState(false);
+  const [snapGuides, setSnapGuides] = useState<DeckSnapGuide[]>([]);
+  const [agentSelectionVersion, setAgentSelectionVersion] = useState(0);
   const manifest = props.detail.deckManifest;
   const canvas = manifest?.canvas ?? { width: 1920, height: 1080 };
   const slides = manifest?.slides ?? [];
@@ -881,6 +952,14 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
   const activeHistory = useMemo(() => (activeSlideId ? deckHistoryRef.current.get(activeSlideId) ?? null : null), [activeSlideId, historyVersion]);
   const canUndo = Boolean(activeHistory && activeHistory.currentIndex > 0);
   const canRedo = Boolean(activeHistory && activeHistory.currentIndex < activeHistory.entries.length - 1);
+
+  activeObjectRef.current = activeObject;
+  activeTextEditRef.current = activeTextEdit;
+  selectionModeRef.current = selectionMode;
+
+  useEffect(() => {
+    directTextEditModeRef.current = directTextEditMode;
+  }, [directTextEditMode]);
 
   useEffect(() => {
     onSaveStateChange(saveState);
@@ -913,6 +992,7 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
   };
 
   const exitTextEditMode = () => {
+    activeTextSelectionRef.current = null;
     for (const record of frameRecordsRef.current.values()) {
       const doc = record.iframe.contentDocument;
       if (!doc) continue;
@@ -935,6 +1015,118 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
     return findTextTargetById(object, activeTextEdit.textTargetId) ?? textTargetForObject(object);
   };
 
+  const readAgentSelection = (slide: DeckManifestSlide | null, doc: Document | null, currentSlideHtml: string): SlideArtifactSelection | null => {
+    if (!slide) return null;
+    const object = findActiveObject();
+    if (activeTextEdit && object) {
+      const textTarget = findActiveTextTarget(object);
+      const saved = activeTextSelectionRef.current;
+      const selectionState =
+        saved &&
+        saved.slideId === activeTextEdit.slideId &&
+        saved.objectId === activeTextEdit.objectId &&
+        saved.textTargetId === activeTextEdit.textTargetId
+          ? saved.selection
+          : isHtmlElement(textTarget)
+            ? captureRichTextSelection(textTarget.ownerDocument, textTarget)
+            : null;
+      if (selectionState) {
+        const type = selectionState.selectionType === "element" ? "element" : selectionState.selectionType === "text" ? "text" : "write";
+        return {
+          type,
+          text: selectionState.selectedText,
+          html: selectionState.selectedHtml,
+          path: deckTextSelectionPath(slide.id, object, textTarget, selectionState),
+          slideId: slide.id,
+          range: {
+            startPath: selectionState.startPath,
+            startOffset: selectionState.startOffset,
+            endPath: selectionState.endPath,
+            endOffset: selectionState.endOffset,
+          },
+        };
+      }
+    }
+    if (activeObject && object) {
+      return {
+        type: "element",
+        text: object.textContent?.replace(/\s+/g, " ").trim() ?? "",
+        html: serializeDeckObjectForAgent(object),
+        path: deckObjectSelectionPath(slide.id, object),
+        slideId: slide.id,
+      };
+    }
+    if (doc) {
+      return {
+        type: "slide",
+        text: slide.title,
+        html: currentSlideHtml,
+        path: `deck:${slide.id}`,
+        slideId: slide.id,
+      };
+    }
+    return {
+      type: "none",
+      text: "",
+      html: "",
+      path: "",
+      slideId: slide.id,
+    };
+  };
+
+  const createDeckAgentRuntimeSnapshot = () => {
+    const slide = activeSlide;
+    const doc = slide ? frameRecordsRef.current.get(slide.id)?.iframe.contentDocument ?? null : null;
+    const currentSlideHtml = doc?.documentElement ? serializeSlideDocument(doc) : "";
+    return {
+      title: props.detail.project.title,
+      artifactId: props.detail.artifact.id,
+      fileRef: props.detail.artifact.fileRef,
+      revision: props.detail.artifact.revision,
+      activeSlide: slide,
+      activeSlideIndex,
+      currentSlideHtml,
+      selection: readAgentSelection(slide, doc, currentSlideHtml),
+    };
+  };
+
+  agentRuntimeSnapshotRef.current = createDeckAgentRuntimeSnapshot;
+
+  useEffect(() => {
+    const provider = () => agentRuntimeSnapshotRef.current();
+    props.onAgentRuntimeProviderChange(provider);
+    return () => props.onAgentRuntimeProviderChange(null);
+  }, [props.onAgentRuntimeProviderChange]);
+
+  useEffect(() => {
+    const selection = createDeckAgentRuntimeSnapshot().selection;
+    props.onAgentSelectionTextChange(selection && selection.type !== "slide" && selection.type !== "write" ? selection.text : "");
+  }, [activeObject, activeSlideId, activeTextEdit, agentSelectionVersion, props.detail.artifact.revision, props.onAgentSelectionTextChange]);
+
+  const rememberTextSelection = (slideId: string, doc: Document) => {
+    const selection = doc.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    const anchor = nearestElement(range.commonAncestorContainer);
+    const textTarget = anchor?.closest<HTMLElement>('[contenteditable="true"][data-ai-slide-text-edit-id]');
+    const object = textTarget?.closest<HTMLElement>('[data-object="true"][data-ai-slide-object-id]');
+    const objectId = object?.getAttribute("data-ai-slide-object-id") ?? "";
+    const textTargetId = textTarget?.getAttribute("data-ai-slide-text-edit-id") ?? "";
+    if (!textTarget || !objectId || !textTargetId) return;
+    const state = captureRichTextSelection(doc, textTarget);
+    if (!state) return;
+    activeTextSelectionRef.current = { slideId, objectId, textTargetId, selection: state };
+    setAgentSelectionVersion((version) => version + 1);
+  };
+
+  const restoreActiveTextSelection = (textTarget: HTMLElement) => {
+    const saved = activeTextSelectionRef.current;
+    if (!activeObject || !activeTextEdit || !saved) return;
+    if (saved.slideId !== activeObject.slideId || saved.objectId !== activeObject.objectId || saved.textTargetId !== activeTextEdit.textTargetId) return;
+    if (selectionBelongsToElement(textTarget.ownerDocument, textTarget)) return;
+    restoreRichTextSelection(textTarget.ownerDocument, saved.selection);
+  };
+
   const selectObject = (slideId: string, object: DeckObjectElement, mode: "object" | "text" = "object", textTarget?: DeckObjectElement) => {
     const objectId = object.getAttribute("data-ai-slide-object-id");
     if (!objectId) return;
@@ -948,8 +1140,10 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
       objectId,
       objectType: object.getAttribute("data-object-type") ?? "object",
       label: object.getAttribute("data-screen-label") || object.textContent?.trim().slice(0, 64) || "Object",
+      movable: isMovableDeckObject(object),
     };
     setActiveObject(nextActiveObject);
+    setActiveObjectGeometry(readDeckObjectGeometry(object));
     setActiveSelectionBox(readSelectionBox(slideId, object, scale));
     setActiveTextEdit(activeTextTarget ? { slideId, objectId, textTargetId: activeTextTarget.getAttribute("data-ai-slide-text-edit-id") ?? "" } : null);
     setSelectionMode(mode);
@@ -959,7 +1153,9 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
   const clearActiveSelection = (options: { preserveToolbar?: boolean } = {}) => {
     exitTextEditMode();
     clearSelections();
+    setSnapGuides([]);
     setActiveObject(null);
+    setActiveObjectGeometry(null);
     setActiveSelectionBox(null);
     setActiveTextEdit(null);
     setSelectionMode("idle");
@@ -1057,29 +1253,68 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
   };
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => handleHistoryShortcut(event);
+    const onKeyDown = (event: KeyboardEvent) => {
+      handleSlideNavigationKeyboardEvent(event);
+      handleHistoryShortcut(event);
+    };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
   const handleSlideNavigationKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (shouldIgnoreSlideNavigationEvent(event)) return;
+    handleSlideNavigationKeyboardEvent(event);
+  };
+
+  const handleSlideNavigationKeyboardEvent = (event: SlideNavigationKeyboardEvent, fromSlideId = activeSlideId) => {
+    if (shouldIgnoreDeckSlideNavigationEvent(event)) return;
     const direction = slideDirectionFromKey(event.key, "vertical");
     if (!direction) return;
     event.preventDefault();
-    navigateSlide(direction);
+    event.stopPropagation();
+    navigateSlide(direction, fromSlideId);
+  };
+
+  const shouldIgnoreDeckSlideNavigationEvent = (event: SlideNavigationKeyboardEvent) => {
+    return (
+      selectionModeRef.current !== "idle" ||
+      Boolean(activeObjectRef.current) ||
+      Boolean(activeTextEditRef.current) ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.altKey ||
+      event.shiftKey ||
+      isInsideKeyboardInput(event.target)
+    );
   };
 
   const initializeFrame = (slide: DeckManifestSlide, iframe: HTMLIFrameElement | null) => {
     if (!iframe) return;
     const previous = frameRecordsRef.current.get(slide.id);
-    if (previous?.saveTimer) clearTimeout(previous.saveTimer);
-    frameRecordsRef.current.set(slide.id, { iframe, saveTimer: null });
+    if (previous?.iframe !== iframe) {
+      if (previous?.saveTimer) clearTimeout(previous.saveTimer);
+      frameRecordsRef.current.set(slide.id, { iframe, saveTimer: null });
+    }
     const doc = iframe.contentDocument;
     if (!doc || !doc.head || !doc.body || initializedFramesRef.current.has(doc)) return;
     initializedFramesRef.current.add(doc);
     prepareSlideEditorDocument(doc);
     if (doc.location.href !== "about:blank") ensureInitialSlideHistory(slide.id, doc);
+    doc.addEventListener(
+      "mousedown",
+      (event) => {
+        if (!directTextEditModeRef.current || event.button !== 0 || isInsideEditable(event.target)) return;
+        const target = isElement(event.target) ? event.target.closest<DeckObjectElement>('[data-object="true"]') : null;
+        if (!target || target.getAttribute("data-object-type") !== "textbox") return;
+        setActiveSlideId(slide.id);
+        // Enable the whole textbox before the browser's default mousedown selection runs.
+        enterTextEditMode(slide.id, target, target, {
+          deferToNativeSelection: true,
+          selectContents: false,
+          useObjectTextRoot: true,
+        });
+      },
+      true,
+    );
     doc.addEventListener(
       "click",
       (event) => {
@@ -1092,7 +1327,15 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
         if (isInsideEditable(event.target)) return;
         event.preventDefault();
         event.stopPropagation();
-        selectObject(slide.id, target);
+        if (target.getAttribute("data-object-type") === "textbox" && directTextEditModeRef.current) {
+          enterTextEditMode(slide.id, target, target, {
+            caretPoint: event instanceof MouseEvent ? { x: event.clientX, y: event.clientY } : undefined,
+            selectContents: false,
+            useObjectTextRoot: true,
+          });
+        } else {
+          selectObject(slide.id, target);
+        }
       },
       true,
     );
@@ -1110,12 +1353,23 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
     doc.addEventListener(
       "input",
       () => {
+        rememberTextSelection(slide.id, doc);
         recordSlideHistory(slide.id, doc);
         scheduleSlideSave(slide.id);
       },
       true,
     );
-    doc.addEventListener("keydown", (event) => handleHistoryShortcut(event, slide.id), true);
+    doc.addEventListener("selectionchange", () => rememberTextSelection(slide.id, doc));
+    doc.addEventListener("keyup", () => rememberTextSelection(slide.id, doc), true);
+    doc.addEventListener("mouseup", () => rememberTextSelection(slide.id, doc), true);
+    doc.addEventListener(
+      "keydown",
+      (event) => {
+        handleSlideNavigationKeyboardEvent(event, slide.id);
+        handleHistoryShortcut(event, slide.id);
+      },
+      true,
+    );
   };
 
   const selectObjectFromFramePoint = (slide: DeckManifestSlide, clientX: number, clientY: number) => {
@@ -1129,7 +1383,14 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
     const x = (clientX - rect.left) * (canvas.width / rect.width);
     const y = (clientY - rect.top) * (canvas.height / rect.height);
     const target = hitTestDeckObject(doc, x, y) ?? hitTestDeckObjectFromElementPoint(doc, x, y);
-    if (target) selectObject(slide.id, target);
+    if (target?.getAttribute("data-object-type") === "textbox" && directTextEditModeRef.current) {
+      enterTextEditMode(slide.id, target, target, {
+        caretPoint: { x, y },
+        selectContents: false,
+        useObjectTextRoot: true,
+      });
+    }
+    else if (target) selectObject(slide.id, target);
     else if (activeTextEdit?.slideId === slide.id) clearActiveSelection({ preserveToolbar: true });
   };
 
@@ -1149,22 +1410,42 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
     else selectObject(slide.id, target);
   };
 
-  const enterTextEditMode = (slideId: string, object: DeckObjectElement, preferredTarget?: Element) => {
+  const enterTextEditMode = (slideId: string, object: DeckObjectElement, preferredTarget?: Element, options: TextEditEntryOptions = {}) => {
     setActiveSlideId(slideId);
     if (!isHtmlElement(object)) {
       selectObject(slideId, object);
       return;
     }
-    const textTarget = textTargetForObject(object, preferredTarget);
+    const textTarget = options.useObjectTextRoot ? object : textTargetForObject(object, preferredTarget);
     if (!isHtmlElement(textTarget)) {
       selectObject(slideId, object);
       return;
     }
+    exitTextEditMode();
     selectObject(slideId, object, "text", textTarget);
     textTarget.contentEditable = "true";
     textTarget.spellcheck = true;
     textTarget.focus();
-    selectElementText(textTarget);
+    const rememberCurrentSelection = () => {
+      const selection = captureRichTextSelection(textTarget.ownerDocument, textTarget);
+      if (!selection) return;
+      activeTextSelectionRef.current = {
+        slideId,
+        objectId: object.getAttribute("data-ai-slide-object-id") ?? "",
+        textTargetId: textTarget.getAttribute("data-ai-slide-text-edit-id") ?? "",
+        selection,
+      };
+    };
+    if (options.deferToNativeSelection) {
+      return;
+    }
+    if (options.selectContents === false) {
+      placeCaretInElement(textTarget, options.caretPoint);
+      queueTextEditCaretPlacement(textTarget, options.caretPoint, rememberCurrentSelection);
+    } else {
+      selectElementText(textTarget);
+    }
+    rememberCurrentSelection();
   };
 
   const beginResizeObject = (handle: ResizeHandle, event: PointerEvent<HTMLButtonElement>) => {
@@ -1172,7 +1453,7 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
     event.stopPropagation();
     const object = findActiveObject();
     if (!object || !activeObject || !activeSelectionBox || scale <= 0) return;
-    const initialRect = readObjectRect(object);
+    const initialRect = readDeckObjectRect(object);
     const startClientX = event.clientX;
     const startClientY = event.clientY;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -1181,8 +1462,9 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
       moveEvent.preventDefault();
       const deltaX = (moveEvent.clientX - startClientX) / scale;
       const deltaY = (moveEvent.clientY - startClientY) / scale;
-      const nextRect = resizedRectForHandle(handle, initialRect, deltaX, deltaY, canvas.width, canvas.height);
-      applyObjectRect(object, nextRect);
+      const nextRect = resizedDeckRectForHandle(handle, initialRect, deltaX, deltaY, canvas.width, canvas.height);
+      applyDeckObjectRect(object, nextRect, { onTextboxResize: enableTextResizeWrapping });
+      setActiveObjectGeometry(readDeckObjectGeometry(object));
       setActiveSelectionBox(readSelectionBox(activeObject.slideId, object, scale));
     };
 
@@ -1192,6 +1474,101 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
       window.removeEventListener("pointerup", onPointerEnd);
       window.removeEventListener("pointercancel", onPointerEnd);
       setActiveSelectionBox(readSelectionBox(activeObject.slideId, object, scale));
+      setActiveObjectGeometry(readDeckObjectGeometry(object));
+      recordSlideHistory(activeObject.slideId, object.ownerDocument);
+      scheduleSlideSave(activeObject.slideId);
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", onPointerEnd);
+  };
+
+  const beginDragObject = (event: PointerEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const object = findActiveObject();
+    if (!object || !activeObject || scale <= 0 || !isMovableDeckObject(object)) return;
+    const initialRect = readDeckObjectRect(object);
+    const snapTargets = collectDeckSnapTargets(object, canvas.width, canvas.height);
+    const startClientX = event.clientX;
+    const startClientY = event.clientY;
+    let didMove = false;
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    const onPointerMove = (moveEvent: globalThis.PointerEvent) => {
+      moveEvent.preventDefault();
+      const deltaX = (moveEvent.clientX - startClientX) / scale;
+      const deltaY = (moveEvent.clientY - startClientY) / scale;
+      if (!didMove && Math.hypot(moveEvent.clientX - startClientX, moveEvent.clientY - startClientY) < 2) return;
+      didMove = true;
+      const rawRect = movedDeckRectForDelta(initialRect, deltaX, deltaY, canvas.width, canvas.height);
+      const snapped = snappedDeckDragRect(rawRect, snapTargets, 8 / scale, canvas.width, canvas.height);
+      applyDeckObjectRect(object, snapped.rect, { onTextboxResize: enableTextResizeWrapping, preserveSize: true });
+      setActiveObjectGeometry(readDeckObjectGeometry(object));
+      setActiveSelectionBox(readSelectionBox(activeObject.slideId, object, scale));
+      setSnapGuides(snapped.guides);
+    };
+
+    const onPointerEnd = (endEvent: globalThis.PointerEvent) => {
+      endEvent.preventDefault();
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", onPointerEnd);
+      setSnapGuides([]);
+      setActiveSelectionBox(readSelectionBox(activeObject.slideId, object, scale));
+      setActiveObjectGeometry(readDeckObjectGeometry(object));
+      if (!didMove) return;
+      recordSlideHistory(activeObject.slideId, object.ownerDocument);
+      scheduleSlideSave(activeObject.slideId);
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", onPointerEnd);
+  };
+
+  const beginRotateObject = (event: PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const object = findActiveObject();
+    if (!object || !activeObject || !activeSelectionBox || scale <= 0) return;
+    const selectionElement = event.currentTarget.parentElement;
+    const stage = selectionElement?.offsetParent instanceof HTMLElement ? selectionElement.offsetParent : null;
+    const stageRect = stage?.getBoundingClientRect();
+    if (!stageRect) return;
+    const initialGeometry = readDeckObjectGeometry(object);
+    const centerClientX = stageRect.left + activeSelectionBox.left + activeSelectionBox.width / 2;
+    const centerClientY = stageRect.top + activeSelectionBox.top + activeSelectionBox.height / 2;
+    let previousAngle = pointerAngle(event.clientX, event.clientY, centerClientX, centerClientY);
+    let rawRotation = initialGeometry.rotation;
+    let totalDelta = 0;
+    let didRotate = false;
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    const onPointerMove = (moveEvent: globalThis.PointerEvent) => {
+      moveEvent.preventDefault();
+      const nextAngle = pointerAngle(moveEvent.clientX, moveEvent.clientY, centerClientX, centerClientY);
+      const delta = angleDelta(previousAngle, nextAngle);
+      previousAngle = nextAngle;
+      rawRotation += delta;
+      totalDelta += delta;
+      if (!didRotate && Math.abs(totalDelta) < 0.5) return;
+      didRotate = true;
+      const rotation = moveEvent.shiftKey ? snapRotation(rawRotation, 15) : rawRotation;
+      applyDeckObjectRotation(object, rotation);
+      setActiveObjectGeometry(readDeckObjectGeometry(object));
+      setActiveSelectionBox(readSelectionBox(activeObject.slideId, object, scale));
+    };
+
+    const onPointerEnd = (endEvent: globalThis.PointerEvent) => {
+      endEvent.preventDefault();
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", onPointerEnd);
+      setActiveObjectGeometry(readDeckObjectGeometry(object));
+      setActiveSelectionBox(readSelectionBox(activeObject.slideId, object, scale));
+      if (!didRotate) return;
       recordSlideHistory(activeObject.slideId, object.ownerDocument);
       scheduleSlideSave(activeObject.slideId);
     };
@@ -1207,22 +1584,108 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
     const textTarget = findActiveTextTarget(object);
     mutate(object, textTarget);
     if (!activeTextEdit) object.setAttribute("data-ai-slide-selected", "true");
+    setActiveObjectGeometry(readDeckObjectGeometry(object));
     setActiveSelectionBox(readSelectionBox(activeObject.slideId, object, scale));
     setToolbarState(activeTextEdit ? readActualDeckToolbarState(object, textTarget) : readDeckToolbarState(object));
     recordSlideHistory(activeObject.slideId, object.ownerDocument);
     scheduleSlideSave(activeObject.slideId);
   };
 
-  const updateTextStyle = (style: Partial<CSSStyleDeclaration>) => {
+  const applyActiveTextOperation = (operation: (doc: Document, textTarget: HTMLElement) => boolean) => {
     if (!activeTextEdit) return;
     mutateActiveObject((_object, textTarget) => {
-      Object.assign(textTarget.style, style);
+      if (!isHtmlElement(textTarget)) return;
+      restoreActiveTextSelection(textTarget);
+      operation(textTarget.ownerDocument, textTarget);
+      const selection = captureRichTextSelection(textTarget.ownerDocument, textTarget);
+      if (selection) activeTextSelectionRef.current = { ...activeTextEdit, selection };
     });
+  };
+
+  const updateTextStyle = (style: RichTextStyle) => {
+    applyActiveTextOperation((doc, textTarget) => applyPresentationStyle(doc, style, textTarget));
+  };
+
+  const updateTextAlignment = (align: "left" | "center" | "right") => {
+    if (activeTextEdit) {
+      updateTextStyle({ textAlign: align });
+      return;
+    }
+    mutateActiveObject((object) => {
+      applyTextAlignmentToObject(object, align);
+    });
+  };
+
+  const updateTextColor = (color: string) => {
+    if (activeTextEdit) {
+      updateTextStyle({ color });
+      return;
+    }
+    mutateActiveObject((object) => {
+      applyTextColorToObject(object, color);
+    });
+  };
+
+  const toggleInlineFormat = (tagName: InlineFormatTag) => {
+    applyActiveTextOperation((doc, textTarget) => applyInlineFormat(doc, tagName, textTarget));
   };
 
   const updateObjectStyle = (style: Partial<CSSStyleDeclaration>) => {
     mutateActiveObject((object) => {
       Object.assign(object.style, style);
+    });
+  };
+
+  const requestImageReplacement = () => {
+    if (activeObject?.objectType !== "image") return;
+    const input = imageFileInputRef.current;
+    if (!input) return;
+    input.value = "";
+    input.click();
+  };
+
+  const replaceActiveImageFromFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file || !file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (!dataUrl) return;
+      mutateActiveObject((object) => {
+        replaceDeckImageObjectSource(object, dataUrl);
+      });
+    });
+    reader.readAsDataURL(file);
+  };
+
+  const updateActiveObjectGeometry = (patch: DeckObjectGeometryPatch) => {
+    mutateActiveObject((object) => {
+      const current = readDeckObjectGeometry(object);
+      const nextRect = {
+        left: patch.left ?? current.left,
+        top: patch.top ?? current.top,
+        width: patch.width ?? current.width,
+        height: patch.height ?? current.height,
+      };
+      const rectChanged =
+        nextRect.left !== current.left ||
+        nextRect.top !== current.top ||
+        nextRect.width !== current.width ||
+        nextRect.height !== current.height;
+      if (rectChanged) {
+        const sizeChanged = patch.width !== undefined || patch.height !== undefined;
+        applyDeckObjectRect(object, nextRect, { onTextboxResize: enableTextResizeWrapping, preserveSize: !sizeChanged });
+      }
+      if (patch.rotation !== undefined) applyDeckObjectRotation(object, patch.rotation);
+    });
+  };
+
+  const alignActiveObjectGeometry = (alignment: DeckObjectAlignment) => {
+    mutateActiveObject((object) => {
+      const current = readDeckObjectGeometry(object);
+      const nextRect = alignedDeckObjectRect(current, alignment, canvas.width, canvas.height);
+      applyDeckObjectRect(object, nextRect, { onTextboxResize: enableTextResizeWrapping, preserveSize: true });
     });
   };
 
@@ -1248,6 +1711,7 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
     if (!object || !activeObject) return;
     object.remove();
     setActiveObject(null);
+    setActiveObjectGeometry(null);
     setActiveSelectionBox(null);
     setActiveTextEdit(null);
     setSelectionMode("idle");
@@ -1263,23 +1727,27 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#2a2a2a] px-3 py-3.5 md:px-6 md:pb-6 md:pt-5">
       <DeckToolbar
         activeObject={activeObject}
+        directTextEditMode={directTextEditMode}
         saveState={saveState}
         selectionMode={selectionMode}
         state={toolbarState}
         canRedo={canRedo}
         canUndo={canUndo}
-        onAlign={(align) => updateTextStyle({ textAlign: align })}
-        onDelete={deleteActiveObject}
-        onDuplicate={duplicateActiveObject}
+        onAlign={updateTextAlignment}
         onFillColor={(color) => updateObjectStyle({ backgroundColor: color })}
         onFontFamily={(fontFamily) => updateTextStyle({ fontFamily })}
         onFontSize={(fontSize) => updateTextStyle({ fontSize: normalizeCssSize(fontSize) })}
+        onImage={requestImageReplacement}
         onRedo={() => applyHistoryOffset(1)}
-        onTextColor={(color) => updateTextStyle({ color })}
-        onToggleBold={() => updateTextStyle({ fontWeight: toolbarState.bold ? "400" : "800" })}
-        onToggleItalic={() => updateTextStyle({ fontStyle: toolbarState.italic ? "normal" : "italic" })}
+        onTextColor={updateTextColor}
+        onToggleBold={() => toggleInlineFormat("strong")}
+        onToggleItalic={() => toggleInlineFormat("em")}
+        onToggleStrikethrough={() => toggleInlineFormat("s")}
+        onToggleDirectTextEditMode={() => setDirectTextEditMode((current) => !current)}
+        onToggleUnderline={() => toggleInlineFormat("u")}
         onUndo={() => applyHistoryOffset(-1)}
       />
+      <input ref={imageFileInputRef} className="hidden" type="file" accept="image/*" onChange={replaceActiveImageFromFile} />
       <div
         ref={hostRef}
         className="flex min-h-0 flex-1 items-center justify-center overflow-auto px-0 pb-5 pt-2.5 outline-none md:px-2 md:pb-7 md:pt-3"
@@ -1317,47 +1785,25 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
                     title={slide.title}
                     onLoad={(event) => initializeFrame(slide, event.currentTarget)}
                   />
-                  {activeSelectionBox?.slideId === slide.id && activeTextEdit?.slideId !== slide.id ? (
-                    <>
-                      <div
-                        className="pointer-events-none absolute z-[3] border border-violet-500 shadow-none"
-                        style={{
-                          left: activeSelectionBox.left,
-                          top: activeSelectionBox.top,
-                          width: activeSelectionBox.width,
-                          height: activeSelectionBox.height,
-                        }}
-                      >
-                        {resizeHandles.map((handle) => (
-                          <button
-                            aria-label={`Resize ${handle}`}
-                            className={cn("pointer-events-auto absolute size-2 rounded-full border border-violet-500 bg-white p-0 shadow-[0_1px_4px_rgba(0,0,0,0.18)]", resizeHandlePosition[handle])}
-                            data-handle={handle}
-                            key={handle}
-                            type="button"
-                            onPointerDown={(event) => beginResizeObject(handle, event)}
-                          />
-                        ))}
-                      </div>
-                      <div
-                        className="absolute z-[4] inline-flex h-[30px] -translate-x-1/2 -translate-y-[calc(100%_+_8px)] items-center gap-px rounded-md border border-black/8 bg-white p-[3px] shadow-[0_8px_22px_rgba(0,0,0,0.16)] [&>button]:grid [&>button]:size-[22px] [&>button]:place-items-center [&>button]:rounded-[5px] [&>button]:border-0 [&>button]:bg-transparent [&>button]:p-0 [&>button]:text-black/58 [&>button:hover]:bg-black/[0.06] [&>button:hover]:text-[#111]"
-                        style={{
-                          left: activeSelectionBox.left + activeSelectionBox.width / 2,
-                          top: activeSelectionBox.top,
-                        }}
-                      >
-                        <button type="button" title="Duplicate object" onClick={duplicateActiveObject}>
-                          <Copy size={13} />
-                        </button>
-                        <button type="button" title="Delete object" onClick={deleteActiveObject}>
-                          <Trash2 size={13} />
-                        </button>
-                        <button type="button" title="Move object">
-                          <Move size={13} />
-                        </button>
-                      </div>
-                    </>
-                  ) : null}
+                  <DeckInteractionLayer
+                    activeObject={activeObject?.slideId === slide.id ? activeObject : null}
+                    activeGeometry={activeObject?.slideId === slide.id ? activeObjectGeometry : null}
+                    scale={scale}
+                    selectionBox={activeSelectionBox?.slideId === slide.id && activeTextEdit?.slideId !== slide.id ? activeSelectionBox : null}
+                    snapGuides={snapGuides}
+                    onAlignObject={alignActiveObjectGeometry}
+                    onBeginDragObject={beginDragObject}
+                    onBeginRotateObject={beginRotateObject}
+                    onBeginResizeObject={beginResizeObject}
+                    onDeleteObject={deleteActiveObject}
+                    onDuplicateObject={duplicateActiveObject}
+                    onDoubleClickSelection={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      enterTextEditFromFramePoint(slide, event.clientX, event.clientY);
+                    }}
+                    onUpdateObjectGeometry={updateActiveObjectGeometry}
+                  />
                   {isTextEditingSlide ? (
                     shieldRects.map((shield, shieldIndex) => (
                       <div
@@ -1369,7 +1815,7 @@ function DeckEditor(props: { detail: ProjectDetailResponse; projectId: string; o
                         onDoubleClick={(event) => enterTextEditFromFramePoint(slide, event.clientX, event.clientY)}
                       />
                     ))
-                  ) : (
+                  ) : directTextEditMode ? null : (
                     <div
                       className="absolute inset-0 z-[2] cursor-default bg-transparent"
                       role="presentation"
@@ -1420,26 +1866,32 @@ function DeckToolbar(props: {
   activeObject: ActiveDeckObject | null;
   canRedo: boolean;
   canUndo: boolean;
+  directTextEditMode: boolean;
   saveState: "saved" | "saving" | "error";
   selectionMode: DeckSelectionMode;
   state: DeckToolbarState;
   onAlign: (align: "left" | "center" | "right") => void;
-  onDelete: () => void;
-  onDuplicate: () => void;
   onFillColor: (color: string) => void;
   onFontFamily: (fontFamily: string) => void;
   onFontSize: (fontSize: string) => void;
+  onImage: () => void;
   onRedo: () => void;
   onTextColor: (color: string) => void;
   onToggleBold: () => void;
+  onToggleDirectTextEditMode: () => void;
   onToggleItalic: () => void;
+  onToggleStrikethrough: () => void;
+  onToggleUnderline: () => void;
   onUndo: () => void;
 }) {
   const disabled = !props.activeObject;
+  const textControlDisabled = disabled || props.selectionMode !== "text";
+  const textboxControlDisabled = disabled || props.activeObject?.objectType !== "textbox";
+  const imageControlDisabled = props.activeObject?.objectType !== "image";
   const hasCurrentFontOption = deckFontOptions.some((option) => option.value === props.state.fontFamily);
   return (
-    <Toolbar display={{ maxWidth: 1500 }}>
-      <ToolbarRow>
+    <Toolbar className="relative overflow-visible" display={{ maxWidth: 1500, width: "content" }}>
+      <ToolbarRow wrap className="gap-y-1.5">
         <ToolbarGroup>
           <ToolbarIconButton disabled={!props.canUndo} title="Undo" onClick={props.onUndo}>
             <Undo2 size={16} />
@@ -1450,13 +1902,13 @@ function DeckToolbar(props: {
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup className="[column-gap:4px]">
-          <ToolbarSelect compact disabled={disabled} title="Block style" value={props.state.block} onChange={() => {}}>
+          <ToolbarSelect compact disabled={textControlDisabled} title="Block style" value={props.state.block} onChange={() => {}}>
             <option value="normal">Normal Text</option>
             <option value="heading">Heading</option>
             <option value="shape">Shape</option>
             <option value="image">Image</option>
           </ToolbarSelect>
-          <ToolbarSelect disabled={disabled} title="Font family" value={props.state.fontFamily} onChange={props.onFontFamily}>
+          <ToolbarSelect disabled={textControlDisabled} title="Font family" value={props.state.fontFamily} onChange={props.onFontFamily}>
             {hasCurrentFontOption ? null : <option value={props.state.fontFamily}>{fontFamilyLabel(props.state.fontFamily)}</option>}
             {deckFontOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -1464,53 +1916,50 @@ function DeckToolbar(props: {
               </option>
             ))}
           </ToolbarSelect>
-          <ToolbarNumberInput disabled={disabled} title="Font size" value={props.state.fontSize} onChange={props.onFontSize} />
+          <ToolbarNumberInput disabled={textControlDisabled} title="Font size" value={props.state.fontSize} onChange={props.onFontSize} />
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup>
-          <ToolbarIconButton active={props.state.bold} disabled={disabled} title="Bold" onClick={props.onToggleBold}>
+          <ToolbarIconButton active={props.state.bold} disabled={textControlDisabled} title="Bold" onClick={props.onToggleBold}>
             <Bold size={16} />
           </ToolbarIconButton>
-          <ToolbarIconButton active={props.state.italic} disabled={disabled} title="Italic" onClick={props.onToggleItalic}>
+          <ToolbarIconButton active={props.state.italic} disabled={textControlDisabled} title="Italic" onClick={props.onToggleItalic}>
             <Italic size={16} />
           </ToolbarIconButton>
-          <ToolbarIconButton active={props.state.underline} disabled={disabled} title="Underline" onClick={() => undefined}>
+          <ToolbarIconButton active={props.state.underline} disabled={textControlDisabled} title="Underline" onClick={props.onToggleUnderline}>
             <Underline size={16} />
           </ToolbarIconButton>
-          <ToolbarIconButton active={props.state.strikethrough} disabled={disabled} title="Strikethrough" onClick={() => undefined}>
-            <span style={{ fontSize: 13, fontWeight: 800, lineHeight: 1, textDecoration: "line-through" }}>S</span>
+          <ToolbarIconButton active={props.state.strikethrough} disabled={textControlDisabled} title="Strikethrough" onClick={props.onToggleStrikethrough}>
+            <Strikethrough size={16} />
           </ToolbarIconButton>
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup>
-          <ToolbarIconButton active={props.state.align === "left"} disabled={disabled} title="Align left" onClick={() => props.onAlign("left")}>
+          <ToolbarIconButton active={props.state.align === "left"} disabled={textboxControlDisabled} title="Align left" onClick={() => props.onAlign("left")}>
             <AlignLeft size={16} />
           </ToolbarIconButton>
-          <ToolbarIconButton active={props.state.align === "center"} disabled={disabled} title="Align center" onClick={() => props.onAlign("center")}>
+          <ToolbarIconButton active={props.state.align === "center"} disabled={textboxControlDisabled} title="Align center" onClick={() => props.onAlign("center")}>
             <AlignCenter size={16} />
           </ToolbarIconButton>
-          <ToolbarIconButton active={props.state.align === "right"} disabled={disabled} title="Align right" onClick={() => props.onAlign("right")}>
+          <ToolbarIconButton active={props.state.align === "right"} disabled={textboxControlDisabled} title="Align right" onClick={() => props.onAlign("right")}>
             <AlignRight size={16} />
           </ToolbarIconButton>
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup>
-          <ToolbarColorInput disabled={disabled} title="Text color" color={props.state.textColor} onChange={props.onTextColor} />
+          <ToolbarIconButton active={props.directTextEditMode} title="Single-click text edit" onClick={props.onToggleDirectTextEditMode}>
+            <Crosshair size={16} />
+          </ToolbarIconButton>
+        </ToolbarGroup>
+        <ToolbarDivider />
+        <ToolbarGroup>
+          <ToolbarColorInput disabled={textboxControlDisabled} title="Text color" color={props.state.textColor} onChange={props.onTextColor} />
           <ToolbarColorInput disabled={disabled} title="Fill color" color={props.state.fillColor} icon={<PaintBucket size={15} />} onChange={props.onFillColor} />
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup>
-          <ToolbarIconButton disabled={disabled} title="Image" onClick={() => undefined}>
+          <ToolbarIconButton disabled={imageControlDisabled} title="Replace image" onClick={props.onImage}>
             <Image size={16} />
-          </ToolbarIconButton>
-        </ToolbarGroup>
-        <ToolbarDivider />
-        <ToolbarGroup>
-          <ToolbarIconButton disabled={disabled} title="Duplicate object" onClick={props.onDuplicate}>
-            <Copy size={16} />
-          </ToolbarIconButton>
-          <ToolbarIconButton disabled={disabled} title="Delete object" onClick={props.onDelete}>
-            <Trash2 size={16} />
           </ToolbarIconButton>
         </ToolbarGroup>
       </ToolbarRow>
@@ -1518,7 +1967,7 @@ function DeckToolbar(props: {
   );
 }
 
-const textBlockTags = new Set(["H1", "H2", "H3", "H4", "H5", "H6", "P", "LI", "TD", "TH", "BLOCKQUOTE", "FIGCAPTION"]);
+const textBlockTags = new Set(["DIV", "H1", "H2", "H3", "H4", "H5", "H6", "P", "LI", "TD", "TH", "BLOCKQUOTE", "FIGCAPTION"]);
 const inlineTextTags = new Set(["SPAN", "STRONG", "EM", "B", "I", "SMALL", "A", "CODE", "MARK"]);
 
 function textTargetForObject(object: DeckObjectElement, preferredTarget?: Element): DeckObjectElement {
@@ -1549,7 +1998,7 @@ function textTargetFromPreferredElement(object: HTMLElement, preferredTarget: El
 }
 
 function firstTextTargetForObject(object: HTMLElement): DeckObjectElement | null {
-  const candidates = Array.from(object.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6, p, li, td, th, blockquote, figcaption, span"));
+  const candidates = Array.from(object.querySelectorAll<HTMLElement>("div, h1, h2, h3, h4, h5, h6, p, li, td, th, blockquote, figcaption, span"));
   return candidates.find(hasEditableText) ?? null;
 }
 
@@ -1567,6 +2016,7 @@ function ensureTextTargetId(target: DeckObjectElement): DeckObjectElement | null
 
 function findTextTargetById(object: DeckObjectElement, textTargetId: string) {
   if (!textTargetId || !isHtmlElement(object)) return null;
+  if (object.getAttribute("data-ai-slide-text-edit-id") === textTargetId) return object;
   return object.querySelector<DeckObjectElement>(`[data-ai-slide-text-edit-id="${CSS.escape(textTargetId)}"]`);
 }
 
@@ -1582,8 +2032,16 @@ function isElement(value: unknown): value is Element {
   return Boolean(value && typeof value === "object" && "ownerDocument" in value && "closest" in value);
 }
 
+function nearestElement(node: Node): Element | null {
+  return node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+}
+
 function isInsideEditable(value: unknown) {
   return isElement(value) && Boolean(value.closest('[contenteditable="true"]'));
+}
+
+function isInsideKeyboardInput(value: unknown) {
+  return isElement(value) && Boolean(value.closest("input, textarea, select, [contenteditable='true']"));
 }
 
 function selectElementText(element: HTMLElement) {
@@ -1594,6 +2052,75 @@ function selectElementText(element: HTMLElement) {
   range.selectNodeContents(element);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+function placeCaretInElement(element: HTMLElement, point?: { x: number; y: number }) {
+  const doc = element.ownerDocument;
+  const selection = doc.defaultView?.getSelection();
+  if (!selection) return;
+  const range = caretRangeFromPoint(doc, point);
+  if (range && (element === range.startContainer || element.contains(range.startContainer))) {
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return;
+  }
+
+  const fallback = doc.createRange();
+  fallback.selectNodeContents(element);
+  fallback.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(fallback);
+}
+
+function queueTextEditCaretPlacement(element: HTMLElement, point: { x: number; y: number } | undefined, afterPlace: () => void) {
+  const view = element.ownerDocument.defaultView;
+  const place = () => {
+    if (!element.isConnected || element.getAttribute("contenteditable") !== "true") return;
+    element.focus();
+    placeCaretInElement(element, point);
+    afterPlace();
+  };
+  if (view?.requestAnimationFrame) {
+    view.requestAnimationFrame(place);
+    return;
+  }
+  view?.setTimeout(place, 0);
+}
+
+function caretRangeFromPoint(doc: Document, point?: { x: number; y: number }) {
+  if (!point) return null;
+  const docWithCaret = doc as Document & {
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+  };
+  const position = docWithCaret.caretPositionFromPoint?.(point.x, point.y);
+  if (position?.offsetNode) {
+    const range = doc.createRange();
+    range.setStart(position.offsetNode, clampNodeOffset(position.offsetNode, position.offset));
+    return range;
+  }
+  return docWithCaret.caretRangeFromPoint?.(point.x, point.y) ?? null;
+}
+
+function clampNodeOffset(node: Node, offset: number) {
+  const max = node.nodeType === Node.TEXT_NODE ? node.textContent?.length ?? 0 : node.childNodes.length;
+  return Math.max(0, Math.min(max, offset));
+}
+
+function pointerAngle(clientX: number, clientY: number, centerClientX: number, centerClientY: number) {
+  return (Math.atan2(clientY - centerClientY, clientX - centerClientX) * 180) / Math.PI;
+}
+
+function angleDelta(from: number, to: number) {
+  let delta = to - from;
+  while (delta > 180) delta -= 360;
+  while (delta < -180) delta += 360;
+  return delta;
+}
+
+function snapRotation(rotation: number, step: number) {
+  return Math.round(rotation / step) * step;
 }
 
 function hitTestDeckObject(doc: Document, x: number, y: number): DeckObjectElement | null {
@@ -1632,38 +2159,15 @@ function objectDepth(object: Element) {
 }
 
 function readSelectionBox(slideId: string, object: DeckObjectElement, scale: number): ActiveDeckSelectionBox {
-  const rect = object.getBoundingClientRect();
+  const geometry = readDeckObjectGeometry(object);
   return {
     slideId,
-    left: rect.left * scale,
-    top: rect.top * scale,
-    width: Math.max(1, rect.width * scale),
-    height: Math.max(1, rect.height * scale),
+    left: geometry.left * scale,
+    top: geometry.top * scale,
+    width: Math.max(1, geometry.width * scale),
+    height: Math.max(1, geometry.height * scale),
+    rotation: geometry.rotation,
   };
-}
-
-function readObjectRect(object: DeckObjectElement): ResizeRect {
-  const rect = object.getBoundingClientRect();
-  return {
-    left: rect.left,
-    top: rect.top,
-    width: rect.width,
-    height: rect.height,
-  };
-}
-
-function applyObjectRect(object: DeckObjectElement, rect: ResizeRect) {
-  object.style.left = px(rect.left);
-  object.style.top = px(rect.top);
-  object.style.width = px(rect.width);
-  object.style.height = px(rect.height);
-  object.style.right = "auto";
-  object.style.bottom = "auto";
-  if (object.getAttribute("data-object-type") === "textbox") enableTextResizeWrapping(object);
-  if (isSvgElement(object)) {
-    object.setAttribute("width", px(rect.width));
-    object.setAttribute("height", px(rect.height));
-  }
 }
 
 function enableTextResizeWrapping(object: DeckObjectElement) {
@@ -1681,41 +2185,20 @@ function applyTextResizeWrapping(element: HTMLElement) {
   element.style.lineBreak = "anywhere";
 }
 
-function resizedRectForHandle(handle: ResizeHandle, initial: ResizeRect, deltaX: number, deltaY: number, canvasWidth: number, canvasHeight: number): ResizeRect {
-  const minWidth = 24;
-  const minHeight = 24;
-  let left = initial.left;
-  let top = initial.top;
-  let right = initial.left + initial.width;
-  let bottom = initial.top + initial.height;
-
-  if (handle.includes("left")) {
-    left = clamp(initial.left + deltaX, 0, right - minWidth);
-  }
-  if (handle.includes("right")) {
-    right = clamp(initial.left + initial.width + deltaX, left + minWidth, canvasWidth);
-  }
-  if (handle.includes("top")) {
-    top = clamp(initial.top + deltaY, 0, bottom - minHeight);
-  }
-  if (handle.includes("bottom")) {
-    bottom = clamp(initial.top + initial.height + deltaY, top + minHeight, canvasHeight);
-  }
-
-  return {
-    left,
-    top,
-    width: Math.max(minWidth, right - left),
-    height: Math.max(minHeight, bottom - top),
-  };
+function applyTextAlignmentToObject(object: DeckObjectElement, align: "left" | "center" | "right") {
+  if (!isHtmlElement(object) || object.getAttribute("data-object-type") !== "textbox") return;
+  object.style.textAlign = align;
+  object.querySelectorAll<HTMLElement>("div, h1, h2, h3, h4, h5, h6, p, li, td, th, blockquote, figcaption").forEach((element) => {
+    if (hasEditableText(element)) element.style.textAlign = align;
+  });
 }
 
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function px(value: number) {
-  return `${Math.round(value * 100) / 100}px`;
+function applyTextColorToObject(object: DeckObjectElement, color: string) {
+  if (!isHtmlElement(object) || object.getAttribute("data-object-type") !== "textbox") return;
+  object.style.color = color;
+  object.querySelectorAll<HTMLElement>("div, h1, h2, h3, h4, h5, h6, p, li, td, th, blockquote, figcaption, span, strong, em, b, i, small, a").forEach((element) => {
+    if (hasEditableText(element)) element.style.color = color;
+  });
 }
 
 function editingShieldRects(box: ActiveDeckSelectionBox, frameWidth: number, frameHeight: number): CSSProperties[] {
@@ -1736,11 +2219,23 @@ function clampRectValue(value: number, max: number) {
 }
 
 function readDeckToolbarState(object: DeckObjectElement): DeckToolbarState {
-  return selectedDeckObjectToolbarState;
+  const objectComputed = object.ownerDocument.defaultView?.getComputedStyle(object);
+  const textTarget = isHtmlElement(object) && object.getAttribute("data-object-type") === "textbox" ? textTargetForObject(object) : object;
+  const textComputed = textTarget.ownerDocument.defaultView?.getComputedStyle(textTarget);
+  return {
+    ...selectedDeckObjectToolbarState,
+    textColor: rgbToHex(textComputed?.color) || selectedDeckObjectToolbarState.textColor,
+    fillColor:
+      rgbToHex(objectComputed?.backgroundColor) ||
+      rgbToHex(isSvgElement(object) ? object.getAttribute("fill") ?? "" : "") ||
+      selectedDeckObjectToolbarState.fillColor,
+    align: normalizeTextAlign(textComputed?.textAlign || objectComputed?.textAlign),
+  };
 }
 
 function readActualDeckToolbarState(object: DeckObjectElement, textTarget: DeckObjectElement = textTargetForObject(object)): DeckToolbarState {
-  const textComputed = textTarget.ownerDocument.defaultView?.getComputedStyle(textTarget);
+  const styleSource = currentRichTextStyleSource(textTarget) ?? textTarget;
+  const textComputed = styleSource.ownerDocument.defaultView?.getComputedStyle(styleSource);
   const objectComputed = object.ownerDocument.defaultView?.getComputedStyle(object);
   const fontWeight = textComputed?.fontWeight ?? "400";
   const decoration = textComputed?.textDecorationLine ?? "";
@@ -1760,6 +2255,16 @@ function readActualDeckToolbarState(object: DeckObjectElement, textTarget: DeckO
       defaultDeckToolbarState.fillColor,
     align: normalizeTextAlign(textComputed?.textAlign),
   };
+}
+
+function currentRichTextStyleSource(textTarget: DeckObjectElement) {
+  const selection = textTarget.ownerDocument.getSelection();
+  if (!selection || selection.rangeCount === 0) return null;
+  const range = selection.getRangeAt(0);
+  const selectedElement = selectedElementFromRange(range);
+  if (selectedElement && textTarget.contains(selectedElement)) return selectedElement;
+  const anchor = nearestElement(range.commonAncestorContainer);
+  return anchor && textTarget.contains(anchor) ? anchor : null;
 }
 
 function ensureSlideEditorStyles(doc: Document) {
@@ -1818,6 +2323,45 @@ function serializeSlideDocument(doc: Document) {
   return `${doctype}\n${clone.outerHTML}`;
 }
 
+function serializeDeckObjectForAgent(object: DeckObjectElement) {
+  const clone = object.cloneNode(true) as HTMLElement;
+  cleanupDeckEditorAttributes(clone);
+  clone.querySelectorAll<HTMLElement>("*").forEach(cleanupDeckEditorAttributes);
+  return clone.outerHTML;
+}
+
+function cleanupDeckEditorAttributes(element: HTMLElement) {
+  element.removeAttribute("data-ai-slide-object-id");
+  element.removeAttribute("data-ai-slide-text-edit-id");
+  element.removeAttribute("data-ai-slide-selected");
+  element.removeAttribute("contenteditable");
+  element.removeAttribute("spellcheck");
+  element.removeAttribute("tabindex");
+}
+
+function deckObjectSelectionPath(slideId: string, object: DeckObjectElement) {
+  const index = deckObjectIndex(object);
+  return index >= 0 ? `deck:${slideId}/objects[${index}]` : `deck:${slideId}/object`;
+}
+
+function deckTextSelectionPath(slideId: string, object: DeckObjectElement, textTarget: DeckObjectElement, selection: RichTextSelectionState) {
+  const objectPath = deckObjectSelectionPath(slideId, object);
+  const textIndex = deckTextTargetIndex(object, textTarget);
+  const textPath = textIndex >= 0 ? `${objectPath}/text[${textIndex}]` : `${objectPath}/text`;
+  return `${textPath}#${selection.startPath}:${selection.startOffset}-${selection.endPath}:${selection.endOffset}`;
+}
+
+function deckObjectIndex(object: DeckObjectElement) {
+  return Array.from(object.ownerDocument.querySelectorAll<DeckObjectElement>('[data-object="true"]')).indexOf(object);
+}
+
+function deckTextTargetIndex(object: DeckObjectElement, textTarget: DeckObjectElement) {
+  const candidates = [object, ...Array.from(object.querySelectorAll<DeckObjectElement>("div, h1, h2, h3, h4, h5, h6, p, li, td, th, blockquote, figcaption, span"))]
+    .filter((candidate, index, list) => list.indexOf(candidate) === index)
+    .filter((candidate) => isHtmlElement(candidate) && hasEditableText(candidate));
+  return candidates.indexOf(textTarget);
+}
+
 function normalizeCssSize(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return defaultDeckToolbarState.fontSize;
@@ -1857,6 +2401,47 @@ function fontFamilyLabel(value: string) {
     .replaceAll("\"", "")
     .replaceAll("'", "")
     .trim() || "Font";
+}
+
+function replaceDeckImageObjectSource(object: DeckObjectElement, src: string) {
+  if (isHtmlImageElement(object)) {
+    applyHtmlImageSource(object, src);
+    return;
+  }
+  const image = object.querySelector?.("img");
+  if (isHtmlImageElement(image)) {
+    applyHtmlImageSource(image, src);
+    return;
+  }
+  if (isSvgImageElement(object)) {
+    object.setAttribute("href", src);
+    object.setAttribute("xlink:href", src);
+    return;
+  }
+  const svgImage = object.querySelector?.("image");
+  if (isSvgImageElement(svgImage)) {
+    svgImage.setAttribute("href", src);
+    svgImage.setAttribute("xlink:href", src);
+    return;
+  }
+  if (isHtmlElement(object)) {
+    object.style.backgroundImage = `url("${src.replaceAll("\"", "\\\"")}")`;
+    object.style.backgroundSize ||= "cover";
+    object.style.backgroundPosition ||= "center";
+  }
+}
+
+function isHtmlImageElement(value: unknown): value is HTMLImageElement {
+  return isElement(value) && value.ownerDocument.defaultView ? value instanceof value.ownerDocument.defaultView.HTMLImageElement : false;
+}
+
+function isSvgImageElement(value: unknown): value is SVGImageElement {
+  return isElement(value) && value.ownerDocument.defaultView ? value instanceof value.ownerDocument.defaultView.SVGImageElement : false;
+}
+
+function applyHtmlImageSource(image: HTMLImageElement, src: string) {
+  image.src = src;
+  image.removeAttribute("srcset");
 }
 
 function blockForDeckObject(object: DeckObjectElement, fontSize: string, textTarget: DeckObjectElement = textTargetForObject(object)): DeckToolbarState["block"] {

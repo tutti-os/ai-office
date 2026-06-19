@@ -369,6 +369,7 @@ export class ProjectRepository {
     const root = ensureProjectDirs(project.id);
     if (artifact.type === "deck") materializeDeckProject(root, project, artifact);
     else materializePptxProject(root, project, artifact);
+    syncProjectTemplateSkill(root, project, artifact);
     this.writeProjectAgentInstructions(project, artifact);
   }
 
@@ -377,6 +378,7 @@ export class ProjectRepository {
     if (!project) return null;
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact) return null;
+    syncProjectTemplateSkill(ensureProjectDirs(project.id), project, artifact);
     this.writeProjectAgentInstructions(project, artifact);
     return { project, artifact };
   }
@@ -526,6 +528,31 @@ function readTemplateDeckSource(templateId: string | null) {
     assetsDir: join(templateDir, "assets"),
     playlist,
   };
+}
+
+function syncProjectTemplateSkill(projectRoot: string, project: SlideProject, artifact: SlideArtifact) {
+  if (artifact.type !== "deck" || !project.templateId) return;
+  const sourceDir = readTemplateSkillSource(project.templateId);
+  if (!sourceDir) return;
+  const skillRoot = join(projectRoot, ".ai-slide", "skills", safeSkillSlug(project.templateId));
+  rmSync(skillRoot, { force: true, recursive: true });
+  mkdirSync(skillRoot, { recursive: true });
+  cpSync(join(sourceDir, "SKILL.md"), join(skillRoot, "SKILL.md"));
+  for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !/^references?$/i.test(entry.name)) continue;
+    cpSync(join(sourceDir, entry.name), join(skillRoot, entry.name), { recursive: true });
+  }
+}
+
+function readTemplateSkillSource(templateId: string | null) {
+  if (!templateId) return null;
+  const templateDir = templateRoots.map((root) => join(root, templateId)).find((candidate) => existsSync(candidate));
+  if (!templateDir) return null;
+  return existsSync(join(templateDir, "SKILL.md")) ? templateDir : null;
+}
+
+function safeSkillSlug(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "template";
 }
 
 function isBlankDeckManifest(manifestPath: string) {

@@ -149,7 +149,7 @@ export class ProjectService {
     let sortOrder = 0;
     let generatedText = "";
     let refreshedArtifact = false;
-    let workspaceFingerprint = await this.workspaceFingerprint(runtimeProject.id);
+    let workspaceFingerprint = "";
 
     const createRunEvent = (
       type: RuntimeStreamEvent["type"] extends infer T ? Extract<T, string> : never,
@@ -179,6 +179,7 @@ export class ProjectService {
     };
 
     try {
+      workspaceFingerprint = await this.workspaceFingerprint(runtimeProject.id);
       this.repo.updateRun(runId, { status: "running" });
       this.events.emit({ type: "run.started", projectId: runtimeProject.id, runId, payload: { run: this.repo.getRun(runId) } });
 

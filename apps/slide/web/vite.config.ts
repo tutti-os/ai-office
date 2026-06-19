@@ -8,7 +8,10 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5175,
     proxy: {
-      "/api": "http://127.0.0.1:8791",
+      "/api": {
+        target: "http://127.0.0.1:8791",
+        ws: true,
+      },
       "/local-assets": "http://127.0.0.1:8791",
     },
   },

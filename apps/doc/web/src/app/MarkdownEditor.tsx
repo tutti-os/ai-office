@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type FC } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type FC } from "react";
 import { createPortal } from "react-dom";
 import {
   IS_BOLD,
@@ -72,10 +72,12 @@ type MarkdownLinkPosition = {
 const markdownLinkPanelWidth = 300;
 const markdownLinkViewportMargin = 8;
 const markdownLinkAnchorGap = 8;
+const MarkdownToolbarActiveContext = createContext(false);
 
 export function MarkdownEditor(props: MarkdownEditorProps) {
   const editorRef = useRef<MDXEditorMethods | null>(null);
   const markdownRef = useRef(props.runtime.content);
+  const [toolbarActive, setToolbarActive] = useState(false);
 
   const plugins = useMemo(
     () => [
@@ -116,6 +118,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     props.onSelectionChange(selectionFromEditor(editor, markdown));
   }, [props]);
 
+  const activateToolbar = useCallback(() => setToolbarActive(true), []);
+
   const handleChange = useCallback(
     (markdown: string, initialMarkdownNormalize: boolean) => {
       markdownRef.current = markdown;
@@ -146,18 +150,23 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         <div
           className="mx-auto min-h-[760px] w-full max-w-[1120px]"
           onBlurCapture={syncSelection}
+          onFocusCapture={activateToolbar}
+          onKeyDownCapture={activateToolbar}
           onKeyUpCapture={syncSelection}
+          onMouseDownCapture={activateToolbar}
           onMouseUpCapture={syncSelection}
         >
-          <MDXEditor
-            ref={editorRef}
-            markdown={props.runtime.content}
-            className="flex min-h-[760px] flex-col bg-transparent text-[#202124]"
-            contentEditableClassName="markdown-preview ai-markdown-content mx-auto min-h-[780px] w-full max-w-[980px] flex-1 overflow-visible rounded border border-black/20 bg-white !px-12 !py-9 text-[#202124] shadow-[0_30px_90px_rgba(0,0,0,0.45)] outline-none max-[760px]:!px-7 max-[760px]:!py-7 md:!px-18 md:!py-10"
-            onChange={handleChange}
-            plugins={plugins}
-            spellCheck
-          />
+          <MarkdownToolbarActiveContext.Provider value={toolbarActive}>
+            <MDXEditor
+              ref={editorRef}
+              markdown={props.runtime.content}
+              className="flex min-h-[760px] flex-col bg-transparent text-[#202124]"
+              contentEditableClassName="markdown-preview ai-markdown-content mx-auto min-h-[780px] w-full max-w-[980px] flex-1 overflow-visible rounded border border-black/20 bg-white !px-12 !py-9 text-[#202124] shadow-[0_30px_90px_rgba(0,0,0,0.45)] outline-none max-[760px]:!px-7 max-[760px]:!py-7 md:!px-18 md:!py-10"
+              onChange={handleChange}
+              plugins={plugins}
+              spellCheck
+            />
+          </MarkdownToolbarActiveContext.Provider>
         </div>
       </div>
     </section>
@@ -178,6 +187,7 @@ function MarkdownToolbarAdapter() {
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const linkButtonRef = useRef<HTMLDivElement | null>(null);
   const linkPanelRef = useRef<HTMLFormElement | null>(null);
+  const toolbarDisabled = !useContext(MarkdownToolbarActiveContext);
   const activeEditor = useCellValue(activeEditor$);
   const [currentFormat, currentListType, currentBlockType] = useCellValues(currentFormat$, currentListType$, currentBlockType$);
   const applyFormat = usePublisher(applyFormat$);
@@ -365,7 +375,7 @@ function MarkdownToolbarAdapter() {
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup className="[column-gap:4px]">
-          <ToolbarSelect title="Block style" value={blockType} onChange={(value) => applyMarkdownBlock(value as MarkdownBlockKind, insertMarkdown)}>
+          <ToolbarSelect disabled={toolbarDisabled} title="Block style" value={blockType} onChange={(value) => applyMarkdownBlock(value as MarkdownBlockKind, insertMarkdown)}>
             <option value="p">Normal Text</option>
             <option value="h1">Heading 1</option>
             <option value="h2">Heading 2</option>
@@ -376,30 +386,30 @@ function MarkdownToolbarAdapter() {
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup>
-          <IconButtonLight active={Boolean(currentFormat & IS_BOLD)} title="Bold" onClick={() => applyFormat("bold")}><Bold size={19} /></IconButtonLight>
-          <IconButtonLight active={Boolean(currentFormat & IS_ITALIC)} title="Italic" onClick={() => applyFormat("italic")}><Italic size={19} /></IconButtonLight>
-          <IconButtonLight active={Boolean(currentFormat & IS_STRIKETHROUGH)} title="Strikethrough" onClick={() => applyFormat("strikethrough")}><Strikethrough size={19} /></IconButtonLight>
-          <IconButtonLight active={Boolean(currentFormat & IS_CODE)} title="Inline code" onClick={() => applyFormat("code")}><Code2 size={18} /></IconButtonLight>
+          <IconButtonLight active={Boolean(currentFormat & IS_BOLD)} disabled={toolbarDisabled} title="Bold" onClick={() => applyFormat("bold")}><Bold size={19} /></IconButtonLight>
+          <IconButtonLight active={Boolean(currentFormat & IS_ITALIC)} disabled={toolbarDisabled} title="Italic" onClick={() => applyFormat("italic")}><Italic size={19} /></IconButtonLight>
+          <IconButtonLight active={Boolean(currentFormat & IS_STRIKETHROUGH)} disabled={toolbarDisabled} title="Strikethrough" onClick={() => applyFormat("strikethrough")}><Strikethrough size={19} /></IconButtonLight>
+          <IconButtonLight active={Boolean(currentFormat & IS_CODE)} disabled={toolbarDisabled} title="Inline code" onClick={() => applyFormat("code")}><Code2 size={18} /></IconButtonLight>
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup>
-          <IconButtonLight active={listType === "number"} title="Numbered list" onClick={() => applyListType(listType === "number" ? "" : "number")}><ListOrdered size={19} /></IconButtonLight>
-          <IconButtonLight active={listType === "bullet"} title="Bulleted list" onClick={() => applyListType(listType === "bullet" ? "" : "bullet")}><List size={19} /></IconButtonLight>
-          <IconButtonLight active={listType === "check"} title="Checklist" onClick={() => applyListType(listType === "check" ? "" : "check")}><ListTodo size={19} /></IconButtonLight>
+          <IconButtonLight active={listType === "number"} disabled={toolbarDisabled} title="Numbered list" onClick={() => applyListType(listType === "number" ? "" : "number")}><ListOrdered size={19} /></IconButtonLight>
+          <IconButtonLight active={listType === "bullet"} disabled={toolbarDisabled} title="Bulleted list" onClick={() => applyListType(listType === "bullet" ? "" : "bullet")}><List size={19} /></IconButtonLight>
+          <IconButtonLight active={listType === "check"} disabled={toolbarDisabled} title="Checklist" onClick={() => applyListType(listType === "check" ? "" : "check")}><ListTodo size={19} /></IconButtonLight>
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup>
-          <IconButtonLight title="Image" onClick={requestImageFileSelection}><Image size={18} /></IconButtonLight>
+          <IconButtonLight disabled={toolbarDisabled} title="Image" onClick={requestImageFileSelection}><Image size={18} /></IconButtonLight>
           <div ref={linkButtonRef} className="relative inline-grid">
-            <IconButtonLight active={linkActive || linkPanelOpen} title="Create link" onClick={linkActive ? removeLink : openMarkdownLinkPanel}><Link2 size={18} /></IconButtonLight>
+            <IconButtonLight active={linkActive || linkPanelOpen} disabled={toolbarDisabled} title="Create link" onClick={linkActive ? removeLink : openMarkdownLinkPanel}><Link2 size={18} /></IconButtonLight>
           </div>
-          <IconButtonLight title="Insert table" onClick={() => insertTable({ rows: 3, columns: 3 })}><Table2 size={18} /></IconButtonLight>
+          <IconButtonLight disabled={toolbarDisabled} title="Insert table" onClick={() => insertTable({ rows: 3, columns: 3 })}><Table2 size={18} /></IconButtonLight>
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup>
-          <IconButtonLight active={blockType === "blockquote"} title="Quote" onClick={() => applyMarkdownBlock("blockquote", insertMarkdown)}><Quote size={18} /></IconButtonLight>
-          <IconButtonLight title="Thematic break" onClick={insertThematicBreak}><Minus size={18} /></IconButtonLight>
-          <IconButtonLight title="Code block" onClick={() => insertCodeBlock({})}><Code2 size={18} /></IconButtonLight>
+          <IconButtonLight active={blockType === "blockquote"} disabled={toolbarDisabled} title="Quote" onClick={() => applyMarkdownBlock("blockquote", insertMarkdown)}><Quote size={18} /></IconButtonLight>
+          <IconButtonLight disabled={toolbarDisabled} title="Thematic break" onClick={insertThematicBreak}><Minus size={18} /></IconButtonLight>
+          <IconButtonLight disabled={toolbarDisabled} title="Code block" onClick={() => insertCodeBlock({})}><Code2 size={18} /></IconButtonLight>
         </ToolbarGroup>
       </ToolbarRow>
     </Toolbar>
