@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import type { DocumentType, LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
+import { PromptComposer } from "@ai-app/ui/prompt-composer";
 import {
   Check,
   ChevronDown,
@@ -55,12 +56,6 @@ export function HomeComposer(props: {
   const handleFileInput = (event: ChangeEvent<HTMLInputElement>) => {
     props.onAddFiles(Array.from(event.target.files ?? []));
     event.target.value = "";
-  };
-
-  const handlePromptKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
-    event.preventDefault();
-    if (canSubmit) props.onCreateFromPrompt();
   };
 
   return (
@@ -132,25 +127,19 @@ export function HomeComposer(props: {
         })}
       </div>
 
-      <div className="rounded-[20px] border border-white/10 bg-[#303030] p-4 shadow-[0_22px_80px_rgba(0,0,0,0.42)]">
-        {props.attachments.length > 0 ? (
+      <PromptComposer
+        canSubmit={canSubmit}
+        placeholder="Ask anything, create anything..."
+        value={props.prompt}
+        beforeTextarea={props.attachments.length > 0 ? (
           <div className="mb-4 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {props.attachments.map((attachment) => (
               <AttachmentPreview key={attachment.id} attachment={attachment} onRemove={props.onRemoveAttachment} />
             ))}
           </div>
         ) : null}
-
-        <textarea
-          className="h-[108px] w-full resize-none border-0 bg-transparent px-1 text-[15px] leading-6 text-white outline-none placeholder:text-white/42"
-          value={props.prompt}
-          onChange={(event) => props.onPromptChange(event.target.value)}
-          onKeyDown={handlePromptKeyDown}
-          placeholder="Ask anything, create anything..."
-        />
-
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
+        leadingActions={
+          <>
             <label className="grid size-9 shrink-0 place-items-center rounded-full border border-white/10 bg-white text-black hover:bg-white/90" title="Add files">
               <Plus size={21} />
               <input className="sr-only" type="file" multiple onChange={handleFileInput} />
@@ -161,9 +150,9 @@ export function HomeComposer(props: {
               selectedProfile={selectedProfile}
               onSelect={props.onRuntimeProfileChange}
             />
-          </div>
-
-          <div className="flex shrink-0 items-center">
+          </>
+        }
+        trailingActions={
             <button
               className="grid size-10 place-items-center rounded-full bg-white text-black disabled:bg-white/16 disabled:text-white/36"
               type="button"
@@ -173,9 +162,10 @@ export function HomeComposer(props: {
             >
               {props.loading ? <Loader2 className="animate-spin" size={18} /> : <CornerDownLeft size={20} />}
             </button>
-          </div>
-        </div>
-      </div>
+        }
+        onChange={props.onPromptChange}
+        onSubmit={props.onCreateFromPrompt}
+      />
 
       {props.error ? <div className="mt-4 w-full rounded-xl bg-[#3a241f] p-3 text-[12px] leading-5 text-[#ffad9f]">{props.error}</div> : null}
     </div>

@@ -5,6 +5,7 @@ import type { AiEditRequest, CreateProjectRequest, RuntimeProfile, UpdateDeckSli
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
 import { RuntimeProviderUnsupportedError, type RuntimeStreamEvent, type SlideRuntimeProject } from "../runtimes/runtime-provider.js";
+import { requireOfficeCli } from "../toolchains/officecli.js";
 import { EventHub } from "../ws/event-hub.js";
 import { ProjectRepository } from "./project-repository.js";
 
@@ -33,7 +34,8 @@ export class ProjectService {
     return this.repo.clearProjectHistory();
   }
 
-  createProject(input: CreateProjectRequest) {
+  async createProject(input: CreateProjectRequest) {
+    if (input.artifactType === "pptx") await requireOfficeCli();
     const result = this.repo.createProject(input);
     this.events.emit({ type: "project.created", projectId: result.project.id, payload: result });
     return result;
@@ -103,6 +105,7 @@ export class ProjectService {
 
   async startAiEdit(projectId: string, request: AiEditRequest) {
     const runtimeProject = await this.createRuntimeProject(projectId);
+    if (runtimeProject.artifact.type === "pptx") await requireOfficeCli();
     this.repo.syncProjectAgentInstructions(projectId);
     const runtimeProfile = runtimeProfileFromId(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);

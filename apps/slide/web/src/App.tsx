@@ -12,6 +12,7 @@ import {
   Clock3,
   Copy,
   Crosshair,
+  Download,
   FileCode2,
   FileText,
   History,
@@ -32,6 +33,7 @@ import {
   X,
 } from "lucide-react";
 import { ArtifactEditorFrame, ArtifactWorkspaceHeader, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
+import { PromptComposer } from "@ai-app/ui/prompt-composer";
 import {
   applyInlineFormat,
   applyPresentationStyle,
@@ -59,7 +61,7 @@ import { PptxPreview } from "./app/PptxPreview";
 import { SlideFilmstrip } from "./app/SlideFilmstrip";
 import { fitScale, nextSlideIndex, scaledHeight, slideDirectionFromKey, thumbnailMetrics, useElementSize } from "./app/slideView";
 import { useAgentConversation } from "./app/useAgentConversation";
-import { cancelRun, clearProjectHistory, createProject, fetchLocalAgentProviders, getProject, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
+import { cancelRun, clearProjectHistory, createProject, fetchLocalAgentProviders, fetchOfficeCliStatus, getProject, installOfficeCli, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
 import { DeckArtifactRuntimeAdapter, type DeckAgentRuntimeProvider } from "./artifact/deckArtifactAdapter";
 import { DeckInteractionLayer } from "./artifact/deckInteractionLayerView";
 import {
@@ -82,7 +84,7 @@ import {
 } from "./artifact/deckInteractionLayer";
 import { PptxArtifactRuntimeAdapter } from "./artifact/pptxArtifactAdapter";
 import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
-import type { DeckManifestSlide, LocalAgentProviderStatus, ProjectDetailResponse, SlideArtifactSelection, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
+import type { DeckManifestSlide, LocalAgentProviderStatus, OfficeCliStatus, ProjectDetailResponse, SlideArtifactSelection, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
 
 const agentProfiles: Array<{ id: string; provider: string; model: string; label: string }> = [
   { id: "local-agent:codex", provider: "codex", model: "codex:default", label: "Codex" },
@@ -133,6 +135,8 @@ export function App() {
   const [historyProjects, setHistoryProjects] = useState<SlideProject[]>([]);
   const [slideTemplates, setSlideTemplates] = useState<SlideTemplate[]>([]);
   const [localAgentProviders, setLocalAgentProviders] = useState<LocalAgentProviderStatus[]>([]);
+  const [officeCliStatus, setOfficeCliStatus] = useState<OfficeCliStatus | null>(null);
+  const [officeCliInstalling, setOfficeCliInstalling] = useState(false);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [loadingProject, setLoadingProject] = useState(false);
   const [error, setError] = useState("");
@@ -213,6 +217,20 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    void fetchOfficeCliStatus()
+      .then((response) => setOfficeCliStatus(response.officecli))
+      .catch((err) =>
+        setOfficeCliStatus({
+          available: false,
+          source: "missing",
+          canInstall: false,
+          installing: false,
+          reason: err instanceof Error ? err.message : "Unable to check OfficeCLI status.",
+        }),
+      );
+  }, []);
+
+  useEffect(() => {
     if (route.name !== "home" || slideTemplates.length > 0) return;
     setTemplatesLoading(true);
     void listTemplates()
@@ -260,17 +278,34 @@ export function App() {
     route.name,
   ]);
 
-  const createAndOpenProject = async (input: { title: string; template?: SlideTemplate; artifactType?: SlideArtifactType }) => {
+  const createAndOpenProject = async (input: { title: string; template?: SlideTemplate; artifactType?: SlideArtifactType; initialPrompt?: string }) => {
     setCreating(true);
     setError("");
     try {
+      const artifactType = input.artifactType ?? artifactTypeForOutput(outputType);
+      if (artifactType === "pptx" && officeCliStatus?.available !== true) {
+        throw new Error(officeCliStatus?.reason ?? "OfficeCLI is required for PPTX.");
+      }
       const response = await createProject({
         title: input.title,
-        artifactType: input.artifactType ?? artifactTypeForOutput(outputType),
+        artifactType,
         templateId: input.template?.id ?? null,
         templateName: input.template?.name ?? null,
       });
       setHistoryProjects((projects) => [response.project, ...projects.filter((project) => project.id !== response.project.id)]);
+      const initialPrompt = input.initialPrompt?.trim();
+      if (initialPrompt) {
+        await startAiEdit(response.project.id, {
+          userPrompt: initialPrompt,
+          mode: "write",
+          artifactType,
+          selectedText: "",
+          selectedHtml: "",
+          selectionType: "write",
+          selectionPath: "",
+          runtimeProfileId: selectedAgent || null,
+        });
+      }
       setRoute(pushSlideRoute(response.project.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -279,9 +314,29 @@ export function App() {
     }
   };
 
+  const downloadOfficeCli = async () => {
+    setError("");
+    setOfficeCliInstalling(true);
+    try {
+      const response = await installOfficeCli();
+      setOfficeCliStatus(response.officecli);
+      if (!response.officecli.available) setError(response.officecli.reason ?? "Unable to install OfficeCLI");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      try {
+        const response = await fetchOfficeCliStatus();
+        setOfficeCliStatus(response.officecli);
+      } catch {
+        // Keep the existing status if the follow-up check also fails.
+      }
+    } finally {
+      setOfficeCliInstalling(false);
+    }
+  };
+
   const createFromPrompt = () => {
     if (!prompt.trim()) return;
-    void createAndOpenProject({ title: prompt.trim() });
+    void createAndOpenProject({ title: prompt.trim(), initialPrompt: prompt.trim() });
   };
 
   const createBlank = () => {
@@ -326,6 +381,7 @@ export function App() {
             runtimeProfileId: selectedAgent || null,
           }),
         );
+        void agentConversation.reload();
         setProjectDetail(await getProject(currentProjectId));
       } else {
         const deckRuntime = deckAgentRuntimeProviderRef.current?.() ?? null;
@@ -342,6 +398,7 @@ export function App() {
             runtimeProfileId: selectedAgent || null,
           }),
         );
+        void agentConversation.reload();
       }
       await agentConversation.reload();
     } catch (err) {
@@ -406,11 +463,14 @@ export function App() {
         <h1 className="m-0 text-[34px] font-extrabold leading-[1.18] text-white md:text-[36px]">Ready to create any presentation?</h1>
         <Composer
           creating={creating}
+          officeCliInstalling={officeCliInstalling}
+          officeCliStatus={officeCliStatus}
           outputType={outputType}
           prompt={prompt}
           selectedAgent={selectedAgent}
           localAgentProviders={localAgentProviders}
           onCreate={createFromPrompt}
+          onInstallOfficeCli={downloadOfficeCli}
           onOutputTypeChange={setOutputType}
           onPromptChange={setPrompt}
           onSelectedAgentChange={setSelectedAgent}
@@ -488,60 +548,116 @@ export function App() {
 function Composer(props: {
   creating: boolean;
   localAgentProviders: LocalAgentProviderStatus[];
+  officeCliInstalling: boolean;
+  officeCliStatus: OfficeCliStatus | null;
   outputType: OutputType;
   prompt: string;
   selectedAgent: string;
   onCreate: () => void;
+  onInstallOfficeCli: () => void;
   onOutputTypeChange: (type: OutputType) => void;
   onPromptChange: (value: string) => void;
   onSelectedAgentChange: (value: string) => void;
 }) {
-  const canSubmit = props.prompt.trim().length > 0 && !props.creating;
+  const pptxAvailable = props.officeCliStatus?.available === true;
+  const selectedOutputAvailable = props.outputType !== "pptx" || pptxAvailable;
+  const canSubmit = props.prompt.trim().length > 0 && !props.creating && selectedOutputAvailable;
 
   return (
-    <div className="mt-8 w-full rounded-[20px] border border-white/10 bg-[#303030] p-4 text-left shadow-[0_22px_80px_rgba(0,0,0,0.42)]">
-      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-        <FormatOption
-          active={props.outputType === "html"}
-          description="Editable slide runtime"
-          icon={<FileCode2 size={20} />}
-          label="Deck"
-          onClick={() => props.onOutputTypeChange("html")}
-        />
-        <FormatOption
-          active={props.outputType === "pptx"}
-          description="PowerPoint package"
-          icon={<FileText size={20} />}
-          label="PPTX"
-          onClick={() => props.onOutputTypeChange("pptx")}
-        />
-      </div>
-
-      <textarea
-        className="block h-[108px] w-full resize-none border-0 bg-transparent px-1 pb-2 text-[15px] leading-6 text-white outline-none placeholder:text-white/42"
-        value={props.prompt}
-        placeholder="Ask for a pitch deck, lesson deck, board update, research talk..."
-        onChange={(event) => props.onPromptChange(event.currentTarget.value)}
-      />
-
-      <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <button className="grid size-9 shrink-0 place-items-center rounded-full border-0 bg-white text-black" type="button" title="Add source files">
-          <Plus size={20} />
-        </button>
-        <AgentMenu localAgentProviders={props.localAgentProviders} selectedAgent={props.selectedAgent} onChange={props.onSelectedAgentChange} />
+    <PromptComposer
+      canSubmit={canSubmit}
+      className="mt-8 w-full text-left"
+      footerClassName="flex-wrap gap-2.5"
+      leadingActionsClassName="mr-auto flex-1 basis-[204px] flex-wrap gap-2.5 md:flex-none md:basis-auto"
+      placeholder="Ask for a pitch deck, lesson deck, board update, research talk..."
+      textareaClassName="block pb-2"
+      value={props.prompt}
+      beforeTextarea={
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <FormatOption
+            active={props.outputType === "html"}
+            description="Editable slide runtime"
+            icon={<FileCode2 size={20} />}
+            label="Deck"
+            onClick={() => props.onOutputTypeChange("html")}
+          />
+          <FormatOption
+            active={props.outputType === "pptx"}
+            description={formatPptxOutputDescription(props.officeCliStatus)}
+            disabled={!pptxAvailable}
+            icon={<FileText size={20} />}
+            installing={props.officeCliInstalling || props.officeCliStatus?.installing === true}
+            label="PPTX"
+            showInstall={!pptxAvailable && props.officeCliStatus?.canInstall === true}
+            title={!pptxAvailable ? props.officeCliStatus?.reason ?? "OfficeCLI is required for PPTX" : undefined}
+            onInstall={props.onInstallOfficeCli}
+            onClick={() => props.onOutputTypeChange("pptx")}
+          />
+        </div>
+      }
+      leadingActions={
+        <>
+          <button className="grid size-9 shrink-0 place-items-center rounded-full border-0 bg-white text-black" type="button" title="Add source files">
+            <Plus size={20} />
+          </button>
+          <AgentMenu localAgentProviders={props.localAgentProviders} selectedAgent={props.selectedAgent} onChange={props.onSelectedAgentChange} />
+        </>
+      }
+      trailingActions={
         <button className="inline-flex h-10 min-w-[108px] flex-1 items-center justify-center gap-2 rounded-full border-0 bg-white px-[18px] text-[13px] font-extrabold text-black disabled:cursor-default disabled:bg-white/16 disabled:text-white/36 md:flex-none" disabled={!canSubmit} type="button" title="Create deck" onClick={props.onCreate}>
           {props.creating ? <Loader2 className="animate-spin" size={18} /> : <Wand2 size={18} />}
           Create
         </button>
-      </div>
-    </div>
+      }
+      trailingActionsClassName="flex-1 md:flex-none"
+      onChange={props.onPromptChange}
+      onSubmit={props.onCreate}
+    />
   );
 }
 
-function FormatOption(props: { active: boolean; description: string; icon: React.ReactNode; label: string; onClick: () => void }) {
+function formatPptxOutputDescription(officeCliStatus: OfficeCliStatus | null) {
+  if (!officeCliStatus) return "Checking OfficeCLI";
+  if (officeCliStatus.available) return officeCliStatus.version ? `OfficeCLI ${officeCliStatus.version}` : "OfficeCLI ready";
+  if (officeCliStatus.installing) return "Installing OfficeCLI";
+  return "Requires OfficeCLI";
+}
+
+function FormatOption(props: {
+  active: boolean;
+  description: string;
+  disabled?: boolean;
+  icon: React.ReactNode;
+  installing?: boolean;
+  label: string;
+  showInstall?: boolean;
+  title?: string;
+  onClick: () => void;
+  onInstall?: () => void;
+}) {
   return (
-    <button className={cn("flex min-h-16 min-w-0 items-center gap-3 rounded-xl border p-3 text-left transition", props.active ? "border-white bg-white text-black" : "border-white/10 bg-[#2f2f2f] text-white/82 hover:border-white/20 hover:bg-[#363636]")} type="button" onClick={props.onClick}>
-      <span className={cn("grid size-9 shrink-0 place-items-center rounded-xl", props.active ? (props.label === "PPTX" ? "bg-[#e9f0ff] text-[#2f66d9]" : "bg-[#e9f7ef] text-[#187a44]") : "bg-white/8 text-white/64")}>{props.icon}</span>
+    <div
+      className={cn(
+        "flex min-h-16 min-w-0 items-center gap-3 rounded-xl border p-3 text-left transition",
+        props.active
+          ? "border-white bg-white text-black"
+          : props.disabled
+            ? "border-white/8 bg-[#292929] text-white/34"
+            : "border-white/10 bg-[#2f2f2f] text-white/82 hover:border-white/20 hover:bg-[#363636]",
+      )}
+      role="button"
+      tabIndex={props.disabled && !props.showInstall ? -1 : 0}
+      title={props.title}
+      onClick={() => {
+        if (!props.disabled) props.onClick();
+      }}
+      onKeyDown={(event) => {
+        if (props.disabled || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        props.onClick();
+      }}
+    >
+      <span className={cn("grid size-9 shrink-0 place-items-center rounded-xl", props.active ? (props.label === "PPTX" ? "bg-[#e9f0ff] text-[#2f66d9]" : "bg-[#e9f7ef] text-[#187a44]") : props.disabled ? "bg-white/5 text-white/28" : "bg-white/8 text-white/64")}>{props.icon}</span>
       <span className="grid min-w-0 gap-1">
         <span className="truncate text-[14px] font-extrabold leading-none">{props.label}</span>
         <small className="truncate text-[12px] font-bold text-current opacity-50">{props.description}</small>
@@ -550,8 +666,30 @@ function FormatOption(props: { active: boolean; description: string; icon: React
         <span className="ml-auto grid size-6 shrink-0 place-items-center rounded-full bg-black text-white">
           <Check size={14} />
         </span>
+      ) : props.showInstall ? (
+        <span
+          className="ml-auto grid size-7 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/8 text-white/58 hover:bg-white/12 hover:text-white"
+          role="button"
+          tabIndex={0}
+          title="Download OfficeCLI"
+          aria-label="Download OfficeCLI"
+          onClick={(event) => {
+            event.stopPropagation();
+            if (props.installing) return;
+            props.onInstall?.();
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (props.installing) return;
+            props.onInstall?.();
+          }}
+        >
+          {props.installing ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
+        </span>
       ) : null}
-    </button>
+    </div>
   );
 }
 

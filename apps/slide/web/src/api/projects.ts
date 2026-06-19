@@ -4,6 +4,7 @@ import type {
   AiEditResponse,
   DeckSlideHtmlResponse,
   LocalAgentProviderStatusResponse,
+  OfficeCliStatusResponse,
   ProjectDetailResponse,
   ProjectRunsResponse,
   ProjectResponse,
@@ -37,6 +38,14 @@ export async function listTemplates() {
 
 export async function fetchLocalAgentProviders() {
   return requestJson<LocalAgentProviderStatusResponse>("/api/local-agent/providers");
+}
+
+export async function fetchOfficeCliStatus() {
+  return requestJson<OfficeCliStatusResponse>("/api/toolchains/officecli");
+}
+
+export async function installOfficeCli() {
+  return requestJson<OfficeCliStatusResponse>("/api/toolchains/officecli/install", { method: "POST" });
 }
 
 export async function updateProject(projectId: string, input: UpdateProjectRequest) {

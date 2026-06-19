@@ -8,6 +8,7 @@ import { projectWorkspaceRoot } from "./local/paths.js";
 import { ProjectRepository } from "./artifact/project-repository.js";
 import { ProjectService } from "./artifact/project-service.js";
 import { ensureTemplateDirs, listTemplates, safeTemplateAssetPath, templateAssetRoot } from "./templates/template-service.js";
+import { getOfficeCliStatus, installOfficeCli } from "./toolchains/officecli.js";
 import { EventHub } from "./ws/event-hub.js";
 
 const webDist = process.env.AI_SLIDE_WEB_DIST ? resolve(process.env.AI_SLIDE_WEB_DIST) : resolve(process.cwd(), "../web/dist");
@@ -38,11 +39,33 @@ server.get("/api/templates", async () => ({ templates: listTemplates() }));
 
 server.get("/api/local-agent/providers", async () => projects.listLocalAgentProviders());
 
+server.get("/api/toolchains/officecli", async () => {
+  try {
+    return { officecli: await getOfficeCliStatus() };
+  } catch (error) {
+    return {
+      officecli: {
+        available: false,
+        source: "missing",
+        canInstall: false,
+        installing: false,
+        reason: error instanceof Error ? error.message : "Unable to check OfficeCLI status.",
+      },
+    };
+  }
+});
+
+server.post("/api/toolchains/officecli/install", async (_request, reply) => {
+  const officecli = await installOfficeCli();
+  if (!officecli.available) return reply.code(400).send({ officecli, error: officecli.reason ?? "Unable to install OfficeCLI" });
+  return { officecli };
+});
+
 server.get("/api/projects", async () => projects.listProjects());
 
 server.post<{ Body: CreateProjectRequest }>("/api/projects", async (request, reply) => {
   try {
-    return projects.createProject(request.body ?? {});
+    return await projects.createProject(request.body ?? {});
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to create project";
     return reply.code(400).send({ error: message });

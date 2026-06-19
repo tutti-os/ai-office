@@ -266,6 +266,22 @@ export interface LocalAgentProviderStatusResponse {
   providers: LocalAgentProviderStatus[];
 }
 
+export type OfficeCliSource = "env" | "bundled" | "path" | "tutti" | "missing";
+
+export interface OfficeCliStatus {
+  available: boolean;
+  version?: string;
+  executablePath?: string;
+  source: OfficeCliSource;
+  canInstall: boolean;
+  installing: boolean;
+  reason?: string;
+}
+
+export interface OfficeCliStatusResponse {
+  officecli: OfficeCliStatus;
+}
+
 export type StreamEventType =
   | "project.created"
   | "project.updated"

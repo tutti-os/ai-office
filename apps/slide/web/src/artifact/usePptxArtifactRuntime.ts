@@ -11,7 +11,7 @@ export function usePptxArtifactRuntime(adapter: PptxArtifactRuntimeAdapter) {
   const loadGenerationRef = useRef(0);
   const previewServiceRef = useRef(
     createPptxPreviewService({
-      assetBaseUrl: "/office-preview/ooxml-convert/",
+      assetBaseUrl: import.meta.env.DEV ? "/office-preview-dev/ooxml-convert/" : "/office-preview/ooxml-convert/",
     }),
   );
 

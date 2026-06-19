@@ -5,6 +5,7 @@ import type { AiEditRequest, SlideRun } from "@ai-slide/shared";
 import type { SkillMaterializationFile, SkillMaterializationRecord } from "@nextop-os/agent-acp-kit";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { extractOoxmlTextPreview } from "../artifact/ooxml-text.js";
+import { officeCliEnvSync } from "../toolchains/officecli.js";
 import type { RuntimeEditContext, SlideRuntimeProject } from "./runtime-provider.js";
 
 const noBrowserRenderVerification =
@@ -18,6 +19,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       buildSystemPrompt,
       buildSkillManifest: buildProjectSkillManifest,
       buildEnv: (context, workspaceRoot) => ({
+        ...officeCliEnvSync(),
         AI_SLIDE_WORKSPACE: workspaceRoot,
         AI_SLIDE_PROJECT_ID: context.project.id,
         AI_SLIDE_RUN_ID: context.run.id,
@@ -95,13 +97,17 @@ function isTextSkillFile(fileName: string) {
 
 function buildSystemPrompt(context: RuntimeEditContext) {
   if (context.project.artifact.type === "pptx") {
+    const targetPptxPath = resolve(projectWorkspaceRoot(context.project.id), "slides.pptx");
     return [
       "You are an AI slide editing agent inside a local presentation app.",
       "This project is a PowerPoint PPTX presentation.",
-      "The canonical file is `slides.pptx` in the current working directory.",
-      "When asked to create or edit the presentation, write the final PPTX result to `slides.pptx`.",
+      `Current focused file: ${targetPptxPath}`,
+      "Use the officecli command-line tool to inspect, create, edit, and validate the focused PPTX file. If an office skill is available in the agent environment, follow it.",
+      "Prefer officecli L1/L2 operations such as view, get, query, add, set, remove, and validate. Do not hand-edit OOXML unless officecli high-level commands cannot solve the task.",
+      "When asked to create or edit the presentation, write the final PPTX result to the focused file.",
       "Do not convert the presentation to Markdown or a single HTML document unless explicitly asked for a separate export.",
       noBrowserRenderVerification,
+      "After editing files, respond with a brief task summary only. Do not include extracted PPTX content in the final response.",
     ].join("\n\n");
   }
 
@@ -142,11 +148,13 @@ function buildEditPrompt(context: RuntimeEditContext) {
   ].join("\n");
 
   if (context.project.artifact.type === "pptx") {
+    const focusedPath = resolve(projectWorkspaceRoot(context.project.id), "slides.pptx");
     return `<slide_agent_context>
 project_id: ${context.project.id}
 title: ${context.project.title}
 artifact_type: pptx
 mode: ${context.request.mode}
+focused_pptx_path: ${focusedPath}
 canonical_pptx_path: slides.pptx
 ${selection}
 </slide_agent_context>
@@ -165,7 +173,7 @@ ${extractOoxmlTextPreview(resolve(projectWorkspaceRoot(context.project.id), "sli
 ${context.request.userPrompt}
 </user_instruction>
 
-Create or edit the PPTX file at slides.pptx.`;
+Use officecli to inspect and edit the focused PPTX when possible. Create or edit the PPTX file at slides.pptx.`;
   }
 
   return `<slide_agent_context>
