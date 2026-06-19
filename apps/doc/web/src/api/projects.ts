@@ -3,6 +3,7 @@ import type {
   AiEditResponse,
   CreateProjectRequest,
   DocumentProject,
+  ProjectAssetUploadResponse,
   ProjectRunsResponse,
   UpdateProjectRequest,
 } from "@ai-doc/shared";
@@ -29,6 +30,21 @@ export async function getProject(projectId: string) {
 
 export async function getProjectDocxFile(projectId: string) {
   return requestArrayBuffer(`/api/projects/${encodeURIComponent(projectId)}/files/document.docx`);
+}
+
+export async function uploadProjectAsset(projectId: string, file: File) {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/assets`, {
+    method: "POST",
+    headers: {
+      "content-type": file.type || "application/octet-stream",
+      "x-file-name": encodeURIComponent(file.name || "image"),
+    },
+    body: await file.arrayBuffer(),
+  });
+  const data = (await response.json().catch(() => null)) as ProjectAssetUploadResponse | { error?: string } | null;
+  if (!response.ok) throw new Error(data && "error" in data && data.error ? data.error : `Asset upload failed: ${response.status}`);
+  if (!data || !("path" in data)) throw new Error("Asset upload response is missing asset path");
+  return data;
 }
 
 export async function listProjects() {

@@ -5,3 +5,16 @@
 @theme {
   --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
+
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 0;
+  background: #1f1f1f;
+}
+
+html,
+body {
+  overflow: hidden;
+}

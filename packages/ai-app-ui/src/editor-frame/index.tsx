@@ -4,7 +4,7 @@ import { ChevronDown, Download } from "lucide-react";
 export type ArtifactEditorKind = "html" | "markdown" | "docx" | "deck" | "pptx";
 
 export const artifactEditorGridClass =
-  "grid h-screen min-h-0 grid-cols-[400px_minmax(0,1fr)] overflow-hidden bg-[#1f1f1f] font-sans text-white";
+  "grid h-dvh min-h-0 grid-cols-[400px_minmax(0,1fr)] overflow-hidden bg-[#1f1f1f] font-sans text-white";
 
 export function ArtifactEditorFrame(props: {
   sidebar: ReactNode;
@@ -15,7 +15,9 @@ export function ArtifactEditorFrame(props: {
   return (
     <section className={cx(artifactEditorGridClass, props.className)}>
       {props.sidebar}
-      <section className={cx("grid min-h-0 min-w-0 overflow-hidden", props.contentClassName)}>{props.children}</section>
+      <section className={cx("grid h-full min-h-0 min-w-0 grid-rows-[minmax(0,1fr)] overflow-hidden", props.contentClassName)}>
+        {props.children}
+      </section>
     </section>
   );
 }

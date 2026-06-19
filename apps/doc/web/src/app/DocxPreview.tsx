@@ -40,7 +40,7 @@ export function DocxPreview(props: DocxPreviewProps) {
   }, [syncSelection]);
 
   return (
-    <section className="relative flex min-h-0 flex-col bg-[#1f1f1f]">
+    <section className="relative flex h-full min-h-0 flex-col bg-[#1f1f1f]">
       <ArtifactWorkspaceHeader
         title={props.runtime.title || "Untitled Word Doc"}
         saveState={props.loading ? "loading" : props.dirty ? "saving" : "saved"}

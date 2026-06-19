@@ -22,7 +22,7 @@ type LinkEditorPosition = {
 
 export function DocumentLoadingScreen(props: { error: string; loading: boolean }) {
   return (
-    <section className="relative flex min-h-0 flex-col bg-[#1f1f1f]">
+    <section className="relative flex h-full min-h-0 flex-col bg-[#1f1f1f]">
       <header className="flex h-12 shrink-0 items-center border-b border-white/8 px-5">
         <div className="min-w-0 truncate text-[13px] font-semibold text-white">Loading doc</div>
       </header>
@@ -346,7 +346,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
         />
       }
     >
-      <section className="relative flex min-h-0 flex-col bg-[#1f1f1f]">
+      <section className="relative flex h-full min-h-0 flex-col bg-[#1f1f1f]">
         <ArtifactWorkspaceHeader
           title={props.runtime?.title ?? "Untitled Doc"}
           saveState={props.saveState}

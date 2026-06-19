@@ -27,6 +27,7 @@ type SharedShellProps = {
 export function MarkdownDocumentScreen(props: SharedShellProps & {
   agentProcessing: boolean;
   loading: boolean;
+  projectId: string | null;
   readOnly: boolean;
   runtime: MarkdownRuntimeState;
   saveState: ArtifactSaveState;
@@ -41,6 +42,7 @@ export function MarkdownDocumentScreen(props: SharedShellProps & {
     <ArtifactEditorFrame sidebar={<DocumentAgentSidebar artifactLabel="markdown" {...props} />}>
       <MarkdownEditor
         runtime={props.runtime}
+        projectId={props.projectId}
         dirty={props.dirty}
         saveState={props.saveState}
         loading={props.loading}

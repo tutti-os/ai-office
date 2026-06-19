@@ -113,7 +113,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
   } = props.model;
   const artifactAgentProcessing = isArtifactAgentRunning(artifactInteraction);
   return (
-    <main className="h-screen overflow-hidden bg-[#1f1f1f] font-sans text-white">
+    <main className="h-dvh min-h-0 overflow-hidden bg-[#1f1f1f] font-sans text-white">
       <input
         ref={imageFileInputRef}
         className="hidden"
@@ -164,6 +164,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           error={error}
           localAgentProviders={localAgentProviders}
           loading={loading}
+          projectId={currentProjectId}
           runtime={markdownRuntime}
           runtimeProfiles={runtimeProfiles}
           agentProcessing={artifactAgentProcessing}

@@ -686,6 +686,7 @@ export function useRuntimeWorkbenchModel() {
     projectId: currentProjectId,
     onProjectUpdated: (project) => {
       if (project.id !== currentProjectId || project.updatedBy !== "ai") return;
+      if (!isNewerDocumentProject(project, currentProject)) return;
       setCurrentProject(project);
       if (project.type === "markdown") {
         loadMarkdownDocument(project.content, { title: project.title, source: "imported-html" });
@@ -1317,4 +1318,14 @@ export function useRuntimeWorkbenchModel() {
       markdownTableCellCommitterRef.current = committer;
     },
   };
+}
+
+function isNewerDocumentProject(next: DocumentProject, current: DocumentProject | null) {
+  if (!current || current.id !== next.id) return true;
+  return timestampMs(next.updatedAt) > timestampMs(current.updatedAt);
+}
+
+function timestampMs(value: string | null | undefined) {
+  const time = value ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(time) ? time : 0;
 }

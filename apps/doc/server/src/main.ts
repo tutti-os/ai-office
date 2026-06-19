@@ -23,6 +23,13 @@ const events = new EventHub();
 const repo = new DocumentRepository();
 const documents = new DocumentService(repo, events);
 
+server.addContentTypeParser(/^image\/.*/i, { parseAs: "buffer", bodyLimit: 30 * 1024 * 1024 }, (_request, body, done) => {
+  done(null, body);
+});
+server.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bodyLimit: 30 * 1024 * 1024 }, (_request, body, done) => {
+  done(null, body);
+});
+
 await server.register(fastifyWebsocket);
 
 if (existsSync(webDist)) {
@@ -79,6 +86,35 @@ server.get<{ Params: { projectId: string } }>("/api/projects/:projectId/files/do
       .send(file.bytes);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to read DOCX file";
+    return reply.code(message.includes("not found") || message.includes("no such file") ? 404 : 400).send({ error: message });
+  }
+});
+
+server.post<{ Params: { projectId: string }; Body: Buffer }>("/api/projects/:projectId/assets", async (request, reply) => {
+  try {
+    const fileNameHeader = request.headers["x-file-name"];
+    const contentType = request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() ?? "application/octet-stream";
+    const asset = await documents.uploadProjectAsset(request.params.projectId, {
+      fileName: typeof fileNameHeader === "string" ? decodeURIComponent(fileNameHeader) : "image",
+      mimeType: contentType,
+      bytes: Buffer.isBuffer(request.body) ? request.body : Buffer.from([]),
+    });
+    return reply.send(asset);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to upload asset";
+    return reply.code(message.includes("not found") ? 404 : 400).send({ error: message });
+  }
+});
+
+server.get<{ Params: { projectId: string; fileName: string } }>("/api/projects/:projectId/assets/:fileName", async (request, reply) => {
+  try {
+    const file = await documents.getProjectAsset(request.params.projectId, decodeURIComponent(request.params.fileName));
+    return reply
+      .type(file.mimeType)
+      .header("cache-control", "no-store")
+      .send(file.bytes);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to read asset";
     return reply.code(message.includes("not found") || message.includes("no such file") ? 404 : 400).send({ error: message });
   }
 });

@@ -214,6 +214,13 @@ export interface ProjectRunsResponse {
   runs: DocumentRunTimelineItem[];
 }
 
+export interface ProjectAssetUploadResponse {
+  path: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
 export interface LocalAgentProviderStatusResponse {
   providers: LocalAgentProviderStatus[];
 }

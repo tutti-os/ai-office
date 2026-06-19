@@ -42,17 +42,20 @@ import {
   useCellValue,
   useCellValues,
   usePublisher,
+  type ImageNode,
 } from "@mdxeditor/editor";
 import "@mdxeditor/editor/style.css";
-import { Bold, Code2, Image, Italic, Link2, List, ListOrdered, ListTodo, Minus, Quote, Redo2, Replace, Strikethrough, Table2, Undo2 } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, Bold, Code2, Image, Italic, Link2, List, ListOrdered, ListTodo, Minus, Quote, Redo2, Replace, Strikethrough, Table2, Undo2 } from "lucide-react";
 import { ArtifactAgentProcessingOverlay, ArtifactWorkspaceHeader } from "@ai-app/ui/editor-frame";
 import type { ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { IconButtonLight, Toolbar, ToolbarDivider, ToolbarGroup, ToolbarRow, ToolbarSelect } from "@ai-app/ui/toolbar";
 import type { MarkdownRuntimeState, MarkdownSelection } from "../artifact/markdownArtifactAdapter";
+import { uploadProjectAsset } from "../api/projects";
 import { markdownParagraphCount, markdownWordCount } from "./documentWorkbenchContent";
 
 type MarkdownEditorProps = {
   runtime: MarkdownRuntimeState;
+  projectId: string | null;
   dirty: boolean;
   saveState: ArtifactSaveState;
   loading: boolean;
@@ -80,8 +83,15 @@ type MarkdownLinkPosition = {
 const markdownLinkPanelWidth = 300;
 const markdownLinkViewportMargin = 8;
 const markdownLinkAnchorGap = 8;
+const markdownImageCenterTitleToken = "ai-md-align-center";
+const markdownImageRightTitleToken = "ai-md-align-right";
+type MarkdownImageAlignment = "left" | "center" | "right";
 type MarkdownEditorStateSnapshot = {
   toJSON: () => { root: unknown };
+};
+type MarkdownSelectedImageState = {
+  alignment: MarkdownImageAlignment;
+  nodeKey: string;
 };
 type MarkdownTableCellEditor = {
   dispatchCommand: (command: typeof NESTED_EDITOR_UPDATED_COMMAND, payload: undefined) => boolean;
@@ -93,17 +103,21 @@ const MarkdownToolbarContext = createContext<{
   active: boolean;
   canRedo: boolean;
   canUndo: boolean;
+  projectId: string | null;
   readOnly: boolean;
   onBlockChange: (kind: MarkdownBlockKind) => void;
   onRedo: () => void;
+  runProgrammaticChange: <T>(mutation: () => T) => T | undefined;
   onUndo: () => void;
 }>({
   active: false,
   canRedo: false,
   canUndo: false,
+  projectId: null,
   readOnly: false,
   onBlockChange: () => undefined,
   onRedo: () => undefined,
+  runProgrammaticChange: () => undefined,
   onUndo: () => undefined,
 });
 
@@ -113,6 +127,10 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   const activeSelectionRangeRef = useRef<Range | null>(null);
   const activeTableCellEditorRef = useRef<MarkdownTableCellEditor | null>(null);
   const pendingTableCellEditRef = useRef(false);
+  // Toolbar/plugin mutations update Lexical nodes first; this bridge is the single
+  // place that promotes those editor-state changes into runtime content.
+  const programmaticChangePendingRef = useRef(false);
+  const programmaticCommitFrameRef = useRef<number | null>(null);
   const [toolbarActive, setToolbarActive] = useState(false);
 
   const setPendingTableCellEdit = useCallback(
@@ -132,6 +150,51 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     return true;
   }, [setPendingTableCellEdit]);
 
+  const commitMarkdownRuntimeChange = useCallback(() => {
+    if (props.readOnly) {
+      programmaticChangePendingRef.current = false;
+      return false;
+    }
+    const editor = editorRef.current;
+    const markdown = normalizeMarkdownEditorOutput(editor?.getMarkdown() ?? markdownRef.current);
+    if (markdown === markdownRef.current) return false;
+    markdownRef.current = markdown;
+    programmaticChangePendingRef.current = false;
+    const selection = selectionFromEditor(editor, markdown);
+    setPendingTableCellEdit(false);
+    props.onSelectionChange(selection);
+    props.onChange(markdown, selection);
+    return true;
+  }, [props, setPendingTableCellEdit]);
+
+  const scheduleProgrammaticCommit = useCallback(
+    (attempt = 0) => {
+      if (programmaticCommitFrameRef.current !== null) window.cancelAnimationFrame(programmaticCommitFrameRef.current);
+      programmaticCommitFrameRef.current = window.requestAnimationFrame(() => {
+        programmaticCommitFrameRef.current = null;
+        const committed = commitMarkdownRuntimeChange();
+        if (committed || !programmaticChangePendingRef.current) return;
+        if (attempt < 5) {
+          scheduleProgrammaticCommit(attempt + 1);
+          return;
+        }
+        programmaticChangePendingRef.current = false;
+      });
+    },
+    [commitMarkdownRuntimeChange],
+  );
+
+  const runProgrammaticChange = useCallback(
+    <T,>(mutation: () => T) => {
+      if (props.readOnly) return undefined;
+      programmaticChangePendingRef.current = true;
+      const result = mutation();
+      scheduleProgrammaticCommit();
+      return result;
+    },
+    [props.readOnly, scheduleProgrammaticCommit],
+  );
+
   const plugins = useMemo(
     () => [
       markdownToolbarPlugin(),
@@ -146,7 +209,11 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       linkPlugin(),
       linkDialogPlugin({ showLinkTitleField: false }),
       tablePlugin(),
-      imagePlugin({ imageUploadHandler: fileToDataUrl, EditImageToolbar: MarkdownImageReplaceToolbar as unknown as FC<{}> }),
+      imagePlugin({
+        imagePreviewHandler: (imageSource) => Promise.resolve(markdownImagePreviewUrl(props.projectId, imageSource)),
+        imageUploadHandler: (file) => uploadMarkdownImageAsset(props.projectId, file),
+        EditImageToolbar: MarkdownImageReplaceToolbar as unknown as FC<{}>,
+      }),
       codeBlockPlugin({
         defaultCodeBlockLanguage: "text",
         codeBlockEditorDescriptors: [
@@ -159,7 +226,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       }),
       markdownShortcutPlugin(),
     ],
-    [setPendingTableCellEdit],
+    [props.projectId, setPendingTableCellEdit],
   );
 
   useEffect(() => {
@@ -169,12 +236,23 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
   useEffect(() => {
     markdownRef.current = props.runtime.content;
+    programmaticChangePendingRef.current = false;
+    if (programmaticCommitFrameRef.current !== null) {
+      window.cancelAnimationFrame(programmaticCommitFrameRef.current);
+      programmaticCommitFrameRef.current = null;
+    }
     activeSelectionRangeRef.current = null;
     clearMarkdownPersistentSelectionHighlight();
     const editor = editorRef.current;
     if (!editor || editor.getMarkdown() === props.runtime.content) return;
     editor.setMarkdown(props.runtime.content);
   }, [props.runtime.content, props.runtime.revision]);
+
+  useEffect(() => {
+    return () => {
+      if (programmaticCommitFrameRef.current !== null) window.cancelAnimationFrame(programmaticCommitFrameRef.current);
+    };
+  }, []);
 
   const syncSelection = useCallback(() => {
     const editor = editorRef.current;
@@ -250,7 +328,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       markdownRef.current = normalizedMarkdown;
       const selection = selectionFromEditor(editorRef.current, normalizedMarkdown);
       props.onSelectionChange(selection);
-      if (!initialMarkdownNormalize) {
+      if (!initialMarkdownNormalize || programmaticChangePendingRef.current) {
+        programmaticChangePendingRef.current = false;
         setPendingTableCellEdit(false);
         props.onChange(normalizedMarkdown, selection);
       }
@@ -273,7 +352,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   );
 
   return (
-    <section className="relative flex min-h-0 flex-col bg-[#1f1f1f]">
+    <section className="relative flex h-full min-h-0 flex-col bg-[#1f1f1f]">
       <ArtifactWorkspaceHeader
         title={props.runtime.title || "Untitled Markdown"}
         saveState={props.saveState}
@@ -317,9 +396,11 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
                 active: toolbarActive,
                 canRedo: !props.readOnly && props.runtime.history.currentIndex < props.runtime.history.entries.length - 1,
                 canUndo: !props.readOnly && props.runtime.history.currentIndex > 0,
+                projectId: props.projectId,
                 readOnly: props.readOnly,
                 onBlockChange: applyBlockChange,
                 onRedo: props.onRedo,
+                runProgrammaticChange,
                 onUndo: props.onUndo,
               }}
             >
@@ -467,10 +548,28 @@ function MarkdownToolbarAdapter() {
   const [linkPanelOpen, setLinkPanelOpen] = useState(false);
   const [linkDraft, setLinkDraft] = useState<MarkdownLinkDraft>({ text: "", href: "https://" });
   const [linkPosition, setLinkPosition] = useState<MarkdownLinkPosition | null>(null);
+  const [selectedImage, setSelectedImage] = useState<MarkdownSelectedImageState | null>(null);
 
   const blockType = markdownBlockTypeFromEditor(currentBlockType);
   const listType = markdownListTypeFromEditor(currentListType);
   const linkActive = linkDialogState.type !== "inactive";
+
+  useEffect(() => {
+    if (!activeEditor) {
+      setSelectedImage(null);
+      return;
+    }
+    const readSelectedImage = () => activeEditor.getEditorState().read(selectedMarkdownImageStateFromSelection);
+    setSelectedImage(readSelectedImage());
+    return activeEditor.registerUpdateListener(({ editorState }) => {
+      const nextSelectedImage = editorState.read(selectedMarkdownImageStateFromSelection);
+      setSelectedImage((current) => {
+        if (!current && !nextSelectedImage) return current;
+        if (current?.alignment === nextSelectedImage?.alignment && current?.nodeKey === nextSelectedImage?.nodeKey) return current;
+        return nextSelectedImage;
+      });
+    });
+  }, [activeEditor]);
 
   useLayoutEffect(() => {
     if (!linkPanelOpen) {
@@ -548,6 +647,12 @@ function MarkdownToolbarAdapter() {
     setLinkPanelOpen(false);
   };
 
+  const setSelectedImageAlignment = (alignment: MarkdownImageAlignment) => {
+    if (toolbarContext.readOnly) return;
+    if (!selectedImage) return;
+    toolbarContext.runProgrammaticChange(() => setMarkdownImageAlignmentByNodeKey(activeEditor, selectedImage.nodeKey, alignment));
+  };
+
   const linkPanelStyle: CSSProperties = linkPosition ? { left: linkPosition.left, top: linkPosition.top, width: linkPosition.width } : { visibility: "hidden" };
   const linkPanel =
     linkPanelOpen && typeof document !== "undefined"
@@ -603,10 +708,11 @@ function MarkdownToolbarAdapter() {
     input.value = "";
     if (toolbarContext.readOnly) return;
     if (!file || !file.type.startsWith("image/")) return;
-    const src = await fileToDataUrl(file);
+    const src = await uploadMarkdownImageAsset(toolbarContext.projectId, file);
     const altText = imageAltFromFileName(file.name);
-    if (replaceSelectedImage(activeEditor, src, altText)) return;
-    insertImage({ src, altText });
+    const replaced = toolbarContext.runProgrammaticChange(() => replaceSelectedImage(activeEditor, src, altText));
+    if (replaced) return;
+    toolbarContext.runProgrammaticChange(() => insertImage({ src, altText }));
   };
 
   return (
@@ -650,6 +756,16 @@ function MarkdownToolbarAdapter() {
           </div>
           <IconButtonLight disabled={toolbarDisabled} title="Insert table" onClick={() => insertTable({ rows: 3, columns: 3 })}><Table2 size={18} /></IconButtonLight>
         </ToolbarGroup>
+        {selectedImage ? (
+          <>
+            <ToolbarDivider />
+            <ToolbarGroup>
+              <IconButtonLight active={selectedImage.alignment === "left"} disabled={toolbarDisabled} title="Align image left" onClick={() => setSelectedImageAlignment("left")}><AlignLeft size={19} /></IconButtonLight>
+              <IconButtonLight active={selectedImage.alignment === "center"} disabled={toolbarDisabled} title="Center image" onClick={() => setSelectedImageAlignment("center")}><AlignCenter size={19} /></IconButtonLight>
+              <IconButtonLight active={selectedImage.alignment === "right"} disabled={toolbarDisabled} title="Align image right" onClick={() => setSelectedImageAlignment("right")}><AlignRight size={19} /></IconButtonLight>
+            </ToolbarGroup>
+          </>
+        ) : null}
         <ToolbarDivider />
         <ToolbarGroup>
           <IconButtonLight active={blockType === "blockquote"} disabled={toolbarDisabled} title="Quote" onClick={() => toolbarContext.onBlockChange("blockquote")}><Quote size={18} /></IconButtonLight>
@@ -682,9 +798,9 @@ function MarkdownImageReplaceToolbar(props: { nodeKey: string; alt: string }) {
     input.value = "";
     if (toolbarContext.readOnly) return;
     if (!file || !file.type.startsWith("image/")) return;
-    const src = await fileToDataUrl(file);
+    const src = await uploadMarkdownImageAsset(toolbarContext.projectId, file);
     const altText = props.alt.trim() || imageAltFromFileName(file.name);
-    replaceImageByNodeKey(activeEditor, props.nodeKey, src, altText);
+    toolbarContext.runProgrammaticChange(() => replaceImageByNodeKey(activeEditor, props.nodeKey, src, altText));
   };
 
   return (
@@ -737,6 +853,48 @@ function replaceImageByNodeKey(editor: { update: (fn: () => void) => void } | nu
     node.setSrc(src);
     node.setAltText(altText);
   });
+}
+
+function selectedMarkdownImageStateFromSelection(): MarkdownSelectedImageState | null {
+  const selection = lexical.$getSelection();
+  if (!lexical.$isNodeSelection(selection)) return null;
+  const imageNode = selection.getNodes().find((node) => $isImageNode(node));
+  if (!imageNode) return null;
+  return {
+    alignment: markdownImageAlignment(imageNode),
+    nodeKey: imageNode.getKey(),
+  };
+}
+
+function setMarkdownImageAlignmentByNodeKey(editor: { update: (fn: () => void) => void } | null, nodeKey: string, alignment: MarkdownImageAlignment) {
+  editor?.update(() => {
+    const imageNode = lexical.$getNodeByKey(nodeKey);
+    if (!imageNode) return;
+    if (!$isImageNode(imageNode)) return;
+    imageNode.setTitle(markdownImageTitleWithAlignment(imageNode.getTitle(), alignment));
+  });
+}
+
+function markdownImageAlignment(node: ImageNode): MarkdownImageAlignment {
+  const title = node.getTitle();
+  if (markdownImageTitleHasToken(title, markdownImageRightTitleToken)) return "right";
+  if (markdownImageTitleHasToken(title, markdownImageCenterTitleToken)) return "center";
+  return "left";
+}
+
+function markdownImageTitleHasToken(title: string | undefined, token: string) {
+  return markdownImageTitleTokens(title).includes(token);
+}
+
+function markdownImageTitleWithAlignment(title: string | undefined, alignment: MarkdownImageAlignment) {
+  const tokens = markdownImageTitleTokens(title).filter((token) => token !== markdownImageCenterTitleToken && token !== markdownImageRightTitleToken);
+  if (alignment === "center") tokens.push(markdownImageCenterTitleToken);
+  if (alignment === "right") tokens.push(markdownImageRightTitleToken);
+  return tokens.length ? tokens.join(" ") : undefined;
+}
+
+function markdownImageTitleTokens(title: string | undefined) {
+  return (title ?? "").split(/\s+/).filter(Boolean);
 }
 
 function PlainMarkdownCodeBlockEditor(props: CodeBlockEditorProps) {
@@ -851,13 +1009,23 @@ function editorHtml(editor: MDXEditorMethods | null) {
   return editor?.getContentEditableHTML() ?? "";
 }
 
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(reader.error ?? new Error("Unable to read image"));
-    reader.readAsDataURL(file);
-  });
+async function uploadMarkdownImageAsset(projectId: string | null, file: File) {
+  if (!projectId) throw new Error("Project is not ready for image upload");
+  const asset = await uploadProjectAsset(projectId, file);
+  return asset.path;
+}
+
+function markdownImagePreviewUrl(projectId: string | null, imageSource: string) {
+  const assetName = markdownProjectAssetName(imageSource);
+  if (!projectId || !assetName) return imageSource;
+  return `/api/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetName)}`;
+}
+
+function markdownProjectAssetName(imageSource: string) {
+  const trimmed = imageSource.trim();
+  if (trimmed.startsWith("./assets/")) return trimmed.slice("./assets/".length);
+  if (trimmed.startsWith("assets/")) return trimmed.slice("assets/".length);
+  return "";
 }
 
 function imageAltFromFileName(fileName: string) {

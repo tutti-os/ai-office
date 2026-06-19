@@ -65,7 +65,7 @@ export function SlideEditorScreen(props: {
         />
       }
     >
-      <section className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#242424]">
+      <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#242424]">
         <ArtifactWorkspaceHeader
           title={props.detail?.project.title ?? "Untitled Presentation"}
           saveState={headerSaveState}

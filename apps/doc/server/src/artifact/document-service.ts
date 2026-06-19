@@ -12,6 +12,7 @@ import {
   type DocumentProject,
   type DocumentRun,
   type DocumentRunEvent,
+  type ProjectAssetUploadResponse,
   parseDocxDocumentManifest,
   type RuntimeProfile,
   serializeDocxDocumentManifest,
@@ -119,6 +120,20 @@ export class DocumentService {
     if (!project) return null;
     this.events.emit({ type: "project.updated", projectId, payload: { project } });
     return { project };
+  }
+
+  async uploadProjectAsset(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }): Promise<ProjectAssetUploadResponse> {
+    const project = this.repo.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    if (project.type !== "markdown") throw new Error("Assets are currently supported for Markdown docs only");
+    if (!isSupportedImageMimeType(input.mimeType)) throw new Error("Only image assets are supported");
+    if (input.bytes.byteLength === 0) throw new Error("Asset file is empty");
+    if (input.bytes.byteLength > maxProjectAssetBytes) throw new Error("Asset file is too large");
+    return this.repo.writeProjectAsset(projectId, input);
+  }
+
+  async getProjectAsset(projectId: string, fileName: string) {
+    return this.repo.readProjectAsset(projectId, fileName);
   }
 
   async applyTemplate(projectId: string, input: ApplyTemplateRequest) {
@@ -397,9 +412,15 @@ function defaultProjectContent(type: DocumentProject["type"], template: Document
 
 const docxFileName = "document.docx";
 const docxMimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const maxProjectAssetBytes = 20 * 1024 * 1024;
+const supportedImageMimeTypes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"]);
 
 function docxFilePath(projectId: string) {
   return join(projectWorkspaceRoot(projectId), docxFileName);
+}
+
+function isSupportedImageMimeType(mimeType: string) {
+  return supportedImageMimeTypes.has(mimeType.toLowerCase());
 }
 
 async function readDocxManifestFromFile(projectId: string): Promise<DocxDocumentManifest | null> {

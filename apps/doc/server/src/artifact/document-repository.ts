@@ -1,6 +1,7 @@
-import { rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
+import { basename, extname, join } from "node:path";
 import {
   createEmptyDocxDocumentManifest,
   defaultHtmlDocument,
@@ -118,6 +119,35 @@ export class DocumentRepository {
     const updated = this.getProject(projectId);
     if (updated) this.materializeProject(updated);
     return updated;
+  }
+
+  async writeProjectAsset(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    const root = ensureProjectDirs(projectId);
+    const assetsDir = join(root, "assets");
+    mkdirSync(assetsDir, { recursive: true });
+    const fileName = uniqueAssetFileName(assetsDir, input.fileName, input.mimeType);
+    writeFileSync(join(assetsDir, fileName), input.bytes);
+    return {
+      path: `./assets/${fileName}`,
+      fileName,
+      mimeType: input.mimeType,
+      sizeBytes: input.bytes.byteLength,
+    };
+  }
+
+  async readProjectAsset(projectId: string, fileName: string) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    const safeName = safeAssetFileName(fileName, "application/octet-stream");
+    if (safeName !== fileName) throw new Error("Asset not found");
+    const bytes = await readFile(join(projectWorkspaceRoot(projectId), "assets", safeName));
+    return {
+      bytes,
+      fileName: safeName,
+      mimeType: mimeTypeForAssetFileName(safeName),
+    };
   }
 
   syncProjectAgentInstructions(projectId: string) {
@@ -251,6 +281,7 @@ function markdownProjectAgentInstructions(project: DocumentProject) {
     "",
     "You are editing a Markdown doc with the local AI Doc app.",
     `Current focused file: ${targetMarkdownPath}`,
+    `Place local image assets under ${join(projectWorkspaceRoot(project.id), "assets")} and reference them from Markdown as ./assets/<file-name>.`,
     "Read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
   ].join("\n");
 }
@@ -291,6 +322,49 @@ function rowToProject(row: ProjectRow): DocumentProject {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function uniqueAssetFileName(assetsDir: string, requestedName: string, mimeType: string) {
+  const safeName = safeAssetFileName(requestedName, mimeType);
+  const extension = extname(safeName);
+  const stem = basename(safeName, extension) || "image";
+  let candidate = safeName;
+  let index = 2;
+  while (existsSync(join(assetsDir, candidate))) {
+    candidate = `${stem}-${index}${extension}`;
+    index += 1;
+  }
+  return candidate;
+}
+
+function safeAssetFileName(fileName: string, mimeType: string) {
+  const rawBase = basename(fileName || "image");
+  const extension = normalizedImageExtension(rawBase, mimeType);
+  const stem = basename(rawBase, extname(rawBase))
+    .replace(/[^\w.-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "image";
+  return `${stem}${extension}`;
+}
+
+function normalizedImageExtension(fileName: string, mimeType: string) {
+  const extension = extname(fileName).toLowerCase();
+  if ([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"].includes(extension)) return extension;
+  if (mimeType === "image/png") return ".png";
+  if (mimeType === "image/jpeg") return ".jpg";
+  if (mimeType === "image/gif") return ".gif";
+  if (mimeType === "image/webp") return ".webp";
+  if (mimeType === "image/svg+xml") return ".svg";
+  return ".png";
+}
+
+function mimeTypeForAssetFileName(fileName: string) {
+  const extension = extname(fileName).toLowerCase();
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  if (extension === ".gif") return "image/gif";
+  if (extension === ".webp") return "image/webp";
+  if (extension === ".svg") return "image/svg+xml";
+  return "image/png";
 }
 
 function rows<TRow>(value: unknown): TRow[] {

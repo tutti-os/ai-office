@@ -83,6 +83,7 @@ export function App() {
     projectId: currentProjectId,
     onProjectUpdated: (detail) => {
       if (detail.project.id !== currentProjectId) return;
+      if (!isNewerProjectDetail(detail, projectDetail)) return;
       setProjectDetail(detail);
       setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
     },
@@ -436,7 +437,7 @@ export function App() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-auto bg-[#1f1f1f] px-3.5 pb-9 pt-14 font-sans text-white md:px-7 md:pb-12">
+    <main className="relative h-dvh overflow-auto bg-[#1f1f1f] px-3.5 pb-9 pt-14 font-sans text-white md:px-7 md:pb-12">
       <button className="absolute right-7 top-7 z-20 flex h-8 items-center gap-2 rounded-full border border-[#5b332f] bg-[#3a241f] px-3 text-[12px] font-bold text-[#ffad9f]" type="button" title="Clear history data" onClick={() => void clearHistory()}>
         <Trash2 size={14} />
         Debug clear history
@@ -530,6 +531,16 @@ export function App() {
       ) : null}
     </main>
   );
+}
+
+function isNewerProjectDetail(next: ProjectDetailResponse, current: ProjectDetailResponse | null) {
+  if (!current || current.project.id !== next.project.id) return true;
+  return timestampMs(next.project.updatedAt) > timestampMs(current.project.updatedAt);
+}
+
+function timestampMs(value: string | null | undefined) {
+  const time = value ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(time) ? time : 0;
 }
 
 function artifactTypeForOutput(outputType: OutputType): SlideArtifactType {

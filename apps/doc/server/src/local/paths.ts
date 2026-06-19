@@ -4,6 +4,8 @@ import {
   ensureProjectDirs as ensureSharedProjectDirs,
   projectWorkspaceRoot as sharedProjectWorkspaceRoot,
 } from "@ai-app/shared/local-paths";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 
 export const appPaths = createAppPaths({
   homeEnvVar: "AI_DOC_HOME",
@@ -20,5 +22,7 @@ export function projectWorkspaceRoot(projectId: string) {
 }
 
 export function ensureProjectDirs(projectId: string) {
-  return ensureSharedProjectDirs(appPaths, projectId);
+  const root = ensureSharedProjectDirs(appPaths, projectId);
+  mkdirSync(join(root, "assets"), { recursive: true });
+  return root;
 }
