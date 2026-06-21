@@ -32,7 +32,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
       columns: [
         { key: "title", label: "Title" },
         { key: "type", label: "Type" },
-        { key: "updatedAt", label: "Updated" },
+        { key: "updated-at", label: "Updated" },
       ],
       rows,
     });
@@ -73,6 +73,7 @@ function projectSummary(project: DocumentProject) {
     type: project.type,
     templateName: project.templateName,
     updatedAt: project.updatedAt,
+    "updated-at": project.updatedAt,
   };
 }
 

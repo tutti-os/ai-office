@@ -45,7 +45,7 @@
           "columns": [
             { "key": "title", "label": "Title" },
             { "key": "type", "label": "Type" },
-            { "key": "updatedAt", "label": "Updated" }
+            { "key": "updated-at", "label": "Updated" }
           ]
         }
       },
