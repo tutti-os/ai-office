@@ -4,7 +4,6 @@ import { randomUUID } from "node:crypto";
 import { basename, extname, join } from "node:path";
 import {
   createEmptyDocxDocumentManifest,
-  defaultHtmlDocument,
   type DocumentProject,
   type DocumentRun,
   type DocumentRunEvent,
@@ -39,9 +38,6 @@ export class DocumentRepository {
 
   ensureSeedData() {
     this.runtimeProfiles.ensureSeedData();
-    const row = getDb().prepare(`SELECT COUNT(*) AS count FROM projects`).get() as { count: number };
-    if (row.count > 0) return;
-    this.createProject({ title: "Untitled Doc", content: defaultHtmlDocument, type: "html", templateId: null, templateName: null });
   }
 
   interruptActiveRuns(reason: string) {
