@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { isArtifactAgentRunning } from "@ai-app/shared/artifact-runtime";
-import { ArtifactAgentProcessingOverlay, ArtifactEditorFrame, ArtifactWorkspaceHeader, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
+import { ArtifactAgentProcessingOverlay, ArtifactEditorFrame, ArtifactExportToast, ArtifactWorkspaceHeader, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { DeckEditor } from "./DeckEditor";
+import { saveDeckPptxExport } from "./deckExport";
+import { exportProjectPptxFile, openProjectExportsDir } from "../api/projects";
 import { EditorInfoPanel } from "./EditorInfoPanel";
 import { PptxPreview } from "./PptxPreview";
 import { usePptxArtifactRuntime } from "../artifact/usePptxArtifactRuntime";
@@ -36,9 +38,54 @@ export function SlideEditorScreen(props: {
   onSend: (prompt: string) => Promise<void>;
 }) {
   const [deckSaveState, setDeckSaveState] = useState<ArtifactSaveState>("saved");
+  const [pptxExporting, setPptxExporting] = useState(false);
+  const [exportNotice, setExportNotice] = useState("");
   const artifactType = props.detail?.artifact.type ?? "deck";
   const headerSaveState: ArtifactSaveState = props.loading ? "loading" : props.pptxError ? "error" : artifactType === "deck" ? deckSaveState : "saved";
   const agentProcessing = isArtifactAgentRunning(props.artifactInteraction);
+
+  const exportDeckPptx = async () => {
+    if (!props.detail?.deckManifest || props.detail.artifact.type !== "deck") return;
+    setPptxExporting(true);
+    setExportNotice("");
+    try {
+      const exported = await saveDeckPptxExport({
+        artifact: props.detail.artifact,
+        manifest: props.detail.deckManifest,
+        projectId: props.projectId,
+        title: props.detail.project.title,
+      });
+      console.info(`[ai-slide] Exported deck PPTX to ${exported.path}`);
+      setExportNotice(`Exported PPTX to ${exported.path}`);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setPptxExporting(false);
+    }
+  };
+
+  const exportPptxArtifact = async () => {
+    if (props.detail?.artifact.type !== "pptx") return;
+    setPptxExporting(true);
+    setExportNotice("");
+    try {
+      const exported = await exportProjectPptxFile(props.projectId);
+      console.info(`[ai-slide] Exported PPTX to ${exported.path}`);
+      setExportNotice(`Exported PPTX to ${exported.path}`);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setPptxExporting(false);
+    }
+  };
+
+  const openExportLocation = async () => {
+    try {
+      await openProjectExportsDir(props.projectId);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   useEffect(() => {
     props.onArtifactSaveStateChange(artifactType === "deck" ? deckSaveState : "saved");
@@ -65,12 +112,13 @@ export function SlideEditorScreen(props: {
         />
       }
     >
-      <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#242424]">
+      <section className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#242424]">
         <ArtifactWorkspaceHeader
           title={props.detail?.project.title ?? "Untitled Presentation"}
           saveState={headerSaveState}
-          exportItems={slideExportItems(props.projectId, artifactType)}
+          exportItems={slideExportItems(artifactType, exportDeckPptx, exportPptxArtifact, pptxExporting)}
         />
+        <ArtifactExportToast message={exportNotice} onClose={() => setExportNotice("")} onOpenLocation={() => void openExportLocation()} />
         <div className="relative flex min-h-0 flex-1 flex-col">
           {props.loading ? (
             <EditorInfoPanel title="Loading presentation..." />
@@ -104,19 +152,23 @@ export function SlideEditorScreen(props: {
   );
 }
 
-function slideExportItems(projectId: string, artifactType: SlideArtifactType) {
+function slideExportItems(artifactType: SlideArtifactType, onExportDeckPptx: () => Promise<void>, onExportPptxArtifact: () => Promise<void>, pptxExporting: boolean) {
   if (artifactType === "pptx") {
     return [
       {
-        label: "PPTX",
-        onSelect: () => window.open(`/api/projects/${encodeURIComponent(projectId)}/files/slides.pptx`, "_blank"),
+        label: pptxExporting ? "PPTX exporting..." : "PPTX",
+        disabled: pptxExporting,
+        onSelect: () => void onExportPptxArtifact(),
       },
       { label: "PDF", disabled: true, onSelect: () => undefined },
     ];
   }
   return [
     { label: "HTML deck", disabled: true, onSelect: () => undefined },
-    { label: "PPTX", disabled: true, onSelect: () => undefined },
-    { label: "PDF", disabled: true, onSelect: () => undefined },
+    {
+      label: pptxExporting ? "PPTX exporting..." : "PPTX",
+      disabled: pptxExporting,
+      onSelect: () => void onExportDeckPptx(),
+    },
   ];
 }

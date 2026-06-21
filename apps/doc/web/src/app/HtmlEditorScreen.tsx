@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
-import { ArtifactAgentProcessingOverlay, ArtifactEditorFrame, ArtifactWorkspaceHeader, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
+import { ArtifactAgentProcessingOverlay, ArtifactEditorFrame, ArtifactExportToast, ArtifactWorkspaceHeader, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
 import { type ToolbarLayoutValue } from "@ai-app/ui/toolbar";
 import type { DocumentRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
 import type { AdjacentInsertPosition, Alignment, ElementStyleAttributes, HeadingTag, ImageAttributes, InlineFormatTag, ListKind } from "../artifact/runtime/operations";
@@ -45,7 +45,11 @@ export function DocumentLoadingScreen(props: { error: string; loading: boolean }
 export type HtmlEditorScreenProps = {
   activeSelectionText: string;
   dirty: boolean;
+  docxExporting: boolean;
+  pdfExportAvailable: boolean;
+  pdfExporting: boolean;
   error: string;
+  exportNotice: string;
   editorStats: EditorStats;
   frameRevision: number;
   frameSrcDoc: string;
@@ -80,6 +84,11 @@ export type HtmlEditorScreenProps = {
   onApplyOperation: () => void;
   onAttributeDraftChange: (value: AttributeDraft) => void;
   onBackHome: () => void;
+  onExportDocx: () => Promise<void>;
+  onExportHtml: () => Promise<void>;
+  onExportPdf: () => Promise<void>;
+  onDismissExportNotice: () => void;
+  onOpenExportLocation: () => void;
   onCloseLinkEditor: () => void;
   onCloseOperation: () => void;
   onBackColor: (color: string) => void;
@@ -351,10 +360,20 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
           title={props.runtime?.title ?? "Untitled Doc"}
           saveState={props.saveState}
           exportItems={[
-            { label: "PDF", disabled: true, onSelect: () => undefined },
-            { label: "DOCX", disabled: true, onSelect: () => undefined },
+            { label: "HTML", onSelect: () => void props.onExportHtml() },
+            {
+              label: props.docxExporting ? "DOCX exporting..." : "DOCX",
+              disabled: props.docxExporting,
+              onSelect: () => void props.onExportDocx(),
+            },
+            {
+              label: props.pdfExporting ? "PDF exporting..." : "PDF",
+              disabled: props.pdfExporting || !props.pdfExportAvailable,
+              onSelect: () => void props.onExportPdf(),
+            },
           ]}
         />
+        <ArtifactExportToast message={props.exportNotice} onClose={props.onDismissExportNotice} onOpenLocation={props.onOpenExportLocation} />
 
         <div className="relative min-h-0 flex-1">
           <div ref={frameScrollContainerRef} className="h-full overflow-x-hidden overflow-y-auto bg-[#2a2a2a] px-3 py-5 md:px-6 md:py-7">

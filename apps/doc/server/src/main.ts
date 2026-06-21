@@ -106,6 +106,32 @@ server.post<{ Params: { projectId: string }; Body: Buffer }>("/api/projects/:pro
   }
 });
 
+server.post<{ Params: { projectId: string }; Body: Buffer }>("/api/projects/:projectId/exports", async (request, reply) => {
+  try {
+    const fileNameHeader = request.headers["x-file-name"];
+    const mimeTypeHeader = request.headers["x-mime-type"];
+    const contentType = request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() ?? "application/octet-stream";
+    const exported = await documents.writeProjectExport(request.params.projectId, {
+      fileName: typeof fileNameHeader === "string" ? decodeURIComponent(fileNameHeader) : "export",
+      mimeType: typeof mimeTypeHeader === "string" ? decodeURIComponent(mimeTypeHeader).split(";")[0]?.trim().toLowerCase() || contentType : contentType,
+      bytes: Buffer.isBuffer(request.body) ? request.body : Buffer.from([]),
+    });
+    return reply.send(exported);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to write export";
+    return reply.code(message.toLowerCase().includes("not found") ? 404 : 400).send({ error: message });
+  }
+});
+
+server.post<{ Params: { projectId: string } }>("/api/projects/:projectId/exports/open", async (request, reply) => {
+  try {
+    return await documents.openProjectExportsDir(request.params.projectId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to open exports folder";
+    return reply.code(message.toLowerCase().includes("not found") ? 404 : 400).send({ error: message });
+  }
+});
+
 server.get<{ Params: { projectId: string; fileName: string } }>("/api/projects/:projectId/assets/:fileName", async (request, reply) => {
   try {
     const file = await documents.getProjectAsset(request.params.projectId, decodeURIComponent(request.params.fileName));

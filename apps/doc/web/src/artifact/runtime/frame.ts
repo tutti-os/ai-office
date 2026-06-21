@@ -118,6 +118,7 @@ function enableTableCellCaretPlacement(doc: Document) {
       if (isFrameReadOnly(doc)) return;
       const cell = activeCell?.isConnected ? activeCell : currentTableCell(doc);
       if (!cell || !isTableCellInputRedirectTarget(doc, event.target) || event.defaultPrevented) return;
+      if (event.isComposing || event.keyCode === 229) return;
       if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
       event.preventDefault();
       activeCell = cell;
@@ -130,7 +131,8 @@ function enableTableCellCaretPlacement(doc: Document) {
     (event) => {
       if (isFrameReadOnly(doc)) return;
       const cell = activeCell?.isConnected ? activeCell : currentTableCell(doc);
-      if (!(event instanceof InputEvent) || event.inputType !== "insertText" || !event.data || !cell) return;
+      if (!(event instanceof InputEvent) || event.isComposing || event.inputType === "insertCompositionText") return;
+      if (event.inputType !== "insertText" || !event.data || !cell) return;
       if (!isTableCellInputRedirectTarget(doc, event.target)) return;
       event.preventDefault();
       activeCell = cell;

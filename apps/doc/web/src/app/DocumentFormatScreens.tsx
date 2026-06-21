@@ -15,11 +15,14 @@ type SharedShellProps = {
   agentSending: boolean;
   dirty: boolean;
   error: string;
+  exportNotice: string;
   localAgentProviders: LocalAgentProviderStatus[];
   runtimeProfiles: RuntimeProfile[];
   selectedRuntimeProfileId: string;
   onBackHome: () => void;
   onCancelAgentRun: (runId: string) => Promise<void>;
+  onDismissExportNotice: () => void;
+  onOpenExportLocation: () => void;
   onRuntimeProfileChange: (profileId: string) => void;
   onSendAgentPrompt: (prompt: string) => Promise<void>;
 };
@@ -31,7 +34,12 @@ export function MarkdownDocumentScreen(props: SharedShellProps & {
   readOnly: boolean;
   runtime: MarkdownRuntimeState;
   saveState: ArtifactSaveState;
+  pdfExportAvailable: boolean;
+  pdfExporting: boolean;
   onChange: (content: string, selection: MarkdownSelection) => void;
+  onExportDocx: (markdown: string) => Promise<void>;
+  onExportMarkdown: (markdown: string) => Promise<void>;
+  onExportPdf: (markdown: string) => Promise<void>;
   onPendingTableCellEditChange: (pending: boolean) => void;
   onRedo: () => void;
   onSelectionChange: (selection: MarkdownSelection) => void;
@@ -44,6 +52,7 @@ export function MarkdownDocumentScreen(props: SharedShellProps & {
         runtime={props.runtime}
         projectId={props.projectId}
         dirty={props.dirty}
+        exportNotice={props.exportNotice}
         saveState={props.saveState}
         loading={props.loading}
         agentProcessing={props.agentProcessing}
@@ -51,6 +60,13 @@ export function MarkdownDocumentScreen(props: SharedShellProps & {
         onUndo={props.onUndo}
         onRedo={props.onRedo}
         onChange={props.onChange}
+        onExportDocx={props.onExportDocx}
+        onExportMarkdown={props.onExportMarkdown}
+        onExportPdf={props.onExportPdf}
+        onDismissExportNotice={props.onDismissExportNotice}
+        onOpenExportLocation={props.onOpenExportLocation}
+        pdfExportAvailable={props.pdfExportAvailable}
+        pdfExporting={props.pdfExporting}
         onPendingTableCellEditChange={props.onPendingTableCellEditChange}
         onSelectionChange={props.onSelectionChange}
         onTableCellCommitterChange={props.onTableCellCommitterChange}

@@ -3,6 +3,7 @@ import type {
   AiEditRequest,
   AiEditResponse,
   AppSnapshot,
+  DeckAssetUploadResponse,
   DeckSlideHtmlResponse,
   LocalAgentProviderStatusResponse,
   OfficeCliStatusResponse,
@@ -94,6 +95,61 @@ export async function updateDeckSlideHtml(projectId: string, slideId: string, in
     method: "PATCH",
     body: JSON.stringify(input),
   });
+}
+
+export async function uploadDeckAsset(projectId: string, file: File) {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/deck/assets`, {
+    method: "POST",
+    headers: {
+      "content-type": file.type || "application/octet-stream",
+      "x-file-name": encodeURIComponent(file.name || "image"),
+    },
+    body: await file.arrayBuffer(),
+  });
+  const data = (await response.json().catch(() => null)) as DeckAssetUploadResponse | { error?: string } | null;
+  if (!response.ok) throw new Error(data && "error" in data && data.error ? data.error : `Asset upload failed: ${response.status}`);
+  if (!data || !("path" in data)) throw new Error("Asset upload response is missing asset path");
+  return data;
+}
+
+export type ProjectExportWriteResponse = {
+  path: string;
+  absolutePath: string;
+  exportsDir: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+export async function writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; content: Uint8Array | ArrayBuffer }) {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/exports`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/octet-stream",
+      "x-file-name": encodeURIComponent(input.fileName || "slides.pptx"),
+      "x-mime-type": encodeURIComponent(input.mimeType),
+    },
+    body: input.content instanceof Uint8Array ? input.content.slice().buffer : input.content,
+  });
+  const data = (await response.json().catch(() => null)) as ProjectExportWriteResponse | { error?: string } | null;
+  if (!response.ok) throw new Error(data && "error" in data && data.error ? data.error : `Export failed: ${response.status}`);
+  if (!data || !("path" in data)) throw new Error("Export response is missing export path");
+  return data;
+}
+
+export async function exportProjectPptxFile(projectId: string) {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/exports/pptx`, { method: "POST" });
+  const data = (await response.json().catch(() => null)) as ProjectExportWriteResponse | { error?: string } | null;
+  if (!response.ok) throw new Error(data && "error" in data && data.error ? data.error : `Export failed: ${response.status}`);
+  if (!data || !("path" in data)) throw new Error("Export response is missing export path");
+  return data;
+}
+
+export async function openProjectExportsDir(projectId: string) {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/exports/open`, { method: "POST" });
+  const data = (await response.json().catch(() => null)) as { path?: string; error?: string } | null;
+  if (!response.ok) throw new Error(data?.error || `Unable to open exports folder: ${response.status}`);
+  return data;
 }
 
 export async function clearProjectHistory(): Promise<SlideProject[]> {

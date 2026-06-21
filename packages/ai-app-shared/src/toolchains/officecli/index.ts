@@ -9,7 +9,7 @@ import { execFile } from "node:child_process";
 
 const execFileAsync = promisify(execFile);
 
-export type OfficeCliSource = "env" | "bundled" | "path" | "tutti" | "missing";
+export type OfficeCliSource = "env" | "bundled" | "tutti" | "missing";
 
 export interface OfficeCliStatus {
   available: boolean;
@@ -55,20 +55,24 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
       return { ...status, canInstall: canInstallOfficeCli(), installing: Boolean(installPromise) };
     }
 
+    const tuttiPath = process.env.TUTTI_APP_OFFICECLI_PATH?.trim();
+    if (tuttiPath) {
+      const status = await probeOfficeCli(tuttiPath, "tutti");
+      if (status.available) return status;
+      return { ...status, canInstall: canInstallOfficeCli(), installing: Boolean(installPromise) };
+    }
+
     if (existsSync(installedBinaryPath)) {
       const status = await probeOfficeCli(installedBinaryPath, "bundled");
       if (status.available) return { ...status, canInstall: canInstallOfficeCli(), installing: Boolean(installPromise) };
     }
-
-    const pathStatus = await probeOfficeCli("officecli", "path");
-    if (pathStatus.available) return { ...pathStatus, canInstall: canInstallOfficeCli(), installing: Boolean(installPromise) };
 
     return {
       available: false,
       source: "missing",
       canInstall: canInstallOfficeCli(),
       installing: Boolean(installPromise),
-      reason: pathStatus.reason || "officecli is not installed or not discoverable.",
+      reason: "OfficeCLI is not installed in this application.",
     };
   }
 
@@ -100,7 +104,8 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
 
   function officeCliEnvSync(): Record<string, string> {
     const envPath = process.env[`${options.envPrefix}_OFFICECLI_PATH`]?.trim();
-    const executablePath = envPath || (existsSync(installedBinaryPath) ? installedBinaryPath : "");
+    const tuttiPath = process.env.TUTTI_APP_OFFICECLI_PATH?.trim();
+    const executablePath = envPath || tuttiPath || (existsSync(installedBinaryPath) ? installedBinaryPath : "");
     return executablePath ? officeCliEnvForPath(executablePath) : {};
   }
 

@@ -1,14 +1,33 @@
-import { cpSync, mkdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(scriptDir, "..");
-const source = resolve(appRoot, "node_modules/@tutti-os/office-preview/dist/ooxml-convert");
-const destination = resolve(appRoot, "public/office-preview/ooxml-convert");
+const assets = [
+  {
+    label: "office-preview",
+    source: resolve(appRoot, "node_modules/@tutti-os/office-preview/dist/ooxml-convert"),
+    destination: resolve(appRoot, "public/office-preview/ooxml-convert"),
+  },
+  {
+    label: "office-export",
+    source: firstExistingPath([
+      resolve(appRoot, "node_modules/@tutti-os/office-export/dist/ooxml-export"),
+      resolve(appRoot, "node_modules/@tutti-os/office-export/public"),
+    ]),
+    destination: resolve(appRoot, "public/office-export/ooxml-export"),
+  },
+];
 
-rmSync(destination, { force: true, recursive: true });
-mkdirSync(dirname(destination), { recursive: true });
-cpSync(source, destination, { recursive: true });
+for (const asset of assets) {
+  if (!asset.source) throw new Error(`Unable to find ${asset.label} assets`);
+  rmSync(asset.destination, { force: true, recursive: true });
+  mkdirSync(dirname(asset.destination), { recursive: true });
+  cpSync(asset.source, asset.destination, { recursive: true });
+  console.log(`Copied ${asset.label} assets to ${asset.destination}`);
+}
 
-console.log(`Copied office-preview assets to ${destination}`);
+function firstExistingPath(paths) {
+  return paths.find((path) => existsSync(path)) ?? "";
+}

@@ -10,9 +10,21 @@ const officePreviewAssetsRoot = resolve(
   import.meta.dirname,
   "node_modules/@tutti-os/office-preview/dist/ooxml-convert",
 );
+const officeExportAssetsRoot = firstExistingPath([
+  resolve(import.meta.dirname, "node_modules/@tutti-os/office-export/dist/ooxml-export"),
+  resolve(import.meta.dirname, "node_modules/@tutti-os/office-export/public"),
+]);
 
 export default defineConfig({
-  plugins: [officePreviewDevAssets(), react(), tailwindcss()],
+  plugins: [officeAssetDevRoutes(), react(), tailwindcss()],
+  optimizeDeps: {
+    exclude: ["@tutti-os/office-export"],
+  },
+  resolve: {
+    alias: {
+      "@tutti-os/office-export": resolve(import.meta.dirname, "node_modules/@tutti-os/office-export/dist/index.js"),
+    },
+  },
   server: {
     host: "127.0.0.1",
     port: 5175,
@@ -26,22 +38,31 @@ export default defineConfig({
   },
 });
 
-function officePreviewDevAssets(): Plugin {
+function officeAssetDevRoutes(): Plugin {
   return {
-    name: "ai-slide-office-preview-dev-assets",
+    name: "ai-slide-office-dev-assets",
     configureServer(server: ViteDevServer) {
-      server.middlewares.use("/office-preview-dev/ooxml-convert", (request: IncomingMessage, response: ServerResponse, next) => {
-        if (!request.url) return next();
-        const pathname = request.url.split("?")[0] ?? "";
-        const filePath = resolve(officePreviewAssetsRoot, `.${pathname}`);
-        const relativePath = relative(officePreviewAssetsRoot, filePath);
-        if (relativePath.startsWith("..") || normalize(relativePath).startsWith("..")) return next();
-        if (!existsSync(filePath)) return next();
-        const ext = extname(filePath);
-        if (ext === ".js") response.setHeader("content-type", "application/javascript; charset=utf-8");
-        if (ext === ".wasm") response.setHeader("content-type", "application/wasm");
-        createReadStream(filePath).pipe(response);
-      });
+      serveAssetRoot(server, "/office-preview-dev/ooxml-convert", officePreviewAssetsRoot);
+      serveAssetRoot(server, "/office-export-dev/ooxml-export", officeExportAssetsRoot);
     },
   };
+}
+
+function serveAssetRoot(server: ViteDevServer, routePrefix: string, assetRoot: string) {
+  server.middlewares.use(routePrefix, (request: IncomingMessage, response: ServerResponse, next) => {
+    if (!request.url || !assetRoot) return next();
+    const pathname = request.url.split("?")[0] ?? "";
+    const filePath = resolve(assetRoot, `.${pathname}`);
+    const relativePath = relative(assetRoot, filePath);
+    if (relativePath.startsWith("..") || normalize(relativePath).startsWith("..")) return next();
+    if (!existsSync(filePath)) return next();
+    const ext = extname(filePath);
+    if (ext === ".js") response.setHeader("content-type", "application/javascript; charset=utf-8");
+    if (ext === ".wasm") response.setHeader("content-type", "application/wasm");
+    createReadStream(filePath).pipe(response);
+  });
+}
+
+function firstExistingPath(paths: string[]) {
+  return paths.find((path) => existsSync(path)) ?? "";
 }

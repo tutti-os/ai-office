@@ -14,6 +14,7 @@ packages/*/dist/
 
 # Generated runtime assets
 apps/*/web/public/office-preview/
+apps/*/web/public/office-export/
 apps/*/templates/
 apps/*/web/public/generated/
 

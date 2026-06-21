@@ -19,6 +19,7 @@ import {
   type UpdateProjectRequest,
 } from "@ai-doc/shared";
 import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
+import { openPathInFileManager } from "@ai-app/shared/local-open";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { DocumentRepository } from "./document-repository.js";
 import { documentTemplates, getTemplate } from "./templates.js";
@@ -125,15 +126,31 @@ export class DocumentService {
   async uploadProjectAsset(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }): Promise<ProjectAssetUploadResponse> {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
-    if (project.type !== "markdown") throw new Error("Assets are currently supported for Markdown docs only");
+    if (project.type !== "html" && project.type !== "markdown") throw new Error("Assets are currently supported for HTML and Markdown docs only");
     if (!isSupportedImageMimeType(input.mimeType)) throw new Error("Only image assets are supported");
     if (input.bytes.byteLength === 0) throw new Error("Asset file is empty");
     if (input.bytes.byteLength > maxProjectAssetBytes) throw new Error("Asset file is too large");
     return this.repo.writeProjectAsset(projectId, input);
   }
 
+  async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
+    const project = this.repo.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    if (project.type !== "html" && project.type !== "markdown") throw new Error("Exports are currently supported for HTML and Markdown docs only");
+    if (!isSupportedExportMimeType(input.mimeType)) throw new Error("Only HTML, Markdown, DOCX, and PDF exports are supported");
+    if (input.bytes.byteLength === 0) throw new Error("Export file is empty");
+    if (input.bytes.byteLength > maxProjectExportBytes) throw new Error("Export file is too large");
+    return this.repo.writeProjectExport(projectId, input);
+  }
+
   async getProjectAsset(projectId: string, fileName: string) {
     return this.repo.readProjectAsset(projectId, fileName);
+  }
+
+  async openProjectExportsDir(projectId: string) {
+    const path = this.repo.projectExportsDir(projectId);
+    await openPathInFileManager(path);
+    return { path };
   }
 
   async applyTemplate(projectId: string, input: ApplyTemplateRequest) {
@@ -412,8 +429,11 @@ function defaultProjectContent(type: DocumentProject["type"], template: Document
 
 const docxFileName = "document.docx";
 const docxMimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const pdfMimeType = "application/pdf";
 const maxProjectAssetBytes = 20 * 1024 * 1024;
+const maxProjectExportBytes = 20 * 1024 * 1024;
 const supportedImageMimeTypes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"]);
+const supportedExportMimeTypes = new Set(["text/html", "text/markdown", docxMimeType, pdfMimeType]);
 
 function docxFilePath(projectId: string) {
   return join(projectWorkspaceRoot(projectId), docxFileName);
@@ -421,6 +441,10 @@ function docxFilePath(projectId: string) {
 
 function isSupportedImageMimeType(mimeType: string) {
   return supportedImageMimeTypes.has(mimeType.toLowerCase());
+}
+
+function isSupportedExportMimeType(mimeType: string) {
+  return supportedExportMimeTypes.has(mimeType.toLowerCase());
 }
 
 async function readDocxManifestFromFile(projectId: string): Promise<DocxDocumentManifest | null> {

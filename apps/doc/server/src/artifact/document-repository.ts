@@ -137,6 +137,25 @@ export class DocumentRepository {
     };
   }
 
+  async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    const root = ensureProjectDirs(projectId);
+    const exportsDir = join(root, "exports");
+    mkdirSync(exportsDir, { recursive: true });
+    const fileName = uniqueExportFileName(exportsDir, input.fileName, input.mimeType);
+    const absolutePath = join(exportsDir, fileName);
+    writeFileSync(absolutePath, input.bytes);
+    return {
+      path: absolutePath,
+      absolutePath,
+      exportsDir,
+      fileName,
+      mimeType: input.mimeType,
+      sizeBytes: input.bytes.byteLength,
+    };
+  }
+
   async readProjectAsset(projectId: string, fileName: string) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
@@ -148,6 +167,12 @@ export class DocumentRepository {
       fileName: safeName,
       mimeType: mimeTypeForAssetFileName(safeName),
     };
+  }
+
+  projectExportsDir(projectId: string) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    return join(ensureProjectDirs(projectId), "exports");
   }
 
   syncProjectAgentInstructions(projectId: string) {
@@ -337,6 +362,19 @@ function uniqueAssetFileName(assetsDir: string, requestedName: string, mimeType:
   return candidate;
 }
 
+function uniqueExportFileName(exportsDir: string, requestedName: string, mimeType: string) {
+  const safeName = safeExportFileName(requestedName, mimeType);
+  const extension = extname(safeName);
+  const stem = basename(safeName, extension) || "export";
+  let candidate = safeName;
+  let index = 2;
+  while (existsSync(join(exportsDir, candidate))) {
+    candidate = `${stem}-${index}${extension}`;
+    index += 1;
+  }
+  return candidate;
+}
+
 function safeAssetFileName(fileName: string, mimeType: string) {
   const rawBase = basename(fileName || "image");
   const extension = normalizedImageExtension(rawBase, mimeType);
@@ -344,6 +382,16 @@ function safeAssetFileName(fileName: string, mimeType: string) {
     .replace(/[^\w.-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80) || "image";
+  return `${stem}${extension}`;
+}
+
+function safeExportFileName(fileName: string, mimeType: string) {
+  const rawBase = basename(fileName || "export");
+  const extension = normalizedExportExtension(rawBase, mimeType);
+  const stem = basename(rawBase, extname(rawBase))
+    .replace(/[^\w.-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "export";
   return `${stem}${extension}`;
 }
 
@@ -356,6 +404,18 @@ function normalizedImageExtension(fileName: string, mimeType: string) {
   if (mimeType === "image/webp") return ".webp";
   if (mimeType === "image/svg+xml") return ".svg";
   return ".png";
+}
+
+function normalizedExportExtension(fileName: string, mimeType: string) {
+  const extension = extname(fileName).toLowerCase();
+  if (extension === ".html" || extension === ".htm") return extension;
+  if (extension === ".md" || extension === ".markdown") return extension;
+  if (extension === ".docx") return extension;
+  if (extension === ".pdf") return extension;
+  if (mimeType === "text/markdown") return ".md";
+  if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return ".docx";
+  if (mimeType === "application/pdf") return ".pdf";
+  return ".html";
 }
 
 function mimeTypeForAssetFileName(fileName: string) {

@@ -38,6 +38,8 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     editorOpen,
     editorStats,
     error,
+    exportNotice,
+    dismissExportNotice,
     filteredTemplates,
     frameRevision,
     frameSrcDoc,
@@ -46,6 +48,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     historyProjects,
     homeAttachments,
     homePanel,
+    htmlDocxExporting,
     htmlEditorController,
     htmlToolbarActive,
     iframeRef,
@@ -63,6 +66,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     markdownSaveState,
     officeCliInstalling,
     officeCliStatus,
+    openCurrentProjectExportsDir,
     openHistoryProject,
     openLinkEditor,
     operationDraft,
@@ -71,6 +75,8 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     operationPosition,
     operationWrapperTag,
     outputType,
+    pdfExportAvailable,
+    pdfExporting,
     prompt,
     redoMarkdown,
     requestHomeRoute,
@@ -82,6 +88,12 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     selectedRuntimeProfileId,
     selectedTemplateCategory,
     sendAgentPrompt,
+    exportCurrentHtml,
+    exportCurrentHtmlDocx,
+    exportCurrentHtmlPdf,
+    exportCurrentMarkdown,
+    exportCurrentMarkdownDocx,
+    exportCurrentMarkdownPdf,
     setAttributeDraft,
     setEditorStats,
     setHomePanel,
@@ -162,6 +174,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           agentSending={agentBusy}
           dirty={activeDirty}
           error={error}
+          exportNotice={exportNotice}
           localAgentProviders={localAgentProviders}
           loading={loading}
           projectId={currentProjectId}
@@ -173,11 +186,18 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           selectedRuntimeProfileId={selectedRuntimeProfileId}
           onBackHome={requestHomeRoute}
           onCancelAgentRun={cancelAgentRun}
+          onDismissExportNotice={dismissExportNotice}
+          onOpenExportLocation={openCurrentProjectExportsDir}
           onChange={(content, selection) => {
             updateMarkdownContent(content, selection);
             setEditorStats({ characterCount: content.length, wordCount: markdownWordCount(content), paragraphCount: markdownParagraphCount(content), elementCount: 0 });
           }}
           onPendingTableCellEditChange={setMarkdownTableCellEditPending}
+          onExportDocx={exportCurrentMarkdownDocx}
+          onExportMarkdown={exportCurrentMarkdown}
+          onExportPdf={exportCurrentMarkdownPdf}
+          pdfExportAvailable={pdfExportAvailable}
+          pdfExporting={pdfExporting}
           onRedo={redoMarkdown}
           onRuntimeProfileChange={setSelectedRuntimeProfileId}
           onSelectionChange={updateMarkdownSelection}
@@ -194,6 +214,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           agentSending={agentBusy}
           dirty={activeDirty}
           error={error || docxError}
+          exportNotice={exportNotice}
           localAgentProviders={localAgentProviders}
           loading={loading || docxLoading}
           projectId={currentProjectId}
@@ -203,6 +224,8 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           selectedRuntimeProfileId={selectedRuntimeProfileId}
           onBackHome={requestHomeRoute}
           onCancelAgentRun={cancelAgentRun}
+          onDismissExportNotice={dismissExportNotice}
+          onOpenExportLocation={openCurrentProjectExportsDir}
           onRuntimeProfileChange={setSelectedRuntimeProfileId}
           onSelectionChange={updateDocxSelection}
           onSendAgentPrompt={sendAgentPrompt}
@@ -214,6 +237,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           activeSelectionText={activeSelectionText}
           dirty={activeDirty}
           error={error}
+          exportNotice={exportNotice}
           frameRevision={frameRevision}
           frameSrcDoc={frameSrcDoc}
           iframeRef={iframeRef}
@@ -228,6 +252,9 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           editorStats={editorStats}
           runtime={runtime}
           saveState={saveState}
+          docxExporting={htmlDocxExporting}
+          pdfExportAvailable={pdfExportAvailable}
+          pdfExporting={pdfExporting}
           agentProcessing={artifactAgentProcessing}
           readOnly={artifactReadOnly}
           toolbarDisabled={!htmlToolbarActive || artifactReadOnly}
@@ -244,6 +271,11 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           tableDraft={tableDraft}
           styleDraft={styleDraft}
           onBackHome={requestHomeRoute}
+          onDismissExportNotice={dismissExportNotice}
+          onOpenExportLocation={openCurrentProjectExportsDir}
+          onExportDocx={exportCurrentHtmlDocx}
+          onExportHtml={exportCurrentHtml}
+          onExportPdf={exportCurrentHtmlPdf}
           onApplyLink={applyLink}
           onCloseLinkEditor={() => setLinkEditorOpen(false)}
           onCreateLink={openLinkEditor}

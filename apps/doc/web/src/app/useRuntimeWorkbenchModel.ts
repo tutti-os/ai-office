@@ -3,6 +3,9 @@ import { HomePage } from "./HomePage";
 import { DocxDocumentScreen, MarkdownDocumentScreen } from "./DocumentFormatScreens";
 import { HtmlEditorController } from "./HtmlEditorController";
 import { DocumentLoadingScreen, HtmlEditorScreen } from "./HtmlEditorScreen";
+import { saveHtmlArtifactDocxExport, saveHtmlArtifactExport, saveHtmlArtifactPdfExport } from "./htmlExport";
+import { saveMarkdownArtifactDocxExport, saveMarkdownArtifactExport, saveMarkdownArtifactPdfExport } from "./markdownExport";
+import { isTuttiPdfExportAvailable } from "./tuttiPdfBridge";
 import {
   createInitialPromptAiEditRequest,
   initialContentForType,
@@ -28,7 +31,6 @@ import {
   readCurrentLinkHref,
   readCurrentLinkText,
   readCurrentStyles,
-  readFileAsDataUrl,
   readToolbarState,
   removeImageSelectionOverlay,
   removeSelectedImageObject,
@@ -40,7 +42,7 @@ import {
 } from "./htmlRuntimeDom";
 import { renderImageSelectionOverlay } from "./htmlImageSelectionOverlay";
 import { useAgentConversation } from "./useAgentConversation";
-import { cancelRun, clearProjectHistory, createProject, getProject, listProjects, startAiEdit, updateProject } from "../api/projects";
+import { cancelRun, clearProjectHistory, createProject, getProject, listProjects, openProjectExportsDir, startAiEdit, updateProject, uploadProjectAsset } from "../api/projects";
 import { fetchGensparkStudyPlanFixture } from "../api/fixtures";
 import { fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, fetchTemplates, installOfficeCli } from "../api/runtime";
 import type { DocumentProject, DocumentType, LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
@@ -54,6 +56,7 @@ import { useMarkdownArtifactRuntime } from "../artifact/useMarkdownArtifactRunti
 import { RuntimeApplier } from "../artifact/runtime/applier";
 import { runtimeDocumentFromFrame } from "../artifact/runtime/document";
 import { enableEditableFrame, setEditableFrameInteraction } from "../artifact/runtime/frame";
+import { htmlProjectAssetRuntimeUrl, renderHtmlProjectAssetReferences } from "../artifact/runtime/projectAssets";
 import {
   applyInlineFormat,
   appendToElement,
@@ -207,6 +210,9 @@ export function useRuntimeWorkbenchModel() {
   const [localAgentProviders, setLocalAgentProviders] = useState<LocalAgentProviderStatus[]>([]);
   const [officeCliStatus, setOfficeCliStatus] = useState<OfficeCliStatus | null>(null);
   const [officeCliInstalling, setOfficeCliInstalling] = useState(false);
+  const [htmlDocxExporting, setHtmlDocxExporting] = useState(false);
+  const [pdfExporting, setPdfExporting] = useState(false);
+  const [exportNotice, setExportNotice] = useState("");
   const [selectedRuntimeProfileId, setSelectedRuntimeProfileId] = useState("");
   const homeAttachments = useHomeAttachments();
   const [homePanel, setHomePanel] = useState<HomePanel>("templates");
@@ -363,8 +369,8 @@ export function useRuntimeWorkbenchModel() {
     }
   };
 
-  const loadHtmlDocument = (html: string, input: { title: string; source?: RuntimeState["source"] }) => {
-    loadArtifact({ content: html, title: input.title, source: input.source });
+  const loadHtmlDocument = (html: string, input: { projectId?: string | null; title: string; source?: RuntimeState["source"] }) => {
+    loadArtifact({ content: html, projectId: input.projectId, title: input.title, source: input.source });
     clearMarkdownArtifact();
     clearDocxArtifact();
     setMarkdownTableCellEditPending(false);
@@ -605,7 +611,7 @@ export function useRuntimeWorkbenchModel() {
         } else if (project.type === "docx") {
           await loadDocxDocument(project);
         } else {
-          loadHtmlDocument(project.content, { title: project.title, source: "imported-html" });
+          loadHtmlDocument(project.content, { projectId: project.id, title: project.title, source: "imported-html" });
         }
       })
       .catch((err) => {
@@ -693,7 +699,7 @@ export function useRuntimeWorkbenchModel() {
       } else if (project.type === "docx") {
         void loadDocxDocument(project).catch((err) => setError(err instanceof Error ? err.message : String(err)));
       } else {
-        loadHtmlDocument(project.content, { title: project.title, source: "imported-html" });
+        loadHtmlDocument(project.content, { projectId: project.id, title: project.title, source: "imported-html" });
       }
       setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
     },
@@ -1048,7 +1054,9 @@ export function useRuntimeWorkbenchModel() {
     }
     let src = "";
     try {
-      src = await readFileAsDataUrl(file);
+      if (!currentProjectId) throw new Error("Project is not open.");
+      const asset = await uploadProjectAsset(currentProjectId, file);
+      src = htmlProjectAssetRuntimeUrl(currentProjectId, asset.fileName);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       pendingImageTargetRef.current = null;
@@ -1211,6 +1219,130 @@ export function useRuntimeWorkbenchModel() {
     resetHtmlFrameFromRuntime();
   };
 
+  const exportCurrentHtml = async () => {
+    if (!runtime || !currentProjectId) return;
+    setError("");
+    setExportNotice("");
+    try {
+      const exported = await saveHtmlArtifactExport({
+        projectId: currentProjectId,
+        title: runtime.title || currentProject?.title || "doc",
+        html: serializeHtmlRuntime(runtime),
+      });
+      console.info(`[ai-doc] Exported HTML to ${exported.path}`);
+      setExportNotice(`Exported HTML to ${exported.path}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const exportCurrentHtmlDocx = async () => {
+    if (!runtime || !currentProjectId || !iframeRef.current) return;
+    setError("");
+    setExportNotice("");
+    setHtmlDocxExporting(true);
+    try {
+      const exported = await saveHtmlArtifactDocxExport({
+        iframe: iframeRef.current,
+        projectId: currentProjectId,
+        title: runtime.title || currentProject?.title || "doc",
+      });
+      console.info(`[ai-doc] Exported DOCX to ${exported.path}`);
+      setExportNotice(`Exported DOCX to ${exported.path}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setHtmlDocxExporting(false);
+    }
+  };
+
+  const exportCurrentHtmlPdf = async () => {
+    if (!runtime || !currentProjectId) return;
+    setError("");
+    setExportNotice("");
+    setPdfExporting(true);
+    try {
+      const exported = await saveHtmlArtifactPdfExport({
+        projectId: currentProjectId,
+        title: runtime.title || currentProject?.title || "doc",
+        html: renderHtmlProjectAssetReferences(serializeHtmlRuntime(runtime), currentProjectId),
+      });
+      console.info(`[ai-doc] Exported PDF to ${exported.path}`);
+      setExportNotice(`Exported PDF to ${exported.path}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPdfExporting(false);
+    }
+  };
+
+  const exportCurrentMarkdown = async (markdown: string) => {
+    if (!markdownRuntime || !currentProjectId) return;
+    setError("");
+    setExportNotice("");
+    try {
+      const exported = await saveMarkdownArtifactExport({
+        projectId: currentProjectId,
+        title: markdownRuntime.title || currentProject?.title || "doc",
+        markdown,
+      });
+      console.info(`[ai-doc] Exported Markdown to ${exported.path}`);
+      setExportNotice(`Exported Markdown to ${exported.path}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const exportCurrentMarkdownDocx = async (markdown: string) => {
+    if (!markdownRuntime || !currentProjectId) return;
+    setError("");
+    setExportNotice("");
+    setHtmlDocxExporting(true);
+    try {
+      const exported = await saveMarkdownArtifactDocxExport({
+        projectId: currentProjectId,
+        title: markdownRuntime.title || currentProject?.title || "doc",
+        markdown,
+      });
+      console.info(`[ai-doc] Exported Markdown DOCX to ${exported.path}`);
+      setExportNotice(`Exported DOCX to ${exported.path}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setHtmlDocxExporting(false);
+    }
+  };
+
+  const exportCurrentMarkdownPdf = async (markdown: string) => {
+    if (!markdownRuntime || !currentProjectId) return;
+    setError("");
+    setExportNotice("");
+    setPdfExporting(true);
+    try {
+      const exported = await saveMarkdownArtifactPdfExport({
+        projectId: currentProjectId,
+        title: markdownRuntime.title || currentProject?.title || "doc",
+        markdown,
+      });
+      console.info(`[ai-doc] Exported Markdown PDF to ${exported.path}`);
+      setExportNotice(`Exported PDF to ${exported.path}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPdfExporting(false);
+    }
+  };
+
+  const openCurrentProjectExportsDir = async () => {
+    if (!currentProjectId) return;
+    setError("");
+    try {
+      await openProjectExportsDir(currentProjectId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   return {
     activeDirty,
     activeSelectionText,
@@ -1242,6 +1374,9 @@ export function useRuntimeWorkbenchModel() {
     editorOpen,
     editorStats,
     error,
+    exportNotice,
+    dismissExportNotice: () => setExportNotice(""),
+    openCurrentProjectExportsDir,
     filteredTemplates,
     frameRevision,
     frameSrcDoc,
@@ -1250,6 +1385,7 @@ export function useRuntimeWorkbenchModel() {
     historyProjects,
     homeAttachments,
     homePanel,
+    htmlDocxExporting,
     htmlEditorController,
     htmlToolbarActive,
     iframeRef,
@@ -1275,6 +1411,8 @@ export function useRuntimeWorkbenchModel() {
     operationPosition,
     operationWrapperTag,
     outputType,
+    pdfExportAvailable: isTuttiPdfExportAvailable(),
+    pdfExporting,
     prompt,
     redoMarkdown,
     requestHomeRoute,
@@ -1286,6 +1424,12 @@ export function useRuntimeWorkbenchModel() {
     selectedRuntimeProfileId,
     selectedTemplateCategory,
     sendAgentPrompt,
+    exportCurrentHtml,
+    exportCurrentHtmlDocx,
+    exportCurrentHtmlPdf,
+    exportCurrentMarkdown,
+    exportCurrentMarkdownDocx,
+    exportCurrentMarkdownPdf,
     setAttributeDraft,
     setEditorStats,
     setHomePanel,

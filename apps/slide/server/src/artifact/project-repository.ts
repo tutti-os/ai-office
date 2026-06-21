@@ -286,6 +286,52 @@ export class ProjectRepository {
     return { slide, html, artifact: updatedArtifact };
   }
 
+  async writeDeckAsset(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    const artifact = this.getArtifact(project.activeArtifactId);
+    if (!artifact || artifact.type !== "deck") throw new Error("Deck artifact not found");
+    this.ensureTemplateDeckMaterialized(project, artifact);
+    const assetsDir = join(ensureProjectDirs(projectId), artifact.fileRef, "assets");
+    mkdirSync(assetsDir, { recursive: true });
+    const fileName = uniqueAssetFileName(assetsDir, input.fileName, input.mimeType);
+    writeFileSync(join(assetsDir, fileName), input.bytes);
+    const updatedArtifact = this.bumpArtifactRevision(artifact.id, "human") ?? artifact;
+    return {
+      artifact: updatedArtifact,
+      path: `../assets/${fileName}`,
+      fileName,
+      mimeType: input.mimeType,
+      sizeBytes: input.bytes.byteLength,
+    };
+  }
+
+  async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    const artifact = this.getArtifact(project.activeArtifactId);
+    if (!artifact || artifact.type !== "deck") throw new Error("Deck artifact not found");
+    const exportsDir = join(ensureProjectDirs(projectId), "exports");
+    mkdirSync(exportsDir, { recursive: true });
+    const fileName = uniqueExportFileName(exportsDir, input.fileName, input.mimeType);
+    const absolutePath = join(exportsDir, fileName);
+    writeFileSync(absolutePath, input.bytes);
+    return {
+      path: absolutePath,
+      absolutePath,
+      exportsDir,
+      fileName,
+      mimeType: input.mimeType,
+      sizeBytes: input.bytes.byteLength,
+    };
+  }
+
+  projectExportsDir(projectId: string) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    return join(ensureProjectDirs(projectId), "exports");
+  }
+
   bumpArtifactRevision(artifactId: string, updatedBy: SlideProject["updatedBy"]) {
     const current = this.getArtifact(artifactId);
     if (!current) return null;
@@ -536,6 +582,67 @@ function readTemplateSkillSource(templateId: string | null) {
 
 function safeSkillSlug(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "template";
+}
+
+function uniqueAssetFileName(assetsDir: string, requestedName: string, mimeType: string) {
+  const parsed = safeAssetFileName(requestedName, mimeType);
+  const ext = extname(parsed);
+  const stem = basename(parsed, ext);
+  let candidate = parsed;
+  let index = 2;
+  while (existsSync(join(assetsDir, candidate))) {
+    candidate = `${stem}-${index}${ext}`;
+    index += 1;
+  }
+  return candidate;
+}
+
+function uniqueExportFileName(exportsDir: string, requestedName: string, mimeType: string) {
+  const parsed = safeExportFileName(requestedName, mimeType);
+  const ext = extname(parsed);
+  const stem = basename(parsed, ext);
+  let candidate = parsed;
+  let index = 2;
+  while (existsSync(join(exportsDir, candidate))) {
+    candidate = `${stem}-${index}${ext}`;
+    index += 1;
+  }
+  return candidate;
+}
+
+function safeAssetFileName(fileName: string, mimeType: string) {
+  const fallbackExt = extensionForMimeType(mimeType);
+  const clean = basename(decodeURIComponent(fileName || "image"))
+    .trim()
+    .replace(/[^\w.-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const ext = extname(clean) || fallbackExt;
+  const stem = basename(clean || "image", ext).replace(/\.+$/g, "") || "image";
+  return `${stem}${ext}`;
+}
+
+function safeExportFileName(fileName: string, mimeType: string) {
+  const clean = basename(decodeURIComponent(fileName || "slides"))
+    .trim()
+    .replace(/[^\w.-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const ext = extname(clean).toLowerCase() === ".pptx" ? ".pptx" : extensionForExportMimeType(mimeType);
+  const stem = basename(clean || "slides", extname(clean)).replace(/\.+$/g, "") || "slides";
+  return `${stem}${ext}`;
+}
+
+function extensionForMimeType(mimeType: string) {
+  if (mimeType === "image/png") return ".png";
+  if (mimeType === "image/jpeg") return ".jpg";
+  if (mimeType === "image/webp") return ".webp";
+  if (mimeType === "image/gif") return ".gif";
+  if (mimeType === "image/svg+xml") return ".svg";
+  return ".bin";
+}
+
+function extensionForExportMimeType(mimeType: string) {
+  if (mimeType === pptxMimeType) return ".pptx";
+  return ".pptx";
 }
 
 function isBlankDeckManifest(manifestPath: string) {

@@ -228,6 +228,13 @@ export interface UpdateDeckSlideHtmlRequest {
   html: string;
 }
 
+export interface DeckAssetUploadResponse {
+  path: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
 export interface AiEditRequest {
   userPrompt: string;
   mode: AiEditMode;
@@ -263,7 +270,7 @@ export interface LocalAgentProviderStatusResponse {
   providers: LocalAgentProviderStatus[];
 }
 
-export type OfficeCliSource = "env" | "bundled" | "path" | "tutti" | "missing";
+export type OfficeCliSource = "env" | "bundled" | "tutti" | "missing";
 
 export interface OfficeCliStatus {
   available: boolean;

@@ -14,6 +14,7 @@
     "@ai-app/shared": "workspace:*",
     "@ai-app/ui": "workspace:*",
     "@ai-slide/shared": "workspace:*",
+    "@tutti-os/office-export": "file:../../../../tsh-web/packages/office-export",
     "@tutti-os/office-preview": "0.0.0-test.20260616183444.f506a6bec39c",
     "@vitejs/plugin-react": "^5.1.1",
     "lucide-react": "^0.562.0",

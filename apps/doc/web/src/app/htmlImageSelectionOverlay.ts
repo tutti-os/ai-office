@@ -16,7 +16,7 @@ export function renderImageSelectionOverlay(input: {
   overlay.setAttribute("data-runtime-editor-overlay", "image-selection");
   overlay.contentEditable = "false";
   Object.assign(overlay.style, {
-    position: "absolute",
+    position: "fixed",
     zIndex: "2147483647",
     pointerEvents: "none",
     border: "2px solid #2684ff",

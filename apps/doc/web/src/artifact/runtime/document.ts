@@ -1,4 +1,6 @@
 import type { RuntimeDocument } from "./types";
+import { rewriteAssetReferencesInElement } from "@ai-app/shared/artifact-assets";
+import { restoreProjectAssetUrl } from "./projectAssets";
 
 const fallbackHeadHTML = `<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -37,12 +39,16 @@ ${bodyHTML}
 }
 
 export function runtimeDocumentFromFrame(doc: Document): RuntimeDocument {
+  const htmlElement = doc.documentElement.cloneNode(true) as HTMLElement;
+  rewriteAssetReferencesInElement(htmlElement, restoreProjectAssetUrl);
+  const head = htmlElement.querySelector("head");
+  const body = htmlElement.querySelector("body");
   return {
     doctype: doc.doctype ? `<!DOCTYPE ${doc.doctype.name}>` : "<!DOCTYPE html>",
-    htmlAttributes: attributesToRecord(doc.documentElement),
-    headHTML: sanitizeHeadHTML(doc.head.innerHTML.trim() || fallbackHeadHTML),
-    bodyAttributes: sanitizeBodyAttributes(attributesToRecord(doc.body)),
-    bodyInnerHTML: sanitizeBodyHTML(doc.body.innerHTML),
+    htmlAttributes: attributesToRecord(htmlElement),
+    headHTML: sanitizeHeadHTML(head?.innerHTML.trim() || fallbackHeadHTML),
+    bodyAttributes: sanitizeBodyAttributes(attributesToRecord(body)),
+    bodyInnerHTML: sanitizeBodyHTML(body?.innerHTML ?? ""),
   };
 }
 

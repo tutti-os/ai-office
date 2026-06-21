@@ -5,6 +5,7 @@ export type ArtifactSource = "imported-html" | "blank" | "fixture";
 
 export type ArtifactRuntimeParseInput = {
   content: string;
+  projectId?: string | null;
   title: string;
   source?: ArtifactSource;
 };

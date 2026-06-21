@@ -24,5 +24,6 @@ export function projectWorkspaceRoot(projectId: string) {
 export function ensureProjectDirs(projectId: string) {
   const root = ensureSharedProjectDirs(appPaths, projectId);
   mkdirSync(join(root, "assets"), { recursive: true });
+  mkdirSync(join(root, "exports"), { recursive: true });
   return root;
 }

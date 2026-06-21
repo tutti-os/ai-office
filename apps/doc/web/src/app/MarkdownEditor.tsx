@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type FC, type KeyboardEvent, type MouseEvent, type RefObject } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type CompositionEvent as ReactCompositionEvent, type FC, type KeyboardEvent, type MouseEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import {
   IS_BOLD,
@@ -46,7 +46,7 @@ import {
 } from "@mdxeditor/editor";
 import "@mdxeditor/editor/style.css";
 import { AlignCenter, AlignLeft, AlignRight, Bold, Code2, Image, Italic, Link2, List, ListOrdered, ListTodo, Minus, Quote, Redo2, Replace, Strikethrough, Table2, Undo2 } from "lucide-react";
-import { ArtifactAgentProcessingOverlay, ArtifactWorkspaceHeader } from "@ai-app/ui/editor-frame";
+import { ArtifactAgentProcessingOverlay, ArtifactExportToast, ArtifactWorkspaceHeader } from "@ai-app/ui/editor-frame";
 import type { ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { IconButtonLight, Toolbar, ToolbarDivider, ToolbarGroup, ToolbarRow, ToolbarSelect } from "@ai-app/ui/toolbar";
 import type { MarkdownRuntimeState, MarkdownSelection } from "../artifact/markdownArtifactAdapter";
@@ -57,6 +57,7 @@ type MarkdownEditorProps = {
   runtime: MarkdownRuntimeState;
   projectId: string | null;
   dirty: boolean;
+  exportNotice: string;
   saveState: ArtifactSaveState;
   loading: boolean;
   agentProcessing: boolean;
@@ -64,6 +65,13 @@ type MarkdownEditorProps = {
   onUndo: () => void;
   onRedo: () => void;
   onChange: (content: string, selection: MarkdownSelection) => void;
+  onExportDocx: (markdown: string) => Promise<void>;
+  onExportMarkdown: (markdown: string) => Promise<void>;
+  onExportPdf: (markdown: string) => Promise<void>;
+  onDismissExportNotice: () => void;
+  onOpenExportLocation: () => void;
+  pdfExportAvailable: boolean;
+  pdfExporting: boolean;
   onPendingTableCellEditChange: (pending: boolean) => void;
   onSelectionChange: (selection: MarkdownSelection) => void;
   onTableCellCommitterChange: (committer: (() => boolean) | null) => void;
@@ -131,6 +139,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   // place that promotes those editor-state changes into runtime content.
   const programmaticChangePendingRef = useRef(false);
   const programmaticCommitFrameRef = useRef<number | null>(null);
+  const markdownCompositionActiveRef = useRef(false);
+  const markdownCompositionDraftRef = useRef<string | null>(null);
   const [toolbarActive, setToolbarActive] = useState(false);
 
   const setPendingTableCellEdit = useCallback(
@@ -235,6 +245,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   }, [commitPendingTableCellEdit, props.onTableCellCommitterChange]);
 
   useEffect(() => {
+    if (markdownCompositionActiveRef.current) return;
     markdownRef.current = props.runtime.content;
     programmaticChangePendingRef.current = false;
     if (programmaticCommitFrameRef.current !== null) {
@@ -255,6 +266,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   }, []);
 
   const syncSelection = useCallback(() => {
+    if (markdownCompositionActiveRef.current) return;
     const editor = editorRef.current;
     const markdown = editor?.getMarkdown() ?? markdownRef.current;
     const selection = selectionFromEditor(editor, markdown);
@@ -303,6 +315,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       }
       return;
     }
+    if (isMarkdownComposingKeyEvent(event)) return;
     if (event.key !== "Tab") return;
     event.preventDefault();
     const markdown = editorRef.current?.getMarkdown() ?? markdownRef.current;
@@ -314,12 +327,18 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     props.onChange(nextMarkdown, selectionFromOffsets(nextMarkdown, selection.start, selection.end));
   }, [activateToolbar, props]);
   const handleEditorClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    if (blockMarkdownReadOnlyTableChromeEvent(event, props.readOnly)) return;
+    if (props.readOnly) return;
     focusMarkdownTableCellEditor(event);
-  }, []);
+  }, [props.readOnly]);
+  const handleEditorMouseDown = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    if (blockMarkdownReadOnlyTableChromeEvent(event, props.readOnly)) return;
+    clearMarkdownPersistentSelectionHighlight();
+    activateToolbar();
+  }, [activateToolbar, props.readOnly]);
 
-  const handleChange = useCallback(
-    (markdown: string, initialMarkdownNormalize: boolean) => {
-      const normalizedMarkdown = normalizeMarkdownEditorOutput(markdown);
+  const commitNormalizedMarkdownChange = useCallback(
+    (normalizedMarkdown: string, initialMarkdownNormalize: boolean) => {
       if (props.readOnly) {
         if (normalizedMarkdown !== markdownRef.current) editorRef.current?.setMarkdown(markdownRef.current);
         props.onSelectionChange(selectionFromEditor(editorRef.current, markdownRef.current));
@@ -336,6 +355,33 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     },
     [props, setPendingTableCellEdit],
   );
+
+  const handleChange = useCallback(
+    (markdown: string, initialMarkdownNormalize: boolean) => {
+      const normalizedMarkdown = normalizeMarkdownEditorOutput(markdown);
+      if (markdownCompositionActiveRef.current) {
+        markdownCompositionDraftRef.current = normalizedMarkdown;
+        return;
+      }
+      commitNormalizedMarkdownChange(normalizedMarkdown, initialMarkdownNormalize);
+    },
+    [commitNormalizedMarkdownChange],
+  );
+
+  const handleMarkdownCompositionStart = useCallback((event: ReactCompositionEvent<HTMLDivElement>) => {
+    if (isMarkdownNestedTextInput(event.target)) return;
+    markdownCompositionActiveRef.current = true;
+    markdownCompositionDraftRef.current = null;
+  }, []);
+
+  const handleMarkdownCompositionEnd = useCallback((event: ReactCompositionEvent<HTMLDivElement>) => {
+    if (isMarkdownNestedTextInput(event.target)) return;
+    if (!markdownCompositionActiveRef.current) return;
+    markdownCompositionActiveRef.current = false;
+    const markdown = normalizeMarkdownEditorOutput(editorRef.current?.getMarkdown() ?? markdownCompositionDraftRef.current ?? markdownRef.current);
+    markdownCompositionDraftRef.current = null;
+    commitNormalizedMarkdownChange(markdown, false);
+  }, [commitNormalizedMarkdownChange]);
 
   const applyBlockChange = useCallback(
     (kind: MarkdownBlockKind) => {
@@ -362,12 +408,21 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         ]}
         exportItems={[
           {
-            label: "HTML",
-            onSelect: () => downloadTextFile(`${safeFileName(props.runtime.title || "doc")}.html`, editorHtml(editorRef.current), "text/html"),
+            label: "Markdown",
+            onSelect: () => void props.onExportMarkdown(normalizeMarkdownEditorOutput(editorRef.current?.getMarkdown() ?? markdownRef.current)),
           },
-          { label: "PDF", disabled: true, onSelect: () => undefined },
+          {
+            label: "DOCX",
+            onSelect: () => void props.onExportDocx(normalizeMarkdownEditorOutput(editorRef.current?.getMarkdown() ?? markdownRef.current)),
+          },
+          {
+            label: props.pdfExporting ? "PDF exporting..." : "PDF",
+            disabled: props.pdfExporting || !props.pdfExportAvailable,
+            onSelect: () => void props.onExportPdf(normalizeMarkdownEditorOutput(editorRef.current?.getMarkdown() ?? markdownRef.current)),
+          },
         ]}
       />
+      <ArtifactExportToast message={props.exportNotice} onClose={props.onDismissExportNotice} onOpenLocation={props.onOpenExportLocation} />
 
       <div className="relative min-h-0 flex-1">
         <div className="h-full overflow-x-hidden overflow-y-auto bg-[#2a2a2a] px-3 py-5 md:px-6 md:py-7">
@@ -379,16 +434,15 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
               clearMarkdownPersistentSelectionHighlight();
               activateToolbar();
             }}
+            onCompositionStartCapture={handleMarkdownCompositionStart}
+            onCompositionEndCapture={handleMarkdownCompositionEnd}
             onKeyDownCapture={handleEditorKeyDown}
             onBeforeInputCapture={(event) => blockMarkdownReadOnlyMutation(event, props.readOnly)}
             onPasteCapture={(event) => blockMarkdownReadOnlyMutation(event, props.readOnly)}
             onCutCapture={(event) => blockMarkdownReadOnlyMutation(event, props.readOnly)}
             onDropCapture={(event) => blockMarkdownReadOnlyMutation(event, props.readOnly)}
             onKeyUpCapture={syncSelection}
-            onMouseDownCapture={() => {
-              clearMarkdownPersistentSelectionHighlight();
-              activateToolbar();
-            }}
+            onMouseDownCapture={handleEditorMouseDown}
             onMouseUpCapture={syncSelection}
           >
             <MarkdownToolbarContext.Provider
@@ -407,11 +461,11 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
               <MDXEditor
                 ref={editorRef}
                 markdown={props.runtime.content}
-                className="ai-markdown-editor-page flex min-h-[760px] flex-col bg-transparent text-[#202124]"
+                className={`ai-markdown-editor-page flex min-h-[760px] flex-col bg-transparent text-[#202124]${props.readOnly ? " ai-markdown-editor-readonly" : ""}`}
                 contentEditableClassName="markdown-preview ai-markdown-content min-h-[780px] overflow-visible !px-12 !py-9 text-[#202124] outline-none max-[760px]:!px-7 max-[760px]:!py-7 md:!px-18 md:!py-10"
                 onChange={handleChange}
                 plugins={plugins}
-                readOnly={props.readOnly}
+                readOnly={false}
                 spellCheck
               />
             </MarkdownToolbarContext.Provider>
@@ -439,10 +493,26 @@ function blockMarkdownReadOnlyMutation(event: { preventDefault: () => void; stop
   event.stopPropagation();
 }
 
+function blockMarkdownReadOnlyTableChromeEvent(event: { target: EventTarget | null; preventDefault: () => void; stopPropagation: () => void }, readOnly: boolean) {
+  if (!readOnly || !isMarkdownTableChromeTarget(event.target)) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  return true;
+}
+
+function isMarkdownTableChromeTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest('[data-tool-cell="true"], [class*="toolCell"], [class*="tableToolsColumn"], button[class*="tableRowEditorTrigger"], button[class*="tableColumnEditorTrigger"]'));
+}
+
 function isMarkdownEditingKey(event: KeyboardEvent<HTMLDivElement>) {
   if (event.metaKey || event.ctrlKey || event.altKey) return false;
   if (event.key.length === 1) return true;
   return event.key === "Backspace" || event.key === "Delete" || event.key === "Enter" || event.key === "Tab";
+}
+
+function isMarkdownComposingKeyEvent(event: KeyboardEvent<HTMLDivElement>) {
+  return event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229;
 }
 
 function markdownSelectionRangeFromDocument() {
@@ -457,6 +527,10 @@ function markdownSelectionRangeFromDocument() {
 function isMarkdownEditorFocusInside() {
   const activeElement = document.activeElement;
   return Boolean(activeElement instanceof Element && activeElement.closest(".ai-markdown-editor-page"));
+}
+
+function isMarkdownNestedTextInput(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest("input, textarea, select"));
 }
 
 function setMarkdownPersistentSelectionHighlight(range: Range) {
@@ -900,17 +974,50 @@ function markdownImageTitleTokens(title: string | undefined) {
 function PlainMarkdownCodeBlockEditor(props: CodeBlockEditorProps) {
   const { setCode } = useCodeBlockEditorContext();
   const toolbarContext = useContext(MarkdownToolbarContext);
+  const codeCompositionActiveRef = useRef(false);
+  const [draftCode, setDraftCode] = useState(props.code);
+
+  useEffect(() => {
+    if (!codeCompositionActiveRef.current) setDraftCode(props.code);
+  }, [props.code]);
+
   return (
-    <textarea
-      aria-label="Code block"
-      className="min-h-24 w-full resize-y rounded-lg border-0 bg-[#171717] p-3.5 font-mono text-[13px] leading-[1.55] text-[#f7f7f7] outline-none focus:shadow-[0_0_0_2px_rgba(26,115,232,0.32)]"
-      readOnly={toolbarContext.readOnly}
-      value={props.code}
-      spellCheck={false}
-      onChange={(event) => {
-        if (!toolbarContext.readOnly) setCode(event.target.value);
-      }}
-    />
+    <figure className="ai-markdown-code-block-frame">
+      <figcaption className="ai-markdown-code-block-header">
+        <span className="ai-markdown-code-block-title">
+          <span aria-hidden="true" className="ai-markdown-code-block-mark">
+            &lt;/&gt;
+          </span>
+          <span>Code block</span>
+        </span>
+        <span aria-hidden="true" className="ai-markdown-code-block-dots">
+          <span />
+          <span />
+          <span />
+        </span>
+      </figcaption>
+      <textarea
+        aria-label="Code block"
+        className="ai-markdown-code-block-editor"
+        readOnly={toolbarContext.readOnly}
+        value={draftCode}
+        spellCheck={false}
+        onCompositionStart={() => {
+          codeCompositionActiveRef.current = true;
+        }}
+        onCompositionEnd={(event) => {
+          codeCompositionActiveRef.current = false;
+          const nextCode = event.currentTarget.value;
+          setDraftCode(nextCode);
+          if (!toolbarContext.readOnly) setCode(nextCode);
+        }}
+        onChange={(event) => {
+          const nextCode = event.target.value;
+          setDraftCode(nextCode);
+          if (!codeCompositionActiveRef.current && !toolbarContext.readOnly) setCode(nextCode);
+        }}
+      />
+    </figure>
   );
 }
 
@@ -1005,10 +1112,6 @@ function normalizeMarkdownEditorOutput(markdown: string) {
     .replace(/^(\s*)([-*+]|\d+\.)\s+(.+?)(?:&#x9;|\t)$/gm, "$1  $2 $3");
 }
 
-function editorHtml(editor: MDXEditorMethods | null) {
-  return editor?.getContentEditableHTML() ?? "";
-}
-
 async function uploadMarkdownImageAsset(projectId: string | null, file: File) {
   if (!projectId) throw new Error("Project is not ready for image upload");
   const asset = await uploadProjectAsset(projectId, file);
@@ -1054,17 +1157,4 @@ function escapeMarkdownLinkDestination(value: string) {
 
 function clampNumber(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
-}
-
-function downloadTextFile(fileName: string, content: string, type: string) {
-  const url = URL.createObjectURL(new Blob([content], { type }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-function safeFileName(value: string) {
-  return value.trim().replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "doc";
 }

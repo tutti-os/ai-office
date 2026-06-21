@@ -21,6 +21,13 @@ const events = new EventHub();
 const repo = new ProjectRepository();
 const projects = new ProjectService(repo, events);
 
+server.addContentTypeParser(/^image\/.*/i, { parseAs: "buffer", bodyLimit: 30 * 1024 * 1024 }, (_request, body, done) => {
+  done(null, body);
+});
+server.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bodyLimit: 30 * 1024 * 1024 }, (_request, body, done) => {
+  done(null, body);
+});
+
 await server.register(fastifyWebsocket);
 await ensureTemplateDirs();
 
@@ -95,6 +102,56 @@ server.patch<{ Params: { projectId: string; slideId: string }; Body: UpdateDeckS
     }
   },
 );
+
+server.post<{ Params: { projectId: string }; Body: Buffer }>("/api/projects/:projectId/deck/assets", async (request, reply) => {
+  try {
+    const fileName = decodeURIComponent(String(request.headers["x-file-name"] ?? "image"));
+    const mimeType = String(request.headers["content-type"] ?? "application/octet-stream").split(";")[0] ?? "application/octet-stream";
+    return await projects.uploadDeckAsset(request.params.projectId, {
+      fileName,
+      mimeType,
+      bytes: Buffer.isBuffer(request.body) ? request.body : Buffer.from(request.body ?? ""),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to upload asset";
+    return reply.code(message.includes("not found") ? 404 : 400).send({ error: message });
+  }
+});
+
+server.post<{ Params: { projectId: string }; Body: Buffer }>("/api/projects/:projectId/exports", async (request, reply) => {
+  try {
+    const fileNameHeader = request.headers["x-file-name"];
+    const mimeTypeHeader = request.headers["x-mime-type"];
+    const contentType = String(request.headers["content-type"] ?? "application/octet-stream").split(";")[0]?.trim().toLowerCase() ?? "application/octet-stream";
+    const exported = await projects.writeProjectExport(request.params.projectId, {
+      fileName: typeof fileNameHeader === "string" ? decodeURIComponent(fileNameHeader) : "slides.pptx",
+      mimeType: typeof mimeTypeHeader === "string" ? decodeURIComponent(mimeTypeHeader).split(";")[0]?.trim().toLowerCase() || contentType : contentType,
+      bytes: Buffer.isBuffer(request.body) ? request.body : Buffer.from(request.body ?? ""),
+    });
+    return reply.send(exported);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to write export";
+    return reply.code(message.toLowerCase().includes("not found") ? 404 : 400).send({ error: message });
+  }
+});
+
+server.post<{ Params: { projectId: string } }>("/api/projects/:projectId/exports/pptx", async (request, reply) => {
+  try {
+    return await projects.exportPptxFile(request.params.projectId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to export PPTX file";
+    return reply.code(message.toLowerCase().includes("not found") ? 404 : 400).send({ error: message });
+  }
+});
+
+server.post<{ Params: { projectId: string } }>("/api/projects/:projectId/exports/open", async (request, reply) => {
+  try {
+    return await projects.openProjectExportsDir(request.params.projectId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to open exports folder";
+    return reply.code(message.toLowerCase().includes("not found") ? 404 : 400).send({ error: message });
+  }
+});
 
 server.get<{ Params: { projectId: string; "*": string } }>("/local-assets/projects/:projectId/*", async (request, reply) => {
   const relativePath = request.params["*"];

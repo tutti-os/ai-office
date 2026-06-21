@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, Download } from "lucide-react";
+import { ChevronDown, Download, X } from "lucide-react";
 
 export type ArtifactEditorKind = "html" | "markdown" | "docx" | "deck" | "pptx";
 
@@ -47,6 +47,37 @@ export function ArtifactAgentProcessingOverlay(props: {
         className="ai-artifact-agent-sweep absolute -inset-y-16 left-0 w-1/3 bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.05)_18%,rgba(255,255,255,0.34)_48%,rgba(147,197,253,0.20)_58%,transparent_100%)] blur-[0.5px]"
         style={{ animation: "ai-artifact-agent-sweep 2.35s cubic-bezier(0.4, 0, 0.2, 1) infinite" }}
       />
+    </div>
+  );
+}
+
+export function ArtifactExportToast(props: {
+  message: string;
+  onClose: () => void;
+  onOpenLocation: () => void;
+}) {
+  if (!props.message) return null;
+  return (
+    <div className="absolute left-1/2 top-3 z-[100] w-[640px] max-w-[calc(100%-32px)] -translate-x-1/2 rounded-md border border-amber-300/25 bg-[#2f2615] px-4 py-2.5 text-amber-100 shadow-[0_14px_36px_rgba(0,0,0,0.32)]">
+      <div className="flex min-w-0 items-center gap-3">
+        <button
+          className="min-w-0 flex-1 truncate text-left text-[13px] font-bold text-amber-100 hover:text-white"
+          type="button"
+          title={props.message}
+          onClick={props.onOpenLocation}
+        >
+          {props.message}
+        </button>
+        <button
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-amber-100/70 hover:bg-white/8 hover:text-white"
+          type="button"
+          aria-label="Dismiss export notice"
+          title="Dismiss"
+          onClick={props.onClose}
+        >
+          <X size={16} />
+        </button>
+      </div>
     </div>
   );
 }

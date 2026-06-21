@@ -1,5 +1,10 @@
 import type { CSSProperties } from "react";
 import { selectedElementFromRange, type RichTextSelectionState } from "@ai-app/ui/rich-text";
+import {
+  assetPathFromRelativeUrl,
+  encodeAssetPath,
+  rewriteAssetReferencesInElement,
+} from "@ai-app/shared/artifact-assets";
 import { readDeckObjectGeometry, type DeckObjectElement } from "../artifact/deckInteractionLayer";
 
 type ActiveDeckSelectionBox = {
@@ -372,7 +377,8 @@ export function ensureSlideEditorStyles(doc: Document) {
   doc.head.append(style);
 }
 
-export function prepareSlideEditorDocument(doc: Document) {
+export function prepareSlideEditorDocument(doc: Document, assetOptions?: { fileRef: string; projectId: string }) {
+  if (assetOptions) renderDeckSlideAssetReferences(doc.documentElement, assetOptions);
   ensureSlideEditorStyles(doc);
   doc.querySelectorAll<DeckObjectElement>('[data-object="true"]').forEach((object, index) => {
     if (!object.getAttribute("data-ai-slide-object-id")) object.setAttribute("data-ai-slide-object-id", `object-${index + 1}`);
@@ -387,6 +393,7 @@ export function applySlideHtmlSnapshot(doc: Document, html: string) {
 
 export function serializeSlideDocument(doc: Document) {
   const clone = doc.documentElement.cloneNode(true) as HTMLElement;
+  restoreDeckSlideAssetReferences(clone);
   clone.removeAttribute("data-ai-slide-editor-attached");
   clone.querySelectorAll("[data-ai-slide-editor]").forEach((element) => element.remove());
   clone.querySelectorAll<HTMLElement>("[data-ai-slide-object-id]").forEach((element) => {
@@ -551,4 +558,27 @@ export function rgbToHex(value: string | undefined) {
 export function projectAssetUrl(projectId: string, fileRef: string, filePath: string, revision?: number) {
   const path = `/local-assets/projects/${encodeURIComponent(projectId)}/${[fileRef, ...filePath.split("/")].map(encodeURIComponent).join("/")}`;
   return revision ? `${path}?v=${encodeURIComponent(String(revision))}` : path;
+}
+
+function renderDeckSlideAssetReferences(root: ParentNode, options: { fileRef: string; projectId: string }) {
+  rewriteAssetReferencesInElement(root, (url) => {
+    const assetPath = assetPathFromRelativeUrl(url, ["../assets/", "./assets/", "assets/"]);
+    return assetPath ? projectAssetUrl(options.projectId, options.fileRef, `assets/${assetPath}`) : null;
+  });
+}
+
+function restoreDeckSlideAssetReferences(root: ParentNode) {
+  rewriteAssetReferencesInElement(root, (url) => {
+    const path = localAssetRoutePath(url);
+    const match = path.match(/^\/local-assets\/projects\/[^/]+\/[^/]+\/assets\/(.+)$/);
+    return match?.[1] ? `../assets/${encodeAssetPath(decodeURIComponent(match[1]))}` : null;
+  });
+}
+
+function localAssetRoutePath(value: string) {
+  try {
+    return new URL(value, window.location.href).pathname;
+  } catch {
+    return value.split(/[?#]/, 1)[0] ?? "";
+  }
 }

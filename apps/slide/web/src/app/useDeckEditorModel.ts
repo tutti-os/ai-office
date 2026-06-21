@@ -49,6 +49,7 @@ import {
 } from "./deckEditorDom";
 import { DeckEditorController } from "./DeckEditorController";
 import { fitScale, nextSlideIndex, scaledHeight, slideDirectionFromKey, thumbnailMetrics, useElementSize } from "./slideView";
+import { uploadDeckAsset } from "../api/projects";
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -190,11 +191,12 @@ export function useDeckEditorModel(props: {
   const deckController = useMemo(
     () =>
       new DeckEditorController({
+        fileRef: props.detail.artifact.fileRef,
         projectId: props.projectId,
         onHistoryChange: () => setHistoryVersion((version) => version + 1),
         onSaveStateChange: setSaveState,
       }),
-    [props.projectId],
+    [props.detail.artifact.fileRef, props.projectId],
   );
   const manifest = props.detail.deckManifest;
   const canvas = manifest?.canvas ?? { width: 1920, height: 1080 };
@@ -508,7 +510,7 @@ export function useDeckEditorModel(props: {
     const doc = iframe.contentDocument;
     if (!doc || !doc.head || !doc.body || deckController.isFrameInitialized(doc)) return;
     deckController.markFrameInitialized(doc);
-    prepareSlideEditorDocument(doc);
+    prepareSlideEditorDocument(doc, { fileRef: props.detail.artifact.fileRef, projectId: props.projectId });
     if (doc.location.href !== "about:blank") ensureInitialSlideHistory(slide.id, doc);
     doc.addEventListener(
       "mousedown",
@@ -864,20 +866,20 @@ export function useDeckEditorModel(props: {
     input.click();
   };
 
-  const replaceActiveImageFromFile = (event: ChangeEvent<HTMLInputElement>) => {
+  const replaceActiveImageFromFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
     if (readOnlyRef.current) return;
     if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.addEventListener("load", () => {
-      const dataUrl = typeof reader.result === "string" ? reader.result : "";
-      if (!dataUrl) return;
+    try {
+      const asset = await uploadDeckAsset(props.projectId, file);
+      const src = projectAssetUrl(props.projectId, props.detail.artifact.fileRef, `assets/${asset.fileName}`);
       mutateActiveObject((object) => {
-        replaceDeckImageObjectSource(object, dataUrl);
+        replaceDeckImageObjectSource(object, src);
       });
-    });
-    reader.readAsDataURL(file);
+    } catch {
+      setSaveState("error");
+    }
   };
 
   const updateActiveObjectGeometry = (patch: DeckObjectGeometryPatch) => {

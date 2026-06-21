@@ -225,7 +225,7 @@ export interface LocalAgentProviderStatusResponse {
   providers: LocalAgentProviderStatus[];
 }
 
-export type OfficeCliSource = "env" | "bundled" | "path" | "tutti" | "missing";
+export type OfficeCliSource = "env" | "bundled" | "tutti" | "missing";
 
 export interface OfficeCliStatus {
   available: boolean;

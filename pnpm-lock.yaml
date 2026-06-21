@@ -78,6 +78,9 @@ importers:
       '@mdxeditor/editor':
         specifier: ^4.0.3
         version: 4.0.3(@codemirror/language@6.12.3)(@lezer/highlight@1.2.3)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(yjs@13.6.31)
+      '@tutti-os/office-export':
+        specifier: file:../../../../tsh-web/packages/office-export
+        version: file:../tsh-web/packages/office-export
       '@tutti-os/office-preview':
         specifier: 0.0.0-test.20260616183444.f506a6bec39c
         version: 0.0.0-test.20260616183444.f506a6bec39c(react@19.2.7)
@@ -173,6 +176,9 @@ importers:
       '@ai-slide/shared':
         specifier: workspace:*
         version: link:../shared
+      '@tutti-os/office-export':
+        specifier: file:../../../../tsh-web/packages/office-export
+        version: file:../tsh-web/packages/office-export
       '@tutti-os/office-preview':
         specifier: 0.0.0-test.20260616183444.f506a6bec39c
         version: 0.0.0-test.20260616183444.f506a6bec39c(react@19.2.7)
@@ -1691,6 +1697,9 @@ packages:
     resolution: {integrity: sha512-hItDHuIIlEV61R+faXu66s1K36aTurO/Qw0e45Vskz57gXl9pWOT6eg3zmcEui6CZXddbN7zd41bwmvag4JGwQ==}
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
+
+  '@tutti-os/office-export@file:../tsh-web/packages/office-export':
+    resolution: {directory: ../tsh-web/packages/office-export, type: directory}
 
   '@tutti-os/office-preview@0.0.0-test.20260616183444.f506a6bec39c':
     resolution: {integrity: sha512-zj4gWvI4mikcioA/HB8S7WZL5/c3yZkD92PV+wx5upenLAyILNZuNgeYQ1hLN8Q7sQdPcQUaR4fipmG97VaV0w==}
@@ -4614,6 +4623,8 @@ snapshots:
       '@tailwindcss/oxide': 4.3.1
       tailwindcss: 4.3.1
       vite: 7.3.5(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
+
+  '@tutti-os/office-export@file:../tsh-web/packages/office-export': {}
 
   '@tutti-os/office-preview@0.0.0-test.20260616183444.f506a6bec39c(react@19.2.7)':
     dependencies:

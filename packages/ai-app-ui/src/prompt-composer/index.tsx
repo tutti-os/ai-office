@@ -18,6 +18,7 @@ type PromptComposerProps = {
 
 export function PromptComposer(props: PromptComposerProps) {
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
     if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
     event.preventDefault();
     if (props.canSubmit) props.onSubmit();

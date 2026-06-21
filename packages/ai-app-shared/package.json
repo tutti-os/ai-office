@@ -6,8 +6,10 @@
   "exports": {
     "./types": "./src/types/index.ts",
     "./local-paths": "./src/local-paths/index.ts",
+    "./local-open": "./src/local-open/index.ts",
     "./event-hub": "./src/event-hub/index.ts",
     "./project-store": "./src/project-store/index.ts",
+    "./artifact-assets": "./src/artifact-assets/index.ts",
     "./artifact-runtime": "./src/artifact-runtime/index.ts",
     "./server-routes": "./src/server-routes/index.ts",
     "./toolchains/officecli": "./src/toolchains/officecli/index.ts",

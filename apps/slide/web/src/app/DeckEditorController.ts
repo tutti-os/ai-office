@@ -24,6 +24,7 @@ export class DeckEditorController {
 
   constructor(
     private readonly deps: {
+      fileRef: string;
       projectId: string;
       onHistoryChange: () => void;
       onSaveStateChange: (state: "saved" | "saving" | "error") => void;
@@ -144,7 +145,7 @@ export class DeckEditorController {
     this.applyingHistory.add(slideId);
     try {
       applySlideHtmlSnapshot(doc, history.entries[nextIndex]);
-      prepareSlideEditorDocument(doc);
+      prepareSlideEditorDocument(doc, { fileRef: this.deps.fileRef, projectId: this.deps.projectId });
       history.currentIndex = nextIndex;
       this.slideHistories.set(slideId, history);
       this.scheduleSave(slideId);

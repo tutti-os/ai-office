@@ -350,10 +350,8 @@ export function positionImageSelectionOverlay(image: ImageObjectElement, overlay
   const win = doc.defaultView;
   if (!win || !doc.body.contains(image)) return;
   const rect = image.getBoundingClientRect();
-  const left = rect.left + win.scrollX;
-  const top = rect.top + win.scrollY;
-  overlay.style.left = `${left}px`;
-  overlay.style.top = `${top}px`;
+  overlay.style.left = `${rect.left}px`;
+  overlay.style.top = `${rect.top}px`;
   overlay.style.width = `${Math.max(0, rect.width)}px`;
   overlay.style.height = `${Math.max(0, rect.height)}px`;
 }

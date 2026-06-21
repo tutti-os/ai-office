@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import type { RuntimeState } from "./runtime/types";
 import { HtmlArtifactRuntimeAdapter } from "./htmlArtifactAdapter";
 import type { ArtifactRuntimeParseInput } from "./types";
+import { renderHtmlProjectAssetReferences } from "./runtime/projectAssets";
 
 export type ArtifactSaveState = "saved" | "saving" | "error";
 
@@ -9,13 +10,15 @@ export function useHtmlArtifactRuntime(adapter: HtmlArtifactRuntimeAdapter) {
   const [runtime, setRuntime] = useState<RuntimeState | null>(null);
   const [frameSrcDoc, setFrameSrcDoc] = useState("");
   const [frameRevision, setFrameRevision] = useState(0);
+  const [frameProjectId, setFrameProjectId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<ArtifactSaveState>("saved");
 
   const loadArtifact = useCallback(
     (input: ArtifactRuntimeParseInput) => {
       const nextRuntime = adapter.parse(input);
       setRuntime(nextRuntime);
-      setFrameSrcDoc(revisionedFrameSrcDoc(adapter.serialize(nextRuntime)));
+      setFrameProjectId(input.projectId ?? null);
+      setFrameSrcDoc(revisionedFrameSrcDoc(renderHtmlProjectAssetReferences(adapter.serialize(nextRuntime), input.projectId ?? null)));
       setFrameRevision((current) => current + 1);
       setSaveState("saved");
       return nextRuntime;
@@ -26,15 +29,16 @@ export function useHtmlArtifactRuntime(adapter: HtmlArtifactRuntimeAdapter) {
   const clearArtifact = useCallback(() => {
     setRuntime(null);
     setFrameSrcDoc("");
+    setFrameProjectId(null);
     setFrameRevision((current) => current + 1);
     setSaveState("saved");
   }, []);
 
   const resetFrameFromRuntime = useCallback(() => {
     if (!runtime) return;
-    setFrameSrcDoc(revisionedFrameSrcDoc(adapter.serialize(runtime)));
+    setFrameSrcDoc(revisionedFrameSrcDoc(renderHtmlProjectAssetReferences(adapter.serialize(runtime), frameProjectId)));
     setFrameRevision((current) => current + 1);
-  }, [adapter, runtime]);
+  }, [adapter, frameProjectId, runtime]);
 
   const serialize = useCallback((state: RuntimeState) => adapter.serialize(state), [adapter]);
   const createAiEditRequest = useCallback(

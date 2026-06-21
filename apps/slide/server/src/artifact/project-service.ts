@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { AiEditRequest, CreateProjectRequest, RuntimeProfile, SlideRun, SlideRunEvent, UpdateDeckSlideHtmlRequest, UpdateProjectRequest } from "@ai-slide/shared";
+import { pptxMimeType, type AiEditRequest, type CreateProjectRequest, type DeckAssetUploadResponse, type RuntimeProfile, type SlideRun, type SlideRunEvent, type UpdateDeckSlideHtmlRequest, type UpdateProjectRequest } from "@ai-slide/shared";
 import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
+import { openPathInFileManager } from "@ai-app/shared/local-open";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
 import type { SlideRuntimeProject } from "../runtimes/runtime-provider.js";
@@ -95,6 +96,43 @@ export class ProjectService {
   writeDeckSlideHtml(projectId: string, slideId: string, input: UpdateDeckSlideHtmlRequest) {
     if (typeof input.html !== "string" || !input.html.trim()) throw new Error("Slide HTML is required");
     return this.repo.writeDeckSlideHtml(projectId, slideId, input.html);
+  }
+
+  async uploadDeckAsset(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }): Promise<DeckAssetUploadResponse> {
+    if (!isSupportedImageMimeType(input.mimeType)) throw new Error("Only image assets are supported");
+    if (input.bytes.byteLength === 0) throw new Error("Asset file is empty");
+    if (input.bytes.byteLength > maxDeckAssetBytes) throw new Error("Asset file is too large");
+    const asset = await this.repo.writeDeckAsset(projectId, input);
+    return {
+      path: asset.path,
+      fileName: asset.fileName,
+      mimeType: asset.mimeType,
+      sizeBytes: asset.sizeBytes,
+    };
+  }
+
+  async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
+    if (input.mimeType !== pptxMimeType) throw new Error("Only PPTX exports are supported");
+    if (input.bytes.byteLength === 0) throw new Error("Export file is empty");
+    if (input.bytes.byteLength > maxDeckExportBytes) throw new Error("Export file is too large");
+    return this.repo.writeProjectExport(projectId, input);
+  }
+
+  async exportPptxFile(projectId: string) {
+    const project = this.repo.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    const file = await this.repo.readPptxFile(projectId);
+    return this.writeProjectExport(projectId, {
+      fileName: `${project.title || "slides"}.pptx`,
+      mimeType: file.mimeType,
+      bytes: file.bytes,
+    });
+  }
+
+  async openProjectExportsDir(projectId: string) {
+    const path = this.repo.projectExportsDir(projectId);
+    await openPathInFileManager(path);
+    return { path };
   }
 
   readPptxFile(projectId: string) {
@@ -308,6 +346,13 @@ export class ProjectService {
     this.cancelledRunIds.delete(runId);
     return { run: finalRun };
   }
+}
+
+const maxDeckAssetBytes = 20 * 1024 * 1024;
+const maxDeckExportBytes = 20 * 1024 * 1024;
+
+function isSupportedImageMimeType(mimeType: string) {
+  return ["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"].includes(mimeType);
 }
 
 async function hashDirectory(root: string) {

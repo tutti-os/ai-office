@@ -17,6 +17,15 @@ type ProjectsResponse = {
   projects: DocumentProject[];
 };
 
+export type ProjectExportWriteResponse = {
+  path: string;
+  absolutePath: string;
+  exportsDir: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
 export async function createProject(input: CreateProjectRequest) {
   return requestProject("/api/projects", {
     method: "POST",
@@ -44,6 +53,30 @@ export async function uploadProjectAsset(projectId: string, file: File) {
   const data = (await response.json().catch(() => null)) as ProjectAssetUploadResponse | { error?: string } | null;
   if (!response.ok) throw new Error(data && "error" in data && data.error ? data.error : `Asset upload failed: ${response.status}`);
   if (!data || !("path" in data)) throw new Error("Asset upload response is missing asset path");
+  return data;
+}
+
+export async function writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; content: string | Uint8Array | ArrayBuffer }) {
+  const bytes = typeof input.content === "string" ? new TextEncoder().encode(input.content) : input.content;
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/exports`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/octet-stream",
+      "x-file-name": encodeURIComponent(input.fileName || "export"),
+      "x-mime-type": encodeURIComponent(input.mimeType),
+    },
+    body: bytes instanceof Uint8Array ? bytes.slice().buffer : bytes,
+  });
+  const data = (await response.json().catch(() => null)) as ProjectExportWriteResponse | { error?: string } | null;
+  if (!response.ok) throw new Error(data && "error" in data && data.error ? data.error : `Export failed: ${response.status}`);
+  if (!data || !("path" in data)) throw new Error("Export response is missing export path");
+  return data;
+}
+
+export async function openProjectExportsDir(projectId: string) {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/exports/open`, { method: "POST" });
+  const data = (await response.json().catch(() => null)) as { path?: string; error?: string } | null;
+  if (!response.ok) throw new Error(data?.error || `Unable to open exports folder: ${response.status}`);
   return data;
 }
 
