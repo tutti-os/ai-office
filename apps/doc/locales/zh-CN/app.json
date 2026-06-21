@@ -1,0 +1,21 @@
+{
+  "app.title": "AI 文档",
+  "home.import": "导入",
+  "home.importTitle": "导入本地文档",
+  "home.heading": "准备好创建任何文档了吗？",
+  "home.templates": "模板",
+  "home.history": "历史",
+  "home.templateCount": "{{count}} 个模板",
+  "home.projectCount": "{{count}} 个项目",
+  "home.blankDoc": "空白文档",
+  "composer.htmlDescription": "丰富视觉排版",
+  "composer.markdownDescription": "清晰结构化写作",
+  "composer.wordDescription": "传统 Office 格式",
+  "composer.officeCliRequired": "Word 文档需要 OfficeCLI",
+  "composer.downloadOfficeCli": "下载 OfficeCLI",
+  "composer.checkingOfficeCli": "正在检查 OfficeCLI",
+  "composer.installingOfficeCli": "正在安装 OfficeCLI",
+  "composer.placeholder": "提需求，创建任何内容...",
+  "composer.addContext": "添加上下文",
+  "composer.createFromPrompt": "从提示创建"
+}

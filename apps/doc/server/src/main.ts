@@ -10,6 +10,8 @@ import { DocumentRepository } from "./artifact/document-repository.js";
 import { DocumentService } from "./artifact/document-service.js";
 import { getTemplateScreenshotFile, listTemplates } from "./templates/template-service.js";
 import { getOfficeCliStatus, installOfficeCli } from "./toolchains/officecli.js";
+import { registerTuttiCliRoutes } from "./tutti/cli-routes.js";
+import { registerTuttiReferenceRoutes } from "./tutti/reference-routes.js";
 import { EventHub } from "./ws/event-hub.js";
 
 const webDist = process.env.AI_DOC_WEB_DIST
@@ -31,6 +33,9 @@ server.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bod
 });
 
 await server.register(fastifyWebsocket);
+
+registerTuttiCliRoutes(server, documents);
+registerTuttiReferenceRoutes(server);
 
 if (existsSync(webDist)) {
   await server.register(fastifyStatic, {

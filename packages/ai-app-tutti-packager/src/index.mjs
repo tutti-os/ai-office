@@ -3,25 +3,29 @@ import { createHash } from "node:crypto";
 import { access, chmod, cp, lstat, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-export async function packageNextopApp(options) {
+export async function packageTuttiApp(options) {
   const {
     appId,
     rootDir,
     appDir,
-    buildRoot = path.join(rootDir, "build", "nextop-app"),
+    buildRoot = path.join(rootDir, "build", "tutti-app"),
     packageRoot = path.join(buildRoot, "package"),
     versionEnvVar,
     webBuildFilter,
     webDistDir,
     serverEntry,
-    serverBundleOutfile = "build/nextop-app/package/server/server.js",
+    serverBundleOutfile = path.join(path.relative(rootDir, packageRoot), "server", "server.js"),
+    manifestFile = "tutti.app.json",
+    manifestSchemaVersion = "tutti.app.manifest.v1",
+    cliManifestFile = null,
+    documentationFiles = [],
     packageAssets = [],
     renderBootstrap,
     renderIcon,
     renderPackageGuide,
   } = options;
 
-  const sourceManifest = JSON.parse(await readFile(path.join(appDir, "nextop.app.json"), "utf8"));
+  const sourceManifest = JSON.parse(await readFile(path.join(appDir, manifestFile), "utf8"));
   const rootPackage = JSON.parse(await readFile(path.join(rootDir, "package.json"), "utf8"));
   const version = process.env[versionEnvVar]?.trim() || sourceManifest.version || rootPackage.version || "0.0.0";
   const manifest = { ...sourceManifest, version };
@@ -30,6 +34,9 @@ export async function packageNextopApp(options) {
   await mkdir(buildRoot, { recursive: true });
   await writePackageFiles({
     appDir,
+    cliManifestFile,
+    documentationFiles,
+    manifestFile,
     manifest,
     packageRoot,
     renderBootstrap,
@@ -39,7 +46,12 @@ export async function packageNextopApp(options) {
     packageAssets,
   });
   await bundleServer({ rootDir, serverEntry, serverBundleOutfile });
-  await validatePackageRoot(packageRoot, appId);
+  await validatePackageRoot(packageRoot, {
+    appId,
+    manifestFile,
+    manifestSchemaVersion,
+    cliManifestFile,
+  });
   const zipPath = await createZip({ appId, buildRoot, packageRoot, version });
   const zipSha256 = await sha256File(zipPath);
   const result = { appId: manifest.appId, version, packageRoot, zipPath, zipSha256 };
@@ -51,7 +63,13 @@ export async function packageNextopApp(options) {
 async function writePackageFiles(input) {
   await rm(input.packageRoot, { force: true, recursive: true });
   await mkdir(path.join(input.packageRoot, "server"), { recursive: true });
-  await writeFile(path.join(input.packageRoot, "nextop.app.json"), `${JSON.stringify(input.manifest, null, 2)}\n`);
+  await writeFile(path.join(input.packageRoot, input.manifestFile), `${JSON.stringify(input.manifest, null, 2)}\n`);
+  if (input.cliManifestFile) {
+    await cp(path.join(input.appDir, input.cliManifestFile), path.join(input.packageRoot, input.cliManifestFile));
+  }
+  for (const file of input.documentationFiles ?? []) {
+    await cp(path.join(input.appDir, file), path.join(input.packageRoot, file));
+  }
   await writeFile(path.join(input.packageRoot, "bootstrap.sh"), input.renderBootstrap({ version: input.manifest.version }));
   await chmod(path.join(input.packageRoot, "bootstrap.sh"), 0o755);
   await writeFile(path.join(input.packageRoot, "AGENTS.md"), input.renderPackageGuide());
@@ -109,11 +127,13 @@ async function createZip(input) {
   return zipPath;
 }
 
-async function validatePackageRoot(root, appId) {
-  const requiredFiles = ["nextop.app.json", "AGENTS.md", "bootstrap.sh", "icon.svg", "server/server.js", "dist/index.html"];
+async function validatePackageRoot(root, options) {
+  const { appId, manifestFile, manifestSchemaVersion, cliManifestFile } = options;
+  const requiredFiles = [manifestFile, "AGENTS.md", "bootstrap.sh", "icon.svg", "server/server.js", "dist/index.html"];
+  if (cliManifestFile) requiredFiles.push(cliManifestFile);
   for (const file of requiredFiles) await access(path.join(root, file));
-  const manifest = JSON.parse(await readFile(path.join(root, "nextop.app.json"), "utf8"));
-  if (manifest.schemaVersion !== "nextop.app.manifest.v1") throw new Error("Invalid manifest schemaVersion");
+  const manifest = JSON.parse(await readFile(path.join(root, manifestFile), "utf8"));
+  if (manifest.schemaVersion !== manifestSchemaVersion) throw new Error("Invalid manifest schemaVersion");
   if (manifest.appId !== appId) throw new Error(`Manifest appId must be ${appId}`);
   if (!manifest.runtime?.bootstrap || !manifest.runtime?.healthcheckPath?.startsWith("/")) {
     throw new Error("Manifest runtime bootstrap and healthcheckPath are required");

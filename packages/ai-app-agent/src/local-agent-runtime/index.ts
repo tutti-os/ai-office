@@ -8,7 +8,7 @@ import {
   type RawAgentEvent,
   type RawAgentStream,
   type SkillMaterializationRecord,
-} from "@nextop-os/agent-acp-kit";
+} from "@tutti-os/agent-acp-kit";
 import type { BaseAiEditRequest, BaseRun, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { safePathSegment } from "@ai-app/shared/local-paths";
 import type { RuntimeEditContext, RuntimeProvider, RuntimeStreamEvent } from "@ai-app/agent/runtime";

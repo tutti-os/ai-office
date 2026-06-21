@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
 import { LocalAgentRuntimeProvider as SharedLocalAgentRuntimeProvider } from "@ai-app/agent/local-agent-runtime";
 import type { AiEditRequest, SlideRun } from "@ai-slide/shared";
-import type { SkillMaterializationFile, SkillMaterializationRecord } from "@nextop-os/agent-acp-kit";
+import type { SkillMaterializationFile, SkillMaterializationRecord } from "@tutti-os/agent-acp-kit";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { extractOoxmlTextPreview } from "../artifact/ooxml-text.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";

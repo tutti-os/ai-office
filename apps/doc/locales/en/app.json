@@ -1,0 +1,21 @@
+{
+  "app.title": "AI Doc",
+  "home.import": "Import",
+  "home.importTitle": "Import local document",
+  "home.heading": "Ready to create any doc?",
+  "home.templates": "Templates",
+  "home.history": "History",
+  "home.templateCount": "{{count}} templates",
+  "home.projectCount": "{{count}} projects",
+  "home.blankDoc": "Blank doc",
+  "composer.htmlDescription": "Rich visual formatting",
+  "composer.markdownDescription": "Clean structured writing",
+  "composer.wordDescription": "Traditional Office format",
+  "composer.officeCliRequired": "OfficeCLI is required for Word documents",
+  "composer.downloadOfficeCli": "Download OfficeCLI",
+  "composer.checkingOfficeCli": "Checking OfficeCLI",
+  "composer.installingOfficeCli": "Installing OfficeCLI",
+  "composer.placeholder": "Ask anything, create anything...",
+  "composer.addContext": "Add to context",
+  "composer.createFromPrompt": "Create from prompt"
+}

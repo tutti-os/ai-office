@@ -1,9 +1,9 @@
 {
-  "schemaVersion": "nextop.app.manifest.v1",
-  "appId": "ai-slide",
+  "schemaVersion": "tutti.app.manifest.v1",
+  "appId": "ai-doc",
   "version": "0.1.0",
-  "name": "AI Slide",
-  "description": "Human and local agents editing presentation decks together.",
+  "name": "AI Doc",
+  "description": "Human and local agents editing rich docs together.",
   "icon": {
     "type": "asset",
     "src": "icon.svg"
@@ -11,6 +11,13 @@
   "runtime": {
     "bootstrap": "bootstrap.sh",
     "healthcheckPath": "/api/health"
+  },
+  "cli": {
+    "manifest": "tutti.cli.json"
+  },
+  "references": {
+    "listEndpoint": "/tutti/references/list",
+    "searchEndpoint": "/tutti/references/search"
   },
   "window": {
     "minimizeBehavior": "keep-mounted",
@@ -27,7 +34,7 @@
     ]
   },
   "author": {
-    "name": "Nextop"
+    "name": "Tutti"
   },
-  "tags": ["local-first", "agent", "slide", "deck", "editor"]
+  "tags": ["local-first", "agent", "doc", "editor"]
 }

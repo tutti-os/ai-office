@@ -128,7 +128,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
   } = props.model;
   const artifactAgentProcessing = isArtifactAgentRunning(artifactInteraction);
   return (
-    <main className="h-dvh min-h-0 overflow-hidden bg-[#1f1f1f] font-sans text-white">
+    <main className="h-dvh min-h-0 overflow-hidden bg-[#f4f1ea] font-sans text-[#181818] dark:bg-[#1f1f1f] dark:text-white">
       <input
         ref={imageFileInputRef}
         className="hidden"

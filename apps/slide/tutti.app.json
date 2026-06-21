@@ -1,9 +1,9 @@
 {
-  "schemaVersion": "nextop.app.manifest.v1",
-  "appId": "ai-doc",
+  "schemaVersion": "tutti.app.manifest.v1",
+  "appId": "ai-slide",
   "version": "0.1.0",
-  "name": "AI Doc",
-  "description": "Human and local agents editing rich docs together.",
+  "name": "AI Slide",
+  "description": "Human and local agents editing presentation decks together.",
   "icon": {
     "type": "asset",
     "src": "icon.svg"
@@ -27,7 +27,7 @@
     ]
   },
   "author": {
-    "name": "Nextop"
+    "name": "Tutti"
   },
-  "tags": ["local-first", "agent", "doc", "editor"]
+  "tags": ["local-first", "agent", "slide", "deck", "editor"]
 }

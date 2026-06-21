@@ -17,6 +17,9 @@ const officeExportAssetsRoot = firstExistingPath([
 
 export default defineConfig({
   plugins: [officeAssetDevRoutes(), react(), tailwindcss()],
+  build: {
+    minify: false,
+  },
   optimizeDeps: {
     exclude: ["@tutti-os/office-export"],
   },

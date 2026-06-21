@@ -6,6 +6,7 @@ import {
   type TuttiTemplate,
 } from "../templates/tuttiTemplates";
 import { HomeComposer } from "./HomeComposer";
+import { useI18n } from "../i18n";
 import type { HomeAttachment } from "./useHomeAttachments";
 
 export function HomePage(props: {
@@ -42,6 +43,7 @@ export function HomePage(props: {
   onSelectTemplate: (template: TuttiTemplate) => void;
 }) {
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const { t } = useI18n();
 
   return (
     <div className="relative h-full overflow-auto">
@@ -61,19 +63,19 @@ export function HomePage(props: {
         type="button"
         disabled={props.loading}
         onClick={() => importInputRef.current?.click()}
-        title="Import local document"
+        title={t("home.importTitle")}
       >
         <Upload size={14} />
-        Import
+        {t("home.import")}
       </button>
 
       <div className="mx-auto flex w-full max-w-[1180px] flex-col px-7 pb-12 pt-14">
         <section className="mx-auto flex w-full max-w-[820px] flex-col items-center">
-          <div className="mb-5 grid size-10 place-items-center rounded-full bg-white text-black">
+          <div className="mb-5 grid size-10 place-items-center rounded-full bg-black text-white dark:bg-white dark:text-black">
             <Sparkles size={18} />
           </div>
-          <h1 className="text-center text-[36px] font-bold leading-tight text-white">
-            Ready to create any doc?
+          <h1 className="text-center text-[36px] font-bold leading-tight text-[#171717] dark:text-white">
+            {t("home.heading")}
           </h1>
 
           <HomeComposer
@@ -102,15 +104,15 @@ export function HomePage(props: {
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="flex min-w-0 flex-col gap-2">
                 <div className="flex items-center gap-2">
-                  <HomePanelButton active={props.activePanel === "templates"} label="Templates" onClick={() => props.onActivePanelChange("templates")} />
-                  <HomePanelButton active={props.activePanel === "history"} label="History" onClick={() => props.onActivePanelChange("history")} />
+                  <HomePanelButton active={props.activePanel === "templates"} kind="templates" onClick={() => props.onActivePanelChange("templates")} />
+                  <HomePanelButton active={props.activePanel === "history"} kind="history" onClick={() => props.onActivePanelChange("history")} />
                 </div>
-                <div className="text-[12px] text-white/44">
+                <div className="text-[12px] text-black/50 dark:text-white/44">
                   {props.activePanel === "templates"
                     ? props.selectedCategory === allTemplatesLabel
-                      ? `${props.templateCounts[allTemplatesLabel] ?? 0} templates`
-                      : `${props.templateCounts[props.selectedCategory] ?? 0} templates`
-                    : `${props.historyProjects.length} projects`}
+                      ? t("home.templateCount", { count: props.templateCounts[allTemplatesLabel] ?? 0 })
+                      : t("home.templateCount", { count: props.templateCounts[props.selectedCategory] ?? 0 })
+                    : t("home.projectCount", { count: props.historyProjects.length })}
                 </div>
               </div>
             </div>
@@ -248,6 +250,7 @@ function estimatedTemplateCardHeight(item: MasonryItem, columnWidth: number) {
 }
 
 function BlankTemplateCard(props: { onCreate: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="group w-full min-w-0">
       <button
@@ -257,13 +260,14 @@ function BlankTemplateCard(props: { onCreate: () => void }) {
       >
         <Plus className="mb-4 opacity-60" size={26} />
       </button>
-      <div className="mt-2 truncate px-1 text-[12px] font-semibold text-white/72">Blank doc</div>
+      <div className="mt-2 truncate px-1 text-[12px] font-semibold text-white/72">{t("home.blankDoc")}</div>
     </div>
   );
 }
 
-function HomePanelButton(props: { active: boolean; label: "Templates" | "History"; onClick: () => void }) {
-  const Icon = props.label === "Templates" ? FileText : History;
+function HomePanelButton(props: { active: boolean; kind: "templates" | "history"; onClick: () => void }) {
+  const { t } = useI18n();
+  const Icon = props.kind === "templates" ? FileText : History;
   return (
     <button
       className={`flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-semibold ${
@@ -273,7 +277,7 @@ function HomePanelButton(props: { active: boolean; label: "Templates" | "History
       onClick={props.onClick}
     >
       <Icon size={15} />
-      {props.label}
+      {props.kind === "templates" ? t("home.templates") : t("home.history")}
     </button>
   );
 }

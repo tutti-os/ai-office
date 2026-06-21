@@ -11,12 +11,14 @@
     "dev:slide": "pnpm --filter @ai-slide/app dev",
     "build": "pnpm -r --filter \"./packages/*\" --if-present build && pnpm --filter @ai-doc/app build && pnpm --filter @ai-slide/app build",
     "check": "pnpm -r --filter \"./packages/*\" --if-present check && pnpm --filter @ai-doc/app check && pnpm --filter @ai-slide/app check",
-    "package:nextop": "pnpm --filter @ai-doc/app package:nextop",
-    "package:doc-nextop": "pnpm --filter @ai-doc/app package:nextop",
-    "package:slide-nextop": "pnpm --filter @ai-slide/app package:nextop"
+    "check:i18n": "node scripts/check-doc-i18n.mjs",
+    "validate:tutti": "node scripts/validate-tutti-app-package.mjs build/tutti-app/package",
+    "package:tutti": "pnpm --filter @ai-doc/app package:tutti",
+    "package:doc-tutti": "pnpm --filter @ai-doc/app package:tutti",
+    "package:slide-tutti": "pnpm --filter @ai-slide/app package:tutti"
   },
   "devDependencies": {
-    "@ai-app/nextop-packager": "workspace:*",
+    "@ai-app/tutti-packager": "workspace:*",
     "@types/node": "^24.10.1",
     "esbuild": "^0.28.0",
     "typescript": "^5.9.3"

@@ -8,9 +8,9 @@ importers:
 
   .:
     devDependencies:
-      '@ai-app/nextop-packager':
+      '@ai-app/tutti-packager':
         specifier: workspace:*
-        version: link:packages/ai-app-nextop-packager
+        version: link:packages/ai-app-tutti-packager
       '@types/node':
         specifier: ^24.10.1
         version: 24.13.2
@@ -40,9 +40,9 @@ importers:
       '@fastify/websocket':
         specifier: ^11.2.0
         version: 11.2.0
-      '@nextop-os/agent-acp-kit':
-        specifier: 0.1.9
-        version: 0.1.9
+      '@tutti-os/agent-acp-kit':
+        specifier: ^0.1.16
+        version: 0.1.16
       fastify:
         specifier: ^5.6.2
         version: 5.8.5
@@ -135,9 +135,9 @@ importers:
       '@fastify/websocket':
         specifier: ^11.2.0
         version: 11.2.0
-      '@nextop-os/agent-acp-kit':
-        specifier: 0.1.9
-        version: 0.1.9
+      '@tutti-os/agent-acp-kit':
+        specifier: ^0.1.16
+        version: 0.1.16
       fastify:
         specifier: ^5.8.5
         version: 5.8.5
@@ -219,9 +219,9 @@ importers:
       '@ai-app/shared':
         specifier: workspace:*
         version: link:../ai-app-shared
-      '@nextop-os/agent-acp-kit':
-        specifier: 0.1.9
-        version: 0.1.9
+      '@tutti-os/agent-acp-kit':
+        specifier: ^0.1.16
+        version: 0.1.16
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.7)
@@ -239,8 +239,6 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/ai-app-nextop-packager: {}
-
   packages/ai-app-shared:
     devDependencies:
       '@types/node':
@@ -249,6 +247,8 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/ai-app-tutti-packager: {}
 
   packages/ai-app-ui:
     dependencies:
@@ -1097,9 +1097,6 @@ packages:
       '@cfworker/json-schema':
         optional: true
 
-  '@nextop-os/agent-acp-kit@0.1.9':
-    resolution: {integrity: sha512-FcU0CmZfrDzGhl/W84Sy2c1grt1Y7/JMqbHWF9iq5iqdwHOOLsR5V1pKKR5EaMfyVG5w9Kqjc3Uzz/dIpE1qtw==}
-
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
 
@@ -1697,6 +1694,9 @@ packages:
     resolution: {integrity: sha512-hItDHuIIlEV61R+faXu66s1K36aTurO/Qw0e45Vskz57gXl9pWOT6eg3zmcEui6CZXddbN7zd41bwmvag4JGwQ==}
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
+
+  '@tutti-os/agent-acp-kit@0.1.16':
+    resolution: {integrity: sha512-SDD7JM79j59X6KrDU4VO3Z6qRG7/19WQTuak+pEgJTfq3+tSK3WBzhiqCAsYRndMA/hAtLsAmnbi9cKUhEYSqQ==}
 
   '@tutti-os/office-export@file:../tsh-web/packages/office-export':
     resolution: {directory: ../tsh-web/packages/office-export, type: directory}
@@ -4103,14 +4103,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@nextop-os/agent-acp-kit@0.1.9':
-    dependencies:
-      '@anthropic-ai/claude-agent-sdk': 0.2.101(zod@4.4.3)
-      zod: 4.4.3
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - supports-color
-
   '@pinojs/redact@0.4.0': {}
 
   '@radix-ui/colors@3.0.0': {}
@@ -4623,6 +4615,14 @@ snapshots:
       '@tailwindcss/oxide': 4.3.1
       tailwindcss: 4.3.1
       vite: 7.3.5(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
+
+  '@tutti-os/agent-acp-kit@0.1.16':
+    dependencies:
+      '@anthropic-ai/claude-agent-sdk': 0.2.101(zod@4.4.3)
+      zod: 4.4.3
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - supports-color
 
   '@tutti-os/office-export@file:../tsh-web/packages/office-export': {}
 

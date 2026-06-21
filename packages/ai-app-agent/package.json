@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@ai-app/shared": "workspace:*",
-    "@nextop-os/agent-acp-kit": "0.1.9",
+    "@tutti-os/agent-acp-kit": "^0.1.16",
     "lucide-react": "^0.562.0",
     "react": "^19.2.3"
   },

@@ -1,0 +1,36 @@
+name: Check AI Doc Tutti App
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check shared packages and AI Doc
+        run: pnpm -r --filter "./packages/*" --if-present check && pnpm --filter @ai-doc/app check
+
+      - name: Check AI Doc i18n
+        run: pnpm check:i18n
+
+      - name: Package AI Doc Tutti app
+        run: pnpm package:doc-tutti
+
+      - name: Validate AI Doc Tutti package
+        run: pnpm validate:tutti

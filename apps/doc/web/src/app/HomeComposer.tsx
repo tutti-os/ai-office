@@ -15,6 +15,7 @@ import {
   Plus,
   X,
 } from "lucide-react";
+import { useI18n } from "../i18n";
 import type { HomeAttachment } from "./useHomeAttachments";
 
 export type OutputFormatOption = {
@@ -24,9 +25,9 @@ export type OutputFormatOption = {
 };
 
 export const outputFormatOptions: OutputFormatOption[] = [
-  { id: "html", label: "HTML", description: "Rich visual formatting" },
-  { id: "markdown", label: "Markdown", description: "Clean structured writing" },
-  { id: "docx", label: "Word", description: "Traditional Office format" },
+  { id: "html", label: "HTML", description: "composer.htmlDescription" },
+  { id: "markdown", label: "Markdown", description: "composer.markdownDescription" },
+  { id: "docx", label: "Word", description: "composer.wordDescription" },
 ];
 
 export function HomeComposer(props: {
@@ -48,6 +49,7 @@ export function HomeComposer(props: {
   onRemoveAttachment: (id: string) => void;
   onRuntimeProfileChange: (profileId: string) => void;
 }) {
+  const { t } = useI18n();
   const selectedProfile = props.runtimeProfiles.find((profile) => profile.id === props.selectedRuntimeProfileId) ?? props.runtimeProfiles[0] ?? null;
   const docxAvailable = props.officeCliStatus?.available === true;
   const selectedOutputAvailable = props.outputType !== "docx" || docxAvailable;
@@ -76,7 +78,7 @@ export function HomeComposer(props: {
               }`}
               role="button"
               tabIndex={disabled && !props.officeCliStatus?.canInstall ? -1 : 0}
-              title={disabled ? props.officeCliStatus?.reason ?? "OfficeCLI is required for Word documents" : undefined}
+              title={disabled ? props.officeCliStatus?.reason ?? t("composer.officeCliRequired") : undefined}
               onClick={() => {
                 if (!disabled) props.onOutputTypeChange(option.id);
               }}
@@ -99,7 +101,7 @@ export function HomeComposer(props: {
                           : "mt-1 truncate text-[12px] font-semibold text-white/42"
                     }
                   >
-                    {formatOutputDescription(option, props.officeCliStatus)}
+                    {formatOutputDescription(option, props.officeCliStatus, t)}
                   </div>
                 </div>
               </div>
@@ -112,8 +114,8 @@ export function HomeComposer(props: {
                   className="grid size-7 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/8 text-white/58 hover:bg-white/12 hover:text-white disabled:cursor-wait disabled:opacity-60"
                   type="button"
                   disabled={props.officeCliInstalling || props.loading || props.officeCliStatus.installing}
-                  title="Download OfficeCLI"
-                  aria-label="Download OfficeCLI"
+                  title={t("composer.downloadOfficeCli")}
+                  aria-label={t("composer.downloadOfficeCli")}
                   onClick={(event) => {
                     event.stopPropagation();
                     props.onInstallOfficeCli();
@@ -129,7 +131,7 @@ export function HomeComposer(props: {
 
       <PromptComposer
         canSubmit={canSubmit}
-        placeholder="Ask anything, create anything..."
+        placeholder={t("composer.placeholder")}
         value={props.prompt}
         beforeTextarea={props.attachments.length > 0 ? (
           <div className="mb-4 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -142,8 +144,8 @@ export function HomeComposer(props: {
           <>
             <label
               className="grid size-9 shrink-0 place-items-center rounded-full border border-white/10 bg-white text-black hover:bg-white/90"
-              title="Add to context"
-              aria-label="Add to context"
+              title={t("composer.addContext")}
+              aria-label={t("composer.addContext")}
             >
               <Plus size={21} />
               <input className="sr-only" type="file" multiple onChange={handleFileInput} />
@@ -161,7 +163,7 @@ export function HomeComposer(props: {
               className="grid size-10 place-items-center rounded-full bg-white text-black disabled:bg-white/16 disabled:text-white/36"
               type="button"
               disabled={!canSubmit}
-              title="Create from prompt"
+              title={t("composer.createFromPrompt")}
               onClick={props.onCreateFromPrompt}
             >
               {props.loading ? <Loader2 className="animate-spin" size={18} /> : <CornerDownLeft size={20} />}
@@ -269,11 +271,12 @@ function FormatIcon(props: { option: OutputFormatOption; active?: boolean; class
   );
 }
 
-function formatOutputDescription(option: OutputFormatOption, officeCliStatus: OfficeCliStatus | null) {
-  if (option.id !== "docx") return option.description;
-  if (!officeCliStatus) return "Checking OfficeCLI";
-  if (officeCliStatus.installing) return "Installing OfficeCLI";
-  return option.description;
+function formatOutputDescription(option: OutputFormatOption, officeCliStatus: OfficeCliStatus | null, t: ReturnType<typeof useI18n>["t"]) {
+  if (option.id !== "docx") return t(option.description as Parameters<typeof t>[0]);
+  if (!officeCliStatus) return t("composer.checkingOfficeCli");
+  if (officeCliStatus.installing) return t("composer.installingOfficeCli");
+  if (!officeCliStatus.available && officeCliStatus.reason) return officeCliStatus.reason;
+  return t(option.description as Parameters<typeof t>[0]);
 }
 
 function AttachmentPreview(props: { attachment: HomeAttachment; onRemove: (id: string) => void }) {
