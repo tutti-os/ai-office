@@ -90,19 +90,19 @@ export type ToolbarGroupSpec = {
 };
 
 const toolbarBase =
-  "mx-auto mb-4 w-[min(100%,var(--ai-toolbar-max-width))] rounded-lg border border-black/[0.04] bg-white px-3 py-2 text-[#202124] shadow-[0_10px_28px_rgba(0,0,0,0.12)]";
+  "mx-auto mb-4 w-[min(100%,var(--ai-toolbar-max-width))] rounded-[16px] border border-[#B8A07C]/45 bg-[#F4EFE6]/92 px-3 py-2 text-[#2A2620] shadow-[0_12px_10px_rgba(0,0,0,0.08)] backdrop-blur";
 const toolbarRow = "flex min-w-0 items-center gap-1.5";
 const toolbarIconButton =
-  "inline-grid size-7 shrink-0 place-items-center rounded-md border-0 bg-transparent text-[#242424] outline-none transition hover:not-disabled:bg-black/[0.07] hover:not-disabled:text-black disabled:cursor-default disabled:text-black/20 disabled:opacity-45 [&_svg]:size-[18px]";
+  "inline-grid size-7 shrink-0 place-items-center rounded-[10px] border-0 bg-transparent text-[#2A2620]/72 outline-none transition hover:not-disabled:bg-[#E6DDCD]/70 hover:not-disabled:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275] disabled:opacity-45 [&_svg]:size-[18px]";
 const toolbarTooltip =
-  "relative before:pointer-events-none before:absolute before:left-1/2 before:top-full before:z-50 before:mt-2 before:-translate-x-1/2 before:whitespace-nowrap before:rounded-md before:bg-[#111827] before:px-2 before:py-1 before:text-[10px] before:font-bold before:leading-none before:text-white before:opacity-0 before:shadow-[0_10px_24px_rgba(0,0,0,0.22)] before:transition-opacity before:duration-150 before:content-[attr(data-tip)] after:pointer-events-none after:absolute after:left-1/2 after:top-full after:z-50 after:mt-0.5 after:-translate-x-1/2 after:border-x-[5px] after:border-b-[5px] after:border-x-transparent after:border-b-[#111827] after:opacity-0 after:transition-opacity after:duration-150 hover:before:opacity-100 hover:after:opacity-100 focus-visible:before:opacity-100 focus-visible:after:opacity-100";
+  "relative before:pointer-events-none before:absolute before:left-1/2 before:top-full before:z-50 before:mt-2 before:-translate-x-1/2 before:whitespace-nowrap before:rounded-[10px] before:bg-[#2A2620] before:px-2 before:py-1 before:text-[10px] before:font-bold before:leading-none before:text-[#F4EFE6] before:opacity-0 before:shadow-[0_10px_24px_rgba(0,0,0,0.18)] before:transition-opacity before:duration-150 before:content-[attr(data-tip)] after:pointer-events-none after:absolute after:left-1/2 after:top-full after:z-50 after:mt-0.5 after:-translate-x-1/2 after:border-x-[5px] after:border-b-[5px] after:border-x-transparent after:border-b-[#2A2620] after:opacity-0 after:transition-opacity after:duration-150 hover:before:opacity-100 hover:after:opacity-100 focus-visible:before:opacity-100 focus-visible:after:opacity-100";
 const toolbarInputShell =
-  "inline-flex h-7 shrink-0 items-center rounded-lg border border-black/12 bg-white shadow-[0_1px_1px_rgba(0,0,0,0.02)]";
-const toolbarInputText = "h-[26px] w-full appearance-none border-0 bg-transparent text-[12px] font-semibold leading-none text-[#252525] outline-none disabled:cursor-default disabled:text-black/20 disabled:opacity-45";
+  "inline-flex h-7 shrink-0 items-center rounded-[10px] border border-[#B8A07C]/50 bg-[#F4EFE6] shadow-[0_1px_1px_rgba(0,0,0,0.02)]";
+const toolbarInputText = "h-[26px] w-full appearance-none border-0 bg-transparent text-[12px] font-semibold leading-none text-[#2A2620] outline-none disabled:cursor-default disabled:text-[#8B8275] disabled:opacity-45";
 const toolbarFloatingMenu =
-  "fixed z-50 max-h-80 w-56 overflow-y-auto rounded-xl border border-black/10 bg-white py-1.5 text-[#242424] shadow-[0_18px_42px_rgba(0,0,0,0.18)]";
+  "fixed z-50 max-h-80 w-56 overflow-y-auto rounded-[16px] border border-[#B8A07C]/55 bg-[#F4EFE6] py-1.5 text-[#2A2620] shadow-[0_18px_42px_rgba(0,0,0,0.16)]";
 const toolbarFloatingMenuButton =
-  "flex h-7 w-full items-center justify-between border-0 bg-transparent px-2.5 text-left text-[10px] font-semibold text-inherit hover:not-disabled:bg-black/5 disabled:text-black/28";
+  "flex h-7 w-full items-center justify-between border-0 bg-transparent px-2.5 text-left text-[10px] font-semibold text-inherit hover:not-disabled:bg-[#E6DDCD]/55 disabled:text-[#8B8275]/50";
 const ToolbarWrapContext = createContext(false);
 
 function cx(...classes: Array<string | false | null | undefined>) {
@@ -227,7 +227,7 @@ export function ToolbarGroup(props: { children: ReactNode; className?: string })
 }
 
 export function ToolbarDivider() {
-  return <span className="mx-1.5 block h-6 w-px shrink-0 bg-black/10" />;
+  return <span className="mx-1.5 block h-6 w-px shrink-0 bg-[#B8A07C]/45" />;
 }
 
 export function ToolbarSpacer() {
@@ -247,7 +247,7 @@ export function ToolbarIconButton(props: {
   return (
     <button
       aria-label={props.title}
-      className={cx(toolbarIconButton, toolbarTooltip, props.active && !props.disabled ? "!bg-black/[0.07] !text-black" : "", props.className)}
+      className={cx(toolbarIconButton, toolbarTooltip, props.active && !props.disabled ? "!bg-[#5C6B50] !text-[#F4EFE6]" : "", props.className)}
       data-testid={props.dataTestId}
       data-tip={props.tip ?? toolbarTip(props.title)}
       type="button"
@@ -312,7 +312,7 @@ export function ToolbarSelect(props: {
       >
         {props.children}
       </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[#343434]" size={13} />
+      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8B8275]" size={13} />
     </label>
   );
 }
@@ -326,7 +326,7 @@ export function ToolbarNumberInput(props: {
   return (
     <input
       aria-label={props.title}
-      className={cx(toolbarInputText, "h-7 !w-10 shrink-0 rounded-lg border border-black/12 bg-white text-center")}
+      className={cx(toolbarInputText, "h-7 !w-10 shrink-0 rounded-[10px] border border-[#B8A07C]/50 bg-[#F4EFE6] text-center")}
       disabled={props.disabled}
       inputMode="numeric"
       title={props.title}
@@ -360,7 +360,7 @@ export function FontSizeControl(props: { value: string; disabled?: boolean; onCh
     <div className={cx(toolbarInputShell, "w-[76px] justify-between px-0.5")} title="Font size">
       <button
         aria-label="Decrease font size"
-        className={cx(toolbarTooltip, "grid size-6 place-items-center rounded-md border-0 bg-transparent text-[#444] hover:not-disabled:bg-black/[0.06] disabled:cursor-default disabled:text-black/20 disabled:opacity-45")}
+        className={cx(toolbarTooltip, "grid size-6 place-items-center rounded-[10px] border-0 bg-transparent text-[#2A2620]/72 hover:not-disabled:bg-[#E6DDCD]/70 hover:not-disabled:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275] disabled:opacity-45")}
         data-tip={toolbarTip("Decrease font size")}
         disabled={props.disabled}
         type="button"
@@ -404,7 +404,7 @@ export function FontSizeControl(props: { value: string; disabled?: boolean; onCh
       />
       <button
         aria-label="Increase font size"
-        className={cx(toolbarTooltip, "grid size-6 place-items-center rounded-md border-0 bg-transparent text-[#444] hover:not-disabled:bg-black/[0.06] disabled:cursor-default disabled:text-black/20 disabled:opacity-45")}
+        className={cx(toolbarTooltip, "grid size-6 place-items-center rounded-[10px] border-0 bg-transparent text-[#2A2620]/72 hover:not-disabled:bg-[#E6DDCD]/70 hover:not-disabled:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275] disabled:opacity-45")}
         data-tip={toolbarTip("Increase font size")}
         disabled={props.disabled}
         type="button"
@@ -429,13 +429,13 @@ export function ToolbarColorInput(props: {
     <label
       className={cx(
         toolbarTooltip,
-        "inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1.5 text-[#242424] transition hover:bg-black/[0.07] has-[input:disabled]:cursor-default has-[input:disabled]:text-black/20 has-[input:disabled]:opacity-45",
+        "inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-[10px] border-0 bg-transparent px-1.5 text-[#2A2620]/72 transition hover:bg-[#E6DDCD]/70 hover:text-[#5C6B50] has-[input:disabled]:cursor-default has-[input:disabled]:text-[#8B8275] has-[input:disabled]:opacity-45",
       )}
       data-tip={toolbarTip(props.title)}
       title={props.title}
     >
       {props.icon ?? <span className="grid h-[18px] w-4 place-items-center border-b-2 border-current text-[13px] font-extrabold leading-none">A</span>}
-      <span className="block size-3.5 rounded-[3px] border border-black/18" style={{ backgroundColor: props.color }} />
+      <span className="block size-3.5 rounded-[3px] border border-[#B8A07C]/60" style={{ backgroundColor: props.color }} />
       <input
         aria-label={props.title}
         className="absolute inset-0 size-full cursor-pointer opacity-0 disabled:cursor-default"
@@ -456,7 +456,7 @@ export function ToolbarStatus(props: { label: string; state?: "neutral" | "savin
         ? "bg-red-600/10 text-[#b42318]"
         : props.state === "success"
           ? "bg-green-600/10 text-[#15803d]"
-          : "bg-black/[0.04] text-black/52";
+          : "bg-[#F4EFE6]/70 text-[#8B8275]";
   return <div className={cx("inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-[10px] font-bold", tone)}>{props.label}</div>;
 }
 

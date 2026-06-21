@@ -131,7 +131,10 @@ server.get<{ Params: { projectId: string } }>("/api/projects/:projectId/files/do
 server.post<{ Params: { projectId: string }; Body: Buffer }>("/api/projects/:projectId/assets", async (request, reply) => {
   try {
     const fileNameHeader = request.headers["x-file-name"];
-    const contentType = request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() ?? "application/octet-stream";
+    const mimeTypeHeader = request.headers["x-file-mime-type"];
+    const contentType = typeof mimeTypeHeader === "string"
+      ? decodeURIComponent(mimeTypeHeader).split(";")[0]?.trim().toLowerCase() || "application/octet-stream"
+      : request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() ?? "application/octet-stream";
     const asset = await documents.uploadProjectAsset(request.params.projectId, {
       fileName: typeof fileNameHeader === "string" ? decodeURIComponent(fileNameHeader) : "image",
       mimeType: contentType,

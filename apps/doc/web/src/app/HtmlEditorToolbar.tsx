@@ -35,7 +35,7 @@ export function HtmlEditorToolbar(input: {
   const layoutMenuOpen = input.layoutMenuOpen;
   return (
   <Toolbar
-    className="relative -translate-y-1.5 overflow-visible !shadow-[0_16px_44px_rgba(0,0,0,0.24)]"
+    className="relative -translate-y-1.5 overflow-visible !shadow-[0_12px_10px_rgba(0,0,0,0.08)]"
     display={{ maxWidth: 1500, width: "content" }}
     onMouseDownCapture={(event) => {
       if (!shouldSkipToolbarSelectionPreserve(event.target)) props.onToolbarInteractionStart();
@@ -173,13 +173,13 @@ export function HtmlEditorToolbar(input: {
     {props.operationPanelMode ? (
       <form
         data-toolbar-skip-selection-preserve="true"
-        className="absolute left-3 right-3 top-full z-30 mt-2 flex min-h-9 w-fit max-w-[calc(100%-1.5rem)] shrink-0 items-center gap-1.5 overflow-x-auto rounded-lg border border-black/10 bg-white px-2.5 py-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.14)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="absolute left-3 right-3 top-full z-30 mt-2 flex min-h-9 w-fit max-w-[calc(100%-1.5rem)] shrink-0 items-center gap-1.5 overflow-x-auto rounded-[16px] border border-[#B8A07C]/55 bg-[#F4EFE6] px-2.5 py-1.5 shadow-[0_18px_46px_rgba(0,0,0,0.16)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         onSubmit={(event) => {
           event.preventDefault();
           props.onApplyOperation();
         }}
       >
-        <span className="shrink-0 px-1 text-[11px] font-bold text-[#555]">{operationPanelTitle[props.operationPanelMode]}</span>
+        <span className="shrink-0 px-1 text-[11px] font-bold text-[#8B8275]">{operationPanelTitle[props.operationPanelMode]}</span>
         {props.operationPanelMode === "insertAtPosition" || props.operationPanelMode === "replaceSelection" ? (
           <>
             {props.operationPanelMode === "insertAtPosition" ? (
@@ -459,11 +459,11 @@ export function HtmlEditorToolbar(input: {
             onMouseDown={(event) => event.stopPropagation()}
           />
         )}
-        <button className="h-8 rounded-lg bg-black px-3 text-[11px] font-semibold text-white" type="submit">
+        <button className="h-8 rounded-[10px] bg-[#2A2620] px-3 text-[11px] font-semibold text-[#F4EFE6]" type="submit">
           Apply
         </button>
         <button
-          className="h-8 rounded-lg px-3 text-[11px] font-semibold text-[#555] hover:bg-black/5"
+          className="h-8 rounded-[10px] px-3 text-[11px] font-semibold text-[#8B8275] hover:bg-[#E6DDCD]/55 hover:text-[#5C6B50]"
           type="button"
           onClick={props.onCloseOperation}
         >

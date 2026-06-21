@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, extname, join } from "node:path";
@@ -150,6 +150,7 @@ export class DocumentRepository {
     mkdirSync(assetsDir, { recursive: true });
     const fileName = uniqueAssetFileName(assetsDir, input.fileName, input.mimeType);
     writeFileSync(join(assetsDir, fileName), input.bytes);
+    this.writeProjectAgentInstructions(project);
     return {
       path: `./assets/${fileName}`,
       fileName,
@@ -317,6 +318,7 @@ function htmlProjectAgentInstructions(project: DocumentProject) {
     "You are editing a rich HTML doc with the local AI Doc app.",
     `Current focused file: ${targetHtmlPath}`,
     "Read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
+    projectAssetInstructions(project.id),
   ].join("\n");
 }
 
@@ -329,6 +331,7 @@ function markdownProjectAgentInstructions(project: DocumentProject) {
     `Current focused file: ${targetMarkdownPath}`,
     `Place local image assets under ${join(projectWorkspaceRoot(project.id), "assets")} and reference them from Markdown as ./assets/<file-name>.`,
     "Read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
+    projectAssetInstructions(project.id),
   ].join("\n");
 }
 
@@ -341,6 +344,18 @@ function docxProjectAgentInstructions(project: DocumentProject) {
     `Current focused file: ${targetDocxPath}`,
     "When you create or edit the Word doc, write the final result to the focused file with filesystem tools.",
     "The app watches that file and refreshes the preview when its content changes.",
+    projectAssetInstructions(project.id),
+  ].join("\n");
+}
+
+function projectAssetInstructions(projectId: string) {
+  const assets = listProjectAssets(projectId);
+  if (assets.length === 0) return "";
+  return [
+    "",
+    "Project context attachments:",
+    ...assets.map((asset) => `- ${asset.fileName} (${asset.mimeType}, ${asset.sizeBytes} bytes): ${asset.path}`),
+    "Use these files as source context when they are relevant to the user's request.",
   ].join("\n");
 }
 
@@ -397,12 +412,12 @@ function uniqueExportFileName(exportsDir: string, requestedName: string, mimeTyp
 }
 
 function safeAssetFileName(fileName: string, mimeType: string) {
-  const rawBase = basename(fileName || "image");
-  const extension = normalizedImageExtension(rawBase, mimeType);
+  const rawBase = basename(fileName || "asset");
+  const extension = normalizedAssetExtension(rawBase, mimeType);
   const stem = basename(rawBase, extname(rawBase))
     .replace(/[^\w.-]+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "image";
+    .slice(0, 80) || "asset";
   return `${stem}${extension}`;
 }
 
@@ -416,15 +431,51 @@ function safeExportFileName(fileName: string, mimeType: string) {
   return `${stem}${extension}`;
 }
 
-function normalizedImageExtension(fileName: string, mimeType: string) {
+function normalizedAssetExtension(fileName: string, mimeType: string) {
   const extension = extname(fileName).toLowerCase();
-  if ([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"].includes(extension)) return extension;
+  if ([
+    ".csv",
+    ".doc",
+    ".docx",
+    ".gif",
+    ".htm",
+    ".html",
+    ".jpeg",
+    ".jpg",
+    ".json",
+    ".md",
+    ".markdown",
+    ".odt",
+    ".pdf",
+    ".png",
+    ".ppt",
+    ".pptx",
+    ".rtf",
+    ".svg",
+    ".txt",
+    ".webp",
+    ".xls",
+    ".xlsx",
+  ].includes(extension)) return extension;
   if (mimeType === "image/png") return ".png";
   if (mimeType === "image/jpeg") return ".jpg";
   if (mimeType === "image/gif") return ".gif";
   if (mimeType === "image/webp") return ".webp";
   if (mimeType === "image/svg+xml") return ".svg";
-  return ".png";
+  if (mimeType === "application/pdf") return ".pdf";
+  if (mimeType === "text/plain") return ".txt";
+  if (mimeType === "text/markdown") return ".md";
+  if (mimeType === "text/csv") return ".csv";
+  if (mimeType === "text/html") return ".html";
+  if (mimeType === "application/json") return ".json";
+  if (mimeType === "application/rtf") return ".rtf";
+  if (mimeType === "application/msword") return ".doc";
+  if (mimeType === "application/vnd.ms-excel") return ".xls";
+  if (mimeType === "application/vnd.ms-powerpoint") return ".ppt";
+  if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return ".docx";
+  if (mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation") return ".pptx";
+  if (mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") return ".xlsx";
+  return ".bin";
 }
 
 function normalizedExportExtension(fileName: string, mimeType: string) {
@@ -442,10 +493,39 @@ function normalizedExportExtension(fileName: string, mimeType: string) {
 function mimeTypeForAssetFileName(fileName: string) {
   const extension = extname(fileName).toLowerCase();
   if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  if (extension === ".png") return "image/png";
   if (extension === ".gif") return "image/gif";
   if (extension === ".webp") return "image/webp";
   if (extension === ".svg") return "image/svg+xml";
-  return "image/png";
+  if (extension === ".pdf") return "application/pdf";
+  if (extension === ".md" || extension === ".markdown") return "text/markdown";
+  if (extension === ".csv") return "text/csv";
+  if (extension === ".html" || extension === ".htm") return "text/html";
+  if (extension === ".json") return "application/json";
+  if (extension === ".rtf") return "application/rtf";
+  if (extension === ".doc") return "application/msword";
+  if (extension === ".docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (extension === ".xls") return "application/vnd.ms-excel";
+  if (extension === ".xlsx") return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (extension === ".ppt") return "application/vnd.ms-powerpoint";
+  if (extension === ".pptx") return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+  return "text/plain";
+}
+
+function listProjectAssets(projectId: string) {
+  const assetsDir = join(projectWorkspaceRoot(projectId), "assets");
+  if (!existsSync(assetsDir)) return [];
+  return readdirSync(assetsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => {
+      const absolutePath = join(assetsDir, entry.name);
+      return {
+        fileName: entry.name,
+        path: absolutePath,
+        mimeType: mimeTypeForAssetFileName(entry.name),
+        sizeBytes: statSync(absolutePath).size,
+      };
+    });
 }
 
 function rows<TRow>(value: unknown): TRow[] {

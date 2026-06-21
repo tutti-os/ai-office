@@ -1,6 +1,6 @@
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { join } from "node:path";
+import { extname, join } from "node:path";
 import {
   createEmptyDocxDocumentManifest,
   defaultHtmlDocument,
@@ -166,8 +166,7 @@ export class DocumentService {
   async uploadProjectAsset(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }): Promise<ProjectAssetUploadResponse> {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
-    if (project.type !== "html" && project.type !== "markdown") throw new Error("Assets are currently supported for HTML and Markdown docs only");
-    if (!isSupportedImageMimeType(input.mimeType)) throw new Error("Only image assets are supported");
+    if (!isSupportedProjectAsset(input.fileName, input.mimeType)) throw new Error("Only image, PDF, text, and Office document assets are supported");
     if (input.bytes.byteLength === 0) throw new Error("Asset file is empty");
     if (input.bytes.byteLength > maxProjectAssetBytes) throw new Error("Asset file is too large");
     return this.repo.writeProjectAsset(projectId, input);
@@ -470,10 +469,53 @@ function defaultProjectContent(type: DocumentProject["type"], template: Document
 const docxFileName = "document.docx";
 const docxMimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const pdfMimeType = "application/pdf";
-const maxProjectAssetBytes = 20 * 1024 * 1024;
+const maxProjectAssetBytes = 30 * 1024 * 1024;
 const maxProjectExportBytes = 20 * 1024 * 1024;
 const maxProjectImportBytes = 30 * 1024 * 1024;
-const supportedImageMimeTypes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"]);
+const supportedProjectAssetMimeTypes = new Set([
+  "application/json",
+  "application/msword",
+  "application/pdf",
+  "application/rtf",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/svg+xml",
+  "image/webp",
+  "text/csv",
+  "text/html",
+  "text/markdown",
+  "text/plain",
+]);
+const supportedProjectAssetExtensions = new Set([
+  ".csv",
+  ".doc",
+  ".docx",
+  ".gif",
+  ".htm",
+  ".html",
+  ".jpeg",
+  ".jpg",
+  ".json",
+  ".md",
+  ".markdown",
+  ".odt",
+  ".pdf",
+  ".png",
+  ".ppt",
+  ".pptx",
+  ".rtf",
+  ".svg",
+  ".txt",
+  ".webp",
+  ".xls",
+  ".xlsx",
+]);
 const supportedExportMimeTypes = new Set(["text/html", "text/markdown", docxMimeType, pdfMimeType]);
 
 function docxFilePath(projectId: string) {
@@ -494,8 +536,10 @@ function importedProjectTitle(fileName: string) {
   return decodedName.replace(/\.(html?|markdown|md|docx)$/i, "").trim() || decodedName;
 }
 
-function isSupportedImageMimeType(mimeType: string) {
-  return supportedImageMimeTypes.has(mimeType.toLowerCase());
+function isSupportedProjectAsset(fileName: string, mimeType: string) {
+  const normalizedMimeType = mimeType.toLowerCase();
+  if (supportedProjectAssetMimeTypes.has(normalizedMimeType)) return true;
+  return supportedProjectAssetExtensions.has(extname(fileName).toLowerCase());
 }
 
 function isSupportedExportMimeType(mimeType: string) {

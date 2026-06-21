@@ -47,7 +47,7 @@ export function MarkdownDocumentScreen(props: SharedShellProps & {
   onUndo: () => void;
 }) {
   return (
-    <ArtifactEditorFrame sidebar={<DocumentAgentSidebar artifactLabel="markdown" {...props} />}>
+    <ArtifactEditorFrame className="bg-[#E6DDCD] text-[#2A2620]" sidebar={<DocumentAgentSidebar artifactLabel="markdown" {...props} />}>
       <MarkdownEditor
         runtime={props.runtime}
         projectId={props.projectId}
@@ -65,6 +65,7 @@ export function MarkdownDocumentScreen(props: SharedShellProps & {
         onExportPdf={props.onExportPdf}
         onDismissExportNotice={props.onDismissExportNotice}
         onOpenExportLocation={props.onOpenExportLocation}
+        onBackHome={props.onBackHome}
         pdfExportAvailable={props.pdfExportAvailable}
         pdfExporting={props.pdfExporting}
         onPendingTableCellEditChange={props.onPendingTableCellEditChange}
@@ -86,7 +87,7 @@ export function DocxDocumentScreen(props: SharedShellProps & {
   onSelectionChange: (selection: DocxSelection) => void;
 }) {
   return (
-    <ArtifactEditorFrame sidebar={<DocumentAgentSidebar artifactLabel="docx" {...props} />}>
+    <ArtifactEditorFrame className="bg-[#E6DDCD] text-[#2A2620]" sidebar={<DocumentAgentSidebar artifactLabel="docx" {...props} />}>
       <DocxPreview
         runtime={props.runtime}
         projectId={props.projectId}
@@ -100,6 +101,7 @@ export function DocxDocumentScreen(props: SharedShellProps & {
         onDismissExportNotice={props.onDismissExportNotice}
         onExportPdf={props.onExportPdf}
         onOpenExportLocation={props.onOpenExportLocation}
+        onBackHome={props.onBackHome}
         onSelectionChange={props.onSelectionChange}
       />
     </ArtifactEditorFrame>

@@ -1,4 +1,5 @@
-import { resolve } from "node:path";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { LocalAgentRuntimeProvider as SharedLocalAgentRuntimeProvider } from "@ai-app/agent/local-agent-runtime";
 import type { AiEditRequest, DocumentProject, DocumentRun } from "@ai-doc/shared";
 import { projectWorkspaceRoot } from "../local/paths.js";
@@ -7,6 +8,8 @@ import type { RuntimeEditContext } from "./runtime-provider.js";
 
 const noBrowserRenderVerification =
   "Do not proactively use browser, Playwright, Chrome, or JavaScript rendering tools for visual verification unless the user explicitly asks for browser-based validation.";
+
+const defaultLocalAgentTimeoutMs = 30 * 60_000;
 
 export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<DocumentRun, DocumentProject, AiEditRequest> {
   constructor() {
@@ -20,7 +23,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<D
         AI_DOC_PROJECT_ID: context.project.id,
         AI_DOC_RUN_ID: context.run.id,
       }),
-      timeoutMs: () => Number(process.env.AI_DOC_LOCAL_AGENT_TIMEOUT_MS ?? 180_000),
+      timeoutMs: () => Number(process.env.AI_DOC_LOCAL_AGENT_TIMEOUT_MS ?? defaultLocalAgentTimeoutMs),
       sessionDirName: ".ai-doc",
     });
   }
@@ -38,6 +41,7 @@ function buildSystemPrompt(context: RuntimeEditContext) {
       "Prefer officecli L1/L2 operations such as view, get, query, add, set, remove, and validate. Do not hand-edit OOXML unless officecli high-level commands cannot solve the task.",
       "When asked to create or edit the doc, write the final DOCX result to the focused file.",
       "Do not convert the doc to HTML or Markdown unless the user explicitly asks for that as a separate export.",
+      projectAssetPrompt(workspaceRoot),
       noBrowserRenderVerification,
       "After editing files, respond with a brief task summary only. Do not include extracted DOCX content in the final response.",
     ].join("\n\n");
@@ -53,6 +57,7 @@ function buildSystemPrompt(context: RuntimeEditContext) {
       "Preserve the existing document style and structure unless the user asks for a rewrite. For edits, make the smallest coherent change that satisfies the user. For new content, create a clear outline before expanding it.",
       "Use headings, short paragraphs, lists, tables, blockquotes, and fenced code blocks only when they improve understanding. Avoid malformed tables, broken nested lists, inconsistent heading levels, and unclosed code fences.",
       "Prefer native Markdown over inline HTML. Do not use Markdown as a fake web layout language.",
+      projectAssetPrompt(workspaceRoot),
       noBrowserRenderVerification,
       "After editing files, respond with a brief task summary only. Do not include the full Markdown content in the final response.",
     ].join("\n\n");
@@ -67,6 +72,7 @@ function buildSystemPrompt(context: RuntimeEditContext) {
     "Preserve the existing editor runtime, CSS, layout conventions, and semantic structure unless the user explicitly asks for a redesign.",
     "Optimize for human review: clear visual hierarchy, readable spacing, navigable structure, and concise sections. Prefer an artifact the user will actually read over a long plain-text dump.",
     "Keep the file complete, valid, self-contained, and previewable in a browser/editor iframe. Do not convert the doc to Markdown.",
+    projectAssetPrompt(workspaceRoot),
     noBrowserRenderVerification,
     "After editing files, respond with a brief task summary only. Do not include the HTML content in the final response.",
   ].join("\n\n");
@@ -89,4 +95,21 @@ function promptBlock(name: string, value: string) {
   return `<${name}>
 ${value}
 </${name}>`;
+}
+
+function projectAssetPrompt(workspaceRoot: string) {
+  const assetsDir = resolve(workspaceRoot, "assets");
+  if (!existsSync(assetsDir)) return "No project context attachments are currently uploaded.";
+  const assets = readdirSync(assetsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => {
+      const path = join(assetsDir, entry.name);
+      return `- ${entry.name} (${statSync(path).size} bytes): ${path}`;
+    });
+  if (assets.length === 0) return "No project context attachments are currently uploaded.";
+  return [
+    "Project context attachments are available in the workspace:",
+    ...assets,
+    "Use these files as source material when relevant. For PDFs, inspect or extract their text before claiming you cannot see their content.",
+  ].join("\n");
 }

@@ -22,12 +22,12 @@ type LinkEditorPosition = {
 
 export function DocumentLoadingScreen(props: { error: string; loading: boolean }) {
   return (
-    <section className="relative flex h-full min-h-0 flex-col bg-[#1f1f1f]">
-      <header className="flex h-12 shrink-0 items-center border-b border-white/8 px-5">
-        <div className="min-w-0 truncate text-[13px] font-semibold text-white">Loading doc</div>
+    <section className="relative flex h-full min-h-0 flex-col bg-[#E6DDCD] text-[#2A2620]">
+      <header className="flex h-12 shrink-0 items-center border-b border-[#B8A07C]/45 px-5">
+        <div className="min-w-0 truncate text-[13px] font-semibold text-[#2A2620]">Loading doc</div>
       </header>
-      <div className="grid min-h-0 flex-1 place-items-center bg-[#2a2a2a] px-6 text-center">
-        <div className="max-w-[360px] text-[13px] font-semibold text-white/58">
+      <div className="grid min-h-0 flex-1 place-items-center bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-6 text-center">
+        <div className="max-w-[360px] text-[13px] font-semibold text-[#8B8275]">
           {props.error ? (
             props.error
           ) : (
@@ -290,7 +290,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
           <form
             ref={linkEditorPanelRef}
             data-toolbar-skip-selection-preserve="true"
-            className="fixed z-50 grid w-[300px] max-w-[calc(100vw-16px)] gap-1.5 rounded-lg border border-black/10 bg-white p-2 shadow-[0_12px_28px_rgba(0,0,0,0.14)]"
+            className="fixed z-50 grid w-[300px] max-w-[calc(100vw-16px)] gap-1.5 rounded-[16px] border border-[#B8A07C]/55 bg-[#F4EFE6] p-2 shadow-[0_18px_46px_rgba(0,0,0,0.16)]"
             style={linkEditorStyle}
             onSubmit={(event) => {
               event.preventDefault();
@@ -298,7 +298,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
             }}
           >
             <input
-              className="h-7 w-full rounded-md border border-black/10 bg-white px-2 text-[11px] font-medium text-[#333] outline-none"
+              className="h-7 w-full rounded-[10px] border border-[#B8A07C]/50 bg-[#E6DDCD]/55 px-2 text-[11px] font-medium text-[#2A2620] outline-none placeholder:text-[#8B8275]"
               value={props.linkDraft.text}
               onChange={(event) => props.onLinkDraftChange({ ...props.linkDraft, text: event.currentTarget.value })}
               onMouseDown={(event) => event.stopPropagation()}
@@ -307,19 +307,19 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
             />
             <div className="flex min-w-0 items-center gap-1">
               <input
-                className="h-7 min-w-0 flex-1 rounded-md border border-black/10 bg-white px-2 text-[11px] font-medium text-[#333] outline-none"
+                className="h-7 min-w-0 flex-1 rounded-[10px] border border-[#B8A07C]/50 bg-[#E6DDCD]/55 px-2 text-[11px] font-medium text-[#2A2620] outline-none placeholder:text-[#8B8275]"
                 value={props.linkDraft.href}
                 onChange={(event) => props.onLinkDraftChange({ ...props.linkDraft, href: event.currentTarget.value })}
                 onMouseDown={(event) => event.stopPropagation()}
                 placeholder="https://"
                 aria-label="Link URL"
               />
-              <button className="h-7 rounded-md bg-black px-2.5 text-[10px] font-semibold text-white" type="submit">
+              <button className="h-7 rounded-[10px] bg-[#2A2620] px-2.5 text-[10px] font-semibold text-[#F4EFE6]" type="submit">
                 Apply
               </button>
               {props.toolbarState.link ? (
                 <button
-                  className="h-7 rounded-md border border-black/10 bg-white px-2.5 text-[10px] font-semibold text-[#333]"
+                  className="h-7 rounded-[10px] border border-[#B8A07C]/50 bg-[#F4EFE6] px-2.5 text-[10px] font-semibold text-[#2A2620]"
                   type="button"
                   onClick={props.onRemoveLink}
                   onMouseDown={(event) => event.stopPropagation()}
@@ -336,6 +336,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
   return (
     <>
     <ArtifactEditorFrame
+      className="bg-[#E6DDCD] text-[#2A2620]"
       sidebar={
         <AgentConversationPanel
           activeSelectionText={props.activeSelectionText}
@@ -355,11 +356,13 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
         />
       }
     >
-      <section className="relative flex h-full min-h-0 flex-col bg-[#1f1f1f]">
+      <section className="relative flex h-full min-h-0 flex-col bg-[#E6DDCD]">
         <ArtifactWorkspaceHeader
+          tone="lumen"
           title={props.runtime?.title ?? "Untitled Doc"}
           saveState={props.saveState}
           agentWorking={props.agentProcessing}
+          onBackHome={props.onBackHome}
           exportItems={[
             {
               label: "DOCX (coming soon)",
@@ -376,7 +379,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
         <ArtifactExportToast message={props.exportNotice} onClose={props.onDismissExportNotice} onOpenLocation={props.onOpenExportLocation} />
 
         <div className="relative min-h-0 flex-1">
-          <div ref={frameScrollContainerRef} className="h-full overflow-x-hidden overflow-y-auto bg-[#2a2a2a] px-3 py-5 md:px-6 md:py-7">
+          <div ref={frameScrollContainerRef} className="h-full overflow-x-hidden overflow-y-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-3 py-5 md:px-6 md:py-7">
             <HtmlEditorToolbar
               canCreateLink={canCreateLink}
               canRedo={canRedo}
@@ -394,7 +397,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
               <iframe
                 key={props.frameRevision}
                 ref={props.iframeRef}
-                className="mx-auto block min-h-[860px] w-full max-w-[980px] overflow-clip rounded-[2px] border border-black/30 bg-white shadow-[0_30px_90px_rgba(0,0,0,0.55)]"
+                className="mx-auto block min-h-[860px] w-full max-w-[980px] overflow-clip rounded-[2px] border border-[#B8A07C]/55 bg-white shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)]"
                 style={{ height: frameHeight }}
                 title={props.runtime?.title ?? "Runtime doc"}
                 sandbox="allow-scripts allow-same-origin"
@@ -412,7 +415,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
                 onMouseUp={props.onSelection}
               />
             ) : (
-              <div className="mx-auto grid min-h-[620px] max-w-[860px] place-items-center rounded border border-white/10 bg-[#202020] text-center text-white/42">
+              <div className="mx-auto grid min-h-[620px] max-w-[860px] place-items-center rounded-[20px] border border-[#B8A07C]/55 bg-[#F4EFE6]/55 text-center text-[#8B8275]">
                 Loading doc...
               </div>
             )}

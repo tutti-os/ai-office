@@ -2,7 +2,7 @@
   "app.title": "AI Doc",
   "home.import": "Import",
   "home.importTitle": "Import local document",
-  "home.heading": "Ready to create any doc?",
+  "home.heading": "Create any doc with your agent",
   "home.templates": "Templates",
   "home.history": "History",
   "home.templateCount": "{{count}} templates",

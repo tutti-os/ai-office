@@ -43,7 +43,7 @@ export function ToolbarLayoutMenu(props: {
       <button
         ref={buttonRef}
         aria-label="Layout"
-        className={cx(toolbarIconButton, toolbarTooltip, props.open ? "!bg-black/[0.07] !text-black" : "")}
+        className={cx(toolbarIconButton, toolbarTooltip, props.open ? "!bg-[#5C6B50] !text-[#F4EFE6]" : "")}
         data-tip={toolbarTip("Layout")}
         disabled={props.disabled}
         type="button"
@@ -62,7 +62,7 @@ export function ToolbarLayoutMenu(props: {
       {props.open ? (
         <ToolbarFloatingMenu menuRef={menuRef} position={position} width={width}>
           <div className="px-3 py-3" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="mb-3 border-b border-black/10 pb-2 text-[11px] font-bold text-black/45">{props.targetLabel || "element"}</div>
+            <div className="mb-3 border-b border-[#B8A07C]/45 pb-2 text-[11px] font-bold text-[#8B8275]">{props.targetLabel || "element"}</div>
             <LayoutBoxSection
               title="Margin"
               top={props.value.marginTop}
@@ -90,9 +90,9 @@ export function ToolbarLayoutMenu(props: {
                 paddingLeft: value.left,
               })}
             />
-            <div className="mt-4 flex justify-center gap-2 border-t border-black/10 pt-3">
+            <div className="mt-4 flex justify-center gap-2 border-t border-[#B8A07C]/45 pt-3">
               <button
-                className="h-7 rounded-md border border-black/12 bg-white px-3 text-[11px] font-bold text-black/52 hover:bg-black/[0.04] hover:text-black/70"
+                className="h-7 rounded-[10px] border border-[#B8A07C]/50 bg-[#F4EFE6] px-3 text-[11px] font-bold text-[#8B8275] hover:bg-[#E6DDCD]/55 hover:text-[#5C6B50]"
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => props.onChange({ marginTop: "", marginRight: "", marginBottom: "", marginLeft: "" })}
@@ -100,7 +100,7 @@ export function ToolbarLayoutMenu(props: {
                 Reset Margin
               </button>
               <button
-                className="h-7 rounded-md border border-black/12 bg-white px-3 text-[11px] font-bold text-black/52 hover:bg-black/[0.04] hover:text-black/70"
+                className="h-7 rounded-[10px] border border-[#B8A07C]/50 bg-[#F4EFE6] px-3 text-[11px] font-bold text-[#8B8275] hover:bg-[#E6DDCD]/55 hover:text-[#5C6B50]"
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => props.onChange({ paddingTop: "", paddingRight: "", paddingBottom: "", paddingLeft: "" })}
@@ -133,7 +133,7 @@ function LayoutBoxSection(props: {
   const update = (side: keyof typeof value, next: string) => props.onChange({ ...value, [side]: next });
   return (
     <section className={props.className}>
-      <h3 className="mb-2 text-[12px] font-bold text-[#242424]">{props.title}</h3>
+      <h3 className="mb-2 text-[12px] font-bold text-[#2A2620]">{props.title}</h3>
       <div className="grid grid-cols-2 gap-x-4 gap-y-2">
         <LayoutSideControl label="Top" value={props.top} onChange={(next) => update("top", next)} />
         <LayoutSideControl label="Right" value={props.right} onChange={(next) => update("right", next)} />
@@ -149,7 +149,7 @@ function LayoutSideControl(props: { label: string; value: string; onChange: (val
   const commit = (next: number) => props.onChange(`${formatSliderNumber(clampNumber(next, 0, 96))}px`);
   return (
     <label className="grid grid-cols-[42px_minmax(0,1fr)_50px] items-center gap-2">
-      <span className="text-[11px] font-semibold text-black/58">{props.label}</span>
+      <span className="text-[11px] font-semibold text-[#8B8275]">{props.label}</span>
       <input
         aria-label={props.label}
         className="h-4 accent-[#3b3b3b]"
@@ -163,7 +163,7 @@ function LayoutSideControl(props: { label: string; value: string; onChange: (val
       />
       <input
         aria-label={`${props.label} value`}
-        className="h-7 rounded-md border border-black/12 bg-white px-1.5 text-center text-[12px] font-semibold text-[#242424] outline-none focus:border-black/28"
+        className="h-7 rounded-[10px] border border-[#B8A07C]/50 bg-[#F4EFE6] px-1.5 text-center text-[12px] font-semibold text-[#2A2620] outline-none focus:border-[#5C6B50]/60"
         inputMode="decimal"
         max={96}
         min={0}

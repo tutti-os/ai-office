@@ -6,24 +6,24 @@
       "classification": "Business",
       "templates": [
         {
-          "id": "04cf45f8-9aba-4638-88af-3fc1e706911e",
-          "reason": "Concise company profile one-pager for business introductions."
+          "id": "a84e1441-5c6f-4da2-bc6b-5da811c2f738",
+          "reason": "Business summit flyer for conference and event promotion."
         },
         {
-          "id": "c0542960-0cb3-4fc1-9920-338c1c75290b",
-          "reason": "Event flyer format for conferences and public business events."
+          "id": "2afda99e-c058-4480-ba53-151e6b157b82",
+          "reason": "Collaboration process guide for team workflow documentation."
         },
         {
-          "id": "8f1ce302-2b85-4f28-95ed-75ae09ce6dd5",
-          "reason": "Structured strategy document for planning workflows."
-        },
-        {
-          "id": "35b06cb6-8fb3-4c1c-85e0-e6db29f4b6e6",
-          "reason": "QR/payment flyer with a utility-oriented layout."
+          "id": "6bf1d78d-82ca-4597-85b6-77aa47a91e3c",
+          "reason": "Colorful weekly planner for lightweight business planning."
         },
         {
           "id": "7a7a0fc7-52be-4678-b13b-34765dbae77d",
-          "reason": "Agenda-style template for launch and event operations."
+          "reason": "Product launch event agenda for launch operations."
+        },
+        {
+          "id": "2f333114-fd2f-4d04-8095-fd552aa3bc76",
+          "reason": "Team collaboration guide for cross-functional coordination."
         }
       ]
     },
@@ -31,24 +31,24 @@
       "classification": "Career & Portfolio",
       "templates": [
         {
-          "id": "016bab43-cd7d-4fe6-abc8-661886fe3347",
-          "reason": "Bold portrait resume for growth and marketing roles."
+          "id": "925dd06d-5d24-49ab-af71-e4b64389c592",
+          "reason": "Classic professional resume for broad career use."
         },
         {
           "id": "3f946fc3-884b-44a5-b0ee-e5b8a29f82bb",
-          "reason": "Technical resume variant for engineering roles."
+          "reason": "Clean full stack developer resume for technical roles."
+        },
+        {
+          "id": "616dbbd9-155d-4d44-8e8e-53fc6345ed9a",
+          "reason": "Creative business letter for professional correspondence."
+        },
+        {
+          "id": "03c4068f-9682-4003-aeca-9487805bccbf",
+          "reason": "Marketing specialist resume for growth and campaign roles."
         },
         {
           "id": "978e3083-3bba-44fc-9caf-170031d74ea6",
-          "reason": "Creative portfolio-style resume for design roles."
-        },
-        {
-          "id": "7f9fae9e-0131-4dca-a971-2f91679af4d2",
-          "reason": "General cover letter format to pair with resumes."
-        },
-        {
-          "id": "ad7ee2f3-15e2-4f65-b938-82046b3254fc",
-          "reason": "Hiring flyer format for recruiting and job posts."
+          "reason": "Creative UX/UI designer resume for design portfolios."
         }
       ]
     },
@@ -56,24 +56,24 @@
       "classification": "Education",
       "templates": [
         {
+          "id": "a7386c2b-6f0e-4456-b2a7-37f3b1646c8a",
+          "reason": "Clean academic research poster for education presentations."
+        },
+        {
           "id": "00fec139-a205-4800-8b12-338e5417fc9b",
           "reason": "Academic research poster for higher education use cases."
         },
         {
-          "id": "fdc60925-fbcb-4fcd-b895-12326640e642",
-          "reason": "Elementary daily schedule for classroom operations."
+          "id": "4f7561ca-7fb6-46d6-be1e-85676bfcd1df",
+          "reason": "School enrollment flyer for admissions and outreach."
         },
         {
-          "id": "8e125914-c21f-4849-81b7-c6696652fab8",
-          "reason": "Teaching material layout for lesson content."
+          "id": "8a1fe5a5-5b3c-4351-892e-ee8c59016a81",
+          "reason": "Yoga class schedule for class and workshop planning."
         },
         {
           "id": "e3439e31-eb54-4ffa-ac01-bdd90125ec2c",
-          "reason": "Worksheet format for student exercises."
-        },
-        {
-          "id": "bc7dfa21-668e-4391-8fa0-00febfbfe116",
-          "reason": "Teacher introduction letter for parent communication."
+          "reason": "Scientific method worksheet for student exercises."
         }
       ]
     },
@@ -81,24 +81,24 @@
       "classification": "Legal & Forms",
       "templates": [
         {
-          "id": "885c7a9c-f5ae-4d95-94dd-dbcafb88504b",
-          "reason": "Client consent form for signature-oriented workflows."
+          "id": "54bbd4de-4a1b-4f00-8368-10e1decf1494",
+          "reason": "Bold business invoice for polished billing workflows."
         },
         {
-          "id": "c5aff41b-0c58-4105-bb71-fc0f349d1c1e",
-          "reason": "Invoice format for billing documents."
+          "id": "1c6a7f81-5c82-4a19-808d-425d73a0f449",
+          "reason": "Clean creative studio invoice for service billing."
         },
         {
-          "id": "3c68f2cc-97d3-4b76-93da-4b6a5165cb04",
-          "reason": "Customer survey form for feedback collection."
+          "id": "fd7b7d26-4fc9-4ea7-9a0e-606df3e1b2f4",
+          "reason": "Contract termination letter for formal legal correspondence."
         },
         {
-          "id": "4262af60-6702-4cf3-bc7f-3aaf2613f1b1",
-          "reason": "Medical information form for detailed intake."
+          "id": "f3976273-89a2-4215-8849-4b8bfd641d28",
+          "reason": "Creative business invoice for branded billing documents."
         },
         {
-          "id": "77b7f740-5224-4545-9ed1-93a760c1bfd8",
-          "reason": "Agreement-style legal document with longer sections."
+          "id": "e7b449c2-a064-4a81-aa68-0c3238d46a7f",
+          "reason": "Service evaluation form for structured feedback collection."
         }
       ]
     },
@@ -106,24 +106,24 @@
       "classification": "Marketing",
       "templates": [
         {
-          "id": "ef07c326-d8a2-4b92-91b9-b9a50e64affb",
-          "reason": "Sports event poster with bold visual energy."
+          "id": "989622c4-c7ad-4092-ab0c-f380dfb89e04",
+          "reason": "Event schedule for marketing and promotional programming."
         },
         {
-          "id": "79ac44f0-385c-4409-ae11-d19d66f242ee",
-          "reason": "Art/gallery poster for culture and creative events."
+          "id": "02df7293-9295-4429-be22-c109ac525106",
+          "reason": "Good design principles poster for visual marketing guidance."
         },
         {
-          "id": "1a1a4258-68ee-47b0-98e7-afe3b0cc6fea",
-          "reason": "Brand story page for narrative marketing."
+          "id": "e38ec322-f4f3-466c-a7cb-0c33f51be737",
+          "reason": "Marketing proposal cover page for campaign pitches."
         },
         {
-          "id": "83bdfe9f-79d9-47af-bab1-74b58cc52b45",
-          "reason": "Menu template for hospitality and retail promotion."
+          "id": "655bb4f6-0d5e-43de-99df-3932d57fabc5",
+          "reason": "Riverside arts festival schedule for cultural promotion."
         },
         {
-          "id": "02deb104-8954-48f7-b43e-49f4e462cbb8",
-          "reason": "Press release layout for product announcements."
+          "id": "07441e34-9dfc-4ae1-8b4e-302fef8ccc40",
+          "reason": "Sports event schedule for event marketing."
         }
       ]
     },
@@ -131,24 +131,24 @@
       "classification": "Reports & Analysis",
       "templates": [
         {
-          "id": "7c31ecec-f710-46f5-8cbc-0feb73f98a2b",
-          "reason": "Business model canvas for strategic analysis."
+          "id": "65784530-01fe-4751-8dc2-4c060f46c13c",
+          "reason": "Clean community impact report for social outcome reporting."
         },
         {
-          "id": "fcad6782-fc04-4400-b03b-9f8132057b3c",
-          "reason": "Annual report for executive/company reporting."
+          "id": "b7090710-01e9-461c-b11a-d59c50e1840b",
+          "reason": "Clean project status report for concise progress updates."
         },
         {
-          "id": "d46baa78-27f3-4f5a-b76f-f924bb854097",
-          "reason": "Competitive analysis report for market comparison."
+          "id": "9f147871-3270-4e32-80e4-31a4e591b814",
+          "reason": "Creative company annual report for executive reporting."
+        },
+        {
+          "id": "e7661d35-bc30-4dc8-85fa-45ef9b9d54b7",
+          "reason": "Project status report for detailed progress tracking."
         },
         {
           "id": "d3d0125d-d587-412f-ab13-66cc2c60e119",
-          "reason": "Analytics dashboard for metric-heavy reporting."
-        },
-        {
-          "id": "4bbb2def-d4b4-4bef-a9c9-e59e835d5905",
-          "reason": "Sustainability impact report for social/ESG content."
+          "reason": "Social media analytics dashboard for metric-heavy reporting."
         }
       ]
     }

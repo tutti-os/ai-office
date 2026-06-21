@@ -125,6 +125,7 @@ import {
   type TuttiTemplate,
 } from "../templates/tuttiTemplates";
 import { useHomeAttachments } from "./useHomeAttachments";
+import type { HomeAttachment } from "./useHomeAttachments";
 import {
   defaultToolbarState,
   operationPanelTitle,
@@ -468,22 +469,25 @@ export function useRuntimeWorkbenchModel() {
     try {
       const userPrompt = prompt.trim();
       const title = userPrompt || "Untitled Doc";
-      const attachmentTitle = homeAttachments.attachments[0]?.name ? `Doc from ${homeAttachments.attachments[0].name}` : title;
+      const attachments = homeAttachments.attachments;
+      const attachmentTitle = attachments[0]?.name ? `Doc from ${attachments[0].name}` : title;
       const project = await createProject({
         title: attachmentTitle.length > 80 ? `${attachmentTitle.slice(0, 80).trim()}...` : attachmentTitle,
         content: initialContentForType(outputType),
         type: outputType,
       });
+      const uploadedAttachments = await uploadHomeContextAttachments(project.id, attachments);
       homeAttachments.clearAttachments();
       setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
       openProject(project);
       setPrompt("");
-      if (userPrompt) {
+      const initialUserPrompt = initialPromptWithAttachmentContext(userPrompt, uploadedAttachments);
+      if (initialUserPrompt) {
         await startAiEdit(project.id, createInitialPromptAiEditRequest({
           content: project.content,
           runtimeProfileId: selectedRuntimeProfileId || null,
           type: project.type,
-          userPrompt,
+          userPrompt: initialUserPrompt,
         }));
       }
     } catch (err) {
@@ -1538,6 +1542,53 @@ export function useRuntimeWorkbenchModel() {
       markdownTableCellCommitterRef.current = committer;
     },
   };
+}
+
+type UploadedHomeContextAttachment = {
+  originalName: string;
+  fileName: string;
+  path: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+async function uploadHomeContextAttachments(projectId: string, attachments: HomeAttachment[]): Promise<UploadedHomeContextAttachment[]> {
+  const uploaded: UploadedHomeContextAttachment[] = [];
+  for (const attachment of attachments) {
+    const asset = await uploadProjectAsset(projectId, attachment.file);
+    uploaded.push({
+      originalName: attachment.name,
+      fileName: asset.fileName,
+      path: asset.path,
+      mimeType: asset.mimeType,
+      sizeBytes: asset.sizeBytes,
+    });
+  }
+  return uploaded;
+}
+
+function initialPromptWithAttachmentContext(userPrompt: string, attachments: UploadedHomeContextAttachment[]) {
+  if (attachments.length === 0) return userPrompt;
+  const instruction = userPrompt.trim() || "Create a document from the attached context files.";
+  return [
+    instruction,
+    "",
+    "Context attachments uploaded with this project:",
+    ...attachments.map((attachment, index) => {
+      const displayName = attachment.originalName === attachment.fileName ? attachment.fileName : `${attachment.originalName} saved as ${attachment.fileName}`;
+      return `${index + 1}. ${displayName} (${attachment.mimeType}, ${formatBytes(attachment.sizeBytes)}): ${attachment.path}`;
+    }),
+    "",
+    "Use these files as source context. Read them from the project workspace before drafting or editing the document.",
+  ].join("\n");
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  const kib = bytes / 1024;
+  if (kib < 1024) return `${kib.toFixed(kib >= 10 ? 0 : 1)} KB`;
+  const mib = kib / 1024;
+  return `${mib.toFixed(mib >= 10 ? 0 : 1)} MB`;
 }
 
 function isNewerDocumentProject(next: DocumentProject, current: DocumentProject | null) {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, Download, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, Download, X } from "lucide-react";
 
 export type ArtifactEditorKind = "html" | "markdown" | "docx" | "deck" | "pptx";
 
@@ -58,10 +58,10 @@ export function ArtifactExportToast(props: {
 }) {
   if (!props.message) return null;
   return (
-    <div className="absolute left-1/2 top-3 z-[100] w-[640px] max-w-[calc(100%-32px)] -translate-x-1/2 rounded-md border border-amber-300/25 bg-[#2f2615] px-4 py-2.5 text-amber-100 shadow-[0_14px_36px_rgba(0,0,0,0.32)]">
+    <div className="absolute left-1/2 top-3 z-[100] w-[640px] max-w-[calc(100%-32px)] -translate-x-1/2 rounded-[16px] border border-[#B8A07C]/55 bg-[#F4EFE6] px-4 py-2.5 text-[#2A2620] shadow-[0_18px_46px_rgba(0,0,0,0.16)]">
       <div className="flex min-w-0 items-center gap-3">
         <button
-          className="min-w-0 flex-1 truncate text-left text-[13px] font-bold text-amber-100 hover:text-white"
+          className="min-w-0 flex-1 truncate text-left text-[13px] font-bold text-[#2A2620] hover:text-[#5C6B50]"
           type="button"
           title={props.message}
           onClick={props.onOpenLocation}
@@ -69,7 +69,7 @@ export function ArtifactExportToast(props: {
           {props.message}
         </button>
         <button
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-amber-100/70 hover:bg-white/8 hover:text-white"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-[10px] text-[#8B8275] hover:bg-[#E6DDCD]/55 hover:text-[#5C6B50]"
           type="button"
           aria-label="Dismiss export notice"
           title="Dismiss"
@@ -96,9 +96,12 @@ export function ArtifactWorkspaceHeader(props: {
   agentWorking?: boolean;
   stats?: string[];
   exportItems: ArtifactExportItem[];
+  onBackHome?: () => void;
+  tone?: "dark" | "lumen";
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const lumen = props.tone === "lumen";
 
   useEffect(() => {
     if (!open) return;
@@ -117,15 +120,31 @@ export function ArtifactWorkspaceHeader(props: {
   }, [open]);
 
   return (
-    <header className="flex h-12 shrink-0 items-center justify-between gap-4 border-b border-white/8 px-5">
+    <header className={cx("flex h-12 shrink-0 items-center justify-between gap-4 border-b px-5", lumen ? "border-[#B8A07C]/45 bg-[#E6DDCD] text-[#2A2620]" : "border-white/8")}>
       <div className="flex min-w-0 items-center gap-2">
-        <div className="min-w-0 truncate text-[13px] font-semibold text-white">{props.title}</div>
-        <SaveStateBadge agentWorking={props.agentWorking} state={props.saveState} />
+        {props.onBackHome ? (
+          <button
+            className={cx(
+              "grid size-8 shrink-0 place-items-center rounded-[10px] border transition",
+              lumen
+                ? "border-[#B8A07C]/55 bg-[#F4EFE6]/70 text-[#2A2620]/72 hover:border-[#5C6B50]/50 hover:text-[#5C6B50]"
+                : "border-white/10 bg-white/8 text-white/72 hover:bg-white/14 hover:text-white",
+            )}
+            type="button"
+            aria-label="Back to home"
+            title="Back to home"
+            onClick={props.onBackHome}
+          >
+            <ArrowLeft size={16} />
+          </button>
+        ) : null}
+        <div className={cx("min-w-0 truncate text-[13px] font-semibold", lumen ? "text-[#2A2620]" : "text-white")}>{props.title}</div>
+        <SaveStateBadge agentWorking={props.agentWorking} state={props.saveState} tone={props.tone} />
         {props.stats?.length ? (
-          <div className="hidden min-w-0 items-center gap-1.5 text-[11px] font-semibold text-white/32 md:flex">
+          <div className={cx("hidden min-w-0 items-center gap-1.5 text-[11px] font-semibold md:flex", lumen ? "text-[#8B8275]" : "text-white/32")}>
             {props.stats.map((stat, index) => (
               <span className="shrink-0" key={stat}>
-                {index > 0 ? <span className="mr-1.5 text-white/18">/</span> : null}
+                {index > 0 ? <span className={cx("mr-1.5", lumen ? "text-[#B8A07C]" : "text-white/18")}>/</span> : null}
                 {stat}
               </span>
             ))}
@@ -134,7 +153,12 @@ export function ArtifactWorkspaceHeader(props: {
       </div>
       <div ref={rootRef} className="relative shrink-0">
         <button
-          className="inline-flex h-8 items-center gap-2 rounded-md border border-white/10 bg-white/8 px-3 text-[12px] font-semibold text-white/72 hover:bg-white/14 hover:text-white"
+          className={cx(
+            "inline-flex h-8 items-center gap-2 rounded-[16px] border px-3 text-[12px] font-semibold transition",
+            lumen
+              ? "border-[#B8A07C]/55 bg-[#F4EFE6]/70 text-[#2A2620]/72 hover:border-[#5C6B50]/50 hover:text-[#5C6B50]"
+              : "border-white/10 bg-white/8 text-white/72 hover:bg-white/14 hover:text-white",
+          )}
           type="button"
           aria-haspopup="menu"
           aria-expanded={open}
@@ -146,12 +170,20 @@ export function ArtifactWorkspaceHeader(props: {
         </button>
         {open ? (
           <div
-            className="absolute right-0 top-[calc(100%_+_6px)] z-30 w-44 overflow-hidden rounded-xl border border-white/10 bg-[#2b2b2b] py-1.5 shadow-[0_18px_46px_rgba(0,0,0,0.35)]"
+            className={cx(
+              "absolute right-0 top-[calc(100%_+_6px)] z-30 w-44 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_18px_46px_rgba(0,0,0,0.16)]",
+              lumen ? "border-[#B8A07C]/55 bg-[#F4EFE6] text-[#2A2620]" : "border-white/10 bg-[#2b2b2b]",
+            )}
             role="menu"
           >
             {props.exportItems.map((item) => (
               <button
-                className="block h-8 w-full border-0 bg-transparent px-3 text-left text-[12px] font-semibold text-white/68 hover:bg-white/8 hover:text-white disabled:cursor-default disabled:text-white/24"
+                className={cx(
+                  "block h-8 w-full border-0 bg-transparent px-3 text-left text-[12px] font-semibold",
+                  lumen
+                    ? "text-[#2A2620]/72 hover:bg-[#E6DDCD]/55 hover:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275]/45"
+                    : "text-white/68 hover:bg-white/8 hover:text-white disabled:cursor-default disabled:text-white/24",
+                )}
                 disabled={item.disabled}
                 key={item.label}
                 role="menuitem"
@@ -171,7 +203,7 @@ export function ArtifactWorkspaceHeader(props: {
   );
 }
 
-function SaveStateBadge(props: { state: ArtifactSaveState; agentWorking?: boolean }) {
+function SaveStateBadge(props: { state: ArtifactSaveState; agentWorking?: boolean; tone?: "dark" | "lumen" }) {
   const tone = props.agentWorking
     ? "animate-pulse bg-[#38a7ff] shadow-[0_0_0_3px_rgba(56,167,255,0.16)]"
     : props.state === "error"
@@ -189,7 +221,7 @@ function SaveStateBadge(props: { state: ArtifactSaveState; agentWorking?: boolea
           ? "Loading"
           : "Saving";
   return (
-    <span className="relative top-px inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold text-white/42" title={label}>
+    <span className={cx("relative top-px inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold", props.tone === "lumen" ? "text-[#8B8275]" : "text-white/42")} title={label}>
       <span className={`size-1.5 rounded-full ${tone}`} />
       {label}
     </span>

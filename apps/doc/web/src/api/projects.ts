@@ -57,8 +57,9 @@ export async function uploadProjectAsset(projectId: string, file: File) {
   const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/assets`, {
     method: "POST",
     headers: {
-      "content-type": file.type || "application/octet-stream",
-      "x-file-name": encodeURIComponent(file.name || "image"),
+      "content-type": "application/octet-stream",
+      "x-file-name": encodeURIComponent(file.name || "asset"),
+      "x-file-mime-type": encodeURIComponent(file.type || "application/octet-stream"),
     },
     body: await file.arrayBuffer(),
   });

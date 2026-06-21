@@ -43,7 +43,7 @@ export function ToolbarMoreMenu(props: {
       <button
         ref={buttonRef}
         aria-label="More"
-        className={cx(toolbarIconButton, toolbarTooltip, props.open ? "!bg-black/[0.07] !text-black" : "")}
+        className={cx(toolbarIconButton, toolbarTooltip, props.open ? "!bg-[#5C6B50] !text-[#F4EFE6]" : "")}
         data-tip={toolbarTip("More")}
         type="button"
         title="More"
@@ -158,7 +158,7 @@ export function ToolbarSpacingMenu(props: {
       <button
         ref={buttonRef}
         aria-label="Spacing"
-        className={cx(toolbarIconButton, toolbarTooltip, props.open ? "!bg-black/[0.07] !text-black" : "")}
+        className={cx(toolbarIconButton, toolbarTooltip, props.open ? "!bg-[#5C6B50] !text-[#F4EFE6]" : "")}
         data-tip={toolbarTip("Spacing")}
         disabled={props.disabled}
         type="button"
@@ -212,7 +212,7 @@ function SpacingControl(props: {
   const inputStep = props.step < 0.1 ? "0.05" : String(props.step);
   return (
     <label className="grid grid-cols-[88px_minmax(0,1fr)_54px] items-center gap-2">
-      <span className="text-[11px] font-bold leading-4 text-black/58">{props.label}</span>
+      <span className="text-[11px] font-bold leading-4 text-[#8B8275]">{props.label}</span>
       <input
         aria-label={props.label}
         className="h-4 accent-[#3b3b3b]"
@@ -226,7 +226,7 @@ function SpacingControl(props: {
       />
       <input
         aria-label={`${props.label} value`}
-        className="h-7 rounded-md border border-black/12 bg-white px-1.5 text-center text-[12px] font-semibold text-[#242424] outline-none focus:border-black/28"
+        className="h-7 rounded-[10px] border border-[#B8A07C]/50 bg-[#F4EFE6] px-1.5 text-center text-[12px] font-semibold text-[#2A2620] outline-none focus:border-[#5C6B50]/60"
         inputMode="decimal"
         max={props.max}
         min={props.min}
@@ -318,7 +318,7 @@ function ToolbarObjectMenu<T extends { label: string }>(props: {
       <button
         ref={buttonRef}
         aria-label={props.title}
-        className={cx(toolbarIconButton, toolbarTooltip, props.open ? "!bg-black/[0.07] !text-black" : "")}
+        className={cx(toolbarIconButton, toolbarTooltip, props.open ? "!bg-[#5C6B50] !text-[#F4EFE6]" : "")}
         data-tip={toolbarTip(props.title)}
         type="button"
         title={props.title}
@@ -344,7 +344,7 @@ function ToolbarObjectMenu<T extends { label: string }>(props: {
               onClick={() => props.onSelect(option)}
             >
               <span>{option.label}</span>
-              <span className="text-[9px] text-black/45">{props.secondary(option)}</span>
+              <span className="text-[9px] text-[#8B8275]">{props.secondary(option)}</span>
             </button>
           ))}
         </ToolbarFloatingMenu>
