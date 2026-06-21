@@ -4,6 +4,7 @@ export type ArtifactAppRouteService = {
   listProjects(): unknown | Promise<unknown>;
   createProject(input: unknown): unknown | Promise<unknown>;
   clearProjectHistory(): unknown | Promise<unknown>;
+  deleteProject?(projectId: string): unknown | Promise<unknown>;
   getProject(projectId: string): unknown | Promise<unknown>;
   updateProject(projectId: string, input: unknown): unknown | Promise<unknown>;
   listProjectRuns(projectId: string): unknown | Promise<unknown>;
@@ -83,6 +84,17 @@ export class ArtifactAppHttpRoutes<TStatus> {
       }
     });
     server.delete("/api/projects", async () => this.input.service.clearProjectHistory());
+    if (typeof this.input.service.deleteProject === "function") {
+      server.delete("/api/projects/:projectId", async (request: any, reply: any) => {
+        try {
+          const result = await this.input.service.deleteProject?.(request.params.projectId);
+          if (!result) return reply.code(404).send({ error: "Project not found" });
+          return result;
+        } catch (error) {
+          return reply.code(notFoundOrBadRequest(error)).send({ error: errorMessage(error, "Unable to delete project") });
+        }
+      });
+    }
     server.get("/api/projects/:projectId/runs", async (request: any, reply: any) => {
       try {
         return await this.input.service.listProjectRuns(request.params.projectId);

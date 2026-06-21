@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "type": "doc",
+  "categories": [
+    {
+      "classification": "Business",
+      "templates": [
+        {
+          "id": "04cf45f8-9aba-4638-88af-3fc1e706911e",
+          "reason": "Concise company profile one-pager for business introductions."
+        },
+        {
+          "id": "c0542960-0cb3-4fc1-9920-338c1c75290b",
+          "reason": "Event flyer format for conferences and public business events."
+        },
+        {
+          "id": "8f1ce302-2b85-4f28-95ed-75ae09ce6dd5",
+          "reason": "Structured strategy document for planning workflows."
+        },
+        {
+          "id": "35b06cb6-8fb3-4c1c-85e0-e6db29f4b6e6",
+          "reason": "QR/payment flyer with a utility-oriented layout."
+        },
+        {
+          "id": "7a7a0fc7-52be-4678-b13b-34765dbae77d",
+          "reason": "Agenda-style template for launch and event operations."
+        }
+      ]
+    },
+    {
+      "classification": "Career & Portfolio",
+      "templates": [
+        {
+          "id": "016bab43-cd7d-4fe6-abc8-661886fe3347",
+          "reason": "Bold portrait resume for growth and marketing roles."
+        },
+        {
+          "id": "3f946fc3-884b-44a5-b0ee-e5b8a29f82bb",
+          "reason": "Technical resume variant for engineering roles."
+        },
+        {
+          "id": "978e3083-3bba-44fc-9caf-170031d74ea6",
+          "reason": "Creative portfolio-style resume for design roles."
+        },
+        {
+          "id": "7f9fae9e-0131-4dca-a971-2f91679af4d2",
+          "reason": "General cover letter format to pair with resumes."
+        },
+        {
+          "id": "ad7ee2f3-15e2-4f65-b938-82046b3254fc",
+          "reason": "Hiring flyer format for recruiting and job posts."
+        }
+      ]
+    },
+    {
+      "classification": "Education",
+      "templates": [
+        {
+          "id": "00fec139-a205-4800-8b12-338e5417fc9b",
+          "reason": "Academic research poster for higher education use cases."
+        },
+        {
+          "id": "fdc60925-fbcb-4fcd-b895-12326640e642",
+          "reason": "Elementary daily schedule for classroom operations."
+        },
+        {
+          "id": "8e125914-c21f-4849-81b7-c6696652fab8",
+          "reason": "Teaching material layout for lesson content."
+        },
+        {
+          "id": "e3439e31-eb54-4ffa-ac01-bdd90125ec2c",
+          "reason": "Worksheet format for student exercises."
+        },
+        {
+          "id": "bc7dfa21-668e-4391-8fa0-00febfbfe116",
+          "reason": "Teacher introduction letter for parent communication."
+        }
+      ]
+    },
+    {
+      "classification": "Legal & Forms",
+      "templates": [
+        {
+          "id": "885c7a9c-f5ae-4d95-94dd-dbcafb88504b",
+          "reason": "Client consent form for signature-oriented workflows."
+        },
+        {
+          "id": "c5aff41b-0c58-4105-bb71-fc0f349d1c1e",
+          "reason": "Invoice format for billing documents."
+        },
+        {
+          "id": "3c68f2cc-97d3-4b76-93da-4b6a5165cb04",
+          "reason": "Customer survey form for feedback collection."
+        },
+        {
+          "id": "4262af60-6702-4cf3-bc7f-3aaf2613f1b1",
+          "reason": "Medical information form for detailed intake."
+        },
+        {
+          "id": "77b7f740-5224-4545-9ed1-93a760c1bfd8",
+          "reason": "Agreement-style legal document with longer sections."
+        }
+      ]
+    },
+    {
+      "classification": "Marketing",
+      "templates": [
+        {
+          "id": "ef07c326-d8a2-4b92-91b9-b9a50e64affb",
+          "reason": "Sports event poster with bold visual energy."
+        },
+        {
+          "id": "79ac44f0-385c-4409-ae11-d19d66f242ee",
+          "reason": "Art/gallery poster for culture and creative events."
+        },
+        {
+          "id": "1a1a4258-68ee-47b0-98e7-afe3b0cc6fea",
+          "reason": "Brand story page for narrative marketing."
+        },
+        {
+          "id": "83bdfe9f-79d9-47af-bab1-74b58cc52b45",
+          "reason": "Menu template for hospitality and retail promotion."
+        },
+        {
+          "id": "02deb104-8954-48f7-b43e-49f4e462cbb8",
+          "reason": "Press release layout for product announcements."
+        }
+      ]
+    },
+    {
+      "classification": "Reports & Analysis",
+      "templates": [
+        {
+          "id": "7c31ecec-f710-46f5-8cbc-0feb73f98a2b",
+          "reason": "Business model canvas for strategic analysis."
+        },
+        {
+          "id": "fcad6782-fc04-4400-b03b-9f8132057b3c",
+          "reason": "Annual report for executive/company reporting."
+        },
+        {
+          "id": "d46baa78-27f3-4f5a-b76f-f924bb854097",
+          "reason": "Competitive analysis report for market comparison."
+        },
+        {
+          "id": "d3d0125d-d587-412f-ab13-66cc2c60e119",
+          "reason": "Analytics dashboard for metric-heavy reporting."
+        },
+        {
+          "id": "4bbb2def-d4b4-4bef-a9c9-e59e835d5905",
+          "reason": "Sustainability impact report for social/ESG content."
+        }
+      ]
+    }
+  ]
+}

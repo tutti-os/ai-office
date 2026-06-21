@@ -94,6 +94,27 @@ export class DocumentRepository {
     return { projects: [] as DocumentProject[] };
   }
 
+  deleteProject(projectId: string) {
+    const project = this.getProject(projectId);
+    if (!project) return null;
+    const db = getDb();
+    db.exec("BEGIN");
+    try {
+      db.prepare(`DELETE FROM agent_conversation_messages WHERE project_id = ?`).run(projectId);
+      db.prepare(`DELETE FROM agent_conversation_sessions WHERE project_id = ?`).run(projectId);
+      db.prepare(`DELETE FROM document_run_events WHERE project_id = ?`).run(projectId);
+      db.prepare(`DELETE FROM document_runs WHERE project_id = ?`).run(projectId);
+      db.prepare(`DELETE FROM stream_events WHERE project_id = ?`).run(projectId);
+      db.prepare(`DELETE FROM projects WHERE id = ?`).run(projectId);
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    rmSync(projectWorkspaceRoot(projectId), { force: true, recursive: true });
+    return { projects: this.listProjects() };
+  }
+
   getProject(projectId: string) {
     const row = rowOrNull<ProjectRow>(getDb().prepare(`SELECT * FROM projects WHERE id = ?`).get(projectId));
     return row ? rowToProject(row) : null;

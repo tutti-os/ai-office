@@ -31,6 +31,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     clearHistory,
     currentDocumentType,
     currentProjectId,
+    deleteHistoryProject,
     docxError,
     docxLoading,
     docxRuntime,
@@ -53,6 +54,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     htmlToolbarActive,
     iframeRef,
     imageFileInputRef,
+    importDocumentFile,
     imageDraft,
     linkDraft,
     linkEditorOpen,
@@ -158,6 +160,8 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           onCreateBlank={loadBlankDocument}
           onCreateFromPrompt={loadPromptDocument}
           onClearHistory={clearHistory}
+          onDeleteHistoryProject={deleteHistoryProject}
+          onImportFile={importDocumentFile}
           onOpenHistoryProject={openHistoryProject}
           onInstallOfficeCli={downloadOfficeCli}
           onOutputTypeChange={setOutputType}

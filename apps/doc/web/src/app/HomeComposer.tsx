@@ -24,9 +24,9 @@ export type OutputFormatOption = {
 };
 
 export const outputFormatOptions: OutputFormatOption[] = [
-  { id: "html", label: "HTML", description: "Rich doc runtime" },
-  { id: "docx", label: "Word", description: "Export as .docx" },
-  { id: "markdown", label: "Markdown", description: "Plain text with syntax" },
+  { id: "html", label: "HTML", description: "Rich visual formatting" },
+  { id: "markdown", label: "Markdown", description: "Clean structured writing" },
+  { id: "docx", label: "Word", description: "Traditional Office format" },
 ];
 
 export function HomeComposer(props: {
@@ -140,7 +140,11 @@ export function HomeComposer(props: {
         ) : null}
         leadingActions={
           <>
-            <label className="grid size-9 shrink-0 place-items-center rounded-full border border-white/10 bg-white text-black hover:bg-white/90" title="Add files">
+            <label
+              className="grid size-9 shrink-0 place-items-center rounded-full border border-white/10 bg-white text-black hover:bg-white/90"
+              title="Add to context"
+              aria-label="Add to context"
+            >
               <Plus size={21} />
               <input className="sr-only" type="file" multiple onChange={handleFileInput} />
             </label>
@@ -268,9 +272,8 @@ function FormatIcon(props: { option: OutputFormatOption; active?: boolean; class
 function formatOutputDescription(option: OutputFormatOption, officeCliStatus: OfficeCliStatus | null) {
   if (option.id !== "docx") return option.description;
   if (!officeCliStatus) return "Checking OfficeCLI";
-  if (officeCliStatus.available) return officeCliStatus.version ? `OfficeCLI ${officeCliStatus.version}` : "OfficeCLI ready";
   if (officeCliStatus.installing) return "Installing OfficeCLI";
-  return "Requires OfficeCLI";
+  return option.description;
 }
 
 function AttachmentPreview(props: { attachment: HomeAttachment; onRemove: (id: string) => void }) {

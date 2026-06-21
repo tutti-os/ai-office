@@ -6,7 +6,7 @@ export const allTemplatesLabel = "All Templates";
 
 export function normalizeTemplates(templates: TuttiTemplate[]) {
   return templates
-    .filter((template) => template.id && template.name && template.content)
+    .filter((template) => template.id && template.name)
     .map((template) => ({
       ...template,
       classification: template.classification || "Uncategorized",

@@ -10,6 +10,7 @@
     "build": "pnpm --filter @ai-doc/shared build && pnpm --filter @ai-doc/web build && pnpm --filter @ai-doc/server build",
     "check": "pnpm --filter @ai-doc/shared check && pnpm --filter @ai-doc/web check && pnpm --filter @ai-doc/server check",
     "package:nextop": "node ../../tooling/nextop/package-doc-nextop-app.mjs",
-    "sync:templates": "node scripts/sync-doc-templates.mjs"
+    "sync:templates": "node scripts/sync-doc-templates.mjs",
+    "publish:office-templates": "node scripts/publish-office-templates.mjs"
   }
 }

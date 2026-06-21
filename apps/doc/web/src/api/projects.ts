@@ -33,6 +33,18 @@ export async function createProject(input: CreateProjectRequest) {
   });
 }
 
+export async function importProjectFile(file: File) {
+  return requestProject("/api/projects/import", {
+    method: "POST",
+    headers: {
+      "content-type": "application/octet-stream",
+      "x-file-name": encodeURIComponent(file.name || "imported-doc"),
+      "x-file-mime-type": encodeURIComponent(file.type || "application/octet-stream"),
+    },
+    body: await file.arrayBuffer(),
+  });
+}
+
 export async function getProject(projectId: string) {
   return requestProject(`/api/projects/${encodeURIComponent(projectId)}`);
 }
@@ -114,6 +126,13 @@ export async function cancelRun(runId: string) {
 
 export async function clearProjectHistory() {
   const response = await requestJson<ProjectsResponse>("/api/projects", {
+    method: "DELETE",
+  });
+  return response.projects;
+}
+
+export async function deleteProject(projectId: string) {
+  const response = await requestJson<ProjectsResponse>(`/api/projects/${encodeURIComponent(projectId)}`, {
     method: "DELETE",
   });
   return response.projects;

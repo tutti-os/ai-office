@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import {
@@ -23,6 +23,7 @@ import { openPathInFileManager } from "@ai-app/shared/local-open";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { DocumentRepository } from "./document-repository.js";
 import { documentTemplates, getTemplate } from "./templates.js";
+import { loadTemplateProjectSeed, materializeTemplateAssetsToProject } from "../templates/template-service.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
 import { EventHub } from "../ws/event-hub.js";
@@ -69,20 +70,59 @@ export class DocumentService {
     return this.repo.clearProjectHistory();
   }
 
+  deleteProject(projectId: string) {
+    return this.repo.deleteProject(projectId);
+  }
+
   async createProject(input: CreateProjectRequest) {
     const template = getTemplate(input.templateId);
     const type = input.type ?? "html";
     if (type === "docx") await requireOfficeCli();
-    const content = input.content ?? defaultProjectContent(type, template);
+    const templateProjectSeed = type === "html" && input.templateId && !input.content
+      ? await loadTemplateProjectSeed(input.templateId)
+      : null;
+    const content = input.content ?? templateProjectSeed?.content ?? defaultProjectContent(type, template);
     const templateId = input.templateId ?? (template.id === "blank" ? null : template.id);
-    const templateName = input.templateName ?? (template.id === "blank" ? null : template.name);
+    const templateName = input.templateName ?? templateProjectSeed?.name ?? (template.id === "blank" ? null : template.name);
     const project = this.repo.createProject({
-      title: input.title?.trim() || input.templateName?.trim() || template.name || "Untitled Doc",
+      title: input.title?.trim() || input.templateName?.trim() || templateProjectSeed?.name || template.name || "Untitled Doc",
       content,
       type,
       templateId,
       templateName,
     });
+    if (type === "html" && templateId && templateProjectSeed) {
+      await materializeTemplateAssetsToProject(templateId, join(projectWorkspaceRoot(project.id), "assets"), content);
+    }
+    this.events.emit({ type: "project.created", projectId: project.id, payload: { project } });
+    return { project };
+  }
+
+  async importProjectFile(input: { fileName: string; mimeType: string; bytes: Buffer }) {
+    if (input.bytes.byteLength === 0) throw new Error("Import file is empty");
+    if (input.bytes.byteLength > maxProjectImportBytes) throw new Error("Import file is too large");
+    const type = importedDocumentType(input.fileName, input.mimeType);
+    if (type === "docx") await requireOfficeCli();
+    const now = new Date().toISOString();
+    const content = type === "docx"
+      ? serializeDocxDocumentManifest({
+        kind: "docx",
+        fileName: docxFileName,
+        sha256: createHash("sha256").update(input.bytes).digest("hex"),
+        sizeBytes: input.bytes.byteLength,
+        updatedAt: now,
+      })
+      : input.bytes.toString("utf8");
+    const project = this.repo.createProject({
+      title: importedProjectTitle(input.fileName),
+      content,
+      type,
+      templateId: null,
+      templateName: null,
+    });
+    if (type === "docx") {
+      await writeFile(docxFilePath(project.id), input.bytes);
+    }
     this.events.emit({ type: "project.created", projectId: project.id, payload: { project } });
     return { project };
   }
@@ -432,11 +472,26 @@ const docxMimeType = "application/vnd.openxmlformats-officedocument.wordprocessi
 const pdfMimeType = "application/pdf";
 const maxProjectAssetBytes = 20 * 1024 * 1024;
 const maxProjectExportBytes = 20 * 1024 * 1024;
+const maxProjectImportBytes = 30 * 1024 * 1024;
 const supportedImageMimeTypes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"]);
 const supportedExportMimeTypes = new Set(["text/html", "text/markdown", docxMimeType, pdfMimeType]);
 
 function docxFilePath(projectId: string) {
   return join(projectWorkspaceRoot(projectId), docxFileName);
+}
+
+function importedDocumentType(fileName: string, mimeType: string): DocumentProject["type"] {
+  const normalizedName = fileName.toLowerCase();
+  const normalizedMimeType = mimeType.toLowerCase();
+  if (normalizedName.endsWith(".docx") || normalizedMimeType === docxMimeType) return "docx";
+  if (normalizedName.endsWith(".md") || normalizedName.endsWith(".markdown") || normalizedMimeType === "text/markdown") return "markdown";
+  if (normalizedName.endsWith(".html") || normalizedName.endsWith(".htm") || normalizedMimeType === "text/html") return "html";
+  throw new Error("Only HTML, Markdown, and Word documents can be imported");
+}
+
+function importedProjectTitle(fileName: string) {
+  const decodedName = fileName.trim() || "Imported doc";
+  return decodedName.replace(/\.(html?|markdown|md|docx)$/i, "").trim() || decodedName;
 }
 
 function isSupportedImageMimeType(mimeType: string) {

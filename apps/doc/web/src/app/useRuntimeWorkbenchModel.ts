@@ -10,7 +10,6 @@ import {
   createInitialPromptAiEditRequest,
   initialContentForType,
   markdownParagraphCount,
-  markdownTemplateSeed,
   markdownWordCount,
 } from "./documentWorkbenchContent";
 import { pushDocumentRoute, pushHomeRoute, readCurrentRoute, routePath, type AppRoute } from "./documentWorkbenchRoutes";
@@ -42,7 +41,7 @@ import {
 } from "./htmlRuntimeDom";
 import { renderImageSelectionOverlay } from "./htmlImageSelectionOverlay";
 import { useAgentConversation } from "./useAgentConversation";
-import { cancelRun, clearProjectHistory, createProject, getProject, listProjects, openProjectExportsDir, startAiEdit, updateProject, uploadProjectAsset } from "../api/projects";
+import { cancelRun, clearProjectHistory, createProject, deleteProject, getProject, importProjectFile, listProjects, openProjectExportsDir, startAiEdit, updateProject, uploadProjectAsset } from "../api/projects";
 import { fetchTuttiStudyPlanFixture } from "../api/fixtures";
 import { fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, fetchTemplates, installOfficeCli } from "../api/runtime";
 import type { DocumentProject, DocumentType, LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
@@ -481,11 +480,24 @@ export function useRuntimeWorkbenchModel() {
     try {
       const project = await createProject({
         title: template.name,
-        content: outputType === "markdown" ? markdownTemplateSeed(template.name, template.classification, template.content) : template.content,
-        type: outputType,
+        type: "html",
         templateId: template.id,
         templateName: template.name,
       });
+      setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
+      openProject(project);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const importDocumentFile = async (file: File) => {
+    setError("");
+    setLoading(true);
+    try {
+      const project = await importProjectFile(file);
       setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
       openProject(project);
     } catch (err) {
@@ -506,6 +518,19 @@ export function useRuntimeWorkbenchModel() {
       const projects = await clearProjectHistory();
       setHistoryProjects(projects);
       setHomePanel("history");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteHistoryProject = async (projectId: string) => {
+    setError("");
+    setLoading(true);
+    try {
+      const projects = await deleteProject(projectId);
+      setHistoryProjects(projects);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -1367,6 +1392,7 @@ export function useRuntimeWorkbenchModel() {
     clearHistory,
     currentDocumentType,
     currentProjectId,
+    deleteHistoryProject,
     docxError,
     docxLoading,
     docxRuntime,
@@ -1395,6 +1421,7 @@ export function useRuntimeWorkbenchModel() {
     linkEditorOpen,
     loadBlankDocument,
     loadFixture,
+    importDocumentFile,
     loadPromptDocument,
     loadTemplate,
     loading,

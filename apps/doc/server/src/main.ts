@@ -8,7 +8,7 @@ import { ArtifactAppHttpRoutes } from "@ai-app/shared/server-routes";
 import type { ApplyTemplateRequest } from "@ai-doc/shared";
 import { DocumentRepository } from "./artifact/document-repository.js";
 import { DocumentService } from "./artifact/document-service.js";
-import { listTemplates } from "./templates/template-service.js";
+import { getTemplateScreenshotFile, listTemplates } from "./templates/template-service.js";
 import { getOfficeCliStatus, installOfficeCli } from "./toolchains/officecli.js";
 import { EventHub } from "./ws/event-hub.js";
 
@@ -54,6 +54,39 @@ server.get("/api/dev/fixtures/tutti-study-plan", async (request, reply) => {
     return reply.code(404).send({ error: message, path: fixturePath });
   }
 });
+
+server.get<{ Params: { templateId: string } }>("/api/templates/:templateId/screenshot", async (request, reply) => {
+  const screenshot = getTemplateScreenshotFile(request.params.templateId);
+  if (!screenshot) return reply.code(404).send({ error: "Template screenshot not found" });
+  const image = await readFile(screenshot.filePath);
+  return reply.type(mimeTypeForTemplateAsset(screenshot.fileName)).send(image);
+});
+
+server.post<{ Body: Buffer }>("/api/projects/import", async (request, reply) => {
+  try {
+    const fileNameHeader = request.headers["x-file-name"];
+    const mimeTypeHeader = request.headers["x-file-mime-type"];
+    const contentType = typeof mimeTypeHeader === "string"
+      ? decodeURIComponent(mimeTypeHeader).split(";")[0]?.trim().toLowerCase() || "application/octet-stream"
+      : request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() ?? "application/octet-stream";
+    return await documents.importProjectFile({
+      fileName: typeof fileNameHeader === "string" ? decodeURIComponent(fileNameHeader) : "imported-doc",
+      mimeType: contentType,
+      bytes: Buffer.isBuffer(request.body) ? request.body : Buffer.from([]),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to import project";
+    return reply.code(message.includes("OfficeCLI") ? 503 : 400).send({ error: message });
+  }
+});
+
+function mimeTypeForTemplateAsset(fileName: string) {
+  if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) return "image/jpeg";
+  if (fileName.endsWith(".webp")) return "image/webp";
+  if (fileName.endsWith(".svg")) return "image/svg+xml";
+  if (fileName.endsWith(".gif")) return "image/gif";
+  return "image/png";
+}
 
 new ArtifactAppHttpRoutes({
   appId: "ai-doc",
