@@ -43,7 +43,7 @@ import {
 import { renderImageSelectionOverlay } from "./htmlImageSelectionOverlay";
 import { useAgentConversation } from "./useAgentConversation";
 import { cancelRun, clearProjectHistory, createProject, getProject, listProjects, openProjectExportsDir, startAiEdit, updateProject, uploadProjectAsset } from "../api/projects";
-import { fetchGensparkStudyPlanFixture } from "../api/fixtures";
+import { fetchTuttiStudyPlanFixture } from "../api/fixtures";
 import { fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, fetchTemplates, installOfficeCli } from "../api/runtime";
 import type { DocumentProject, DocumentType, LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
 import { editableArtifactInteraction, isArtifactReadOnly, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
@@ -122,8 +122,8 @@ import {
   templateCategoriesFor,
   templateCountsFor,
   templatesForCategory,
-  type GensparkTemplate,
-} from "../templates/gensparkTemplates";
+  type TuttiTemplate,
+} from "../templates/tuttiTemplates";
 import { useHomeAttachments } from "./useHomeAttachments";
 import {
   defaultToolbarState,
@@ -217,7 +217,7 @@ export function useRuntimeWorkbenchModel() {
   const homeAttachments = useHomeAttachments();
   const [homePanel, setHomePanel] = useState<HomePanel>("templates");
   const [historyProjects, setHistoryProjects] = useState<DocumentProject[]>([]);
-  const [templates, setTemplates] = useState<GensparkTemplate[]>([]);
+  const [templates, setTemplates] = useState<TuttiTemplate[]>([]);
   const [selectedTemplateCategory, setSelectedTemplateCategory] = useState(allTemplatesLabel);
   const [toolbarState, setToolbarState] = useState<ToolbarState>(defaultToolbarState);
   const [htmlToolbarActive, setHtmlToolbarActive] = useState(false);
@@ -475,7 +475,7 @@ export function useRuntimeWorkbenchModel() {
     }
   };
 
-  const loadTemplate = async (template: GensparkTemplate) => {
+  const loadTemplate = async (template: TuttiTemplate) => {
     setError("");
     setLoading(true);
     try {
@@ -517,7 +517,7 @@ export function useRuntimeWorkbenchModel() {
     setLoading(true);
     setError("");
     try {
-      const fixture = await fetchGensparkStudyPlanFixture();
+      const fixture = await fetchTuttiStudyPlanFixture();
       loadHtmlDocument(fixture.html, { source: "fixture", title: fixture.title });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

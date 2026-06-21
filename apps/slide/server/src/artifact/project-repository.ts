@@ -778,7 +778,7 @@ function templateSourceRoots() {
   return [
     process.env.AI_SLIDE_TEMPLATE_ROOT ? resolve(process.env.AI_SLIDE_TEMPLATE_ROOT) : "",
     resolve(root, "templates", "source"),
-    resolve(root, "../../../genspark/slide/template"),
+    resolve(root, "../../../tutti/slide/template"),
   ].filter(Boolean);
 }
 

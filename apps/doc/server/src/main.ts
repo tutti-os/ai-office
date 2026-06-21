@@ -39,8 +39,8 @@ if (existsSync(webDist)) {
   });
 }
 
-server.get("/api/dev/fixtures/genspark-study-plan", async (request, reply) => {
-  const fixturePath = process.env.AI_DOC_GENSPARK_TEST_HTML ?? "/Users/niuma/code/genspark/doc/test.html";
+server.get("/api/dev/fixtures/tutti-study-plan", async (request, reply) => {
+  const fixturePath = process.env.AI_DOC_TUTTI_TEST_HTML ?? "/Users/niuma/code/tutti/doc/test.html";
   try {
     const html = await readFile(fixturePath, "utf8");
     return {

@@ -21,7 +21,7 @@ export AI_DOC_APP_VERSION="${version}"
 export AI_DOC_WEB_DIST="$package_dir/dist"
 export AI_DOC_HOME="\${NEXTOP_APP_DATA_DIR:-$package_dir/.data}"
 export AI_DOC_WORKSPACE_ROOT="\${NEXTOP_WORKSPACE_ROOT:-$AI_DOC_HOME}"
-export AI_DOC_TEMPLATE_ROOT="\${AI_DOC_TEMPLATE_ROOT:-$AI_DOC_HOME/templates/genspark}"
+export AI_DOC_TEMPLATE_ROOT="\${AI_DOC_TEMPLATE_ROOT:-$AI_DOC_HOME/templates/tutti}"
 
 base_url="\${NEXTOP_APP_BASE_URL:-http://$HOST:$PORT}"
 export AI_DOC_SERVER_URL="$base_url"

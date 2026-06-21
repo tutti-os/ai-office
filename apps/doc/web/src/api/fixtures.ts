@@ -5,8 +5,8 @@ export interface HtmlFixtureResponse {
   html: string;
 }
 
-export async function fetchGensparkStudyPlanFixture(): Promise<HtmlFixtureResponse> {
-  const response = await fetch("/api/dev/fixtures/genspark-study-plan");
+export async function fetchTuttiStudyPlanFixture(): Promise<HtmlFixtureResponse> {
+  const response = await fetch("/api/dev/fixtures/tutti-study-plan");
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || response.statusText);

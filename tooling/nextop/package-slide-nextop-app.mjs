@@ -84,7 +84,7 @@ function slideTemplateSourceRoot() {
   const candidates = [
     process.env.AI_SLIDE_TEMPLATE_ROOT ? path.resolve(process.env.AI_SLIDE_TEMPLATE_ROOT) : "",
     path.join(appDir, "templates", "source"),
-    path.resolve(rootDir, "../genspark/slide/template"),
+    path.resolve(rootDir, "../tutti/slide/template"),
   ].filter(Boolean);
   return candidates.find((candidate) => existsSync(candidate)) ?? "";
 }

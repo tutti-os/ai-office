@@ -17,7 +17,7 @@ export function listTemplates(): DocumentLibraryTemplate[] {
 }
 
 function templateRoot() {
-  return process.env.AI_DOC_TEMPLATE_ROOT ? resolve(process.env.AI_DOC_TEMPLATE_ROOT) : resolve(appRoot(), "templates", "genspark");
+  return process.env.AI_DOC_TEMPLATE_ROOT ? resolve(process.env.AI_DOC_TEMPLATE_ROOT) : resolve(appRoot(), "templates", "tutti");
 }
 
 function appRoot() {

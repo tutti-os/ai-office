@@ -2,8 +2,8 @@ import { Clock3, FileText, History, Plus, Sparkles, Trash2 } from "lucide-react"
 import type { DocumentProject, DocumentType, LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
 import {
   allTemplatesLabel,
-  type GensparkTemplate,
-} from "../templates/gensparkTemplates";
+  type TuttiTemplate,
+} from "../templates/tuttiTemplates";
 import { HomeComposer } from "./HomeComposer";
 import type { HomeAttachment } from "./useHomeAttachments";
 
@@ -20,7 +20,7 @@ export function HomePage(props: {
   selectedRuntimeProfileId: string;
   runtimeProfiles: RuntimeProfile[];
   templateCounts: Record<string, number>;
-  templates: GensparkTemplate[];
+  templates: TuttiTemplate[];
   error: string;
   loading: boolean;
   prompt: string;
@@ -36,7 +36,7 @@ export function HomePage(props: {
   onPromptChange: (value: string) => void;
   onRemoveAttachment: (id: string) => void;
   onRuntimeProfileChange: (profileId: string) => void;
-  onSelectTemplate: (template: GensparkTemplate) => void;
+  onSelectTemplate: (template: TuttiTemplate) => void;
 }) {
   return (
     <div className="relative h-full overflow-auto">
@@ -214,7 +214,7 @@ function ProjectHistoryCard(props: { project: DocumentProject; onOpen: (project:
   );
 }
 
-function TemplateCard(props: { template: GensparkTemplate; onSelect: (template: GensparkTemplate) => void }) {
+function TemplateCard(props: { template: TuttiTemplate; onSelect: (template: TuttiTemplate) => void }) {
   const aspectRatio =
     props.template.screenshot_width && props.template.screenshot_height
       ? `${props.template.screenshot_width} / ${props.template.screenshot_height}`

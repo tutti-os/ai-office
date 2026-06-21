@@ -2,8 +2,8 @@ import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const appRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const sourceJson = process.env.AI_DOC_TEMPLATE_JSON ?? path.join(appRoot, "templates", "genspark", "template.json");
-const outputRoot = process.env.AI_DOC_TEMPLATE_ROOT ?? path.join(appRoot, "templates", "genspark");
+const sourceJson = process.env.AI_DOC_TEMPLATE_JSON ?? path.join(appRoot, "templates", "tutti", "template.json");
+const outputRoot = process.env.AI_DOC_TEMPLATE_ROOT ?? path.join(appRoot, "templates", "tutti");
 
 function safeDirName(value) {
   return String(value)
