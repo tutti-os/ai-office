@@ -1,10 +1,33 @@
-name: Check AI Doc Tutti App
+name: AI Doc / Check Tutti App
 
 on:
+  workflow_dispatch:
   pull_request:
+    paths:
+      - ".github/workflows/check-doc-tutti.yml"
+      - "apps/doc/**"
+      - "packages/**"
+      - "scripts/check-doc-i18n.mjs"
+      - "scripts/validate-tutti-app-package.mjs"
+      - "tooling/tutti/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
   push:
     branches:
       - main
+    paths:
+      - ".github/workflows/check-doc-tutti.yml"
+      - "apps/doc/**"
+      - "packages/**"
+      - "scripts/check-doc-i18n.mjs"
+      - "scripts/validate-tutti-app-package.mjs"
+      - "tooling/tutti/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
 
 jobs:
   check:
