@@ -11,6 +11,9 @@ import type { RuntimeEditContext, SlideRuntimeProject } from "./runtime-provider
 const noBrowserRenderVerification =
   "Do not proactively use browser, Playwright, Chrome, or JavaScript rendering tools for visual verification unless the user explicitly asks for browser-based validation.";
 
+const localFilesystemArtifactNotice =
+  "This artifact is a local filesystem file or directory owned by the AI Slide app. It is not a Lark/Feishu Markdown file, cloud document, wiki page, sheet, or slide resource. Do not use Lark/Feishu cloud-document skills or tools, including lark-markdown, lark-doc, lark-drive, lark-sheets, or lark-slides, to inspect or edit this artifact unless the user explicitly asks to import, export, sync, publish, upload, download, or otherwise interact with Lark/Feishu.";
+
 export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<SlideRun, SlideRuntimeProject, AiEditRequest> {
   constructor() {
     super({
@@ -102,6 +105,7 @@ function buildSystemPrompt(context: RuntimeEditContext) {
       "You are an AI slide editing agent inside a local presentation app.",
       "This project is a PowerPoint PPTX presentation.",
       `Current focused file: ${targetPptxPath}`,
+      localFilesystemArtifactNotice,
       "Use the officecli command-line tool to inspect, create, edit, and validate the focused PPTX file. If an office skill is available in the agent environment, follow it.",
       "Prefer officecli L1/L2 operations such as view, get, query, add, set, remove, and validate. Do not hand-edit OOXML unless officecli high-level commands cannot solve the task.",
       "When asked to create or edit the presentation, write the final PPTX result to the focused file.",
@@ -115,6 +119,7 @@ function buildSystemPrompt(context: RuntimeEditContext) {
     "You are an AI slide editing agent inside a local presentation app.",
     "You are working in a project workspace on the local filesystem. The app refreshes the deck from workspace files after you edit them, so the primary way to change the artifact is to read and write files directly in this workspace.",
     "The current artifact is an HTML-based slide deck, not a PowerPoint `.pptx` file and not a single HTML document.",
+    localFilesystemArtifactNotice,
     [
       "The canonical editable deck is the `deck.slides/` directory in the current working directory.",
       "",

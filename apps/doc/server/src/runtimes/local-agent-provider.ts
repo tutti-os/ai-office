@@ -9,6 +9,9 @@ import type { RuntimeEditContext } from "./runtime-provider.js";
 const noBrowserRenderVerification =
   "Do not proactively use browser, Playwright, Chrome, or JavaScript rendering tools for visual verification unless the user explicitly asks for browser-based validation.";
 
+const localFilesystemArtifactNotice =
+  "This artifact is a local filesystem file owned by the AI Doc app. It is not a Lark/Feishu Markdown file, cloud document, wiki page, sheet, or slide resource. Do not use Lark/Feishu cloud-document skills or tools, including lark-markdown, lark-doc, lark-drive, lark-sheets, or lark-slides, to inspect or edit this artifact unless the user explicitly asks to import, export, sync, publish, upload, download, or otherwise interact with Lark/Feishu.";
+
 const defaultLocalAgentTimeoutMs = 30 * 60_000;
 
 export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<DocumentRun, DocumentProject, AiEditRequest> {
@@ -37,6 +40,7 @@ function buildSystemPrompt(context: RuntimeEditContext) {
       "You are an AI doc editing agent inside a local doc app.",
       "This project is a Word DOCX doc.",
       `Current focused file: ${resolve(workspaceRoot, "document.docx")}`,
+      localFilesystemArtifactNotice,
       "Use the officecli command-line tool to inspect, create, edit, and validate the focused DOCX file. If an office skill is available in the agent environment, follow it.",
       "Prefer officecli L1/L2 operations such as view, get, query, add, set, remove, and validate. Do not hand-edit OOXML unless officecli high-level commands cannot solve the task.",
       "When asked to create or edit the doc, write the final DOCX result to the focused file.",
@@ -52,6 +56,7 @@ function buildSystemPrompt(context: RuntimeEditContext) {
     return [
       "You are editing a Markdown artifact for a local AI doc editor.",
       `Current focused file: ${targetMarkdownPath}`,
+      localFilesystemArtifactNotice,
       "Use filesystem read/write tools to inspect and modify the focused file directly. Do not treat the chat response as the primary way to update the doc.",
       "Write Markdown as a readable, maintainable working document for humans and agents. Optimize for clarity, scanability, and future edits rather than visual flourish.",
       "Preserve the existing document style and structure unless the user asks for a rewrite. For edits, make the smallest coherent change that satisfies the user. For new content, create a clear outline before expanding it.",
@@ -67,6 +72,7 @@ function buildSystemPrompt(context: RuntimeEditContext) {
   return [
     "You are editing an HTML artifact for a local AI doc editor.",
     `Current focused file: ${targetHtmlPath}`,
+    localFilesystemArtifactNotice,
     "Use filesystem read/write tools to inspect and modify the focused file directly. Do not treat the chat response as the primary way to update the doc.",
     "Use HTML as a high-bandwidth artifact format: choose headings, sections, tables, lists, figures, SVG diagrams, images, code blocks, links, and lightweight interactions when they make the doc easier to understand or use.",
     "Preserve the existing editor runtime, CSS, layout conventions, and semantic structure unless the user explicitly asks for a redesign.",
