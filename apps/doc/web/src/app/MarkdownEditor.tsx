@@ -308,6 +308,16 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
   const handleEditorKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     activateToolbar();
+    const historyOffset = markdownHistoryShortcutOffset(event);
+    if (historyOffset) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!props.readOnly) {
+        if (historyOffset === -1) props.onUndo();
+        else props.onRedo();
+      }
+      return;
+    }
     if (props.readOnly) {
       if (isMarkdownEditingKey(event)) {
         event.preventDefault();
@@ -402,18 +412,16 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       <ArtifactWorkspaceHeader
         title={props.runtime.title || "Untitled Markdown"}
         saveState={props.saveState}
+        agentWorking={props.agentProcessing}
         stats={[
           `${markdownWordCount(props.runtime.content)} words`,
           `${markdownParagraphCount(props.runtime.content)} blocks`,
         ]}
         exportItems={[
           {
-            label: "Markdown",
-            onSelect: () => void props.onExportMarkdown(normalizeMarkdownEditorOutput(editorRef.current?.getMarkdown() ?? markdownRef.current)),
-          },
-          {
-            label: "DOCX",
-            onSelect: () => void props.onExportDocx(normalizeMarkdownEditorOutput(editorRef.current?.getMarkdown() ?? markdownRef.current)),
+            label: "DOCX (coming soon)",
+            disabled: true,
+            onSelect: () => undefined,
           },
           {
             label: props.pdfExporting ? "PDF exporting..." : "PDF",
@@ -509,6 +517,14 @@ function isMarkdownEditingKey(event: KeyboardEvent<HTMLDivElement>) {
   if (event.metaKey || event.ctrlKey || event.altKey) return false;
   if (event.key.length === 1) return true;
   return event.key === "Backspace" || event.key === "Delete" || event.key === "Enter" || event.key === "Tab";
+}
+
+function markdownHistoryShortcutOffset(event: KeyboardEvent<HTMLDivElement>): -1 | 1 | null {
+  if (!(event.metaKey || event.ctrlKey) || event.altKey) return null;
+  const key = event.key.toLowerCase();
+  if (key === "y") return 1;
+  if (key === "z") return event.shiftKey ? 1 : -1;
+  return null;
 }
 
 function isMarkdownComposingKeyEvent(event: KeyboardEvent<HTMLDivElement>) {

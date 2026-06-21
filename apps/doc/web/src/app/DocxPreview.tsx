@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { FileText } from "lucide-react";
-import { ArtifactAgentProcessingOverlay, ArtifactWorkspaceHeader } from "@ai-app/ui/editor-frame";
+import { ArtifactAgentProcessingOverlay, ArtifactExportToast, ArtifactWorkspaceHeader } from "@ai-app/ui/editor-frame";
 import { DocxRenderer } from "@tutti-os/office-preview/docx";
 import "@tutti-os/office-preview/styles/docx.css";
 import type { DocxRuntimeState, DocxSelection } from "../artifact/docxArtifactAdapter";
@@ -10,8 +10,14 @@ type DocxPreviewProps = {
   projectId: string | null;
   dirty: boolean;
   error: string;
+  exportNotice: string;
   agentProcessing: boolean;
   loading: boolean;
+  pdfExportAvailable: boolean;
+  pdfExporting: boolean;
+  onDismissExportNotice: () => void;
+  onExportPdf: (previewElement: HTMLElement | null) => Promise<void>;
+  onOpenExportLocation: () => void;
   onSelectionChange: (selection: DocxSelection) => void;
 };
 
@@ -44,10 +50,16 @@ export function DocxPreview(props: DocxPreviewProps) {
       <ArtifactWorkspaceHeader
         title={props.runtime.title || "Untitled Word Doc"}
         saveState={props.loading ? "loading" : props.dirty ? "saving" : "saved"}
+        agentWorking={props.agentProcessing}
         exportItems={[
-          { label: "PDF", disabled: true, onSelect: () => undefined },
+          {
+            label: props.pdfExporting ? "PDF exporting..." : "PDF",
+            disabled: props.pdfExporting || !props.pdfExportAvailable,
+            onSelect: () => void props.onExportPdf(rootRef.current),
+          },
         ]}
       />
+      <ArtifactExportToast message={props.exportNotice} onClose={props.onDismissExportNotice} onOpenLocation={props.onOpenExportLocation} />
 
       <div className="relative min-h-0 flex-1">
         <div className="h-full overflow-x-hidden overflow-y-auto bg-[#2a2a2a] px-3 py-4 md:px-6 md:py-6">

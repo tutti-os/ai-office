@@ -93,6 +93,7 @@ export type ArtifactExportItem = {
 export function ArtifactWorkspaceHeader(props: {
   title: string;
   saveState: ArtifactSaveState;
+  agentWorking?: boolean;
   stats?: string[];
   exportItems: ArtifactExportItem[];
 }) {
@@ -119,7 +120,7 @@ export function ArtifactWorkspaceHeader(props: {
     <header className="flex h-12 shrink-0 items-center justify-between gap-4 border-b border-white/8 px-5">
       <div className="flex min-w-0 items-center gap-2">
         <div className="min-w-0 truncate text-[13px] font-semibold text-white">{props.title}</div>
-        <SaveStateBadge state={props.saveState} />
+        <SaveStateBadge agentWorking={props.agentWorking} state={props.saveState} />
         {props.stats?.length ? (
           <div className="hidden min-w-0 items-center gap-1.5 text-[11px] font-semibold text-white/32 md:flex">
             {props.stats.map((stat, index) => (
@@ -170,15 +171,23 @@ export function ArtifactWorkspaceHeader(props: {
   );
 }
 
-function SaveStateBadge(props: { state: ArtifactSaveState }) {
-  const tone =
-    props.state === "error"
+function SaveStateBadge(props: { state: ArtifactSaveState; agentWorking?: boolean }) {
+  const tone = props.agentWorking
+    ? "animate-pulse bg-[#38a7ff] shadow-[0_0_0_3px_rgba(56,167,255,0.16)]"
+    : props.state === "error"
       ? "bg-[#ff6b57] shadow-[0_0_0_3px_rgba(255,107,87,0.12)]"
       : props.state === "saved"
         ? "bg-[#37d67a] shadow-[0_0_0_3px_rgba(55,214,122,0.12)]"
         : "bg-[#f5c542] shadow-[0_0_0_3px_rgba(245,197,66,0.14)]";
-  const label =
-    props.state === "error" ? "Save error" : props.state === "saved" ? "Saved" : props.state === "loading" ? "Loading" : "Saving";
+  const label = props.agentWorking
+    ? "Agent working"
+    : props.state === "error"
+      ? "Save error"
+      : props.state === "saved"
+        ? "Saved"
+        : props.state === "loading"
+          ? "Loading"
+          : "Saving";
   return (
     <span className="relative top-px inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold text-white/42" title={label}>
       <span className={`size-1.5 rounded-full ${tone}`} />

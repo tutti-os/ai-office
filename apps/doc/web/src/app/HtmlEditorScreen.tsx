@@ -359,12 +359,12 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
         <ArtifactWorkspaceHeader
           title={props.runtime?.title ?? "Untitled Doc"}
           saveState={props.saveState}
+          agentWorking={props.agentProcessing}
           exportItems={[
-            { label: "HTML", onSelect: () => void props.onExportHtml() },
             {
-              label: props.docxExporting ? "DOCX exporting..." : "DOCX",
-              disabled: props.docxExporting,
-              onSelect: () => void props.onExportDocx(),
+              label: "DOCX (coming soon)",
+              disabled: true,
+              onSelect: () => undefined,
             },
             {
               label: props.pdfExporting ? "PDF exporting..." : "PDF",

@@ -90,6 +90,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     selectedRuntimeProfileId,
     selectedTemplateCategory,
     sendAgentPrompt,
+    exportCurrentDocxPdf,
     exportCurrentHtml,
     exportCurrentHtmlDocx,
     exportCurrentHtmlPdf,
@@ -225,10 +226,13 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           runtime={docxRuntime}
           runtimeProfiles={runtimeProfiles}
           agentProcessing={artifactAgentProcessing}
+          pdfExportAvailable={pdfExportAvailable}
+          pdfExporting={pdfExporting}
           selectedRuntimeProfileId={selectedRuntimeProfileId}
           onBackHome={requestHomeRoute}
           onCancelAgentRun={cancelAgentRun}
           onDismissExportNotice={dismissExportNotice}
+          onExportPdf={exportCurrentDocxPdf}
           onOpenExportLocation={openCurrentProjectExportsDir}
           onRuntimeProfileChange={setSelectedRuntimeProfileId}
           onSelectionChange={updateDocxSelection}

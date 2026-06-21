@@ -78,8 +78,11 @@ export function MarkdownDocumentScreen(props: SharedShellProps & {
 export function DocxDocumentScreen(props: SharedShellProps & {
   agentProcessing: boolean;
   loading: boolean;
+  pdfExportAvailable: boolean;
+  pdfExporting: boolean;
   projectId: string | null;
   runtime: DocxRuntimeState;
+  onExportPdf: (previewElement: HTMLElement | null) => Promise<void>;
   onSelectionChange: (selection: DocxSelection) => void;
 }) {
   return (
@@ -89,8 +92,14 @@ export function DocxDocumentScreen(props: SharedShellProps & {
         projectId={props.projectId}
         dirty={props.dirty}
         error={props.error}
+        exportNotice={props.exportNotice}
         agentProcessing={props.agentProcessing}
         loading={props.loading}
+        pdfExportAvailable={props.pdfExportAvailable}
+        pdfExporting={props.pdfExporting}
+        onDismissExportNotice={props.onDismissExportNotice}
+        onExportPdf={props.onExportPdf}
+        onOpenExportLocation={props.onOpenExportLocation}
         onSelectionChange={props.onSelectionChange}
       />
     </ArtifactEditorFrame>

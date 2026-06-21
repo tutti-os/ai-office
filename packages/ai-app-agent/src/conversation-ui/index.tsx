@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
+  ChevronDown,
   CheckCircle2,
   CircleDashed,
   Loader2,
@@ -131,19 +132,22 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
           />
           <div className={cx.composerFooter}>
             {props.agentOptions?.length ? (
-              <select
-                className={cx.agentSelect}
-                value={props.selectedAgentId ?? props.agentOptions[0]?.id ?? ""}
-                aria-label="Select ACP agent"
-                disabled={props.sending}
-                onChange={(event) => props.onAgentChange?.(event.currentTarget.value)}
-              >
-                {props.agentOptions.map((option) => (
-                  <option disabled={option.disabled} key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <div className={cx.agentSelectWrap}>
+                <select
+                  className={cx.agentSelect}
+                  value={props.selectedAgentId ?? props.agentOptions[0]?.id ?? ""}
+                  aria-label="Select ACP agent"
+                  disabled={props.sending}
+                  onChange={(event) => props.onAgentChange?.(event.currentTarget.value)}
+                >
+                  {props.agentOptions.map((option) => (
+                    <option disabled={option.disabled} key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className={cx.agentSelectChevron} size={15} />
+              </div>
             ) : (
               <div />
             )}
@@ -256,7 +260,9 @@ export type ConversationClassNames = {
   textarea: string;
   composerFooter: string;
   composerActions: string;
+  agentSelectWrap: string;
   agentSelect: string;
+  agentSelectChevron: string;
   cancelButton: string;
   sendButton: string;
   userRow: string;
@@ -315,7 +321,9 @@ const classes: Record<AgentConversationVariant, ConversationClassNames> = {
     textarea: "h-[92px] w-full resize-none border-0 bg-transparent text-[13px] leading-5 text-white outline-none placeholder:text-white/36",
     composerFooter: "mt-2 flex items-center justify-between border-t border-white/8 pt-2",
     composerActions: "flex items-center gap-2",
-    agentSelect: "h-8 min-w-0 max-w-[168px] rounded-full border border-white/10 bg-[#242424] px-3 text-[12px] font-semibold text-white/70 outline-none disabled:opacity-50",
+    agentSelectWrap: "relative min-w-0 max-w-[176px] shrink",
+    agentSelect: "h-8 w-full min-w-[108px] appearance-none rounded-full border border-white/12 bg-[#242424] py-0 pl-3.5 pr-8 text-[12px] font-semibold text-white/78 outline-none transition hover:border-white/18 hover:bg-[#292929] focus:border-white/26 focus:ring-2 focus:ring-white/10 disabled:cursor-default disabled:opacity-50",
+    agentSelectChevron: "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/46",
     cancelButton: "grid size-8 place-items-center rounded-full border border-white/10 bg-[#3a241f] text-[#ffad9f] hover:bg-[#4a2a24]",
     sendButton: "grid size-8 place-items-center rounded-full bg-white text-black disabled:bg-white/20 disabled:text-white/40",
     userRow: "flex justify-end",
@@ -391,7 +399,9 @@ const classes: Record<AgentConversationVariant, ConversationClassNames> = {
     textarea: "block h-[92px] w-full resize-none border-0 bg-transparent text-[13px] leading-5 text-white outline-none placeholder:text-white/36",
     composerFooter: "mt-2 flex items-center justify-between border-t border-white/8 pt-2",
     composerActions: "flex items-center gap-2",
-    agentSelect: "h-8 min-w-0 max-w-[168px] rounded-full border border-white/10 bg-[#242424] px-3 text-[12px] font-bold text-white/70 outline-none disabled:opacity-50",
+    agentSelectWrap: "relative min-w-0 max-w-[176px] shrink",
+    agentSelect: "h-8 w-full min-w-[108px] appearance-none rounded-full border border-white/12 bg-[#242424] py-0 pl-3.5 pr-8 text-[12px] font-bold text-white/78 outline-none transition hover:border-white/18 hover:bg-[#292929] focus:border-white/26 focus:ring-2 focus:ring-white/10 disabled:cursor-default disabled:opacity-50",
+    agentSelectChevron: "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/46",
     cancelButton: "grid size-8 place-items-center rounded-full border border-white/10 bg-[#3a241f] text-[#ffad9f] hover:bg-[#4a2a24]",
     sendButton: "grid size-8 place-items-center rounded-full border-0 bg-white text-black disabled:cursor-default disabled:bg-white/20 disabled:text-white/40",
     userRow: "flex justify-end",

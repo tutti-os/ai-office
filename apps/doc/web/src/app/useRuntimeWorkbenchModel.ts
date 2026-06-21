@@ -3,6 +3,7 @@ import { HomePage } from "./HomePage";
 import { DocxDocumentScreen, MarkdownDocumentScreen } from "./DocumentFormatScreens";
 import { HtmlEditorController } from "./HtmlEditorController";
 import { DocumentLoadingScreen, HtmlEditorScreen } from "./HtmlEditorScreen";
+import { saveDocxArtifactPdfExport } from "./docxExport";
 import { saveHtmlArtifactDocxExport, saveHtmlArtifactExport, saveHtmlArtifactPdfExport } from "./htmlExport";
 import { saveMarkdownArtifactDocxExport, saveMarkdownArtifactExport, saveMarkdownArtifactPdfExport } from "./markdownExport";
 import { isTuttiPdfExportAvailable } from "./tuttiPdfBridge";
@@ -137,8 +138,25 @@ import {
   type ToolbarState,
 } from "./runtimeWorkbenchTypes";
 
+function htmlHistoryShortcutOffset(event: KeyboardEvent): -1 | 1 | null {
+  if (isNativeTextControlTarget(event.target)) return null;
+  if (!(event.metaKey || event.ctrlKey) || event.altKey) return null;
+  const key = event.key.toLowerCase();
+  if (key === "y") return 1;
+  if (key === "z") return event.shiftKey ? 1 : -1;
+  return null;
+}
+
+function isNativeTextControlTarget(target: EventTarget | null) {
+  if (!target || typeof target !== "object" || !("closest" in target)) return false;
+  const closest = (target as { closest?: unknown }).closest;
+  if (typeof closest !== "function") return false;
+  return Boolean((closest as (selector: string) => unknown).call(target, "input, textarea, select"));
+}
+
 export function useRuntimeWorkbenchModel() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const runtimeRef = useRef<RuntimeState | null>(null);
   const lastEditorTargetRef = useRef<Node | null>(null);
   const lastResolvedTargetRef = useRef<Element | null>(null);
   const lastSelectionRef = useRef<SelectionState | null>(null);
@@ -174,6 +192,7 @@ export function useRuntimeWorkbenchModel() {
     serialize: serializeHtmlRuntime,
     createAiEditRequest,
   } = htmlArtifact;
+  runtimeRef.current = runtime;
   const {
     runtime: markdownRuntime,
     setRuntime: setMarkdownRuntime,
@@ -837,10 +856,19 @@ export function useRuntimeWorkbenchModel() {
       lastEditorTargetRef.current = target;
       queueSelectionSync(target);
     };
+    const handleFrameHistoryShortcut = (event: KeyboardEvent) => {
+      const historyOffset = htmlHistoryShortcutOffset(event);
+      if (!historyOffset) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (artifactReadOnlyRef.current) return;
+      htmlEditorController.applyHistoryOffset(runtimeRef.current, historyOffset);
+    };
     clearTableCellSelection(doc);
     removeImageSelectionOverlay(doc);
     doc.addEventListener("focusin", activateToolbarFromFrame, true);
     doc.addEventListener("pointerdown", activateToolbarFromFrame, true);
+    doc.addEventListener("keydown", handleFrameHistoryShortcut, true);
     doc.addEventListener("keyup", syncFromFrameEvent, true);
     doc.addEventListener("click", syncClickFromFrameEvent, true);
     doc.addEventListener("input", () => {
@@ -1358,6 +1386,26 @@ export function useRuntimeWorkbenchModel() {
     }
   };
 
+  const exportCurrentDocxPdf = async (previewElement: HTMLElement | null) => {
+    if (!docxRuntime || !currentProjectId || !previewElement) return;
+    setError("");
+    setExportNotice("");
+    setPdfExporting(true);
+    try {
+      const exported = await saveDocxArtifactPdfExport({
+        previewElement,
+        projectId: currentProjectId,
+        title: docxRuntime.title || currentProject?.title || "doc",
+      });
+      console.info(`[ai-doc] Exported DOCX PDF to ${exported.path}`);
+      setExportNotice(`Exported PDF to ${exported.path}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPdfExporting(false);
+    }
+  };
+
   const openCurrentProjectExportsDir = async () => {
     if (!currentProjectId) return;
     setError("");
@@ -1451,6 +1499,7 @@ export function useRuntimeWorkbenchModel() {
     selectedRuntimeProfileId,
     selectedTemplateCategory,
     sendAgentPrompt,
+    exportCurrentDocxPdf,
     exportCurrentHtml,
     exportCurrentHtmlDocx,
     exportCurrentHtmlPdf,

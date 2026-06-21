@@ -116,6 +116,7 @@ export function SlideEditorScreen(props: {
         <ArtifactWorkspaceHeader
           title={props.detail?.project.title ?? "Untitled Presentation"}
           saveState={headerSaveState}
+          agentWorking={agentProcessing}
           exportItems={slideExportItems(artifactType, exportDeckPptx, exportPptxArtifact, pptxExporting)}
         />
         <ArtifactExportToast message={exportNotice} onClose={() => setExportNotice("")} onOpenLocation={() => void openExportLocation()} />
