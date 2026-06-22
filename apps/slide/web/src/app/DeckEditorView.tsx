@@ -1,4 +1,5 @@
 import { AlignCenter, AlignLeft, AlignRight, Bold, Crosshair, Image, Italic, PaintBucket, Redo2, Strikethrough, Underline, Undo2 } from "lucide-react";
+import { scrollbarClass } from "@ai-app/ui/app-shell";
 import { Toolbar, ToolbarColorInput, ToolbarDivider, ToolbarGroup, ToolbarIconButton, ToolbarNumberInput, ToolbarRow, ToolbarSelect } from "@ai-app/ui/toolbar";
 import type { PointerEvent } from "react";
 import type { InlineFormatTag, RichTextStyle } from "@ai-app/ui/rich-text";
@@ -145,7 +146,7 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
       <input ref={imageFileInputRef} className="hidden" type="file" accept="image/*" onChange={replaceActiveImageFromFile} />
       <div
         ref={hostRef}
-        className="flex min-h-0 flex-1 items-center justify-center overflow-auto px-0 pb-5 pt-2.5 outline-none md:px-2 md:pb-7 md:pt-3"
+        className={cn("flex min-h-0 flex-1 items-center justify-center overflow-auto px-0 pb-5 pt-2.5 outline-none md:px-2 md:pb-7 md:pt-3", scrollbarClass)}
         tabIndex={0}
         onKeyDown={handleSlideNavigationKey}
         onPointerDown={(event) => {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { FileText } from "lucide-react";
+import { scrollbarClass } from "@ai-app/ui/app-shell";
 import { ArtifactAgentProcessingOverlay, ArtifactExportToast, ArtifactWorkspaceHeader } from "@ai-app/ui/editor-frame";
 import { DocxRenderer } from "@tutti-os/office-preview/docx";
 import "@tutti-os/office-preview/styles/docx.css";
@@ -65,7 +66,7 @@ export function DocxPreview(props: DocxPreviewProps) {
       <ArtifactExportToast message={props.exportNotice} onClose={props.onDismissExportNotice} onOpenLocation={props.onOpenExportLocation} />
 
       <div className="relative min-h-0 flex-1">
-        <div className="h-full overflow-x-hidden overflow-y-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-3 py-4 md:px-6 md:py-6">
+        <div className={`h-full overflow-x-hidden overflow-y-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-3 py-4 md:px-6 md:py-6 ${scrollbarClass}`}>
           {props.error ? <div className="mx-auto mb-4 max-w-[980px] rounded-[16px] border border-[#B8A07C]/50 bg-[#F4EFE6]/80 p-3 text-[12px] leading-5 text-[#7b2e24]">{props.error}</div> : null}
           <div
             ref={rootRef}

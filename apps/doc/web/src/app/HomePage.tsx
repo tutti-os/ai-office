@@ -5,7 +5,7 @@ import {
   allTemplatesLabel,
   type TuttiTemplate,
 } from "../templates/tuttiTemplates";
-import { historyActionsClass, historyCardClass, historyClearButtonClass, historyDeleteButtonClass, historyEmptyIconClass, historyEmptyStateClass } from "@ai-app/ui/app-shell";
+import { historyActionsClass, historyCardClass, historyClearButtonClass, historyDeleteButtonClass, historyEmptyIconClass, historyEmptyStateClass, scrollbarClass } from "@ai-app/ui/app-shell";
 import { HomeComposer } from "./HomeComposer";
 import { useI18n } from "../i18n";
 import type { HomeAttachment } from "./useHomeAttachments";
@@ -47,7 +47,7 @@ export function HomePage(props: {
   const { t } = useI18n();
 
   return (
-    <div className="relative h-full overflow-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px]">
+    <div className={`relative h-full overflow-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] ${scrollbarClass}`}>
       <input
         ref={importInputRef}
         className="hidden"

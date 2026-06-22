@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FileText } from "lucide-react";
+import { darkScrollbarClass } from "@ai-app/ui/app-shell";
 import { PptxRenderer } from "@tutti-os/office-preview/pptx";
 import "@tutti-os/office-preview/styles/pptx.css";
 import type { PptxRenderPresentation } from "@tutti-os/office-preview/pptx";
@@ -101,7 +102,7 @@ export function PptxPreview(props: PptxPreviewProps) {
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#1f1f1f]">
-      <div ref={stageRef} className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#2a2a2a] px-8 py-7 outline-none" tabIndex={0}>
+      <div ref={stageRef} className={`relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#2a2a2a] px-8 py-7 outline-none ${darkScrollbarClass}`} tabIndex={0}>
         {props.error ? <div className="absolute left-1/2 top-4 z-[2] w-[min(calc(100%_-_48px),980px)] -translate-x-1/2 rounded-[10px] bg-[#3a241f] p-3 text-[12px] leading-5 text-[#ffad9f]">{props.error}</div> : null}
         <div
           ref={rootRef}

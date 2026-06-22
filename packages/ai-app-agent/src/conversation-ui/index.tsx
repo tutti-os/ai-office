@@ -365,13 +365,29 @@ export type ConversationClassNames = {
   spin: string;
 };
 
+function cx(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(" ");
+}
+
+const documentScrollbarClass =
+  "[scrollbar-color:rgba(92,107,80,0.54)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:size-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-solid [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[#5C6B50]/45 [&::-webkit-scrollbar-thumb]:bg-clip-padding hover:[&::-webkit-scrollbar-thumb]:bg-[#5C6B50]/62";
+
+const documentNestedScrollbarClass =
+  "[&_pre]:[scrollbar-color:rgba(92,107,80,0.54)_transparent] [&_pre]:[scrollbar-width:thin] [&_pre::-webkit-scrollbar]:size-2 [&_pre::-webkit-scrollbar-track]:bg-transparent [&_pre::-webkit-scrollbar-thumb]:rounded-full [&_pre::-webkit-scrollbar-thumb]:border-2 [&_pre::-webkit-scrollbar-thumb]:border-solid [&_pre::-webkit-scrollbar-thumb]:border-transparent [&_pre::-webkit-scrollbar-thumb]:bg-[#5C6B50]/45 [&_pre::-webkit-scrollbar-thumb]:bg-clip-padding hover:[&_pre::-webkit-scrollbar-thumb]:bg-[#5C6B50]/62";
+
+const slideScrollbarClass =
+  "[scrollbar-color:rgba(255,255,255,0.32)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:size-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-solid [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-white/28 [&::-webkit-scrollbar-thumb]:bg-clip-padding hover:[&::-webkit-scrollbar-thumb]:bg-white/40";
+
+const slideNestedScrollbarClass =
+  "[&_pre]:[scrollbar-color:rgba(255,255,255,0.32)_transparent] [&_pre]:[scrollbar-width:thin] [&_pre::-webkit-scrollbar]:size-2 [&_pre::-webkit-scrollbar-track]:bg-transparent [&_pre::-webkit-scrollbar-thumb]:rounded-full [&_pre::-webkit-scrollbar-thumb]:border-2 [&_pre::-webkit-scrollbar-thumb]:border-solid [&_pre::-webkit-scrollbar-thumb]:border-transparent [&_pre::-webkit-scrollbar-thumb]:bg-white/28 [&_pre::-webkit-scrollbar-thumb]:bg-clip-padding hover:[&_pre::-webkit-scrollbar-thumb]:bg-white/40";
+
 const classes: Record<AgentConversationVariant, ConversationClassNames> = {
   document: {
     root: "flex h-screen min-h-0 flex-col overflow-hidden border-r border-[#B8A07C]/45 bg-[#E6DDCD] text-[#2A2620]",
     header: "flex h-12 items-center justify-between border-b border-[#B8A07C]/45 px-4",
     homeButton: "text-[12px] font-semibold text-[#2A2620]/72 hover:text-[#5C6B50]",
     headerStatus: "flex items-center gap-2 text-[11px] font-semibold text-[#8B8275]",
-    scroll: "min-h-0 flex-1 overflow-auto overscroll-contain px-4 py-5",
+    scroll: cx("min-h-0 flex-1 overflow-auto overscroll-contain px-4 py-5", documentScrollbarClass),
     introCard: "rounded-[20px] border border-[#B8A07C]/55 bg-[#F4EFE6]/58 p-4 shadow-[0_1px_2px_rgba(0,0,0,0.05)] backdrop-blur",
     introMain: "flex items-start gap-3",
     introIcon: "grid size-8 shrink-0 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]",
@@ -383,8 +399,8 @@ const classes: Record<AgentConversationVariant, ConversationClassNames> = {
     activeSelection: "mt-4 rounded-[20px] border border-[#B8A07C]/55 bg-[#F4EFE6]/48 p-3",
     composerSelection: "mb-3 rounded-[20px] border border-[#B8A07C]/55 bg-[#F4EFE6]/48 p-3",
     activeSelectionLabel: "mb-1.5 text-[10px] font-semibold uppercase text-[#8B8275]",
-    activeSelectionText: "max-h-28 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-4 text-[#2A2620]/62",
-    composerSelectionText: "max-h-20 overflow-auto overscroll-contain whitespace-pre-wrap break-words text-[11px] leading-4 text-[#2A2620]/62",
+    activeSelectionText: cx("max-h-28 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-4 text-[#2A2620]/62", documentScrollbarClass),
+    composerSelectionText: cx("max-h-20 overflow-auto overscroll-contain whitespace-pre-wrap break-words text-[11px] leading-4 text-[#2A2620]/62", documentScrollbarClass),
     messages: "mt-5 space-y-4",
     composerWrap: "p-3",
     composer: "rounded-[20px] border border-[#D8CDB9]/70 bg-[#F4EFE6]/92 p-3 shadow-[0_1px_2px_rgba(0,0,0,0.05)]",
@@ -442,11 +458,11 @@ const classes: Record<AgentConversationVariant, ConversationClassNames> = {
           : "text-[10px] font-semibold text-[#8B8275]",
     toolPayload: "mt-1 grid gap-1",
     toolPayloadLabel: "text-[10px] font-semibold uppercase text-[#8B8275]",
-    toolPayloadText: "max-h-[180px] overflow-auto whitespace-pre-wrap break-words rounded-[12px] bg-[#E6DDCD]/70 px-2 py-1.5 font-mono text-[10px] leading-4 text-[#2A2620]/58",
+    toolPayloadText: cx("max-h-[180px] overflow-auto whitespace-pre-wrap break-words rounded-[12px] bg-[#E6DDCD]/70 px-2 py-1.5 font-mono text-[10px] leading-4 text-[#2A2620]/58", documentScrollbarClass),
     thinkingBlock: "rounded-[16px] bg-[#F4EFE6]/50 px-2.5 py-2 text-[11px] leading-4 text-[#8B8275]",
     errorBlock: "rounded-[16px] border border-[#7b2e24]/25 bg-[#F4EFE6]/70 px-2.5 py-2 text-[11px] leading-4 text-[#7b2e24]",
     resultBlock:
-      "break-words text-[12px] leading-5 text-[#2A2620]/70 [&_a]:font-semibold [&_a]:text-[#5C6B50] [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-[#B8A07C] [&_blockquote]:pl-2.5 [&_blockquote]:text-[#8B8275] [&_code]:rounded-md [&_code]:bg-[#F4EFE6]/80 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] [&_em]:text-[#2A2620]/72 [&_h1]:mb-1.5 [&_h1]:text-[14px] [&_h1]:font-bold [&_h1]:text-[#2A2620] [&_h2]:mb-1 [&_h2]:text-[13px] [&_h2]:font-bold [&_h2]:text-[#2A2620] [&_h3]:mb-1 [&_h3]:text-[12px] [&_h3]:font-bold [&_h3]:text-[#2A2620] [&_hr]:my-2 [&_hr]:border-[#B8A07C]/55 [&_li]:my-0.5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_pre]:my-1.5 [&_pre]:max-h-[220px] [&_pre]:overflow-auto [&_pre]:rounded-[12px] [&_pre]:bg-[#F4EFE6]/80 [&_pre]:p-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_strong]:font-bold [&_strong]:text-[#2A2620] [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5",
+      cx("break-words text-[12px] leading-5 text-[#2A2620]/70 [&_a]:font-semibold [&_a]:text-[#5C6B50] [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-[#B8A07C] [&_blockquote]:pl-2.5 [&_blockquote]:text-[#8B8275] [&_code]:rounded-md [&_code]:bg-[#F4EFE6]/80 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] [&_em]:text-[#2A2620]/72 [&_h1]:mb-1.5 [&_h1]:text-[14px] [&_h1]:font-bold [&_h1]:text-[#2A2620] [&_h2]:mb-1 [&_h2]:text-[13px] [&_h2]:font-bold [&_h2]:text-[#2A2620] [&_h3]:mb-1 [&_h3]:text-[12px] [&_h3]:font-bold [&_h3]:text-[#2A2620] [&_hr]:my-2 [&_hr]:border-[#B8A07C]/55 [&_li]:my-0.5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_pre]:my-1.5 [&_pre]:max-h-[220px] [&_pre]:overflow-auto [&_pre]:rounded-[12px] [&_pre]:bg-[#F4EFE6]/80 [&_pre]:p-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_strong]:font-bold [&_strong]:text-[#2A2620] [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5", documentNestedScrollbarClass),
     statusBlock: "text-[11px] leading-4 text-[#8B8275]",
     spin: "animate-spin",
   },
@@ -455,7 +471,7 @@ const classes: Record<AgentConversationVariant, ConversationClassNames> = {
     header: "flex h-12 shrink-0 items-center justify-between border-b border-white/8 px-4",
     homeButton: "border-0 bg-transparent p-0 text-[12px] font-bold text-white/62 hover:text-white",
     headerStatus: "flex items-center gap-[7px] text-[11px] font-bold text-white/38",
-    scroll: "min-h-0 flex-1 overflow-auto overscroll-contain px-4 py-5",
+    scroll: cx("min-h-0 flex-1 overflow-auto overscroll-contain px-4 py-5", slideScrollbarClass),
     introCard: "rounded-2xl bg-[#2c2c2c] p-4 shadow-[0_12px_36px_rgba(0,0,0,0.24)]",
     introMain: "flex items-start gap-3",
     introIcon: "grid size-8 shrink-0 place-items-center rounded-full bg-white text-black",
@@ -467,8 +483,8 @@ const classes: Record<AgentConversationVariant, ConversationClassNames> = {
     activeSelection: "mt-4 rounded-2xl border border-white/8 bg-white/[0.04] p-3",
     composerSelection: "mb-3 rounded-2xl border border-white/8 bg-white/[0.04] p-3",
     activeSelectionLabel: "mb-1.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-white/28",
-    activeSelectionText: "max-h-28 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-4 text-white/58",
-    composerSelectionText: "max-h-20 overflow-auto overscroll-contain whitespace-pre-wrap break-words text-[11px] leading-4 text-white/58",
+    activeSelectionText: cx("max-h-28 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-4 text-white/58", slideScrollbarClass),
+    composerSelectionText: cx("max-h-20 overflow-auto overscroll-contain whitespace-pre-wrap break-words text-[11px] leading-4 text-white/58", slideScrollbarClass),
     messages: "mt-5 grid gap-4",
     composerWrap: "shrink-0 p-3",
     composer: "rounded-2xl border border-white/12 bg-[#2b2b2b] p-3 shadow-[0_14px_40px_rgba(0,0,0,0.35)]",
@@ -526,11 +542,11 @@ const classes: Record<AgentConversationVariant, ConversationClassNames> = {
           : "text-[10px] font-extrabold text-white/48",
     toolPayload: "mt-1 grid gap-1",
     toolPayloadLabel: "text-[10px] font-extrabold uppercase text-white/28",
-    toolPayloadText: "max-h-[180px] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-black/18 px-2 py-1.5 font-mono text-[10px] leading-4 text-white/46",
+    toolPayloadText: cx("max-h-[180px] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-black/18 px-2 py-1.5 font-mono text-[10px] leading-4 text-white/46", slideScrollbarClass),
     thinkingBlock: "rounded-xl bg-white/[0.04] px-2.5 py-2 text-[11px] leading-4 text-white/48",
     errorBlock: "rounded-xl bg-[#3a241f] px-3 py-2.5 text-[12px] leading-5 text-[#ffad9f]",
     resultBlock:
-      "break-words text-[12px] leading-[1.65] text-white/70 [&_a]:font-bold [&_a]:text-white/86 [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-white/18 [&_blockquote]:pl-2.5 [&_blockquote]:text-white/56 [&_code]:rounded-md [&_code]:bg-black/22 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] [&_em]:text-white/72 [&_h1]:mb-1.5 [&_h1]:text-[14px] [&_h1]:font-extrabold [&_h1]:text-white/86 [&_h2]:mb-1 [&_h2]:text-[13px] [&_h2]:font-extrabold [&_h2]:text-white/82 [&_h3]:mb-1 [&_h3]:text-[12px] [&_h3]:font-extrabold [&_h3]:text-white/78 [&_hr]:my-2 [&_hr]:border-white/10 [&_li]:my-0.5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_pre]:my-1.5 [&_pre]:max-h-[220px] [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:bg-black/22 [&_pre]:p-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_strong]:font-extrabold [&_strong]:text-white/84 [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5",
+      cx("break-words text-[12px] leading-[1.65] text-white/70 [&_a]:font-bold [&_a]:text-white/86 [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-white/18 [&_blockquote]:pl-2.5 [&_blockquote]:text-white/56 [&_code]:rounded-md [&_code]:bg-black/22 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] [&_em]:text-white/72 [&_h1]:mb-1.5 [&_h1]:text-[14px] [&_h1]:font-extrabold [&_h1]:text-white/86 [&_h2]:mb-1 [&_h2]:text-[13px] [&_h2]:font-extrabold [&_h2]:text-white/82 [&_h3]:mb-1 [&_h3]:text-[12px] [&_h3]:font-extrabold [&_h3]:text-white/78 [&_hr]:my-2 [&_hr]:border-white/10 [&_li]:my-0.5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_pre]:my-1.5 [&_pre]:max-h-[220px] [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:bg-black/22 [&_pre]:p-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_strong]:font-extrabold [&_strong]:text-white/84 [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5", slideNestedScrollbarClass),
     statusBlock: "mt-1 whitespace-pre-wrap break-words text-[11px] leading-4 text-white/48",
     spin: "animate-spin",
   },

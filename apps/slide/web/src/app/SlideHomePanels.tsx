@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Clock3, Copy, FileCode2, FileText, History, Plus, Trash2, X } from "lucide-react";
-import { appShell, categoryPillClass, historyActionsClass, historyCardClass, historyClearButtonClass, historyDeleteButtonClass, historyEmptyIconClass, historyEmptyStateClass, templateCardClass } from "@ai-app/ui/app-shell";
+import { appShell, categoryPillClass, historyActionsClass, historyCardClass, historyClearButtonClass, historyDeleteButtonClass, historyEmptyIconClass, historyEmptyStateClass, scrollbarClass, templateCardClass } from "@ai-app/ui/app-shell";
 import type { SlideProject } from "@ai-slide/shared";
 import type { OutputType, SlideTemplate } from "../templates";
 
@@ -115,7 +115,7 @@ export function TemplatePreviewModal(props: {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className={cn("min-h-0 flex-1 overflow-y-auto", scrollbarClass)}>
           <div className="flex items-center justify-between gap-4 border-t border-[#B8A07C]/45 px-[34px] py-[18px] max-md:px-[18px]">
             <h3 className="m-0 text-[22px] font-semibold leading-tight text-[#2A2620]">All Slides</h3>
             <span className="text-[13px] font-medium text-[#8B8275]">{slideCount} slides</span>

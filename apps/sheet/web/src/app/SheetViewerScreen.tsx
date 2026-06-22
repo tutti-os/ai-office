@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Download, FileSpreadsheet, Loader2 } from "lucide-react";
+import { scrollbarClass } from "@ai-app/ui/app-shell";
 import { ArtifactEditorFrame, ArtifactExportToast, ArtifactWorkspaceHeader, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import type { OfficeCliStatus, ProjectDetailResponse, SheetCommand } from "@ai-sheet/shared";
 import { XlsxPreview } from "./XlsxPreview";
@@ -68,7 +69,7 @@ export function SheetViewerScreen(props: {
             <div className="mt-4 truncate text-[15px] font-semibold">{props.detail.project.title}</div>
             <div className="mt-1 text-[12px] font-medium text-[#8B8275]">XLSX viewer</div>
           </div>
-          <div className="min-h-0 flex-1 overflow-auto p-5 text-[12px] leading-5 text-[#8B8275]">
+          <div className={`min-h-0 flex-1 overflow-auto p-5 text-[12px] leading-5 text-[#8B8275] ${scrollbarClass}`}>
             <InfoRow label="File" value={manifest?.fileName ?? "workbook.xlsx"} />
             <InfoRow label="Size" value={manifest?.exists ? formatBytes(manifest.sizeBytes) : "No file"} />
             <InfoRow label="Updated" value={manifest?.updatedAt ? formatDate(manifest.updatedAt) : "Never"} />
