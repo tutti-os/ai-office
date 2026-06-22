@@ -318,6 +318,7 @@ function htmlProjectAgentInstructions(project: DocumentProject) {
     "You are editing a rich HTML doc with the local AI Doc app.",
     `Current focused file: ${targetHtmlPath}`,
     "Read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
+    stagedProjectWriteInstructions("HTML"),
     projectAssetInstructions(project.id),
   ].join("\n");
 }
@@ -331,6 +332,7 @@ function markdownProjectAgentInstructions(project: DocumentProject) {
     `Current focused file: ${targetMarkdownPath}`,
     `Place local image assets under ${join(projectWorkspaceRoot(project.id), "assets")} and reference them from Markdown as ./assets/<file-name>.`,
     "Read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
+    stagedProjectWriteInstructions("Markdown"),
     projectAssetInstructions(project.id),
   ].join("\n");
 }
@@ -357,6 +359,14 @@ function projectAssetInstructions(projectId: string) {
     ...assets.map((asset) => `- ${asset.fileName} (${asset.mimeType}, ${asset.sizeBytes} bytes): ${asset.path}`),
     "Use these files as source context when they are relevant to the user's request.",
   ].join("\n");
+}
+
+function stagedProjectWriteInstructions(format: "HTML" | "Markdown") {
+  const validity =
+    format === "HTML"
+      ? "Keep each saved intermediate version valid, self-contained, and previewable."
+      : "Keep each saved intermediate version coherent, with balanced code fences, valid tables, and no dangling partial sections.";
+  return `For large generations or broad rewrites, save useful progress in stages: write an initial scaffold or first complete sections, then continue expanding the focused file so progress is visible in the working file. ${validity}`;
 }
 
 interface ProjectRow {

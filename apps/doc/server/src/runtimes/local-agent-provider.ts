@@ -63,6 +63,7 @@ function buildSystemPrompt(context: RuntimeEditContext) {
       localFilesystemArtifactNotice,
       appToolPrompt(),
       "Use filesystem read/write tools to inspect and modify the focused file directly. Do not treat the chat response as the primary way to update the doc.",
+      stagedDocumentWritePrompt("Markdown"),
       "Write Markdown as a readable, maintainable working document for humans and agents. Optimize for clarity, scanability, and future edits rather than visual flourish.",
       "Preserve the existing document style and structure unless the user asks for a rewrite. For edits, make the smallest coherent change that satisfies the user. For new content, create a clear outline before expanding it.",
       "Use headings, short paragraphs, lists, tables, blockquotes, and fenced code blocks only when they improve understanding. Avoid malformed tables, broken nested lists, inconsistent heading levels, and unclosed code fences.",
@@ -80,6 +81,7 @@ function buildSystemPrompt(context: RuntimeEditContext) {
     localFilesystemArtifactNotice,
     appToolPrompt(),
     "Use filesystem read/write tools to inspect and modify the focused file directly. Do not treat the chat response as the primary way to update the doc.",
+    stagedDocumentWritePrompt("HTML"),
     "Use HTML as a high-bandwidth artifact format: choose headings, sections, tables, lists, figures, SVG diagrams, images, code blocks, links, and lightweight interactions when they make the doc easier to understand or use.",
     "Preserve the existing editor runtime, CSS, layout conventions, and semantic structure unless the user explicitly asks for a redesign.",
     "Optimize for human review: clear visual hierarchy, readable spacing, navigable structure, and concise sections. Prefer an artifact the user will actually read over a long plain-text dump.",
@@ -98,6 +100,14 @@ function appToolPrompt() {
     `  curl -sS -X POST "$AI_APP_TOOL_GATEWAY_URL/call" -H "Authorization: Bearer $AI_APP_TOOL_TOKEN" -H "Content-Type: application/json" --data '{"name":"set_project_title","input":{"title":"Project Brief"}}'`,
     "- When starting a new artifact from a user request, choose a concise human title and call `set_project_title`; do not leave the raw instruction as the project title.",
   ].join("\n");
+}
+
+function stagedDocumentWritePrompt(format: "HTML" | "Markdown") {
+  const validity =
+    format === "HTML"
+      ? "Each saved intermediate version must remain valid, self-contained HTML that can render in the editor iframe."
+      : "Each saved intermediate version must remain coherent Markdown with balanced fences, valid tables, and no dangling partial sections.";
+  return `For large new documents or broad rewrites, write in useful stages instead of waiting to produce everything at once: save an initial scaffold or first complete sections to the focused file, then continue expanding it in follow-up edits so progress is visible in the working file. ${validity}`;
 }
 
 function buildEditPrompt(context: RuntimeEditContext) {

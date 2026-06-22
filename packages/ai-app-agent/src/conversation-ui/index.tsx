@@ -33,7 +33,9 @@ export type AgentConversationOption = {
 };
 
 export type AgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent extends BaseRunEvent = BaseRunEvent> = {
+  activeSelectionLabel?: string;
   activeSelectionText: string;
+  activeSelectionVisible?: boolean;
   agentOptions?: AgentConversationOption[];
   artifactLabel: string;
   dirty: boolean;
@@ -60,6 +62,7 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
   const activeRun = useMemo(() => props.items.find((item) => item.run.status === "accepted" || item.run.status === "running")?.run ?? null, [props.items]);
   const cx = classes[props.variant];
   const showQuickPrompts = props.quickPromptsVisible === true && props.copy.quickPrompts.length > 0;
+  const showActiveSelection = props.activeSelectionVisible ?? Boolean(props.activeSelectionText.trim());
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -101,10 +104,10 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
       </div>
 
       <div className={cx.composerWrap}>
-        {props.activeSelectionText.trim() ? (
+        {showActiveSelection ? (
           <div className={cx.composerSelection}>
-            <div className={cx.activeSelectionLabel}>Selected text</div>
-            <div className={cx.composerSelectionText}>{props.activeSelectionText}</div>
+            <div className={cx.activeSelectionLabel}>{props.activeSelectionLabel ?? "Selected text"}</div>
+            {props.activeSelectionText.trim() ? <div className={cx.composerSelectionText}>{props.activeSelectionText}</div> : null}
           </div>
         ) : null}
         {showQuickPrompts ? (

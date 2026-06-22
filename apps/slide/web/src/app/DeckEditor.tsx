@@ -10,7 +10,7 @@ export function DeckEditor(props: {
   interaction: ArtifactInteractionPolicy;
   projectId: string;
   onAgentRuntimeProviderChange: (provider: DeckAgentRuntimeProvider | null) => void;
-  onAgentSelectionTextChange: (text: string) => void;
+  onAgentSelectionPreviewChange: (preview: { label: string; text: string; visible: boolean }) => void;
   onSaveStateChange: (state: ArtifactSaveState) => void;
 }) {
   return <DeckEditorView model={useDeckEditorModel(props)} />;

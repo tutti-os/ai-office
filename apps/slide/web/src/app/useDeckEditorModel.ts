@@ -163,7 +163,7 @@ export function useDeckEditorModel(props: {
   interaction: ArtifactInteractionPolicy;
   projectId: string;
   onAgentRuntimeProviderChange: (provider: DeckAgentRuntimeProvider | null) => void;
-  onAgentSelectionTextChange: (text: string) => void;
+  onAgentSelectionPreviewChange: (preview: { label: string; text: string; visible: boolean }) => void;
   onSaveStateChange: (state: ArtifactSaveState) => void;
 }) {
   const { onSaveStateChange } = props;
@@ -361,8 +361,16 @@ export function useDeckEditorModel(props: {
 
   useEffect(() => {
     const selection = createDeckAgentRuntimeSnapshot().selection;
-    props.onAgentSelectionTextChange(selection && selection.type !== "slide" && selection.type !== "write" ? selection.text : "");
-  }, [activeObject, activeSlideId, activeTextEdit, agentSelectionVersion, props.detail.artifact.revision, props.onAgentSelectionTextChange]);
+    if (!selection || selection.type === "slide" || selection.type === "write" || selection.type === "none") {
+      props.onAgentSelectionPreviewChange({ label: "Selected text", text: "", visible: false });
+      return;
+    }
+    if (activeObject && !activeTextEdit) {
+      props.onAgentSelectionPreviewChange({ label: "Selected block", text: "", visible: true });
+      return;
+    }
+    props.onAgentSelectionPreviewChange({ label: "Selected text", text: selection.text, visible: Boolean(selection.text.trim()) });
+  }, [activeObject, activeSlideId, activeTextEdit, agentSelectionVersion, props.detail.artifact.revision, props.onAgentSelectionPreviewChange]);
 
   const rememberTextSelection = (slideId: string, doc: Document) => {
     const selection = doc.getSelection();
@@ -485,7 +493,7 @@ export function useDeckEditorModel(props: {
 
   const handleSlideNavigationKeyboardEvent = (event: SlideNavigationKeyboardEvent, fromSlideId = activeSlideId) => {
     if (shouldIgnoreDeckSlideNavigationEvent(event)) return;
-    const direction = slideDirectionFromKey(event.key, "vertical");
+    const direction = slideDirectionFromKey(event.key, "all");
     if (!direction) return;
     event.preventDefault();
     event.stopPropagation();

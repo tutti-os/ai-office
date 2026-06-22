@@ -13,7 +13,9 @@ import type { ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime"
 import type { LocalAgentProviderStatus, ProjectDetailResponse, RuntimeProfile, SlideArtifactType, SlideRunTimelineItem } from "@ai-slide/shared";
 
 export function SlideEditorScreen(props: {
+  activeSelectionLabel?: string;
   activeSelectionText: string;
+  activeSelectionVisible?: boolean;
   artifactInteraction: ArtifactInteractionPolicy;
   conversationError: string;
   conversationItems: SlideRunTimelineItem[];
@@ -32,7 +34,7 @@ export function SlideEditorScreen(props: {
   onBackHome: () => void;
   onCancel: (runId: string) => Promise<void>;
   onDeckAgentRuntimeProviderChange: (provider: DeckAgentRuntimeProvider | null) => void;
-  onDeckSelectionTextChange: (text: string) => void;
+  onDeckSelectionPreviewChange: (preview: { label: string; text: string; visible: boolean }) => void;
   onPptxSelectionChange: ReturnType<typeof usePptxArtifactRuntime>["updateSelection"];
   onSelectedAgentChange: (value: string) => void;
   onSend: (prompt: string) => Promise<void>;
@@ -96,7 +98,9 @@ export function SlideEditorScreen(props: {
       className="bg-[#E6DDCD] text-[#2A2620]"
       sidebar={
         <AgentConversationPanel
+          activeSelectionLabel={props.activeSelectionLabel}
           activeSelectionText={props.activeSelectionText}
+          activeSelectionVisible={props.activeSelectionVisible}
           artifactLabel={props.detail?.artifact.type ?? "deck"}
           dirty={false}
           error={props.conversationError || props.error || props.pptxError}
@@ -134,7 +138,7 @@ export function SlideEditorScreen(props: {
               interaction={props.artifactInteraction}
               projectId={props.projectId}
               onAgentRuntimeProviderChange={props.onDeckAgentRuntimeProviderChange}
-              onAgentSelectionTextChange={props.onDeckSelectionTextChange}
+              onAgentSelectionPreviewChange={props.onDeckSelectionPreviewChange}
               onSaveStateChange={setDeckSaveState}
             />
           ) : props.detail?.artifact.type === "pptx" && props.pptxRuntime ? (

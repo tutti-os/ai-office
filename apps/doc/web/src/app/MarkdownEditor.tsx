@@ -339,9 +339,13 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   }, [activateToolbar, props]);
   const handleEditorClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
     if (blockMarkdownReadOnlyTableChromeEvent(event, props.readOnly)) return;
+    preventMarkdownLinkNavigation(event);
     if (props.readOnly) return;
     focusMarkdownTableCellEditor(event);
   }, [props.readOnly]);
+  const handleEditorAuxClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    preventMarkdownLinkNavigation(event);
+  }, []);
   const handleEditorMouseDown = useCallback((event: MouseEvent<HTMLDivElement>) => {
     if (blockMarkdownReadOnlyTableChromeEvent(event, props.readOnly)) return;
     clearMarkdownPersistentSelectionHighlight();
@@ -440,6 +444,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
           <div
             className="mx-auto min-h-[760px] w-full max-w-[1120px]"
             onBlurCapture={handleEditorBlur}
+            onAuxClickCapture={handleEditorAuxClick}
             onClickCapture={handleEditorClick}
             onFocusCapture={() => {
               clearMarkdownPersistentSelectionHighlight();
@@ -510,6 +515,13 @@ function blockMarkdownReadOnlyTableChromeEvent(event: { target: EventTarget | nu
   event.preventDefault();
   event.stopPropagation();
   return true;
+}
+
+function preventMarkdownLinkNavigation(event: MouseEvent<HTMLDivElement>) {
+  const target = event.target instanceof Element ? event.target : null;
+  const link = target?.closest("a[href]");
+  if (!link?.closest(".markdown-preview")) return;
+  event.preventDefault();
 }
 
 function isMarkdownTableChromeTarget(target: EventTarget | null) {

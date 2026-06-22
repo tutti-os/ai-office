@@ -29,6 +29,9 @@ export function SlideFilmstrip(props: SlideFilmstripProps) {
     const activeThumb = filmstrip?.querySelector<HTMLElement>('[aria-selected="true"]');
     if (!filmstrip || !activeThumb) return;
     const frame = requestAnimationFrame(() => {
+      if (document.activeElement && filmstrip.contains(document.activeElement)) {
+        activeThumb.focus({ preventScroll: true });
+      }
       const stripRect = filmstrip.getBoundingClientRect();
       const thumbRect = activeThumb.getBoundingClientRect();
       const margin = 12;
@@ -49,8 +52,9 @@ export function SlideFilmstrip(props: SlideFilmstripProps) {
           <button
             aria-selected={isActive}
             className={cn(
-              "relative w-36 shrink-0 rounded-[16px] border border-[#B8A07C]/50 bg-[#F4EFE6]/58 p-[7px] text-[#2A2620]/70 shadow-[0_1px_2px_rgba(0,0,0,0.05)]",
-              "aria-selected:border-[#5C6B50] aria-selected:shadow-[0_0_0_2px_rgba(92,107,80,0.18)]",
+              "relative w-36 shrink-0 rounded-[16px] border border-[#B8A07C]/50 bg-[#F4EFE6]/58 p-[7px] text-[#2A2620]/70 shadow-[0_1px_2px_rgba(0,0,0,0.05)] outline-none",
+              "aria-selected:border-[#2A2620] aria-selected:shadow-[0_0_0_2px_rgba(42,38,32,0.22)]",
+              "focus:outline-none focus-visible:outline-none",
             )}
             key={item.id}
             type="button"

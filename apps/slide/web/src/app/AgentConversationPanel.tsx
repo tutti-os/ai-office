@@ -3,7 +3,9 @@ import type { ArtifactEditorKind } from "@ai-app/ui/editor-frame";
 import type { LocalAgentProviderStatus, RuntimeProfile, SlideRun, SlideRunEvent, SlideRunTimelineItem } from "@ai-slide/shared";
 
 type AgentConversationPanelProps = {
+  activeSelectionLabel?: string;
   activeSelectionText: string;
+  activeSelectionVisible?: boolean;
   artifactLabel: Extract<ArtifactEditorKind, "deck" | "pptx">;
   dirty: boolean;
   error: string;

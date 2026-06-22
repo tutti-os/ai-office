@@ -8,6 +8,7 @@ export function runtimeStateToSrcDoc(state: RuntimeState) {
 
 export function enableEditableFrame(doc: Document, interaction: ArtifactInteractionPolicy = { mode: "editable" }) {
   installReadOnlyMutationGuard(doc);
+  installLinkNavigationGuard(doc);
   markTableCellsEditable(doc);
   enableTableCellCaretPlacement(doc);
   ensureRuntimeEditingStyles(doc);
@@ -58,6 +59,27 @@ function installReadOnlyMutationGuard(doc: Document) {
     },
     true,
   );
+}
+
+function installLinkNavigationGuard(doc: Document) {
+  if (doc.documentElement.dataset.aiDocLinkNavigationGuardInstalled === "true") return;
+  doc.documentElement.dataset.aiDocLinkNavigationGuardInstalled = "true";
+
+  const preventLinkNavigation = (event: Event) => {
+    const link = linkFromEventTarget(doc, event.target);
+    if (!link || !doc.body.contains(link)) return;
+    event.preventDefault();
+  };
+
+  doc.addEventListener("click", preventLinkNavigation, true);
+  doc.addEventListener("auxclick", preventLinkNavigation, true);
+}
+
+function linkFromEventTarget(doc: Document, target: EventTarget | null) {
+  const view = doc.defaultView;
+  if (!view || !(target instanceof view.Node)) return null;
+  const element = target instanceof view.Element ? target : target.parentElement;
+  return element?.closest<HTMLAnchorElement>("a[href]") ?? null;
 }
 
 function markTableCellsEditable(doc: Document) {

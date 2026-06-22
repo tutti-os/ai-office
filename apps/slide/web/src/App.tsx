@@ -78,7 +78,7 @@ export function App() {
   const deckAgentRuntimeProviderRef = useRef<DeckAgentRuntimeProvider | null>(null);
   const routeRef = useRef<AppRoute>(readCurrentRoute());
   const hasUnsavedChangesRef = useRef(false);
-  const [deckActiveSelectionText, setDeckActiveSelectionText] = useState("");
+  const [deckActiveSelectionPreview, setDeckActiveSelectionPreview] = useState({ label: "Selected text", text: "", visible: false });
   const agentConversation = useAgentConversation({
     projectId: currentProjectId,
     onProjectUpdated: (detail) => {
@@ -222,7 +222,7 @@ export function App() {
     if (route.name !== "slide") {
       setProjectDetail(null);
       setArtifactSaveState("saved");
-      setDeckActiveSelectionText("");
+      setDeckActiveSelectionPreview({ label: "Selected text", text: "", visible: false });
       deckAgentRuntimeProviderRef.current = null;
       clearPptxArtifact();
       return;
@@ -434,7 +434,9 @@ export function App() {
         conversationLoading={agentConversation.loading}
         detail={projectDetail}
         error={error}
-        activeSelectionText={projectDetail?.artifact.type === "pptx" ? pptxRuntime?.selection.selectedText ?? "" : deckActiveSelectionText}
+        activeSelectionLabel={projectDetail?.artifact.type === "pptx" ? "Selected text" : deckActiveSelectionPreview.label}
+        activeSelectionText={projectDetail?.artifact.type === "pptx" ? pptxRuntime?.selection.selectedText ?? "" : deckActiveSelectionPreview.text}
+        activeSelectionVisible={projectDetail?.artifact.type === "pptx" ? Boolean(pptxRuntime?.selection.selectedText.trim()) : deckActiveSelectionPreview.visible}
         localAgentProviders={localAgentProviders}
         runtimeProfiles={runtimeProfiles}
         selectedAgent={selectedAgent}
@@ -449,7 +451,7 @@ export function App() {
         onCancel={cancelAgentRun}
         onPptxSelectionChange={updatePptxSelection}
         onDeckAgentRuntimeProviderChange={setDeckAgentRuntimeProvider}
-        onDeckSelectionTextChange={setDeckActiveSelectionText}
+        onDeckSelectionPreviewChange={setDeckActiveSelectionPreview}
         onSelectedAgentChange={setSelectedAgent}
         onSend={sendAgentPrompt}
       />
