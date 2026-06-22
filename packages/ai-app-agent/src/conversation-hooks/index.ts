@@ -38,14 +38,16 @@ export function useRunTimelineStream<
   }, [input]);
 
   const reload = useCallback(async () => {
-    if (!input.projectId) {
+    const projectId = input.projectId;
+    if (!projectId) {
       setItems([]);
       return;
     }
     setLoading(true);
     setError("");
     try {
-      setItems(await input.listProjectRuns(input.projectId));
+      const snapshot = await input.listProjectRuns(projectId);
+      setItems((current) => mergeTimelineSnapshot(current, snapshot, projectId));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -70,6 +72,18 @@ export function useRunTimelineStream<
       void current.hydrateProject(projectId).then(projectUpdatedRef.current).catch((err) => setError(errorMessage(err)));
     };
 
+    const reconcileFromServer = (projectId: string) => {
+      const current = inputRef.current;
+      void current
+        .listProjectRuns(projectId)
+        .then((snapshot) => {
+          if (closed || inputRef.current.projectId !== projectId) return;
+          setItems((itemsCurrent) => mergeTimelineSnapshot(itemsCurrent, snapshot, projectId));
+        })
+        .catch((err) => setError(errorMessage(err)));
+      refreshProject(projectId);
+    };
+
     const handleStreamEvent = (event: TStreamEvent) => {
       lastSeq = Math.max(lastSeq, event.seq);
       const current = inputRef.current;
@@ -91,6 +105,8 @@ export function useRunTimelineStream<
       socket = new WebSocket(createWsUrl(inputRef.current.wsPath ?? "/api/ws"));
       socket.addEventListener("open", () => {
         socket?.send(JSON.stringify({ type: "hello", lastSeq }));
+        const projectId = inputRef.current.projectId;
+        if (projectId) reconcileFromServer(projectId);
       });
       socket.addEventListener("message", (message) => {
         const parsed = parseWsMessage(message.data);
@@ -144,4 +160,60 @@ function parseWsMessage(value: unknown): WsServerMessage | null {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function mergeTimelineSnapshot<TRun extends BaseRun, TEvent extends BaseRunEvent, TItem extends BaseRunTimelineItem<TRun, TEvent>>(
+  currentItems: TItem[],
+  snapshotItems: TItem[],
+  projectId: string,
+) {
+  const currentForProject = currentItems.filter((item) => item.run.projectId === projectId);
+  const byRunId = new Map<string, BaseRunTimelineItem<TRun, TEvent>>();
+
+  for (const item of snapshotItems) {
+    byRunId.set(item.run.id, {
+      run: item.run,
+      events: dedupeRunEvents(item.events),
+    });
+  }
+
+  for (const item of currentForProject) {
+    const existing = byRunId.get(item.run.id);
+    if (!existing) {
+      byRunId.set(item.run.id, {
+        run: item.run,
+        events: dedupeRunEvents(item.events),
+      });
+      continue;
+    }
+
+    byRunId.set(item.run.id, {
+      run: newerRun(existing.run, item.run),
+      events: dedupeRunEvents([...existing.events, ...item.events]),
+    });
+  }
+
+  return Array.from(byRunId.values()).sort(sortTimelineItems) as TItem[];
+}
+
+function newerRun<TRun extends BaseRun>(first: TRun, second: TRun) {
+  return runTimeValue(second) > runTimeValue(first) ? second : first;
+}
+
+function runTimeValue(run: BaseRun) {
+  return Date.parse(run.updatedAt || run.createdAt) || 0;
+}
+
+function dedupeRunEvents<TEvent extends BaseRunEvent>(events: TEvent[]) {
+  const byId = new Map<string, TEvent>();
+  for (const event of events) byId.set(event.id, event);
+  return Array.from(byId.values()).sort(sortRunEvents);
+}
+
+function sortTimelineItems<TRun extends BaseRun, TEvent extends BaseRunEvent>(a: BaseRunTimelineItem<TRun, TEvent>, b: BaseRunTimelineItem<TRun, TEvent>) {
+  return a.run.createdAt.localeCompare(b.run.createdAt) || a.run.id.localeCompare(b.run.id);
+}
+
+function sortRunEvents(a: BaseRunEvent, b: BaseRunEvent) {
+  return a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
 }

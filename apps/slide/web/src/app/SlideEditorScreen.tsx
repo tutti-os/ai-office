@@ -3,10 +3,11 @@ import { isArtifactAgentRunning } from "@ai-app/shared/artifact-runtime";
 import { ArtifactAgentProcessingOverlay, ArtifactEditorFrame, ArtifactExportToast, ArtifactWorkspaceHeader, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { DeckEditor } from "./DeckEditor";
-import { saveDeckPptxExport } from "./deckExport";
-import { exportProjectPptxFile, openProjectExportsDir } from "../api/projects";
+import { saveDeckPdfExport } from "./deckExport";
+import { exportProjectHtmlDeck, exportProjectPptxFile, openProjectExportsDir } from "../api/projects";
 import { EditorInfoPanel } from "./EditorInfoPanel";
 import { PptxPreview } from "./PptxPreview";
+import { isTuttiPdfExportAvailable } from "./tuttiPdfBridge";
 import { usePptxArtifactRuntime } from "../artifact/usePptxArtifactRuntime";
 import type { DeckAgentRuntimeProvider } from "../artifact/deckArtifactAdapter";
 import type { ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
@@ -40,29 +41,49 @@ export function SlideEditorScreen(props: {
   onSend: (prompt: string) => Promise<void>;
 }) {
   const [deckSaveState, setDeckSaveState] = useState<ArtifactSaveState>("saved");
+  const [htmlExporting, setHtmlExporting] = useState(false);
   const [pptxExporting, setPptxExporting] = useState(false);
+  const [pdfExporting, setPdfExporting] = useState(false);
   const [exportNotice, setExportNotice] = useState("");
   const artifactType = props.detail?.artifact.type ?? "deck";
+  const pdfExportAvailable = isTuttiPdfExportAvailable();
   const headerSaveState: ArtifactSaveState = props.loading ? "loading" : props.pptxError ? "error" : artifactType === "deck" ? deckSaveState : "saved";
   const agentProcessing = isArtifactAgentRunning(props.artifactInteraction);
 
-  const exportDeckPptx = async () => {
-    if (!props.detail?.deckManifest || props.detail.artifact.type !== "deck") return;
-    setPptxExporting(true);
+  const exportDeckHtml = async () => {
+    if (props.detail?.artifact.type !== "deck") return;
+    setHtmlExporting(true);
     setExportNotice("");
     try {
-      const exported = await saveDeckPptxExport({
+      const exported = await exportProjectHtmlDeck(props.projectId);
+      console.info(`[ai-slide] Exported HTML to ${exported.path}`);
+      setExportNotice(`Exported HTML to ${exported.path}`);
+    } catch (error) {
+      console.error(error);
+      setExportNotice(error instanceof Error ? error.message : "HTML export failed.");
+    } finally {
+      setHtmlExporting(false);
+    }
+  };
+
+  const exportDeckPdf = async () => {
+    if (!props.detail?.deckManifest || props.detail.artifact.type !== "deck") return;
+    setPdfExporting(true);
+    setExportNotice("");
+    try {
+      const exported = await saveDeckPdfExport({
         artifact: props.detail.artifact,
         manifest: props.detail.deckManifest,
         projectId: props.projectId,
         title: props.detail.project.title,
       });
-      console.info(`[ai-slide] Exported deck PPTX to ${exported.path}`);
-      setExportNotice(`Exported PPTX to ${exported.path}`);
+      console.info(`[ai-slide] Exported deck PDF to ${exported.path}`);
+      setExportNotice(`Exported PDF to ${exported.path}`);
     } catch (error) {
       console.error(error);
+      setExportNotice(error instanceof Error ? error.message : "PDF export failed.");
     } finally {
-      setPptxExporting(false);
+      setPdfExporting(false);
     }
   };
 
@@ -122,7 +143,16 @@ export function SlideEditorScreen(props: {
           title={props.detail?.project.title ?? "Untitled Presentation"}
           saveState={headerSaveState}
           agentWorking={agentProcessing}
-          exportItems={slideExportItems(artifactType, exportDeckPptx, exportPptxArtifact, pptxExporting)}
+          exportItems={slideExportItems({
+            artifactType,
+            htmlExporting,
+            onExportDeckHtml: exportDeckHtml,
+            onExportDeckPdf: exportDeckPdf,
+            onExportPptxArtifact: exportPptxArtifact,
+            pdfExportAvailable,
+            pdfExporting,
+            pptxExporting,
+          })}
           tone="lumen"
           onBackHome={props.onBackHome}
         />
@@ -160,23 +190,43 @@ export function SlideEditorScreen(props: {
   );
 }
 
-function slideExportItems(artifactType: SlideArtifactType, onExportDeckPptx: () => Promise<void>, onExportPptxArtifact: () => Promise<void>, pptxExporting: boolean) {
-  if (artifactType === "pptx") {
+function slideExportItems(input: {
+  artifactType: SlideArtifactType;
+  htmlExporting: boolean;
+  onExportDeckHtml: () => Promise<void>;
+  onExportDeckPdf: () => Promise<void>;
+  onExportPptxArtifact: () => Promise<void>;
+  pdfExportAvailable: boolean;
+  pdfExporting: boolean;
+  pptxExporting: boolean;
+}) {
+  if (input.artifactType === "pptx") {
     return [
       {
-        label: pptxExporting ? "PPTX exporting..." : "PPTX",
-        disabled: pptxExporting,
-        onSelect: () => void onExportPptxArtifact(),
+        label: input.pptxExporting ? "PPTX exporting..." : "PPTX",
+        disabled: input.pptxExporting,
+        onSelect: () => void input.onExportPptxArtifact(),
       },
-      { label: "PDF", disabled: true, onSelect: () => undefined },
     ];
   }
-  return [
-    { label: "HTML deck", disabled: true, onSelect: () => undefined },
+  const items = [
     {
-      label: pptxExporting ? "PPTX exporting..." : "PPTX",
-      disabled: pptxExporting,
-      onSelect: () => void onExportDeckPptx(),
+      label: input.htmlExporting ? "HTML exporting..." : "HTML",
+      disabled: input.htmlExporting,
+      onSelect: () => void input.onExportDeckHtml(),
     },
   ];
+  if (input.pdfExportAvailable) {
+    items.push({
+      label: input.pdfExporting ? "PDF exporting..." : "PDF",
+      disabled: input.pdfExporting,
+      onSelect: () => void input.onExportDeckPdf(),
+    });
+  }
+  items.push({
+    label: "PPTX (coming soon)",
+    disabled: true,
+    onSelect: () => undefined,
+  });
+  return items;
 }

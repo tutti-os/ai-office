@@ -25,7 +25,7 @@ const projects = new ProjectService(repo, events);
 server.addContentTypeParser(/^image\/.*/i, { parseAs: "buffer", bodyLimit: 30 * 1024 * 1024 }, (_request, body, done) => {
   done(null, body);
 });
-server.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bodyLimit: 30 * 1024 * 1024 }, (_request, body, done) => {
+server.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bodyLimit: 50 * 1024 * 1024 }, (_request, body, done) => {
   done(null, body);
 });
 
@@ -143,6 +143,15 @@ server.post<{ Params: { projectId: string } }>("/api/projects/:projectId/exports
     return await projects.exportPptxFile(request.params.projectId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to export PPTX file";
+    return reply.code(message.toLowerCase().includes("not found") ? 404 : 400).send({ error: message });
+  }
+});
+
+server.post<{ Params: { projectId: string } }>("/api/projects/:projectId/exports/html-deck", async (request, reply) => {
+  try {
+    return await projects.exportDeckHtml(request.params.projectId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to export HTML deck";
     return reply.code(message.toLowerCase().includes("not found") ? 404 : 400).send({ error: message });
   }
 });

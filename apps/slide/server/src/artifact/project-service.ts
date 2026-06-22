@@ -139,7 +139,7 @@ export class ProjectService {
   }
 
   async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
-    if (input.mimeType !== pptxMimeType) throw new Error("Only PPTX exports are supported");
+    if (!isSupportedExportMimeType(input.mimeType)) throw new Error("Only PPTX and PDF exports are supported");
     if (input.bytes.byteLength === 0) throw new Error("Export file is empty");
     if (input.bytes.byteLength > maxDeckExportBytes) throw new Error("Export file is too large");
     return this.repo.writeProjectExport(projectId, input);
@@ -154,6 +154,10 @@ export class ProjectService {
       mimeType: file.mimeType,
       bytes: file.bytes,
     });
+  }
+
+  async exportDeckHtml(projectId: string) {
+    return this.repo.writeDeckHtmlExport(projectId);
   }
 
   async openProjectExportsDir(projectId: string) {
@@ -376,7 +380,12 @@ export class ProjectService {
 }
 
 const maxDeckAssetBytes = 20 * 1024 * 1024;
-const maxDeckExportBytes = 20 * 1024 * 1024;
+const maxDeckExportBytes = 50 * 1024 * 1024;
+const pdfMimeType = "application/pdf";
+
+function isSupportedExportMimeType(mimeType: string) {
+  return mimeType === pptxMimeType || mimeType === pdfMimeType;
+}
 
 function isSupportedImageMimeType(mimeType: string) {
   return ["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"].includes(mimeType);

@@ -145,6 +145,14 @@ export async function exportProjectPptxFile(projectId: string) {
   return data;
 }
 
+export async function exportProjectHtmlDeck(projectId: string) {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/exports/html-deck`, { method: "POST" });
+  const data = (await response.json().catch(() => null)) as ProjectExportWriteResponse | { error?: string } | null;
+  if (!response.ok) throw new Error(data && "error" in data && data.error ? data.error : `Export failed: ${response.status}`);
+  if (!data || !("path" in data)) throw new Error("Export response is missing export path");
+  return data;
+}
+
 export async function openProjectExportsDir(projectId: string) {
   const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/exports/open`, { method: "POST" });
   const data = (await response.json().catch(() => null)) as { path?: string; error?: string } | null;
