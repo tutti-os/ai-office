@@ -17,6 +17,8 @@
     "check:i18n": "node scripts/check-doc-i18n.mjs",
     "check:parity": "node scripts/check-doc-slide-parity.mjs",
     "validate:tutti": "node scripts/validate-tutti-app-package.mjs build/tutti-app/package",
+    "validate:doc-tutti": "node scripts/validate-tutti-app-package.mjs build/tutti-app/package ai-doc doc",
+    "validate:slide-tutti": "node scripts/validate-tutti-app-package.mjs build/tutti-slide-app/package ai-slide slide",
     "package:tutti": "pnpm --filter @ai-doc/app package:tutti",
     "package:doc-tutti": "pnpm --filter @ai-doc/app package:tutti",
     "package:slide-tutti": "pnpm --filter @ai-slide/app package:tutti",

@@ -14,6 +14,7 @@ import { cancelRun, clearProjectHistory, createProject, deleteProject, fetchBoot
 import { DeckArtifactRuntimeAdapter, type DeckAgentRuntimeProvider } from "./artifact/deckArtifactAdapter";
 import { PptxArtifactRuntimeAdapter } from "./artifact/pptxArtifactAdapter";
 import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
+import { useI18n } from "./i18n";
 import { appShell, homePanelButtonClass } from "@ai-app/ui/app-shell";
 import type { ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { editableArtifactInteraction, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
@@ -52,6 +53,7 @@ function routePath(route: AppRoute) {
 }
 
 export function App() {
+  const { t } = useI18n();
   const [prompt, setPrompt] = useState("");
   const [outputType, setOutputType] = useState<OutputType>("html");
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -78,7 +80,7 @@ export function App() {
   const deckAgentRuntimeProviderRef = useRef<DeckAgentRuntimeProvider | null>(null);
   const routeRef = useRef<AppRoute>(readCurrentRoute());
   const hasUnsavedChangesRef = useRef(false);
-  const [deckActiveSelectionPreview, setDeckActiveSelectionPreview] = useState({ label: "Selected text", text: "", visible: false });
+  const [deckActiveSelectionPreview, setDeckActiveSelectionPreview] = useState({ label: t("editor.selectedText"), text: "", visible: false });
   const agentConversation = useAgentConversation({
     projectId: currentProjectId,
     onProjectUpdated: (detail) => {
@@ -143,14 +145,14 @@ export function App() {
   }, []);
 
   const requestHomeRoute = () => {
-    if (hasUnsavedChanges && !window.confirm("You have unsaved changes. Leave without saving?")) return;
+    if (hasUnsavedChanges && !window.confirm(t("nav.unsavedChanges"))) return;
     setArtifactSaveState("saved");
     setRoute(pushHomeRoute());
   };
 
   useEffect(() => {
     const onPopState = () => {
-      if (hasUnsavedChangesRef.current && !window.confirm("You have unsaved changes. Leave without saving?")) {
+      if (hasUnsavedChangesRef.current && !window.confirm(t("nav.unsavedChanges"))) {
         window.history.pushState({}, "", routePath(routeRef.current));
         return;
       }
@@ -222,7 +224,7 @@ export function App() {
     if (route.name !== "slide") {
       setProjectDetail(null);
       setArtifactSaveState("saved");
-      setDeckActiveSelectionPreview({ label: "Selected text", text: "", visible: false });
+      setDeckActiveSelectionPreview({ label: t("editor.selectedText"), text: "", visible: false });
       deckAgentRuntimeProviderRef.current = null;
       clearPptxArtifact();
       return;
@@ -434,7 +436,7 @@ export function App() {
         conversationLoading={agentConversation.loading}
         detail={projectDetail}
         error={error}
-        activeSelectionLabel={projectDetail?.artifact.type === "pptx" ? "Selected text" : deckActiveSelectionPreview.label}
+        activeSelectionLabel={projectDetail?.artifact.type === "pptx" ? t("editor.selectedText") : deckActiveSelectionPreview.label}
         activeSelectionText={projectDetail?.artifact.type === "pptx" ? pptxRuntime?.selection.selectedText ?? "" : deckActiveSelectionPreview.text}
         activeSelectionVisible={projectDetail?.artifact.type === "pptx" ? Boolean(pptxRuntime?.selection.selectedText.trim()) : deckActiveSelectionPreview.visible}
         localAgentProviders={localAgentProviders}
@@ -464,7 +466,7 @@ export function App() {
         <div className={appShell.heroIcon}>
           <Sparkles size={18} />
         </div>
-        <h1 className={cn("m-0", appShell.heroTitle)}>Ready to create any presentation?</h1>
+        <h1 className={cn("m-0", appShell.heroTitle)}>{t("home.heading")}</h1>
         <HomeComposer
           creating={creating}
           officeCliInstalling={officeCliInstalling}
@@ -489,20 +491,24 @@ export function App() {
             <div className="flex items-center gap-2" aria-label="Home panels">
               <button className={homePanelButtonClass(activePanel === "templates")} type="button" onClick={() => setActivePanel("templates")}>
                 <Layers3 size={15} />
-                Templates
+                {t("home.templates")}
               </button>
               <button className={homePanelButtonClass(activePanel === "history")} type="button" onClick={() => setActivePanel("history")}>
                 <History size={15} />
-                History
+                {t("home.history")}
               </button>
             </div>
             <div className={appShell.countText}>
-              {activePanel === "templates" ? `${templatesLoading ? "Loading" : visibleTemplates.length} templates` : `${historyProjects.length} projects`}
+              {activePanel === "templates"
+                ? templatesLoading
+                  ? t("home.loadingTemplates")
+                  : t("home.templateCount", { count: visibleTemplates.length })
+                : t("home.projectCount", { count: historyProjects.length })}
             </div>
           </div>
           <label className={appShell.searchShell}>
             <Search size={15} />
-            <input className={appShell.searchInput} value={query} placeholder="Search templates" onChange={(event) => setQuery(event.currentTarget.value)} />
+            <input className={appShell.searchInput} value={query} placeholder={t("home.searchTemplates")} onChange={(event) => setQuery(event.currentTarget.value)} />
           </label>
         </div>
 
@@ -512,7 +518,7 @@ export function App() {
               <CategoryButton
                 active={selectedCategory === "All"}
                 count={slideTemplates.length}
-                label="All"
+                label={t("home.allTemplates")}
                 onClick={() => setSelectedCategory("All")}
               />
               {allCategories.map((category) => (

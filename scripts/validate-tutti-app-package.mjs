@@ -2,6 +2,8 @@ import { access, lstat, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 const packageRoot = path.resolve(process.argv[2] ?? "build/tutti-app/package");
+const expectedAppId = process.argv[3] ?? process.env.AI_APP_EXPECTED_APP_ID ?? "ai-doc";
+const expectedCliScope = process.argv[4] ?? process.env.AI_APP_EXPECTED_CLI_SCOPE ?? expectedAppId.replace(/^ai-/, "");
 const errors = [];
 
 await validatePackage(packageRoot);
@@ -19,13 +21,18 @@ async function validatePackage(root) {
     errors.push(`Package root does not exist: ${root}`);
     return;
   }
-  for (const file of ["tutti.app.json", "tutti.cli.json", "AGENTS.md", "COMMANDS.md", "bootstrap.sh", "icon.svg", "server/server.js", "dist/index.html"]) {
+  const requiredFiles = ["tutti.app.json", "AGENTS.md", "bootstrap.sh", "icon.svg", "server/server.js", "dist/index.html"];
+  for (const file of requiredFiles) {
     if (!await exists(path.join(root, file))) errors.push(`Missing file: ${file}`);
   }
   const manifest = await readJson(path.join(root, "tutti.app.json"));
   if (manifest) await validateManifest(root, manifest);
-  const cliManifest = await readJson(path.join(root, "tutti.cli.json"));
-  if (cliManifest) validateCliManifest(cliManifest);
+  if (manifest?.cli?.manifest) {
+    if (!await exists(path.join(root, manifest.cli.manifest))) errors.push(`Missing file: ${manifest.cli.manifest}`);
+    if (!await exists(path.join(root, "COMMANDS.md"))) errors.push("Missing file: COMMANDS.md");
+    const cliManifest = await readJson(path.join(root, manifest.cli.manifest));
+    if (cliManifest) validateCliManifest(cliManifest);
+  }
   await validateBootstrap(root);
   await validateLocaleParity(path.join(root, "locales"));
   await assertNoSymlinks(root);
@@ -33,7 +40,7 @@ async function validatePackage(root) {
 
 async function validateManifest(root, manifest) {
   if (manifest.schemaVersion !== "tutti.app.manifest.v1") errors.push("Invalid manifest schemaVersion");
-  if (manifest.appId !== "ai-doc") errors.push("Manifest appId must be ai-doc");
+  if (manifest.appId !== expectedAppId) errors.push(`Manifest appId must be ${expectedAppId}`);
   if (manifest.runtime?.kind) errors.push("runtime.kind must not be declared");
   if (!manifest.runtime?.bootstrap || !manifest.runtime.healthcheckPath?.startsWith("/")) {
     errors.push("Manifest runtime bootstrap and healthcheckPath are required");
@@ -48,7 +55,7 @@ async function validateManifest(root, manifest) {
 
 function validateCliManifest(manifest) {
   if (manifest.schemaVersion !== "tutti.app.cli.v1") errors.push("Invalid CLI manifest schemaVersion");
-  if (manifest.scope !== "doc") errors.push("CLI scope must be doc");
+  if (manifest.scope !== expectedCliScope) errors.push(`CLI scope must be ${expectedCliScope}`);
   if (!Array.isArray(manifest.commands) || manifest.commands.length === 0) errors.push("CLI manifest needs commands");
   for (const command of manifest.commands ?? []) {
     const commandPath = Array.isArray(command.path) ? command.path.join("/") : "";

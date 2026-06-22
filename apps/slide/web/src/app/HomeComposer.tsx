@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { AgentSelectShell, appShell, formatOptionClass, formatOptionIconClass } from "@ai-app/ui/app-shell";
 import { PromptComposer } from "@ai-app/ui/prompt-composer";
 import type { LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-slide/shared";
+import { useI18n } from "../i18n";
 import type { OutputType } from "../templates";
 
 export function HomeComposer(props: {
@@ -20,6 +21,7 @@ export function HomeComposer(props: {
   onPromptChange: (value: string) => void;
   onSelectedAgentChange: (value: string) => void;
 }) {
+  const { t } = useI18n();
   const pptxAvailable = props.officeCliStatus?.available === true;
   const selectedOutputAvailable = props.outputType !== "pptx" || pptxAvailable;
   const canSubmit = props.prompt.trim().length > 0 && !props.creating && selectedOutputAvailable;
@@ -32,27 +34,27 @@ export function HomeComposer(props: {
           className={appShell.promptComposer}
           footerClassName="flex-wrap gap-2.5 pt-1"
           leadingActionsClassName="mr-auto flex-1 basis-[204px] flex-wrap gap-2.5 md:flex-none md:basis-auto"
-          placeholder="Ask for a pitch deck, lesson deck, board update, research talk..."
+          placeholder={t("composer.placeholder")}
           textareaClassName={cn("block pb-2", appShell.promptTextarea)}
           value={props.prompt}
           beforeTextarea={
             <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-2">
               <FormatOption
                 active={props.outputType === "html"}
-                description="Editable slide runtime"
+                description={t("composer.deckDescription")}
                 icon={<FileCode2 size={20} />}
                 label="Deck"
                 onClick={() => props.onOutputTypeChange("html")}
               />
               <FormatOption
                 active={props.outputType === "pptx"}
-                description={formatPptxOutputDescription(props.officeCliStatus)}
+                description={formatPptxOutputDescription(props.officeCliStatus, t)}
                 disabled={!pptxAvailable}
                 icon={<FileText size={20} />}
                 installing={props.officeCliInstalling || props.officeCliStatus?.installing === true}
                 label="PPTX"
                 showInstall={!pptxAvailable && props.officeCliStatus?.canInstall === true}
-                title={!pptxAvailable ? props.officeCliStatus?.reason ?? "OfficeCLI is required for PPTX" : undefined}
+                title={!pptxAvailable ? props.officeCliStatus?.reason ?? t("composer.officeCliRequired") : undefined}
                 onInstall={props.onInstallOfficeCli}
                 onClick={() => props.onOutputTypeChange("pptx")}
               />
@@ -60,7 +62,7 @@ export function HomeComposer(props: {
           }
           leadingActions={
             <>
-              <button className={appShell.iconAction} type="button" title="Add source files">
+              <button className={appShell.iconAction} type="button" title={t("composer.addSourceFiles")}>
                 <Plus size={20} />
               </button>
               <AgentMenu
@@ -72,9 +74,9 @@ export function HomeComposer(props: {
             </>
           }
           trailingActions={
-            <button className={cn(appShell.submitAction, "inline-flex min-w-[108px] flex-1 items-center justify-center gap-2 border-0 px-[18px] text-[13px] font-medium md:flex-none")} disabled={!canSubmit} type="button" title="Create deck" onClick={props.onCreate}>
+            <button className={cn(appShell.submitAction, "inline-flex min-w-[108px] flex-1 items-center justify-center gap-2 border-0 px-[18px] text-[13px] font-medium md:flex-none")} disabled={!canSubmit} type="button" title={t("composer.createDeck")} onClick={props.onCreate}>
               {props.creating ? <Loader2 className="animate-spin" size={18} /> : <Wand2 size={18} />}
-              Create
+              {t("composer.create")}
             </button>
           }
           trailingActionsClassName="flex-1 md:flex-none"
@@ -86,11 +88,11 @@ export function HomeComposer(props: {
   );
 }
 
-function formatPptxOutputDescription(officeCliStatus: OfficeCliStatus | null) {
-  if (!officeCliStatus) return "Checking OfficeCLI";
-  if (officeCliStatus.available) return officeCliStatus.version ? `OfficeCLI ${officeCliStatus.version}` : "OfficeCLI ready";
-  if (officeCliStatus.installing) return "Installing OfficeCLI";
-  return "Requires OfficeCLI";
+function formatPptxOutputDescription(officeCliStatus: OfficeCliStatus | null, t: ReturnType<typeof useI18n>["t"]) {
+  if (!officeCliStatus) return t("composer.checkingOfficeCli");
+  if (officeCliStatus.available) return officeCliStatus.version ? `OfficeCLI ${officeCliStatus.version}` : t("composer.officeCliReady");
+  if (officeCliStatus.installing) return t("composer.installingOfficeCli");
+  return t("composer.requiresOfficeCli");
 }
 
 function FormatOption(props: {
@@ -123,15 +125,15 @@ function FormatOption(props: {
       <span className={formatOptionIconClass(props.active, props.disabled)}>{props.icon}</span>
       <span className="grid min-w-0 gap-1">
         <span className="truncate text-[14px] font-bold leading-none">{props.label}</span>
-        <small className={cn("truncate text-[12px] font-medium", props.active ? "text-[#8B8275]" : props.disabled ? "text-[#F4EFE6]/34" : "text-[#E6DDCD]/62")}>{props.description}</small>
+        <small className={cn("truncate text-[12px] font-medium", props.active ? "text-[#8B8275]" : props.disabled ? "text-[#8B8275]/78" : "text-[#E6DDCD]/62")}>{props.description}</small>
       </span>
       {props.active ? (
-        <span className="ml-auto grid size-6 shrink-0 place-items-center rounded-full bg-[#2A2620] text-[#F4EFE6]">
+        <span className="ml-auto grid size-6 shrink-0 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]">
           <Check size={14} />
         </span>
       ) : props.showInstall ? (
         <span
-          className="ml-auto grid size-7 shrink-0 place-items-center rounded-[16px] border border-[#E6DDCD]/20 bg-[#F4EFE6]/12 text-[#F4EFE6]/68 hover:bg-[#F4EFE6]/18 hover:text-[#F4EFE6]"
+          className="ml-auto grid size-7 shrink-0 place-items-center rounded-[16px] border border-[#B8A07C]/35 bg-[#D8CDB9]/50 text-[#8B8275] hover:border-[#5C6B50]/40 hover:text-[#5C6B50]"
           role="button"
           tabIndex={0}
           title="Download OfficeCLI"
@@ -162,15 +164,16 @@ function AgentMenu(props: {
   selectedAgent: string;
   onChange: (value: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <AgentSelectShell>
-      <select className="h-full w-full appearance-none rounded-full border border-[#B8A07C]/50 bg-[#F4EFE6]/70 px-4 pr-9 text-[13px] font-medium text-[#2A2620] outline-none hover:border-[#5C6B50]/50 hover:text-[#5C6B50]" value={props.selectedAgent} aria-label="Select ACP agent" onChange={(event) => props.onChange(event.currentTarget.value)}>
+      <select className="h-full w-full appearance-none rounded-full border border-[#B8A07C]/50 bg-[#F4EFE6]/70 px-4 pr-9 text-[13px] font-medium text-[#2A2620] outline-none hover:border-[#5C6B50]/50 hover:text-[#5C6B50]" value={props.selectedAgent} aria-label={t("composer.selectAgent")} onChange={(event) => props.onChange(event.currentTarget.value)}>
         {props.runtimeProfiles.map((profile) => {
           const status = profile.kind === "local-agent" ? props.localAgentProviders.find((provider) => provider.provider === profile.provider) : null;
           const available = status?.available ?? props.localAgentProviders.length === 0;
           return (
             <option disabled={!available} key={profile.id} value={profile.id}>
-              {profile.displayName}{available ? "" : " unavailable"}
+              {profile.displayName}{available ? "" : ` ${t("composer.agentUnavailable")}`}
             </option>
           );
         })}

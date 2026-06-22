@@ -66,6 +66,7 @@ This package runs AI Doc as a local Tutti workspace app.
 - Durable app data is stored under \`AI_DOC_HOME\`, which defaults to \`TUTTI_APP_DATA_DIR\`.
 - Runtime scratch data is stored under \`AI_DOC_RUNTIME_ROOT\`, which defaults to \`TUTTI_APP_RUNTIME_DIR\`.
 - Backend logs, if added later, must stay under \`AI_DOC_LOG_ROOT\`, which defaults to \`TUTTI_APP_LOG_DIR\`.
+- OfficeCLI auto-install uses the shared AI Office toolchain cache, not \`AI_DOC_HOME\`; override with \`AI_DOC_OFFICECLI_PATH\`, \`TUTTI_APP_OFFICECLI_PATH\`, or an \`*_OFFICECLI_INSTALL_ROOT\` env var.
 
 I18n:
 

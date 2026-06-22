@@ -55,6 +55,7 @@ This package runs AI Sheet as a local Tutti workspace app.
 - \`server/server.js\` is the bundled Fastify server.
 - \`dist/\` is the built React/Vite frontend.
 - Durable app data is stored under \`AI_SHEET_HOME\`.
+- OfficeCLI auto-install uses the shared AI Office toolchain cache, not \`AI_SHEET_HOME\`; override with \`AI_SHEET_OFFICECLI_PATH\`, \`TUTTI_APP_OFFICECLI_PATH\`, or an \`*_OFFICECLI_INSTALL_ROOT\` env var.
 - AI Sheet currently supports XLSX display only. The editable source file for a project is \`workbook.xlsx\` under the app-owned project workspace.
 `;
 }

@@ -36,9 +36,9 @@ export const appShell = {
   promptComposer: "border-[#D8CDB9]/70! bg-[#F4EFE6]/92! shadow-[0_1px_2px_rgba(0,0,0,0.05)]!",
   promptTextarea: "text-[#2A2620]! placeholder:text-[#8B8275]!",
   iconAction:
-    "grid size-9 shrink-0 place-items-center rounded-full bg-[#2A2620] text-[#F4EFE6] shadow-[0_12px_10px_rgba(0,0,0,0.08)] transition-colors",
+    "grid size-9 shrink-0 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6] shadow-[0_12px_10px_rgba(0,0,0,0.08)] transition-colors hover:bg-[#4C5E42]",
   submitAction:
-    "grid size-10 place-items-center rounded-full bg-[#2A2620] text-[#F4EFE6] shadow-[0_12px_10px_rgba(0,0,0,0.08)] transition-colors disabled:bg-[#B8A07C]/32 disabled:text-[#8B8275]",
+    "grid size-10 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6] shadow-[0_12px_10px_rgba(0,0,0,0.08)] transition-colors hover:bg-[#4C5E42] disabled:bg-[#D8CDB9]/70 disabled:text-[#8B8275] disabled:shadow-none",
   cardShadow: "shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)]",
   softShadow: "shadow-[0_1px_2px_rgba(0,0,0,0.05)]",
 };
@@ -47,7 +47,7 @@ export function homePanelButtonClass(active: boolean) {
   return cx(
     "flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-medium transition-colors",
     active
-      ? "bg-[#2A2620] text-[#F4EFE6]"
+      ? "bg-[#5C6B50] text-[#F4EFE6] shadow-[0_12px_10px_rgba(0,0,0,0.08)]"
       : "border border-[#B8A07C]/55 bg-[#F4EFE6]/44 text-[#2A2620]/68 hover:text-[#5C6B50]",
   );
 }
@@ -64,8 +64,8 @@ export function categoryPillClass(active: boolean) {
 export function formatOptionClass(active: boolean, disabled?: boolean) {
   return cx(
     "flex min-h-16 items-center justify-between gap-3 rounded-2xl border p-3 text-left transition-colors",
-    active && "border-[#F4EFE6] bg-[#F4EFE6] text-[#2A2620] shadow-[0_12px_10px_rgba(0,0,0,0.08)]",
-    disabled && "border-[#E6DDCD]/12 bg-[#2A2620]/10 text-[#F4EFE6]/40",
+    active && "border-[#D8CDB9]/80 bg-[#F4EFE6] text-[#2A2620] shadow-[0_12px_10px_rgba(0,0,0,0.08)]",
+    disabled && "border-[#D8CDB9]/60 bg-[#E6DDCD]/58 text-[#8B8275]",
     !active && !disabled && "border-[#E6DDCD]/20 bg-[#F4EFE6]/10 text-[#F4EFE6]/86 hover:border-[#F4EFE6]/42 hover:bg-[#F4EFE6]/16",
   );
 }
@@ -73,8 +73,8 @@ export function formatOptionClass(active: boolean, disabled?: boolean) {
 export function formatOptionIconClass(active: boolean, disabled?: boolean) {
   return cx(
     "grid size-9 shrink-0 place-items-center rounded-[14px]",
-    active && "bg-[#2A2620] text-[#F4EFE6]",
-    disabled && "bg-[#F4EFE6]/5 text-[#F4EFE6]/28",
+    active && "bg-[#5C6B50] text-[#F4EFE6]",
+    disabled && "bg-[#D8CDB9]/64 text-[#8B8275]",
     !active && !disabled && "bg-[#F4EFE6]/12 text-[#F4EFE6]/70",
   );
 }

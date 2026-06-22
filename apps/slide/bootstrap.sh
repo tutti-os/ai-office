@@ -27,6 +27,7 @@ export AI_SLIDE_LOG_ROOT="${TUTTI_APP_LOG_DIR:-$AI_SLIDE_RUNTIME_ROOT/logs}"
 export AI_SLIDE_WORKSPACE_ROOT="${TUTTI_WORKSPACE_ROOT:-$AI_SLIDE_HOME}"
 export AI_SLIDE_TEMPLATE_ROOT="${AI_SLIDE_TEMPLATE_ROOT:-$script_dir/templates/source}"
 export AI_SLIDE_TEMPLATE_ASSET_ROOT="${AI_SLIDE_TEMPLATE_ASSET_ROOT:-$script_dir/templates/generated/templates}"
+export AI_SLIDE_TUTTI_CLI="${TUTTI_CLI:-}"
 
 base_url="${TUTTI_APP_BASE_URL:-http://$HOST:$PORT}"
 export AI_SLIDE_SERVER_URL="$base_url"

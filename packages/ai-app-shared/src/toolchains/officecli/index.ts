@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
-import { chmod, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { arch, platform } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { chmod, copyFile, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { arch, homedir, platform } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
@@ -39,8 +39,10 @@ export type OfficeCliToolchainOptions = {
 
 export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): OfficeCliToolchain {
   const officeCliVersion = options.version ?? process.env[`${options.envPrefix}_OFFICECLI_VERSION`] ?? options.defaultVersion ?? "1.0.103";
-  const installRoot = join(options.appRoot, "toolchains", "officecli");
+  const installRoot = resolveOfficeCliInstallRoot(options);
   const installedBinaryPath = join(installRoot, process.platform === "win32" ? "officecli.exe" : "officecli");
+  const legacyInstallRoot = join(options.appRoot, "toolchains", "officecli");
+  const legacyBinaryPath = join(legacyInstallRoot, process.platform === "win32" ? "officecli.exe" : "officecli");
   const releaseMirrors = [
     `https://d.officecli.ai/releases/download/v${officeCliVersion}`,
     `https://github.com/iOfficeAI/OfficeCLI/releases/download/v${officeCliVersion}`,
@@ -67,12 +69,20 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
       if (status.available) return { ...status, canInstall: canInstallOfficeCli(), installing: Boolean(installPromise) };
     }
 
+    if (legacyBinaryPath !== installedBinaryPath && existsSync(legacyBinaryPath)) {
+      const status = await probeOfficeCli(legacyBinaryPath, "bundled");
+      if (status.available) {
+        await promoteLegacyOfficeCli().catch(() => undefined);
+        return { ...status, canInstall: canInstallOfficeCli(), installing: Boolean(installPromise) };
+      }
+    }
+
     return {
       available: false,
       source: "missing",
       canInstall: canInstallOfficeCli(),
       installing: Boolean(installPromise),
-      reason: "OfficeCLI is not installed in this application.",
+      reason: "OfficeCLI is not installed in the shared AI Office toolchain cache.",
     };
   }
 
@@ -105,7 +115,9 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
   function officeCliEnvSync(): Record<string, string> {
     const envPath = process.env[`${options.envPrefix}_OFFICECLI_PATH`]?.trim();
     const tuttiPath = process.env.TUTTI_APP_OFFICECLI_PATH?.trim();
-    const executablePath = envPath || tuttiPath || (existsSync(installedBinaryPath) ? installedBinaryPath : "");
+    const managedPath = existsSync(installedBinaryPath) ? installedBinaryPath : "";
+    const legacyPath = legacyBinaryPath !== installedBinaryPath && existsSync(legacyBinaryPath) ? legacyBinaryPath : "";
+    const executablePath = envPath || tuttiPath || managedPath || legacyPath;
     return executablePath ? officeCliEnvForPath(executablePath) : {};
   }
 
@@ -170,6 +182,17 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
     }
   }
 
+  async function promoteLegacyOfficeCli() {
+    if (existsSync(installedBinaryPath) || !existsSync(legacyBinaryPath)) return;
+    mkdirSync(installRoot, { recursive: true });
+    await copyFile(legacyBinaryPath, installedBinaryPath);
+    await chmod(installedBinaryPath, 0o755);
+    const legacyVersionPath = join(legacyInstallRoot, "VERSION");
+    if (existsSync(legacyVersionPath)) {
+      await copyFile(legacyVersionPath, join(installRoot, "VERSION")).catch(() => undefined);
+    }
+  }
+
   async function downloadReleaseFile(name: string, destination: string) {
     let lastError: unknown = null;
     for (const base of releaseMirrors) {
@@ -219,6 +242,24 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
     officeCliEnv,
     officeCliEnvSync,
   };
+}
+
+function resolveOfficeCliInstallRoot(options: OfficeCliToolchainOptions) {
+  const directRoot =
+    process.env[`${options.envPrefix}_OFFICECLI_INSTALL_ROOT`]?.trim() ||
+    process.env.AI_OFFICE_OFFICECLI_INSTALL_ROOT?.trim() ||
+    process.env.TUTTI_APP_OFFICECLI_INSTALL_ROOT?.trim();
+  if (directRoot) return resolve(directRoot);
+
+  const toolchainRoot =
+    process.env.AI_OFFICE_TOOLCHAIN_ROOT?.trim() ||
+    process.env.TUTTI_APP_TOOLCHAIN_ROOT?.trim();
+  if (toolchainRoot) return resolve(toolchainRoot, "officecli");
+
+  const workspaceRoot = process.env.TUTTI_WORKSPACE_ROOT?.trim();
+  if (workspaceRoot) return resolve(workspaceRoot, ".ai-office", "toolchains", "officecli");
+
+  return join(homedir(), ".ai-office", "toolchains", "officecli");
 }
 
 function officeCliEnvForPath(executablePath: string) {

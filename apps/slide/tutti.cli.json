@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "tutti.app.cli.v1",
+  "scope": "slide",
+  "description": "Create and inspect AI Slide projects.",
+  "documentation": {
+    "file": "COMMANDS.md"
+  },
+  "commands": [
+    {
+      "path": ["status"],
+      "summary": "Show AI Slide status",
+      "description": "Return app health, project counts, runtime provider counts, and Tutti CLI availability.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/status",
+        "timeoutMs": 10000
+      }
+    },
+    {
+      "path": ["list-projects"],
+      "summary": "List slide projects",
+      "description": "List recent AI Slide projects as a table for agents and other Tutti apps.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of projects to return."
+          }
+        }
+      },
+      "output": {
+        "defaultMode": "table",
+        "json": true,
+        "table": {
+          "columns": [
+            { "key": "title", "label": "Title" },
+            { "key": "template", "label": "Template" },
+            { "key": "updated-at", "label": "Updated" }
+          ]
+        }
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/list-projects",
+        "timeoutMs": 10000
+      }
+    },
+    {
+      "path": ["create"],
+      "summary": "Create a slide project",
+      "description": "Create a new editable deck or PPTX presentation project.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Project title."
+          },
+          "artifactType": {
+            "type": "string",
+            "description": "Artifact type: deck or pptx."
+          }
+        }
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/create",
+        "timeoutMs": 30000
+      }
+    }
+  ]
+}
