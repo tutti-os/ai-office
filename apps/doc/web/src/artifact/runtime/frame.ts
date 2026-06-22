@@ -9,8 +9,12 @@ export function runtimeStateToSrcDoc(state: RuntimeState) {
 export function enableEditableFrame(doc: Document, interaction: ArtifactInteractionPolicy = { mode: "editable" }) {
   installReadOnlyMutationGuard(doc);
   installLinkNavigationGuard(doc);
-  markTableCellsEditable(doc);
   enableTableCellCaretPlacement(doc);
+  refreshEditableFrameContent(doc, interaction);
+}
+
+export function refreshEditableFrameContent(doc: Document, interaction: ArtifactInteractionPolicy = { mode: "editable" }) {
+  markTableCellsEditable(doc);
   ensureRuntimeEditingStyles(doc);
   setEditableFrameInteraction(doc, interaction);
 }

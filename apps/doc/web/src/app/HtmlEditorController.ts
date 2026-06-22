@@ -6,6 +6,7 @@ import {
 } from "../artifact/runtime/operations";
 import { RuntimeApplier } from "../artifact/runtime/applier";
 import { runtimeDocumentFromFrame } from "../artifact/runtime/document";
+import { refreshEditableFrameContent } from "../artifact/runtime/frame";
 import { applyRuntimeSnapshot, createRuntimeSnapshot } from "../artifact/runtime/snapshot";
 import type { RuntimeState, SelectionState } from "../artifact/runtime/types";
 import { captureSelectionState, restoreSelectionState } from "../artifact/runtime/selection";
@@ -193,6 +194,7 @@ export class HtmlEditorController {
     const snapshot = runtime.history.snapshots[nextIndex];
     if (!snapshot) return;
     applyRuntimeSnapshot(doc, snapshot);
+    this.refreshFrameAfterSnapshotRestore(doc, snapshot.selectionState);
     const restoredSelection = captureSelectionState(doc);
     const restoredTarget =
       currentSelectionElement(doc) ??
@@ -214,21 +216,26 @@ export class HtmlEditorController {
         : current,
     );
     this.deps.setToolbarState(readToolbarState(doc, restoredTarget, restoredSelection?.commonAncestorPath ?? ""));
+    this.refocusFrame(doc, restoredTarget ?? null, restoredSelection);
   }
 
-  refocusFrame() {
-    this.focusFrame();
-    requestAnimationFrame(() => this.focusFrame());
+  refocusFrame(doc = this.currentDocument(), target?: Element | null, selection?: SelectionState | null) {
+    this.focusFrame(doc, target ?? null, selection ?? null);
+    requestAnimationFrame(() => this.focusFrame(doc, target ?? null, selection ?? null));
   }
 
   private currentDocument() {
     return this.deps.iframeRef.current?.contentDocument ?? null;
   }
 
-  private focusFrame() {
+  private focusFrame(doc: Document | null = this.currentDocument(), target?: Element | null, selection?: SelectionState | null) {
     const frame = this.deps.iframeRef.current;
     frame?.focus();
     frame?.contentWindow?.focus();
+    if (!doc) return;
+    const focusTarget = this.editableFocusTarget(doc, target ?? currentSelectionElement(doc) ?? null);
+    focusTarget?.focus({ preventScroll: true });
+    restoreSelectionState(doc, selection ?? this.deps.lastSelectionRef.current);
   }
 
   private rememberContext(doc: Document, selection: SelectionState | null, fallbackNode?: Node | null) {
@@ -248,6 +255,7 @@ export class HtmlEditorController {
     fallbackPath: string,
   ) {
     applyRuntimeSnapshot(doc, snapshot);
+    this.refreshFrameAfterSnapshotRestore(doc, snapshot.selectionState);
     const restoredSelection = snapshot.selectionState;
     const restoredTarget =
       currentSelectionElement(doc) ??
@@ -259,5 +267,17 @@ export class HtmlEditorController {
       null;
     this.deps.setToolbarState(readToolbarState(doc, restoredTarget, restoredSelection?.commonAncestorPath ?? fallbackPath));
     this.deps.setEditorStats(getEditorStats(doc));
+    this.refocusFrame(doc, restoredTarget, restoredSelection);
+  }
+
+  private refreshFrameAfterSnapshotRestore(doc: Document, selection: SelectionState | null) {
+    refreshEditableFrameContent(doc, this.deps.isReadOnly() ? { mode: "read-only" } : { mode: "editable" });
+    restoreSelectionState(doc, selection);
+  }
+
+  private editableFocusTarget(doc: Document, target: Element | null) {
+    const candidate = target?.closest<HTMLElement>('[contenteditable="true"]') ?? null;
+    if (candidate && doc.body.contains(candidate)) return candidate;
+    return doc.body;
   }
 }
