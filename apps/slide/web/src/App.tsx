@@ -316,7 +316,7 @@ export function App() {
 
   const createFromPrompt = () => {
     if (!prompt.trim()) return;
-    void createAndOpenProject({ title: prompt.trim(), initialPrompt: prompt.trim() });
+    void createAndOpenProject({ title: "Untitled Presentation", initialPrompt: prompt.trim() });
   };
 
   const createBlank = () => {

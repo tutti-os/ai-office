@@ -39,11 +39,18 @@ You are creating or editing an HTML slide deck inside AI Slide from a blank proj
 ## Blank Deck Starting Point
 
 - Blank projects are initialized by the app with \`deck.slides/manifest.json\` and a 1920x1080 canvas. Preserve that canvas.
+- Keep slide files in \`deck.slides/slides/\` named with an index prefix such as \`01-cover.html\`; after adding, deleting, renaming, or reordering slides, call \`reorder_slides\` rather than editing the manifest slide list by hand.
+- Mark every user-editable text, card, callout, table, complete chart/diagram/visual container, chart label, and image block with \`data-object="true"\`. Use \`data-object-type="textbox"\` for text or mixed content and \`data-object-type="image"\` for standalone images.
 - Start with a compact outline: audience, decision or takeaway, section arc, and expected number of slides.
 - Choose one deck mode before writing slides: speaker-led or reading-first.
 - Define CSS variables for the deck's palette, spacing, type scale, card shape, and accent behavior before generating many slides.
 - Create a small set of reusable classes in \`deck.slides/assets/styles.css\` and reuse them across slides instead of scattering unrelated inline styles everywhere.
 - If the user asks for a business deck, include an explicit recommendation or decision slide rather than hiding the ask in a decorative banner.
+- Avoid layout recipes that depend on large \`min-height\` cards plus large headings; compute whether the header, spacing, and cards fit inside 1080px before finalizing.
+- Final review must check real content fit. Do not treat fixed \`.slide { width: 1920px; height: 1080px; }\` as sufficient proof; verify there is no vertical or horizontal overflow and no clipped text.
+- Keep each slide as a complete fixed-size composition. The body and slide root must not depend on browser scrolling, and important content must never sit below the 1080px canvas.
+- If a layout starts to rely on \`overflow: hidden\` to hide text or cards, the content does not fit. Split the content into another indexed slide or choose a simpler pattern.
+- Use explicit regions for dense slides: header, body grid, optional footer/decision band. Reserve space for every region before writing long copy.
 
 Read \`references/blank-deck-patterns.md\` for practical blank-deck layout patterns.
 `,
@@ -68,6 +75,8 @@ Reading-first slides:
 - Use labels, dividers, captions, and contrast to guide scanning.
 
 If a slide needs both a detailed comparison and a decision ask, reserve space for the decision ask in the layout from the beginning.
+If the reserved space does not fit after headline and subhead are present, split the decision ask into another slide or reduce copy density.
+Do not place banners, notes, or decision asks across the middle of body cards. They need their own band, rail, or slide.
 
 ## Useful Slide Recipes
 
@@ -78,6 +87,7 @@ If a slide needs both a detailed comparison and a decision ask, reserve space fo
 - Metric slide: one hero number plus 2-4 supporting metrics, not a wall of numbers.
 - Process or timeline: 3-6 steps with verbs as headings.
 - Decision slide: recommendation, rationale, owner, next action, and risk.
+  Keep this as a compact grid or reserved band. Avoid tall side-by-side cards under a large headline unless the combined vertical budget has been checked.
 
 ## Blank Deck Typography Defaults
 
@@ -87,6 +97,7 @@ If a slide needs both a detailed comparison and a decision ask, reserve space fo
 - Captions/meta: usually 18-24px.
 - Avoid body text below 22px on 1920x1080 unless it is nonessential metadata.
 - Line-height should be intentional: tight for display, relaxed for body.
+- Long headings must be budgeted before writing the body. If a heading takes more than 3 lines, shorten it or move supporting detail to the next slide.
 
 ## Visual System Seeds
 
@@ -101,6 +112,15 @@ Avoid generic AI aesthetics:
 - too many floating cards;
 - ornamental blobs that do not support the content;
 - every slide using the same centered hero layout.
+
+## Fit Checklist
+
+Before finishing a changed slide, check:
+- the slide root is exactly the manifest canvas size;
+- the body has no intended scroll;
+- all text and cards fit inside the canvas;
+- no body card, table, or bullet list is covered by a callout;
+- dense content is split across slides rather than compressed into unreadable type.
 `,
   },
 ];

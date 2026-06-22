@@ -1,5 +1,8 @@
 import type {
   AppSnapshot,
+  ApplySheetCommandsRequest,
+  ApplySheetCommandsResponse,
+  OfficeCliStatusResponse,
   ProjectDetailResponse,
   ProjectResponse,
   ProjectsResponse,
@@ -32,6 +35,14 @@ export async function listProjects(): Promise<SheetProject[]> {
   return response.projects;
 }
 
+export async function fetchOfficeCliStatus() {
+  return requestJson<OfficeCliStatusResponse>("/api/toolchains/officecli");
+}
+
+export async function installOfficeCli() {
+  return requestJson<OfficeCliStatusResponse>("/api/toolchains/officecli/install", { method: "POST" });
+}
+
 export async function updateProject(projectId: string, input: UpdateProjectRequest) {
   return requestJson<ProjectResponse>(`/api/projects/${encodeURIComponent(projectId)}`, {
     method: "PATCH",
@@ -41,6 +52,13 @@ export async function updateProject(projectId: string, input: UpdateProjectReque
 
 export async function getProjectXlsxFile(projectId: string) {
   return requestArrayBuffer(`/api/projects/${encodeURIComponent(projectId)}/files/workbook.xlsx`);
+}
+
+export async function applyProjectCommands(projectId: string, input: ApplySheetCommandsRequest) {
+  return requestJson<ApplySheetCommandsResponse>(`/api/projects/${encodeURIComponent(projectId)}/commands`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export type ProjectExportWriteResponse = {

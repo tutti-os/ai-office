@@ -5,6 +5,7 @@ import fastifyWebsocket from "@fastify/websocket";
 import Fastify from "fastify";
 import { ArtifactAppHttpRoutes } from "@ai-app/shared/server-routes";
 import type { UpdateDeckSlideHtmlRequest } from "@ai-slide/shared";
+import { registerSlideAgentToolRoutes } from "./agent-tools.js";
 import { projectWorkspaceRoot } from "./local/paths.js";
 import { ProjectRepository } from "./artifact/project-repository.js";
 import { ProjectService } from "./artifact/project-service.js";
@@ -59,6 +60,8 @@ new ArtifactAppHttpRoutes({
     }),
   },
 }).register(server);
+
+registerSlideAgentToolRoutes(server, projects);
 
 server.post<{ Body: { path?: string; title?: string } }>("/api/dev/projects/import-pptx", async (request, reply) => {
   try {

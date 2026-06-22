@@ -21,6 +21,8 @@ export type LocalAgentMcpServer = {
   command: string;
   args: string[];
   env?: Record<string, string>;
+  startupTimeoutMs?: number;
+  toolTimeoutMs?: number;
 };
 
 export interface LocalAgentRuntimeProviderOptions<

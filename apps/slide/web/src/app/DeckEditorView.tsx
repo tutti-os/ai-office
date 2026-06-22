@@ -2,6 +2,7 @@ import { AlignCenter, AlignLeft, AlignRight, Bold, Crosshair, Image, Italic, Pai
 import { Toolbar, ToolbarColorInput, ToolbarDivider, ToolbarGroup, ToolbarIconButton, ToolbarNumberInput, ToolbarRow, ToolbarSelect } from "@ai-app/ui/toolbar";
 import type { PointerEvent } from "react";
 import type { InlineFormatTag, RichTextStyle } from "@ai-app/ui/rich-text";
+import { deckSlideDisplayName } from "@ai-slide/shared";
 import { DeckInteractionLayer } from "../artifact/deckInteractionLayerView";
 import type { DeckObjectAlignment, DeckObjectElement, DeckObjectGeometry, DeckObjectGeometryPatch, DeckResizeHandle, DeckSnapGuide } from "../artifact/deckInteractionLayer";
 import { EditorInfoPanel } from "./EditorInfoPanel";
@@ -152,6 +153,7 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
         {activeSlide ? (
           (() => {
             const slide = activeSlide;
+            const slideTitle = deckSlideDisplayName(slide, activeSlideIndex);
             const isTextEditingSlide = activeTextEdit?.slideId === slide.id && activeSelectionBox?.slideId === slide.id;
             const shieldRects = isTextEditingSlide
               ? editingShieldRects(activeSelectionBox, Math.round(canvas.width * scale), frameHeight)
@@ -160,7 +162,7 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
               <article className="min-w-0 shrink-0" key={slide.id} style={{ width: frameWidth || undefined }}>
                 <div className="mb-2 flex items-center gap-2.5">
                   <span className="inline-flex h-6 items-center rounded-md bg-[#5C6B50] px-[7px] font-mono text-[12px] font-black text-[#F4EFE6]">{String(activeSlideIndex + 1).padStart(2, "0")}</span>
-                  <strong className="min-w-0 truncate text-[12px] font-semibold text-[#2A2620]/78">{slide.title}</strong>
+                  <strong className="min-w-0 truncate text-[12px] font-semibold text-[#2A2620]/78">{slideTitle}</strong>
                 </div>
                 <div
                   className={cn("relative overflow-hidden rounded-[2px] border border-[#B8A07C]/60 bg-white shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)]", selectionMode === "object" && activeObject?.slideId === slide.id ? "border-[#5C6B50]" : "")}
@@ -179,7 +181,7 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
                       height: canvas.height,
                       transform: `scale(${scale})`,
                     }}
-                    title={slide.title}
+                    title={slideTitle}
                     onLoad={(event) => initializeFrame(slide, event.currentTarget)}
                   />
                   <DeckInteractionLayer
@@ -241,9 +243,9 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
         items={slides.map((slide, index) => ({
           id: slide.id,
           label: String(index + 1).padStart(2, "0"),
-          title: slide.title,
+          title: deckSlideDisplayName(slide, index),
         }))}
-        renderPreview={(item) => {
+        renderPreview={(item, index) => {
           const slide = slides.find((candidate) => candidate.id === item.id);
           if (!slide) return null;
           return (
@@ -257,7 +259,7 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
                 transform: `scale(${deckThumbnail.scale})`,
               }}
               tabIndex={-1}
-              title={`${slide.title} thumbnail`}
+              title={`${deckSlideDisplayName(slide, index)} thumbnail`}
             />
           );
         }}

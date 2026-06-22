@@ -1,5 +1,5 @@
 import { exportPptxFromIframes } from "@tutti-os/office-export";
-import { pptxMimeType, type DeckManifest, type DeckManifestSlide, type SlideArtifact } from "@ai-slide/shared";
+import { deckSlideDisplayName, pptxMimeType, type DeckManifest, type DeckManifestSlide, type SlideArtifact } from "@ai-slide/shared";
 import { writeProjectExport } from "../api/projects";
 import { projectAssetUrl } from "./deckEditorDom";
 
@@ -67,7 +67,7 @@ async function createExportFrame(input: {
   frame.style.opacity = "0";
   frame.style.pointerEvents = "none";
   frame.tabIndex = -1;
-  frame.title = `${input.slide.title} export`;
+  frame.title = `${deckSlideDisplayName(input.slide)} export`;
   const loaded = waitForFrameLoad(frame);
   frame.src = projectAssetUrl(input.projectId, input.artifact.fileRef, input.slide.file, input.artifact.revision);
   document.body.append(frame);

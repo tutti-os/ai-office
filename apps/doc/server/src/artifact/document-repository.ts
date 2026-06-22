@@ -138,6 +138,10 @@ export class DocumentRepository {
     return updated;
   }
 
+  updateProjectSessionTitle(projectId: string, title: string) {
+    return this.conversations.updateProjectSessionTitle(projectId, title);
+  }
+
   async writeProjectAsset(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");

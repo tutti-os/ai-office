@@ -2,6 +2,7 @@ import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { LocalAgentRuntimeProvider as SharedLocalAgentRuntimeProvider } from "@ai-app/agent/local-agent-runtime";
 import type { AiEditRequest, DocumentProject, DocumentRun } from "@ai-doc/shared";
+import { buildDocAppToolEnv, buildDocAppToolMcpServers } from "../agent-tools.js";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
 import type { RuntimeEditContext } from "./runtime-provider.js";
@@ -20,8 +21,10 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<D
       workspaceRoot: (context) => projectWorkspaceRoot(context.project.id),
       buildPrompt: buildEditPrompt,
       buildSystemPrompt,
+      buildMcpServers: buildDocAppToolMcpServers,
       buildEnv: (context, workspaceRoot) => ({
         ...officeCliEnvSync(),
+        ...buildDocAppToolEnv(context),
         AI_DOC_WORKSPACE: workspaceRoot,
         AI_DOC_PROJECT_ID: context.project.id,
         AI_DOC_RUN_ID: context.run.id,
@@ -41,6 +44,7 @@ function buildSystemPrompt(context: RuntimeEditContext) {
       "This project is a Word DOCX doc.",
       `Current focused file: ${resolve(workspaceRoot, "document.docx")}`,
       localFilesystemArtifactNotice,
+      appToolPrompt(),
       "Use the officecli command-line tool to inspect, create, edit, and validate the focused DOCX file. If an office skill is available in the agent environment, follow it.",
       "Prefer officecli L1/L2 operations such as view, get, query, add, set, remove, and validate. Do not hand-edit OOXML unless officecli high-level commands cannot solve the task.",
       "When asked to create or edit the doc, write the final DOCX result to the focused file.",
@@ -57,6 +61,7 @@ function buildSystemPrompt(context: RuntimeEditContext) {
       "You are editing a Markdown artifact for a local AI doc editor.",
       `Current focused file: ${targetMarkdownPath}`,
       localFilesystemArtifactNotice,
+      appToolPrompt(),
       "Use filesystem read/write tools to inspect and modify the focused file directly. Do not treat the chat response as the primary way to update the doc.",
       "Write Markdown as a readable, maintainable working document for humans and agents. Optimize for clarity, scanability, and future edits rather than visual flourish.",
       "Preserve the existing document style and structure unless the user asks for a rewrite. For edits, make the smallest coherent change that satisfies the user. For new content, create a clear outline before expanding it.",
@@ -73,6 +78,7 @@ function buildSystemPrompt(context: RuntimeEditContext) {
     "You are editing an HTML artifact for a local AI doc editor.",
     `Current focused file: ${targetHtmlPath}`,
     localFilesystemArtifactNotice,
+    appToolPrompt(),
     "Use filesystem read/write tools to inspect and modify the focused file directly. Do not treat the chat response as the primary way to update the doc.",
     "Use HTML as a high-bandwidth artifact format: choose headings, sections, tables, lists, figures, SVG diagrams, images, code blocks, links, and lightweight interactions when they make the doc easier to understand or use.",
     "Preserve the existing editor runtime, CSS, layout conventions, and semantic structure unless the user explicitly asks for a redesign.",
@@ -82,6 +88,16 @@ function buildSystemPrompt(context: RuntimeEditContext) {
     noBrowserRenderVerification,
     "After editing files, respond with a brief task summary only. Do not include the HTML content in the final response.",
   ].join("\n\n");
+}
+
+function appToolPrompt() {
+  return [
+    "App-owned tools:",
+    "- Prefer MCP app tools when visible: `mcp__app_tools__set_project_title`.",
+    "- If MCP app tools are not visible, use the run-scoped HTTP fallback instead of editing app databases, session files, or manifests by hand:",
+    `  curl -sS -X POST "$AI_APP_TOOL_GATEWAY_URL/call" -H "Authorization: Bearer $AI_APP_TOOL_TOKEN" -H "Content-Type: application/json" --data '{"name":"set_project_title","input":{"title":"Project Brief"}}'`,
+    "- When starting a new artifact from a user request, choose a concise human title and call `set_project_title`; do not leave the raw instruction as the project title.",
+  ].join("\n");
 }
 
 function buildEditPrompt(context: RuntimeEditContext) {

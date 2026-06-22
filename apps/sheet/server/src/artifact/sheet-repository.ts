@@ -159,6 +159,12 @@ export class SheetRepository {
     };
   }
 
+  xlsxFilePath(projectId: string) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    return xlsxFilePath(projectId);
+  }
+
   async readXlsxManifest(projectId: string) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");

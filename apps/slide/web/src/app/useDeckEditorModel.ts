@@ -4,7 +4,7 @@ import { type ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { applyInlineFormat, applyPresentationStyle, captureRichTextSelection, restoreRichTextSelection, selectionBelongsToElement, type InlineFormatTag, type RichTextSelectionState, type RichTextStyle } from "@ai-app/ui/rich-text";
 import { Toolbar, ToolbarColorInput, ToolbarDivider, ToolbarGroup, ToolbarIconButton, ToolbarNumberInput, ToolbarRow, ToolbarSelect } from "@ai-app/ui/toolbar";
 import { isArtifactReadOnly, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
-import type { DeckManifestSlide, ProjectDetailResponse, SlideArtifactSelection } from "@ai-slide/shared";
+import { deckSlideDisplayName, type DeckManifestSlide, type ProjectDetailResponse, type SlideArtifactSelection } from "@ai-slide/shared";
 import { DeckInteractionLayer } from "../artifact/deckInteractionLayerView";
 import { alignedDeckObjectRect, applyDeckObjectRect, applyDeckObjectRotation, collectDeckSnapTargets, isMovableDeckObject, movedDeckRectForDelta, readDeckObjectGeometry, readDeckObjectRect, resizedDeckRectForHandle, snappedDeckDragRect, type DeckObjectAlignment, type DeckObjectElement, type DeckObjectGeometry, type DeckObjectGeometryPatch, type DeckResizeHandle, type DeckSnapGuide } from "../artifact/deckInteractionLayer";
 import type { DeckAgentRuntimeProvider } from "../artifact/deckArtifactAdapter";
@@ -320,7 +320,7 @@ export function useDeckEditorModel(props: {
     if (doc) {
       return {
         type: "slide",
-        text: slide.title,
+        text: deckSlideDisplayName(slide, activeSlideIndex),
         html: currentSlideHtml,
         path: `deck:${slide.id}`,
         slideId: slide.id,
@@ -607,7 +607,7 @@ export function useDeckEditorModel(props: {
       });
     }
     else if (target) selectObject(slide.id, target);
-    else if (activeTextEdit?.slideId === slide.id) clearActiveSelection({ preserveToolbar: true });
+    else clearActiveSelection();
   };
 
   const enterTextEditFromFramePoint = (slide: DeckManifestSlide, clientX: number, clientY: number) => {

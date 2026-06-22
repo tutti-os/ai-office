@@ -4,9 +4,11 @@ import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import Fastify from "fastify";
 import { ArtifactAppHttpRoutes } from "@ai-app/shared/server-routes";
-import { xlsxMimeType } from "@ai-sheet/shared";
+import { type ApplySheetCommandsRequest, xlsxMimeType } from "@ai-sheet/shared";
 import { SheetRepository } from "./artifact/sheet-repository.js";
 import { SheetService } from "./artifact/sheet-service.js";
+import { XlsxStorageAdapter } from "./artifact/xlsx-storage-adapter.js";
+import { getOfficeCliStatus, installOfficeCli } from "./toolchains/officecli.js";
 import { EventHub } from "./ws/event-hub.js";
 
 const webDist = process.env.AI_SHEET_WEB_DIST ? resolve(process.env.AI_SHEET_WEB_DIST) : resolve(process.cwd(), "../web/dist");
@@ -16,7 +18,7 @@ const host = process.env.HOST ?? "127.0.0.1";
 const server = Fastify({ logger: true, bodyLimit: 90 * 1024 * 1024 });
 const events = new EventHub();
 const repo = new SheetRepository();
-const sheets = new SheetService(repo, events);
+const sheets = new SheetService(repo, events, new XlsxStorageAdapter());
 
 server.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bodyLimit: 90 * 1024 * 1024 }, (_request, body, done) => {
   done(null, body);
@@ -39,22 +41,10 @@ new ArtifactAppHttpRoutes({
   listTemplates: () => [],
   toolchain: {
     responseKey: "officecli",
-    getStatus: async () => ({
-      available: false,
-      source: "missing" as const,
-      canInstall: false,
-      installing: false,
-      reason: "OfficeCLI is not required for XLSX viewing.",
-    }),
-    install: async () => ({
-      available: false,
-      source: "missing" as const,
-      canInstall: false,
-      installing: false,
-      reason: "OfficeCLI is not required for XLSX viewing.",
-    }),
-    isAvailable: () => false,
-    errorMessage: () => "OfficeCLI is not required for XLSX viewing.",
+    getStatus: getOfficeCliStatus,
+    install: installOfficeCli,
+    isAvailable: (officecli) => officecli.available,
+    errorMessage: (officecli) => officecli.reason ?? "Unable to install OfficeCLI",
     errorStatus: (error) => ({
       available: false,
       source: "missing" as const,
@@ -64,6 +54,17 @@ new ArtifactAppHttpRoutes({
     }),
   },
 }).register(server);
+
+server.post<{ Params: { projectId: string }; Body: ApplySheetCommandsRequest }>("/api/projects/:projectId/commands", async (request, reply) => {
+  try {
+    return await sheets.applyCommands(request.params.projectId, request.body ?? { baseRevision: 0, baseSha256: null, commands: [] });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to apply XLSX commands";
+    const lower = message.toLowerCase();
+    const status = lower.includes("stale") ? 409 : lower.includes("officecli") ? 503 : lower.includes("not found") ? 404 : 400;
+    return reply.code(status).send({ error: message });
+  }
+});
 
 server.post<{ Body: { path?: string; title?: string } }>("/api/dev/projects/import-xlsx", async (request, reply) => {
   try {

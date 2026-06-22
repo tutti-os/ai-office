@@ -301,10 +301,10 @@ export function ToolbarSelect(props: {
   children: ReactNode;
 }) {
   return (
-    <label className={cx(toolbarInputShell, "relative px-2.5 pr-7", props.compact ? "w-[104px]" : "w-[116px]")}>
+    <label className={cx(toolbarInputShell, "relative overflow-hidden", props.compact ? "w-[104px]" : "w-[116px]")}>
       <span className="sr-only">{props.title}</span>
       <select
-        className={cx(toolbarInputText, "min-w-0 truncate")}
+        className={cx(toolbarInputText, "absolute inset-0 h-full min-w-0 cursor-pointer truncate px-2.5 pr-7 disabled:cursor-default")}
         disabled={props.disabled}
         value={props.value}
         title={props.title}

@@ -5,7 +5,7 @@ import {
   encodeAssetPath,
   rewriteAssetReferencesInElement,
 } from "@ai-app/shared/artifact-assets";
-import { readDeckObjectGeometry, type DeckObjectElement } from "../artifact/deckInteractionLayer";
+import { readDeckObjectGeometry, readDeckObjectRect, type DeckObjectElement } from "../artifact/deckInteractionLayer";
 
 type ActiveDeckSelectionBox = {
   slideId: string;
@@ -248,12 +248,13 @@ export function objectDepth(object: Element) {
 
 export function readSelectionBox(slideId: string, object: DeckObjectElement, scale: number): ActiveDeckSelectionBox {
   const geometry = readDeckObjectGeometry(object);
+  const visualRect = readDeckObjectRect(object);
   return {
     slideId,
-    left: geometry.left * scale,
-    top: geometry.top * scale,
-    width: Math.max(1, geometry.width * scale),
-    height: Math.max(1, geometry.height * scale),
+    left: visualRect.left * scale,
+    top: visualRect.top * scale,
+    width: Math.max(1, visualRect.width * scale),
+    height: Math.max(1, visualRect.height * scale),
     rotation: geometry.rotation,
   };
 }
@@ -379,11 +380,71 @@ export function ensureSlideEditorStyles(doc: Document) {
 
 export function prepareSlideEditorDocument(doc: Document, assetOptions?: { fileRef: string; projectId: string }) {
   if (assetOptions) renderDeckSlideAssetReferences(doc.documentElement, assetOptions);
+  ensureEditableObjectMarkers(doc);
+  ensureGraphicObjectMarkers(doc);
   ensureSlideEditorStyles(doc);
   doc.querySelectorAll<DeckObjectElement>('[data-object="true"]').forEach((object, index) => {
     if (!object.getAttribute("data-ai-slide-object-id")) object.setAttribute("data-ai-slide-object-id", `object-${index + 1}`);
     if (isHtmlElement(object)) object.tabIndex = 0;
   });
+}
+
+function ensureEditableObjectMarkers(doc: Document) {
+  if (doc.querySelector('[data-object="true"]')) return;
+  const slide = doc.querySelector<HTMLElement>(".slide") ?? doc.body;
+  if (!slide) return;
+  const candidates = Array.from(
+    slide.querySelectorAll<HTMLElement>(
+      [
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "p",
+        "li",
+        "blockquote",
+        "figcaption",
+        "td",
+        "th",
+        "article",
+        "aside",
+        "section",
+        "div",
+        "img",
+        "svg",
+      ].join(","),
+    ),
+  );
+  for (const element of candidates) {
+    if (element === slide || element.closest("[data-ai-slide-editor]")) continue;
+    const tagName = element.tagName.toLowerCase();
+    const text = element.textContent?.replace(/\s+/g, " ").trim() ?? "";
+    const hasMedia = tagName === "img" || tagName === "svg" || Boolean(element.querySelector("img, svg"));
+    if (!text && !hasMedia) continue;
+    element.setAttribute("data-object", "true");
+    if (!element.getAttribute("data-object-type")) {
+      element.setAttribute("data-object-type", hasMedia && !text ? "image" : "textbox");
+    }
+  }
+}
+
+function ensureGraphicObjectMarkers(doc: Document) {
+  const slide = doc.querySelector<HTMLElement>(".slide") ?? doc.body;
+  if (!slide) return;
+  const visualClassPattern = /(?:^|[-_\s])(chart|diagram|dial|figure|graphic|illustration|matrix|motif|orbit|radar|ring|timeline|visual)(?:$|[-_\s])/i;
+  const candidates = Array.from(slide.querySelectorAll<HTMLElement>("*"));
+  for (const element of candidates) {
+    if (element === slide || element.getAttribute("data-object") === "true" || element.closest("[data-ai-slide-editor]")) continue;
+    if (element.parentElement?.closest('[data-object="true"]')) continue;
+    const markerText = `${element.id} ${typeof element.className === "string" ? element.className : ""}`;
+    if (!visualClassPattern.test(markerText)) continue;
+    const rect = element.getBoundingClientRect();
+    if (rect.width < 24 || rect.height < 24) continue;
+    element.setAttribute("data-object", "true");
+    element.setAttribute("data-object-type", "object");
+  }
 }
 
 export function applySlideHtmlSnapshot(doc: Document, html: string) {

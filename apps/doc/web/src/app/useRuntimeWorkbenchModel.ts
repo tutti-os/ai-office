@@ -468,9 +468,8 @@ export function useRuntimeWorkbenchModel() {
     setLoading(true);
     try {
       const userPrompt = prompt.trim();
-      const title = userPrompt || "Untitled Doc";
       const attachments = homeAttachments.attachments;
-      const attachmentTitle = attachments[0]?.name ? `Doc from ${attachments[0].name}` : title;
+      const attachmentTitle = attachments[0]?.name ? `Doc from ${attachments[0].name}` : "Untitled Doc";
       const project = await createProject({
         title: attachmentTitle.length > 80 ? `${attachmentTitle.slice(0, 80).trim()}...` : attachmentTitle,
         content: initialContentForType(outputType),

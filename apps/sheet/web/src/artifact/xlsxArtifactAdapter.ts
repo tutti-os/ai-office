@@ -1,9 +1,10 @@
 import type { AiEditRequest, SheetArtifactSelection, XlsxManifest } from "@ai-sheet/shared";
 import type { AgentEditRequestInputBase, ArtifactRuntimeAdapterBase } from "@ai-app/shared/artifact-runtime";
-import type { OoxmlXlsxPreview } from "@tutti-os/office-preview/xlsx";
+import { createSpreadsheetEditor, type OoxmlXlsxPreview, type SpreadsheetEditorService, type XlsxRenderWorkbook } from "@tutti-os/office-preview/xlsx";
 
 export type XlsxSelection = {
   sheetId: string | null;
+  sheetName: string | null;
   address: string;
   selectedText: string;
 };
@@ -13,8 +14,10 @@ export type XlsxRuntimeState = {
   title: string;
   manifest: XlsxManifest;
   preview: OoxmlXlsxPreview | null;
+  editor: SpreadsheetEditorService | null;
+  renderWorkbook: XlsxRenderWorkbook | null;
   revision: number;
-  dirty: false;
+  dirty: boolean;
   selection: XlsxSelection;
 };
 
@@ -46,17 +49,32 @@ export class XlsxArtifactRuntimeAdapter
       title: input.title,
       manifest: input.manifest,
       preview: null,
+      editor: null,
+      renderWorkbook: null,
       revision: 0,
       dirty: false,
-      selection: { sheetId: null, address: "", selectedText: "" },
+      selection: { sheetId: null, sheetName: null, address: "", selectedText: "" },
     };
   }
 
   withPreview(runtime: XlsxRuntimeState, preview: OoxmlXlsxPreview | null): XlsxRuntimeState {
+    const editor = preview
+      ? createSpreadsheetEditor({
+          renderWorkbook: preview.renderWorkbook,
+          workbookSnapshot: preview.editorWorkbook,
+        })
+      : null;
+    const renderWorkbook = editor ? editor.renderWorkbook() : (preview?.renderWorkbook ?? null);
+    const activeSheet = renderWorkbook?.sheets[renderWorkbook.activeSheetIndex] ?? renderWorkbook?.sheets[0] ?? null;
     return {
       ...runtime,
+      editor,
       preview,
+      renderWorkbook,
       revision: runtime.revision + 1,
+      selection: activeSheet
+        ? { sheetId: activeSheet.id, sheetName: activeSheet.name, address: "A1", selectedText: "" }
+        : runtime.selection,
     };
   }
 
@@ -70,6 +88,7 @@ export class XlsxArtifactRuntimeAdapter
       html: "",
       path: runtime.selection.address,
       sheetId: runtime.selection.sheetId,
+      sheetName: runtime.selection.sheetName,
       address: runtime.selection.address,
     };
   }

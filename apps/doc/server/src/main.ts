@@ -6,6 +6,7 @@ import fastifyWebsocket from "@fastify/websocket";
 import Fastify from "fastify";
 import { ArtifactAppHttpRoutes } from "@ai-app/shared/server-routes";
 import type { ApplyTemplateRequest } from "@ai-doc/shared";
+import { registerDocAgentToolRoutes } from "./agent-tools.js";
 import { DocumentRepository } from "./artifact/document-repository.js";
 import { DocumentService } from "./artifact/document-service.js";
 import { getTemplateScreenshotFile, listTemplates } from "./templates/template-service.js";
@@ -33,6 +34,7 @@ server.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bod
 });
 
 await server.register(fastifyWebsocket);
+registerDocAgentToolRoutes(server, documents);
 
 registerTuttiCliRoutes(server, documents);
 registerTuttiReferenceRoutes(server);

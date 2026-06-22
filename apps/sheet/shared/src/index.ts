@@ -49,6 +49,7 @@ export interface SheetArtifact {
 
 export interface SheetArtifactSelection extends ArtifactSelectionBase<SheetSelectionType> {
   sheetId?: string | null;
+  sheetName?: string | null;
   address?: string | null;
 }
 
@@ -167,6 +168,26 @@ export interface ImportXlsxProjectRequest {
   title?: string;
 }
 
+export interface SheetSetCellValueCommand {
+  address: string;
+  input: string;
+  sheetId: string;
+  sheetName?: string;
+  type: "set-cell-value";
+}
+
+export type SheetCommand = SheetSetCellValueCommand;
+
+export interface ApplySheetCommandsRequest {
+  baseRevision: number;
+  baseSha256: string | null;
+  commands: SheetCommand[];
+}
+
+export interface ApplySheetCommandsResponse extends SheetProjectDetail {
+  applied: number;
+}
+
 export interface ProjectResponse extends SheetProjectRecord {}
 export interface ProjectDetailResponse extends SheetProjectDetail {}
 
@@ -184,6 +205,22 @@ export interface ProjectRunsResponse {
 
 export interface LocalAgentProviderStatusResponse {
   providers: [];
+}
+
+export type OfficeCliSource = "env" | "bundled" | "tutti" | "missing";
+
+export interface OfficeCliStatus {
+  available: boolean;
+  version?: string;
+  executablePath?: string;
+  source: OfficeCliSource;
+  canInstall: boolean;
+  installing: boolean;
+  reason?: string;
+}
+
+export interface OfficeCliStatusResponse {
+  officecli: OfficeCliStatus;
 }
 
 export interface AiEditRequest {

@@ -127,7 +127,6 @@ export interface TemplatesResponse {
 
 export interface DeckManifestSlide {
   id: string;
-  title: string;
   file: string;
 }
 
@@ -313,6 +312,18 @@ export function isSupportedDeckCanvas(canvas: { width?: number; height?: number 
   return canvas?.width === defaultDeckCanvas.width && canvas?.height === defaultDeckCanvas.height;
 }
 
+export function deckSlideDisplayName(slide: Pick<DeckManifestSlide, "file">, fallbackIndex?: number) {
+  const fileName = slide.file.split(/[\\/]/).pop() ?? slide.file;
+  const stem = fileName.replace(/\.html$/i, "").replace(/^\d+[-_\s]*/, "");
+  const label = stem
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+  if (label) return label;
+  if (typeof fallbackIndex === "number") return `Slide ${fallbackIndex + 1}`;
+  return fileName || "Slide";
+}
 
 export function createBlankDeckManifest(input: { title: string; createdAt?: string }): DeckManifest {
   const now = input.createdAt ?? new Date().toISOString();
@@ -323,7 +334,6 @@ export function createBlankDeckManifest(input: { title: string; createdAt?: stri
     slides: [
       {
         id: "slide-001",
-        title: "Cover",
         file: "slides/01-cover.html",
       },
     ],

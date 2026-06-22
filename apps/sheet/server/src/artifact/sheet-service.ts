@@ -1,12 +1,14 @@
 import { openPathInFileManager } from "@ai-app/shared/local-open";
-import type { CreateProjectRequest, UpdateProjectRequest } from "@ai-sheet/shared";
+import type { ApplySheetCommandsRequest, CreateProjectRequest, UpdateProjectRequest } from "@ai-sheet/shared";
 import { EventHub } from "../ws/event-hub.js";
 import { SheetRepository } from "./sheet-repository.js";
+import { XlsxStorageAdapter } from "./xlsx-storage-adapter.js";
 
 export class SheetService {
   constructor(
     private readonly repo: SheetRepository,
     private readonly events: EventHub,
+    private readonly storage: XlsxStorageAdapter,
   ) {}
 
   bootstrap() {
@@ -112,5 +114,28 @@ export class SheetService {
     const path = this.repo.projectExportsDir(projectId);
     await openPathInFileManager(path);
     return { path };
+  }
+
+  async applyCommands(projectId: string, input: ApplySheetCommandsRequest) {
+    if (!Array.isArray(input.commands) || input.commands.length === 0) throw new Error("At least one sheet command is required");
+    const detail = await this.getProject(projectId);
+    if (input.baseRevision !== detail.artifact.revision) throw new Error("Stale workbook revision. Refresh and try again.");
+    if (input.baseSha256 && detail.xlsxManifest?.sha256 && input.baseSha256 !== detail.xlsxManifest.sha256) {
+      throw new Error("Stale workbook file. Refresh and try again.");
+    }
+
+    await this.storage.applyCommands({
+      commands: input.commands,
+      workbookPath: this.repo.xlsxFilePath(projectId),
+    });
+    const refresh = await this.repo.refreshXlsxArtifactFromFile(projectId, "human");
+    const updated = await this.getProject(projectId);
+    const result = {
+      ...updated,
+      applied: input.commands.length,
+      xlsxManifest: refresh.manifest,
+    };
+    this.events.emit({ type: "project.updated", projectId, payload: result });
+    return result;
   }
 }

@@ -171,6 +171,71 @@ export class ProjectRepository {
     return this.getProject(projectId);
   }
 
+  updateProjectSessionTitle(projectId: string, title: string) {
+    return this.conversations.updateProjectSessionTitle(projectId, title);
+  }
+
+  async updateDeckManifestTitle(projectId: string, title: string, updatedBy: SlideProject["updatedBy"] = "ai") {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    const artifact = this.getArtifact(project.activeArtifactId);
+    if (!artifact || artifact.type !== "deck") return null;
+    this.ensureTemplateDeckMaterialized(project, artifact);
+    const manifest = await this.readDeckManifest(projectId, artifact);
+    if (!manifest) return null;
+    const nextManifest = {
+      ...manifest,
+      title: title.trim() || manifest.title,
+      updatedAt: new Date().toISOString(),
+    };
+    writeDeckManifest(projectId, artifact, nextManifest);
+    const updatedArtifact = this.bumpArtifactRevision(artifact.id, updatedBy) ?? artifact;
+    return { artifact: updatedArtifact, manifest: nextManifest };
+  }
+
+  async reorderDeckSlides(projectId: string, input: { slides?: string[] }, updatedBy: SlideProject["updatedBy"] = "ai") {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    const artifact = this.getArtifact(project.activeArtifactId);
+    if (!artifact || artifact.type !== "deck") throw new Error("Deck artifact not found");
+    this.ensureTemplateDeckMaterialized(project, artifact);
+    const manifest = await this.readDeckManifest(projectId, artifact);
+    if (!manifest) throw new Error("Deck manifest not found");
+
+    const slidesDir = join(projectWorkspaceRoot(projectId), artifact.fileRef, "slides");
+    const filesystemSlides = readdirSync(slidesDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".html"))
+      .map((entry) => entry.name);
+    if (!filesystemSlides.length) throw new Error("No slide HTML files found in deck.slides/slides");
+
+    const sortedFilesystemSlides = filesystemSlides.slice().sort(compareIndexedSlideNames);
+    const requestedSlides = input.slides?.length ? input.slides.map(normalizeSlideListItem) : sortedFilesystemSlides;
+    assertIndexedSlideNames(requestedSlides);
+    assertSameSlideSet(sortedFilesystemSlides, requestedSlides);
+
+    const existingIds = new Map(manifest.slides.map((slide) => [slide.file, slide.id] as const));
+    const usedIds = new Set(manifest.slides.map((slide) => slide.id));
+    const nextSlides = requestedSlides.map((fileName, index) => {
+      const file = `slides/${fileName}`;
+      return {
+        id: existingIds.get(file) ?? nextSlideId(usedIds, index),
+        file,
+      };
+    });
+    const nextManifest: DeckManifest = {
+      ...manifest,
+      slides: nextSlides,
+      updatedAt: new Date().toISOString(),
+    };
+    writeDeckManifest(projectId, artifact, nextManifest);
+    const updatedArtifact = this.bumpArtifactRevision(artifact.id, updatedBy) ?? artifact;
+    return {
+      artifact: updatedArtifact,
+      manifest: nextManifest,
+      slides: nextSlides,
+    };
+  }
+
   clearProjectHistory() {
     getDb().exec(`
       DELETE FROM slide_run_events;
@@ -497,10 +562,7 @@ function materializeDeckProject(root: string, project: SlideProject, artifact: S
   <title>${escapeHtml(project.title)}</title>
 </head>
 <body>
-  <section class="slide">
-    <p style="margin:0 0 24px;color:#667085;font-size:28px;font-weight:700;">AI Slide</p>
-    <h1 style="margin:0;color:#111827;font-size:96px;line-height:1.05;">${escapeHtml(project.title)}</h1>
-  </section>
+  <section class="slide"></section>
 </body>
 </html>
 `,
@@ -538,7 +600,6 @@ function materializeTemplateDeckSource(deckRoot: string, project: SlideProject, 
     else writeFileSync(destinationPage, missingTemplateSlideHtml(project.title, fileName), "utf8");
     return {
       id: `slide-${String(index + 1).padStart(3, "0")}`,
-      title: titleFromSlideFile(fileName),
       file: `slides/${destinationFile}`,
     };
   });
@@ -712,15 +773,6 @@ function isGeneratedImageTemplateDeck(deckRoot: string, manifestPath: string) {
   }
 }
 
-function titleFromSlideFile(fileName: string) {
-  return fileName
-    .replace(/\.html$/i, "")
-    .split(/[-_]/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 function missingTemplateSlideHtml(title: string, fileName: string) {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -781,6 +833,68 @@ function readStoredPptxManifest(projectId: string, artifact: SlideArtifact) {
   }
 }
 
+function writeDeckManifest(projectId: string, artifact: SlideArtifact, manifest: DeckManifest) {
+  writeFileSync(join(projectWorkspaceRoot(projectId), artifact.fileRef, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+}
+
+function normalizeSlideListItem(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) throw new Error("Slide file names cannot be empty");
+  if (trimmed.split(/[\\/]+/).includes("..")) throw new Error(`Invalid slide file path "${value}". Parent directories are not allowed.`);
+  const normalized = normalize(trimmed).replace(/\\/g, "/");
+  const withoutPrefix = normalized.startsWith("slides/") ? normalized.slice("slides/".length) : normalized;
+  if (withoutPrefix.startsWith("/") || withoutPrefix.startsWith("../") || withoutPrefix.includes("/../") || withoutPrefix.includes("/")) {
+    throw new Error(`Invalid slide file path "${value}". Use file names like "01-cover.html" or "slides/01-cover.html".`);
+  }
+  if (!withoutPrefix.toLowerCase().endsWith(".html")) throw new Error(`Slide file must be an HTML file: "${value}"`);
+  return withoutPrefix;
+}
+
+function assertIndexedSlideNames(slides: string[]) {
+  const invalid = slides.find((fileName) => !/^\d{2,}[-_][^/]+\.html$/i.test(fileName));
+  if (invalid) {
+    throw new Error(`Slide files must use an indexed name like "01-cover.html"; invalid file: "${invalid}"`);
+  }
+}
+
+function assertSameSlideSet(filesystemSlides: string[], requestedSlides: string[]) {
+  const filesystemSet = new Set(filesystemSlides);
+  const requestedSet = new Set(requestedSlides);
+  if (requestedSet.size !== requestedSlides.length) throw new Error("Slide order contains duplicate file names");
+  const missing = filesystemSlides.filter((fileName) => !requestedSet.has(fileName));
+  const unknown = requestedSlides.filter((fileName) => !filesystemSet.has(fileName));
+  if (missing.length || unknown.length) {
+    const parts = [];
+    if (missing.length) parts.push(`missing from requested order: ${missing.join(", ")}`);
+    if (unknown.length) parts.push(`not found on disk: ${unknown.join(", ")}`);
+    throw new Error(`Slide order must match files in deck.slides/slides (${parts.join("; ")}).`);
+  }
+}
+
+function compareIndexedSlideNames(left: string, right: string) {
+  const leftIndex = slideNameIndex(left);
+  const rightIndex = slideNameIndex(right);
+  if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+  return left.localeCompare(right);
+}
+
+function slideNameIndex(fileName: string) {
+  const match = /^(\d+)/.exec(fileName);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+function nextSlideId(usedIds: Set<string>, preferredIndex: number) {
+  let index = preferredIndex + 1;
+  while (true) {
+    const id = `slide-${String(index).padStart(3, "0")}`;
+    if (!usedIds.has(id)) {
+      usedIds.add(id);
+      return id;
+    }
+    index += 1;
+  }
+}
+
 function writeStoredPptxManifest(projectId: string, artifact: SlideArtifact, manifest: PptxManifest) {
   writeFileSync(pptxManifestPath(projectId, artifact), `${serializePptxManifest(manifest)}\n`, "utf8");
 }
@@ -802,7 +916,14 @@ function projectAgentInstructions(artifact: SlideArtifact) {
     "",
     "You are editing a slide deck with the local AI Slide app.",
     `Current focused directory: ${targetDeckPath}`,
-    "Use the focused directory's `manifest.json` for deck structure and `slides/*.html` for individual slides.",
+    "Use `slides/*.html` as the editable source for individual slides. Slide files must use indexed names such as `01-cover.html`.",
+    "Mark editable slide elements with `data-object=\"true\"`. Text or mixed content blocks should use `data-object-type=\"textbox\"`; standalone images should use `data-object-type=\"image\"`.",
+    "Use `manifest.json` for app-maintained title, canvas, and the current playlist; do not manually edit `manifest.slides` for ordering.",
+    "After adding, deleting, renaming, or reordering slide files, call the `reorder_slides` app tool.",
+    "Before finishing, review every slide you changed against the fixed canvas contract: no browser scrolling, no meaningful content outside the canvas, no clipped text, and no overlapping body content.",
+    "If the content does not fit comfortably, split it into additional indexed slides instead of shrinking text below readable size or hiding overflow.",
+    "To rename the project, call the `set_project_title` app tool.",
+    "If MCP app tools are not visible, call the run-scoped HTTP fallback with `$AI_APP_TOOL_GATEWAY_URL` and `$AI_APP_TOOL_TOKEN` instead of editing app databases or importing server repositories directly.",
     "Do not collapse the deck into a single HTML file.",
   ].join("\n");
 }

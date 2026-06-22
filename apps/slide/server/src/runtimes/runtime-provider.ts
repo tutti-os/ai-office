@@ -5,7 +5,7 @@ import type { AiEditRequest, DeckManifest, PptxManifest, SlideArtifact, SlidePro
 export type SlideRuntimeProject = SlideProject & {
   artifact: SlideArtifact;
   deckManifest?: DeckManifest | null;
-  deckSlides?: Array<{ id: string; title: string; file: string; htmlPreview: string }>;
+  deckSlides?: Array<{ id: string; displayName: string; file: string; htmlPreview: string }>;
   pptxManifest?: PptxManifest | null;
 };
 

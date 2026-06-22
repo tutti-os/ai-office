@@ -163,6 +163,15 @@ export class DocumentService {
     return { project };
   }
 
+  setProjectTitle(projectId: string, title: string, updatedBy: DocumentProject["updatedBy"] = "ai") {
+    const project = this.repo.updateProject(projectId, { title, updatedBy });
+    if (!project) throw new Error("Project not found");
+    this.repo.updateProjectSessionTitle(projectId, project.title);
+    const result = { project };
+    this.events.emit({ type: "project.updated", projectId, payload: result });
+    return result;
+  }
+
   async uploadProjectAsset(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }): Promise<ProjectAssetUploadResponse> {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { pptxMimeType, type AiEditRequest, type CreateProjectRequest, type DeckAssetUploadResponse, type RuntimeProfile, type SlideRun, type SlideRunEvent, type UpdateDeckSlideHtmlRequest, type UpdateProjectRequest } from "@ai-slide/shared";
+import { deckSlideDisplayName, pptxMimeType, type AiEditRequest, type CreateProjectRequest, type DeckAssetUploadResponse, type RuntimeProfile, type SlideRun, type SlideRunEvent, type UpdateDeckSlideHtmlRequest, type UpdateProjectRequest } from "@ai-slide/shared";
 import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
 import { openPathInFileManager } from "@ai-app/shared/local-open";
 import { projectWorkspaceRoot } from "../local/paths.js";
@@ -91,6 +91,29 @@ export class ProjectService {
     const result = { project, artifact };
     this.events.emit({ type: "project.updated", projectId, payload: result });
     return result;
+  }
+
+  async setProjectTitle(projectId: string, title: string, updatedBy: "human" | "ai" | "system" = "ai") {
+    const cleanTitle = title.trim();
+    if (!cleanTitle) throw new Error("Project title is required");
+    const project = this.repo.updateProject(projectId, { title: cleanTitle, updatedBy });
+    if (!project) throw new Error("Project not found");
+    this.repo.updateProjectSessionTitle(projectId, cleanTitle);
+    await this.repo.updateDeckManifestTitle(projectId, cleanTitle, updatedBy);
+    const detail = await this.getProject(projectId);
+    this.events.emit({ type: "project.updated", projectId, payload: detail });
+    return detail;
+  }
+
+  async reorderDeckSlides(projectId: string, input: { slides?: string[] }, updatedBy: "human" | "ai" | "system" = "ai") {
+    await this.repo.reorderDeckSlides(projectId, input, updatedBy);
+    const detail = await this.getProject(projectId);
+    this.events.emit({ type: "project.updated", projectId, payload: detail });
+    return {
+      project: detail.project,
+      artifact: detail.artifact,
+      deckManifest: detail.deckManifest,
+    };
   }
 
   readDeckSlideHtml(projectId: string, slideId: string) {
@@ -276,19 +299,19 @@ export class ProjectService {
     if (!manifest?.slides.length) return [];
     const slides = manifest.slides.slice(0, 30);
     return Promise.all(
-      slides.map(async (slide) => {
+      slides.map(async (slide, index) => {
         try {
           const result = await this.repo.readDeckSlideHtml(projectId, slide.id);
           return {
             id: slide.id,
-            title: slide.title,
+            displayName: deckSlideDisplayName(slide, index),
             file: slide.file,
             htmlPreview: previewHtmlForPrompt(result.html),
           };
         } catch {
           return {
             id: slide.id,
-            title: slide.title,
+            displayName: deckSlideDisplayName(slide, index),
             file: slide.file,
             htmlPreview: "",
           };

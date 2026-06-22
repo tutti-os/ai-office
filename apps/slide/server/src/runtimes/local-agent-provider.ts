@@ -7,6 +7,7 @@ import { projectWorkspaceRoot } from "../local/paths.js";
 import { extractOoxmlTextPreview } from "../artifact/ooxml-text.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
 import { deckSystemAuthoringPrompt } from "./deck-system-prompt.js";
+import { buildSlideAppToolEnv, buildSlideAppToolMcpServers } from "../agent-tools.js";
 import type { RuntimeEditContext, SlideRuntimeProject } from "./runtime-provider.js";
 
 const noBrowserRenderVerification =
@@ -26,12 +27,14 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       buildSkillManifest: buildProjectSkillManifest,
       buildEnv: (context, workspaceRoot) => ({
         ...officeCliEnvSync(),
+        ...buildSlideAppToolEnv(context),
         AI_SLIDE_WORKSPACE: workspaceRoot,
         AI_SLIDE_PROJECT_ID: context.project.id,
         AI_SLIDE_RUN_ID: context.run.id,
       }),
       timeoutMs: () => Number(process.env.AI_SLIDE_LOCAL_AGENT_TIMEOUT_MS ?? defaultLocalAgentTimeoutMs),
       sessionDirName: ".ai-slide",
+      buildMcpServers: buildSlideAppToolMcpServers,
     });
   }
 }
@@ -123,12 +126,15 @@ function buildSystemPrompt(context: RuntimeEditContext) {
     "You are working in a project workspace on the local filesystem. The app refreshes the deck from workspace files after you edit them, so the primary way to change the artifact is to read and write files directly in this workspace.",
     "The current artifact is an HTML-based slide deck, not a PowerPoint `.pptx` file and not a single HTML document.",
     localFilesystemArtifactNotice,
+    appToolPrompt("slide"),
     [
       "The canonical editable deck is the `deck.slides/` directory in the current working directory.",
       "",
       "Deck structure:",
-      "- `deck.slides/manifest.json` is the source of truth for deck metadata, canvas size, and slide ordering.",
-      "- `deck.slides/slides/*.html` contains the editable HTML for individual slides.",
+      "- `deck.slides/slides/*.html` contains the editable HTML for individual slides and is the source of truth for slide content.",
+      "- Each slide HTML file must use an indexed file name such as `01-cover.html`, `02-problem.html`, or `03-plan.html`.",
+      "- Editable slide elements must be marked with `data-object=\"true\"`. Text or mixed content blocks should use `data-object-type=\"textbox\"`; standalone images should use `data-object-type=\"image\"`. Mark complete visual/chart/diagram containers as editable objects too, not only their internal labels.",
+      "- `deck.slides/manifest.json` is app-maintained deck metadata: title, canvas size, and the ordered playlist of slide files.",
       "- `deck.slides/assets/` contains shared images, stylesheets, fonts, and other assets referenced by slide HTML.",
       "- `deck.slides/previews/` and `deck.slides/thumbnails/` are generated preview assets and should not be treated as the primary editable source.",
       "",
@@ -138,14 +144,37 @@ function buildSystemPrompt(context: RuntimeEditContext) {
       "- Do not convert the deck to Markdown or PPTX unless the user explicitly asks for an export or conversion.",
       "- Preserve the canvas size from `manifest.json` unless the user explicitly asks to change the deck format.",
       "- Preserve existing relative asset paths when possible.",
-      "- When adding a new slide, create a slide HTML file under `deck.slides/slides/` and update `manifest.json`.",
-      "- When deleting or reordering slides, update `manifest.json` consistently.",
-      "- Do not create orphan slide files that are not referenced by `manifest.json`.",
+      "- When adding a new slide, create a new indexed slide HTML file under `deck.slides/slides/`.",
+      "- When deleting a slide, delete its slide HTML file and any assets that are only used by that slide.",
+      "- When starting a new deck from a user request, choose a concise human title and call `set_project_title`; do not leave the raw instruction as the project title.",
+      "- When adding, deleting, renaming, or reordering slides, call the `reorder_slides` app tool instead of manually editing the manifest slides list.",
+      "- Before finishing, review every slide you changed against the fixed canvas contract: no browser scrolling, no meaningful content outside the canvas, no clipped text, and no overlapping body content.",
+      "- If the content does not fit comfortably, split it into additional indexed slides instead of shrinking text below readable size or hiding overflow.",
+      "- To rename the project, call the `set_project_title` app tool instead of editing database or session files.",
       "- Do not edit generated previews or thumbnails as the source of truth.",
     ].join("\n"),
     deckSystemAuthoringPrompt,
     noBrowserRenderVerification,
   ].join("\n\n");
+}
+
+function appToolPrompt(app: "doc" | "slide") {
+  const slideTools = app === "slide" ? ", `mcp__app_tools__reorder_slides`" : "";
+  const fallbackExamples =
+    app === "slide"
+      ? [
+          `curl -sS -X POST "$AI_APP_TOOL_GATEWAY_URL/call" -H "Authorization: Bearer $AI_APP_TOOL_TOKEN" -H "Content-Type: application/json" --data '{"name":"set_project_title","input":{"title":"Product Launch Plan"}}'`,
+          `curl -sS -X POST "$AI_APP_TOOL_GATEWAY_URL/call" -H "Authorization: Bearer $AI_APP_TOOL_TOKEN" -H "Content-Type: application/json" --data '{"name":"reorder_slides","input":{"slides":["01-cover.html","02-problem.html"]}}'`,
+        ]
+      : [
+          `curl -sS -X POST "$AI_APP_TOOL_GATEWAY_URL/call" -H "Authorization: Bearer $AI_APP_TOOL_TOKEN" -H "Content-Type: application/json" --data '{"name":"set_project_title","input":{"title":"Project Brief"}}'`,
+        ];
+  return [
+    "App-owned tools:",
+    `- Prefer MCP app tools when visible: \`mcp__app_tools__set_project_title\`${slideTools}.`,
+    "- If MCP app tools are not visible, use the run-scoped HTTP fallback instead of editing app databases, session files, or manifest playlists by hand:",
+    ...fallbackExamples.map((example) => `  ${example}`),
+  ].join("\n");
 }
 
 function buildEditPrompt(context: RuntimeEditContext) {

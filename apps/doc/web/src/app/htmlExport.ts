@@ -47,8 +47,14 @@ export function safeExportFileName(value: string) {
 }
 
 export const defaultPdfMargin = {
-  top: "12mm",
-  right: "12mm",
-  bottom: "14mm",
-  left: "12mm",
+  top: printToPdfMarginInches(12),
+  right: printToPdfMarginInches(12),
+  bottom: printToPdfMarginInches(14),
+  left: printToPdfMarginInches(12),
 } as const;
+
+function printToPdfMarginInches(millimeters: number) {
+  // Tutti's current PDF bridge accepts CSS-like units but forwards the parsed
+  // number to Electron printToPDF, whose margin values are inches.
+  return `${(millimeters / 25.4).toFixed(4)}px`;
+}

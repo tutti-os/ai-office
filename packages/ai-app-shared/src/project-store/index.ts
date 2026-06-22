@@ -198,6 +198,20 @@ export class SqliteAgentConversationStore {
     return rowToConversationSession(created);
   }
 
+  updateProjectSessionTitle(projectId: string, title: string) {
+    const nextTitle = title.trim();
+    if (!nextTitle) return [];
+    const now = new Date().toISOString();
+    this.getDb()
+      .prepare(`UPDATE agent_conversation_sessions SET title = ?, updated_at = ? WHERE project_id = ?`)
+      .run(nextTitle, now, projectId);
+    return rows<ConversationSessionRow>(
+      this.getDb()
+        .prepare(`SELECT * FROM agent_conversation_sessions WHERE project_id = ? ORDER BY created_at ASC`)
+        .all(projectId),
+    ).map(rowToConversationSession);
+  }
+
   createMessage(input: {
     projectId: string;
     sessionId: string;

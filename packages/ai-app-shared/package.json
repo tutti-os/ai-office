@@ -9,6 +9,8 @@
     "./local-open": "./src/local-open/index.ts",
     "./event-hub": "./src/event-hub/index.ts",
     "./project-store": "./src/project-store/index.ts",
+    "./agent-tools": "./src/agent-tools/index.ts",
+    "./agent-tools/mcp-server": "./src/agent-tools/mcp-server.ts",
     "./artifact-assets": "./src/artifact-assets/index.ts",
     "./artifact-runtime": "./src/artifact-runtime/index.ts",
     "./server-routes": "./src/server-routes/index.ts",

@@ -1,9 +1,9 @@
 import { XlsxRenderer } from "@tutti-os/office-preview/xlsx";
 import "@tutti-os/office-preview/styles/xlsx.css";
-import type { OoxmlXlsxPreview } from "@tutti-os/office-preview/xlsx";
+import type { XlsxRenderWorkbook } from "@tutti-os/office-preview/xlsx";
 
 export function XlsxPreview(props: {
-  preview: OoxmlXlsxPreview | null;
+  workbook: XlsxRenderWorkbook | null;
   loading: boolean;
   error: string;
 }) {
@@ -13,12 +13,12 @@ export function XlsxPreview(props: {
   if (props.error) {
     return <PreviewState title="Unable to preview workbook" body={props.error} />;
   }
-  if (!props.preview) {
+  if (!props.workbook) {
     return <PreviewState title="No workbook loaded" body="Import an XLSX workbook to view it here." />;
   }
   return (
     <div className="h-full min-h-0 overflow-auto bg-white">
-      <XlsxRenderer workbook={props.preview.renderWorkbook} />
+      <XlsxRenderer workbook={props.workbook} />
     </div>
   );
 }
