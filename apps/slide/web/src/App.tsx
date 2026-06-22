@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { allCategoriesForTemplates, categoryCountsForTemplates, type OutputType, type SlideTemplate } from "./templates";
 import { HomeComposer } from "./app/HomeComposer";
-import { BlankTemplateCard, CategoryButton, RecentEmptyState, TemplateCard, TemplatePreviewModal } from "./app/SlideHomePanels";
+import { BlankTemplateCard, CategoryButton, ProjectHistory, TemplateCard, TemplatePreviewModal } from "./app/SlideHomePanels";
 import { SlideEditorScreen } from "./app/SlideEditorScreen";
 import { useAgentConversation } from "./app/useAgentConversation";
 import { cancelRun, clearProjectHistory, createProject, fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, getProject, installOfficeCli, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
@@ -334,6 +334,10 @@ export function App() {
     setSelectedSlideIndex(0);
   };
 
+  const openHistoryProject = (project: SlideProject) => {
+    setRoute(pushSlideRoute(project.id));
+  };
+
   const clearHistory = async () => {
     setError("");
     try {
@@ -516,7 +520,7 @@ export function App() {
             </div>
           </>
         ) : (
-          <RecentEmptyState />
+          <ProjectHistory projects={historyProjects} onOpenProject={openHistoryProject} />
         )}
       </section>
       {selectedTemplate ? (

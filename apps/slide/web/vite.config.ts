@@ -20,6 +20,11 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ["@tutti-os/office-export"],
   },
+  build: {
+    modulePreload: {
+      polyfill: false,
+    },
+  },
   resolve: {
     alias: {
       "@tutti-os/office-export": resolve(import.meta.dirname, "node_modules/@tutti-os/office-export/dist/index.js"),

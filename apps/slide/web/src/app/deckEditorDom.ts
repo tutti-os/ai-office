@@ -396,19 +396,8 @@ export function serializeSlideDocument(doc: Document) {
   restoreDeckSlideAssetReferences(clone);
   clone.removeAttribute("data-ai-slide-editor-attached");
   clone.querySelectorAll("[data-ai-slide-editor]").forEach((element) => element.remove());
-  clone.querySelectorAll<HTMLElement>("[data-ai-slide-object-id]").forEach((element) => {
-    element.removeAttribute("data-ai-slide-object-id");
-  });
-  clone.querySelectorAll<HTMLElement>("[data-ai-slide-text-edit-id]").forEach((element) => {
-    element.removeAttribute("data-ai-slide-text-edit-id");
-  });
-  clone.querySelectorAll<HTMLElement>("[data-ai-slide-selected]").forEach((element) => {
-    element.removeAttribute("data-ai-slide-selected");
-  });
-  clone.querySelectorAll<HTMLElement>("[contenteditable]").forEach((element) => {
-    element.removeAttribute("contenteditable");
-    element.removeAttribute("spellcheck");
-  });
+  cleanupDeckEditorAttributes(clone);
+  clone.querySelectorAll<HTMLElement>("*").forEach(cleanupDeckEditorAttributes);
   const doctype = doc.doctype ? `<!DOCTYPE ${doc.doctype.name}>` : "<!DOCTYPE html>";
   return `${doctype}\n${clone.outerHTML}`;
 }

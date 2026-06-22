@@ -1,4 +1,5 @@
-import { ChevronLeft, ChevronRight, Clock3, Copy, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock3, Copy, FileCode2, FileText, Plus, X } from "lucide-react";
+import type { SlideProject } from "@ai-slide/shared";
 import type { OutputType, SlideTemplate } from "../templates";
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -145,6 +146,42 @@ export function TemplatePreviewModal(props: {
   );
 }
 
+export function ProjectHistory(props: { projects: SlideProject[]; onOpenProject: (project: SlideProject) => void }) {
+  if (props.projects.length === 0) return <RecentEmptyState />;
+  return (
+    <div className="mt-[18px] grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-4">
+      {props.projects.map((project) => (
+        <ProjectHistoryCard key={project.id} project={project} onOpen={props.onOpenProject} />
+      ))}
+    </div>
+  );
+}
+
+function ProjectHistoryCard(props: { project: SlideProject; onOpen: (project: SlideProject) => void }) {
+  return (
+    <div className="group relative min-h-[132px] rounded-lg border border-white/10 bg-[#303030] text-white shadow-[0_14px_34px_rgba(0,0,0,0.24)] transition hover:-translate-y-0.5 hover:bg-[#373737] hover:shadow-[0_18px_46px_rgba(0,0,0,0.34)]">
+      <button
+        aria-label={`Open ${props.project.title}`}
+        className="block h-full min-h-[132px] w-full rounded-lg p-4 text-left"
+        type="button"
+        onClick={() => props.onOpen(props.project)}
+      >
+        <div className="pr-12">
+          <div className="truncate text-[13px] font-extrabold">{props.project.title}</div>
+          <div className="mt-1 truncate text-[11px] font-bold text-white/44">{props.project.templateName ?? "Blank deck"}</div>
+        </div>
+        <div className="mt-5 flex items-center gap-1.5 text-[11px] font-bold text-white/42">
+          <Clock3 size={12} />
+          {formatProjectDate(props.project.updatedAt)}
+        </div>
+      </button>
+      <div className="absolute right-3 top-3 grid size-8 place-items-center rounded-md bg-white text-black">
+        {props.project.templateId ? <FileCode2 size={15} /> : <FileText size={15} />}
+      </div>
+    </div>
+  );
+}
+
 export function RecentEmptyState() {
   return (
     <div className="mt-[18px] grid min-h-[220px] place-items-center gap-2 rounded-xl border border-white/8 bg-[#2b2b2b] p-7 text-center">
@@ -153,6 +190,17 @@ export function RecentEmptyState() {
       <span className="max-w-[420px] text-[13px] leading-relaxed text-white/48">Create a presentation or open a template to see it here.</span>
     </div>
   );
+}
+
+function formatProjectDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown date";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function humanizeCategory(value: string) {
