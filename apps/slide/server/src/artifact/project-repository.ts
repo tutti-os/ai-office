@@ -9,7 +9,6 @@ import {
   deckArtifactFileRef,
   deckSlideDisplayName,
   deckMimeType,
-  isSupportedDeckCanvas,
   parsePptxManifest,
   pptxArtifactFileRef,
   pptxMimeType,
@@ -27,18 +26,10 @@ import {
 import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
 import { getDb, rowOrNull, rows } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
+import { loadTemplateDeckSource, localTemplateSourceRoots, type TemplateDeckSource } from "../templates/template-service.js";
 import { defaultDeckSkillFiles, defaultDeckSkillSlug } from "./default-deck-skill.js";
 
-const templateRoots = templateSourceRoots();
 const htmlMimeType = "text/html";
-
-type TemplateDeckSource = {
-  title: string;
-  canvas: { width: number; height: number };
-  pagesDir: string;
-  assetsDir: string;
-  playlist: string[];
-};
 
 export class ProjectRepository {
   private readonly conversations = new SqliteAgentConversationStore(getDb, {
@@ -109,10 +100,10 @@ export class ProjectRepository {
     return this.runtimeProfiles.getForRun(run);
   }
 
-  createProject(input: CreateProjectRequest) {
+  async createProject(input: CreateProjectRequest) {
     const id = randomUUID();
     const artifactType = input.artifactType ?? "deck";
-    if (artifactType === "deck" && input.templateId) assertTemplateDeckSourceAvailable(input.templateId);
+    const templateSource = artifactType === "deck" && input.templateId ? await requireTemplateDeckSource(input.templateId) : null;
     const now = new Date().toISOString();
     const title = input.title?.trim() || input.templateName?.trim() || "Untitled Presentation";
     const artifact = defaultArtifactInput({ projectId: id, type: artifactType, now });
@@ -131,7 +122,7 @@ export class ProjectRepository {
     const project = this.getProject(id);
     const createdArtifact = this.getArtifact(artifact.id);
     if (!project || !createdArtifact) throw new Error("Unable to create project");
-    this.materializeProject(project, createdArtifact);
+    this.materializeProject(project, createdArtifact, templateSource);
     return { project, artifact: createdArtifact };
   }
 
@@ -142,7 +133,7 @@ export class ProjectRepository {
     if (extname(sourcePath).toLowerCase() !== ".pptx") throw new Error("PPTX source must end with .pptx");
 
     const title = input.title?.trim() || basename(sourcePath, extname(sourcePath));
-    const created = this.createProject({ title, artifactType: "pptx" });
+    const created = await this.createProject({ title, artifactType: "pptx" });
     await copyFile(sourcePath, pptxFilePath(created.project.id, created.artifact));
     const refresh = await this.refreshPptxArtifactFromFile(created.project.id, "human");
     const project = this.getProject(created.project.id);
@@ -182,7 +173,7 @@ export class ProjectRepository {
     if (!project) throw new Error("Project not found");
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact || artifact.type !== "deck") return null;
-    this.ensureTemplateDeckMaterialized(project, artifact);
+    await this.ensureTemplateDeckMaterialized(project, artifact);
     const manifest = await this.readDeckManifest(projectId, artifact);
     if (!manifest) return null;
     const nextManifest = {
@@ -200,7 +191,7 @@ export class ProjectRepository {
     if (!project) throw new Error("Project not found");
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact || artifact.type !== "deck") throw new Error("Deck artifact not found");
-    this.ensureTemplateDeckMaterialized(project, artifact);
+    await this.ensureTemplateDeckMaterialized(project, artifact);
     const manifest = await this.readDeckManifest(projectId, artifact);
     if (!manifest) throw new Error("Deck manifest not found");
 
@@ -355,7 +346,7 @@ export class ProjectRepository {
     if (!project) throw new Error("Project not found");
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact || artifact.type !== "deck") throw new Error("Deck artifact not found");
-    this.ensureTemplateDeckMaterialized(project, artifact);
+    await this.ensureTemplateDeckMaterialized(project, artifact);
     const manifest = await this.readDeckManifest(projectId, artifact);
     const slide = manifest?.slides.find((item) => item.id === slideId);
     if (!slide) throw new Error("Slide not found");
@@ -368,7 +359,7 @@ export class ProjectRepository {
     if (!project) throw new Error("Project not found");
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact || artifact.type !== "deck") throw new Error("Deck artifact not found");
-    this.ensureTemplateDeckMaterialized(project, artifact);
+    await this.ensureTemplateDeckMaterialized(project, artifact);
     const manifest = await this.readDeckManifest(projectId, artifact);
     const slide = manifest?.slides.find((item) => item.id === slideId);
     if (!slide) throw new Error("Slide not found");
@@ -382,7 +373,7 @@ export class ProjectRepository {
     if (!project) throw new Error("Project not found");
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact || artifact.type !== "deck") throw new Error("Deck artifact not found");
-    this.ensureTemplateDeckMaterialized(project, artifact);
+    await this.ensureTemplateDeckMaterialized(project, artifact);
     const assetsDir = join(ensureProjectDirs(projectId), artifact.fileRef, "assets");
     mkdirSync(assetsDir, { recursive: true });
     const fileName = uniqueAssetFileName(assetsDir, input.fileName, input.mimeType);
@@ -420,7 +411,7 @@ export class ProjectRepository {
     if (!project) throw new Error("Project not found");
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact || artifact.type !== "deck") throw new Error("Deck artifact not found");
-    this.ensureTemplateDeckMaterialized(project, artifact);
+    await this.ensureTemplateDeckMaterialized(project, artifact);
     const manifest = await this.readDeckManifest(projectId, artifact);
     if (!manifest) throw new Error("Deck manifest not found");
 
@@ -481,13 +472,14 @@ export class ProjectRepository {
     return this.getArtifact(artifactId);
   }
 
-  ensureTemplateDeckMaterialized(project: SlideProject, artifact: SlideArtifact) {
+  async ensureTemplateDeckMaterialized(project: SlideProject, artifact: SlideArtifact) {
     if (artifact.type !== "deck" || !project.templateId) return;
     const deckRoot = join(projectWorkspaceRoot(project.id), artifact.fileRef);
     const manifestPath = join(deckRoot, "manifest.json");
     if (!isBlankDeckManifest(manifestPath) && !isGeneratedImageTemplateDeck(deckRoot, manifestPath)) return;
-    if (!materializeTemplateDeckProject(deckRoot, project)) {
-      throw new Error(`Template HTML source is missing for "${project.templateId}". Run sync:templates with AI_SLIDE_TEMPLATE_ROOT pointing at the template source directory.`);
+    const source = await (project.templateId ? loadTemplateDeckSource(project.templateId) : null);
+    if (!source || !materializeTemplateDeckSource(deckRoot, project, source)) {
+      throw new Error(`Template HTML source is missing for "${project.templateId}". Check the slide template provider or set AI_SLIDE_TEMPLATE_PROVIDER=local with AI_SLIDE_TEMPLATE_ROOT.`);
     }
   }
 
@@ -528,9 +520,9 @@ export class ProjectRepository {
     return { artifact: updatedArtifact, manifest: nextManifest, changed: true };
   }
 
-  private materializeProject(project: SlideProject, artifact: SlideArtifact) {
+  private materializeProject(project: SlideProject, artifact: SlideArtifact, templateSource: TemplateDeckSource | null = null) {
     const root = ensureProjectDirs(project.id);
-    if (artifact.type === "deck") materializeDeckProject(root, project, artifact);
+    if (artifact.type === "deck") materializeDeckProject(root, project, artifact, templateSource);
     else materializePptxProject(root, project, artifact);
     syncDefaultDeckSkill(root, project, artifact);
     syncProjectTemplateSkill(root, project, artifact);
@@ -573,7 +565,7 @@ function defaultArtifactInput(input: { projectId: string; type: SlideArtifactTyp
   };
 }
 
-function materializeDeckProject(root: string, project: SlideProject, artifact: SlideArtifact) {
+function materializeDeckProject(root: string, project: SlideProject, artifact: SlideArtifact, templateSource: TemplateDeckSource | null = null) {
   const deckRoot = join(root, artifact.fileRef);
   const manifestPath = join(deckRoot, "manifest.json");
   const createdAt = project.createdAt;
@@ -581,7 +573,7 @@ function materializeDeckProject(root: string, project: SlideProject, artifact: S
   mkdirSync(join(deckRoot, "assets"), { recursive: true });
   mkdirSync(join(deckRoot, "previews"), { recursive: true });
   mkdirSync(join(deckRoot, "thumbnails"), { recursive: true });
-  if (project.templateId && materializeTemplateDeckProject(deckRoot, project)) return;
+  if (project.templateId && templateSource && materializeTemplateDeckSource(deckRoot, project, templateSource)) return;
   if (!existsSync(manifestPath)) {
     const manifest = createBlankDeckManifest({ title: project.title, createdAt });
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
@@ -616,16 +608,6 @@ function materializeDeckProject(root: string, project: SlideProject, artifact: S
   }
 }
 
-function materializeTemplateDeckProject(deckRoot: string, project: SlideProject) {
-  const source = readTemplateDeckSource(project.templateId);
-  return source ? materializeTemplateDeckSource(deckRoot, project, source) : false;
-}
-
-function assertTemplateDeckSourceAvailable(templateId: string) {
-  if (readTemplateDeckSource(templateId)) return;
-  throw new Error(`Template HTML source is missing for "${templateId}". Run sync:templates with AI_SLIDE_TEMPLATE_ROOT pointing at the template source directory.`);
-}
-
 function materializeTemplateDeckSource(deckRoot: string, project: SlideProject, source: TemplateDeckSource) {
   rmSync(deckRoot, { force: true, recursive: true });
   mkdirSync(join(deckRoot, "slides"), { recursive: true });
@@ -633,16 +615,17 @@ function materializeTemplateDeckSource(deckRoot: string, project: SlideProject, 
   mkdirSync(join(deckRoot, "previews"), { recursive: true });
   mkdirSync(join(deckRoot, "thumbnails"), { recursive: true });
 
-  if (existsSync(source.assetsDir)) {
-    cpSync(source.assetsDir, join(deckRoot, "assets"), { recursive: true });
+  for (const asset of source.assets) {
+    const assetPath = safeTemplateProjectAssetPath(asset.path);
+    const targetPath = join(deckRoot, "assets", assetPath);
+    mkdirSync(dirname(targetPath), { recursive: true });
+    writeFileSync(targetPath, asset.bytes);
   }
 
-  const slides = source.playlist.map((fileName, index) => {
-    const sourcePage = join(source.pagesDir, fileName);
-    const destinationFile = fileName.replace(/[\\/]/g, "-");
+  const slides = source.slides.map((slide, index) => {
+    const destinationFile = slide.fileName.replace(/[\\/]/g, "-");
     const destinationPage = join(deckRoot, "slides", destinationFile);
-    if (existsSync(sourcePage)) cpSync(sourcePage, destinationPage);
-    else writeFileSync(destinationPage, missingTemplateSlideHtml(project.title, fileName), "utf8");
+    writeFileSync(destinationPage, slide.html || missingTemplateSlideHtml(project.title, slide.fileName), "utf8");
     return {
       id: `slide-${String(index + 1).padStart(3, "0")}`,
       file: `slides/${destinationFile}`,
@@ -662,36 +645,10 @@ function materializeTemplateDeckSource(deckRoot: string, project: SlideProject, 
   return true;
 }
 
-function readTemplateDeckSource(templateId: string | null) {
-  if (!templateId) return null;
-  const templateDir = templateRoots.map((root) => join(root, templateId)).find((candidate) => existsSync(candidate));
-  if (!templateDir) return null;
-  const deckDir = join(templateDir, "deck");
-  const pagesDir = join(templateDir, "pages");
-  if (!existsSync(deckDir) || !existsSync(pagesDir)) return null;
-  const slidesDirName = readdirSync(deckDir, { withFileTypes: true }).find((entry) => entry.isDirectory() && entry.name.endsWith(".slides"))?.name;
-  if (!slidesDirName) return null;
-  const manifestPath = join(deckDir, slidesDirName, "manifest.json");
-  if (!existsSync(manifestPath)) return null;
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
-    metadata?: { title?: string };
-    canvas?: { width?: number; height?: number };
-    playlist?: string[];
-  };
-  const playlist = (manifest.playlist ?? []).filter((item) => typeof item === "string" && item.endsWith(".html"));
-  if (!playlist.length) return null;
-  const canvas = {
-    width: Number.isFinite(manifest.canvas?.width) ? Number(manifest.canvas?.width) : 1920,
-    height: Number.isFinite(manifest.canvas?.height) ? Number(manifest.canvas?.height) : 1080,
-  };
-  if (!isSupportedDeckCanvas(canvas)) return null;
-  return {
-    title: manifest.metadata?.title ?? "",
-    canvas,
-    pagesDir,
-    assetsDir: join(templateDir, "assets"),
-    playlist,
-  };
+async function requireTemplateDeckSource(templateId: string) {
+  const source = await loadTemplateDeckSource(templateId);
+  if (!source) throw new Error(`Template HTML source is missing for "${templateId}". Check the slide template provider or set AI_SLIDE_TEMPLATE_PROVIDER=local with AI_SLIDE_TEMPLATE_ROOT.`);
+  return source;
 }
 
 function syncProjectTemplateSkill(projectRoot: string, project: SlideProject, artifact: SlideArtifact) {
@@ -725,9 +682,15 @@ function syncDefaultDeckSkill(projectRoot: string, project: SlideProject, artifa
 
 function readTemplateSkillSource(templateId: string | null) {
   if (!templateId) return null;
-  const templateDir = templateRoots.map((root) => join(root, templateId)).find((candidate) => existsSync(candidate));
+  const templateDir = localTemplateSourceRoots().map((root) => join(root, templateId)).find((candidate) => existsSync(candidate));
   if (!templateDir) return null;
   return existsSync(join(templateDir, "SKILL.md")) ? templateDir : null;
+}
+
+function safeTemplateProjectAssetPath(value: string) {
+  const normalized = normalize(value).replace(/^(\.\.[/\\])+/, "");
+  if (!normalized || normalized.startsWith("..") || normalized.includes(`..${sep}`)) throw new Error(`Invalid template asset path: ${value}`);
+  return normalized;
 }
 
 function safeSkillSlug(value: string) {
@@ -1463,16 +1426,6 @@ function appRoot() {
     resolve(process.cwd(), "apps", "slide"),
   ];
   return candidates.find((candidate) => existsSync(join(candidate, "package.json"))) ?? resolve(process.cwd(), "..");
-}
-
-function templateSourceRoots() {
-  const root = appRoot();
-  return [
-    process.env.AI_SLIDE_TEMPLATE_ROOT ? resolve(process.env.AI_SLIDE_TEMPLATE_ROOT) : "",
-    resolve(root, "templates", "source"),
-    resolve(root, "../../../tutti/slide/template"),
-    resolve(root, "../../../genspark/slide/template"),
-  ].filter(Boolean);
 }
 
 function escapeHtml(value: string) {

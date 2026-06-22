@@ -10,6 +10,7 @@
     "build": "pnpm --filter @ai-slide/shared build && pnpm --filter @ai-slide/web build && pnpm --filter @ai-slide/server build",
     "check": "pnpm --filter @ai-slide/shared check && pnpm --filter @ai-slide/web check && pnpm --filter @ai-slide/server check",
     "package:tutti": "node ../../tooling/tutti/package-slide-tutti-app.mjs",
-    "sync:templates": "node scripts/sync-slide-templates.mjs"
+    "sync:templates": "node scripts/sync-slide-templates.mjs",
+    "publish:office-templates": "node scripts/publish-office-templates.mjs"
   }
 }

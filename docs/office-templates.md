@@ -60,6 +60,10 @@ The selected template ids live in
 local template files but writes only the selected ids into
 `office-templates/doc/template.json`.
 
+For slide templates, publishing selects up to five templates per category and
+uploads only that selected set under `office-templates/slide/templates/`. The
+allowlist is written to `office-templates/slide/template.json`.
+
 Public CloudFront base URL:
 
 ```text
@@ -70,6 +74,12 @@ Doc manifest URL:
 
 ```text
 /office-templates/doc/template.json
+```
+
+Slide manifest URL:
+
+```text
+/office-templates/slide/template.json
 ```
 
 Doc template URLs:

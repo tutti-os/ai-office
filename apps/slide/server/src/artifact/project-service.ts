@@ -50,7 +50,7 @@ export class ProjectService {
 
   async createProject(input: CreateProjectRequest) {
     if (input.artifactType === "pptx") await requireOfficeCli();
-    const result = this.repo.createProject(input);
+    const result = await this.repo.createProject(input);
     this.events.emit({ type: "project.created", projectId: result.project.id, payload: result });
     return result;
   }
@@ -74,7 +74,7 @@ export class ProjectService {
     if (!project) throw new Error("Project not found");
     const artifact = this.repo.getArtifact(project.activeArtifactId);
     if (!artifact) throw new Error("Active artifact not found");
-    this.repo.ensureTemplateDeckMaterialized(project, artifact);
+    await this.repo.ensureTemplateDeckMaterialized(project, artifact);
     return {
       project,
       artifact,
