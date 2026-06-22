@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { packageTuttiApp as packageSharedTuttiApp } from "@ai-app/tutti-packager";
@@ -5,6 +6,13 @@ import { packageTuttiApp as packageSharedTuttiApp } from "@ai-app/tutti-packager
 const scriptPath = fileURLToPath(import.meta.url);
 const rootDir = path.resolve(path.dirname(scriptPath), "../..");
 const appDir = path.join(rootDir, "apps", "doc");
+const blueDocumentIconPath = path.join(
+  rootDir,
+  "tooling",
+  "tutti",
+  "assets",
+  "ai-doc-blue-document.png",
+);
 
 const APP_ID = "ai-doc";
 
@@ -37,12 +45,10 @@ exec "$node_bin" "$package_dir/server/server.js"
 }
 
 export function renderIcon() {
+  const blueDocumentIcon = readFileSync(blueDocumentIconPath).toString("base64");
+
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="AI Doc">
-  <rect width="1024" height="1024" rx="208" fill="#F5F1E8"/>
-  <path d="M278 156h346l122 126v586H278z" fill="#FFFFFF" stroke="#222222" stroke-width="36"/>
-  <path d="M620 156v144h126" fill="#ECE7DB" stroke="#222222" stroke-width="36"/>
-  <path d="M360 418h304M360 512h304M360 606h218" stroke="#2F4F4F" stroke-width="38" stroke-linecap="round"/>
-  <path d="M718 620l58 28-58 28-28 58-28-58-58-28 58-28 28-58z" fill="#D95D39"/>
+  <image href="data:image/png;base64,${blueDocumentIcon}" width="1024" height="1024" preserveAspectRatio="xMidYMid meet"/>
 </svg>
 `;
 }
