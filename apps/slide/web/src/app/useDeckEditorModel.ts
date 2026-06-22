@@ -396,6 +396,18 @@ export function useDeckEditorModel(props: {
     restoreRichTextSelection(textTarget.ownerDocument, saved.selection);
   };
 
+  const preserveActiveTextSelection = () => {
+    if (!activeTextEdit) return;
+    const object = findActiveObject();
+    if (!object) return;
+    const textTarget = findActiveTextTarget(object);
+    if (!isHtmlElement(textTarget)) return;
+    const selection = captureRichTextSelection(textTarget.ownerDocument, textTarget);
+    if (!selection) return;
+    activeTextSelectionRef.current = { ...activeTextEdit, selection };
+    setAgentSelectionVersion((version) => version + 1);
+  };
+
   const selectObject = (slideId: string, object: DeckObjectElement, mode: "object" | "text" = "object", textTarget?: DeckObjectElement) => {
     const objectId = object.getAttribute("data-ai-slide-object-id");
     if (!objectId) return;
@@ -991,6 +1003,7 @@ export function useDeckEditorModel(props: {
     setDirectTextEditMode,
     slides,
     snapGuides,
+    preserveActiveTextSelection,
     toolbarState,
     toggleInlineFormat,
     updateActiveObjectGeometry,

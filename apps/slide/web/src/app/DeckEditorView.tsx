@@ -103,6 +103,7 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
     setDirectTextEditMode,
     slides,
     snapGuides,
+    preserveActiveTextSelection,
     toolbarState,
     toggleInlineFormat,
     updateActiveObjectGeometry,
@@ -133,6 +134,7 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
         onImage={requestImageReplacement}
         onRedo={() => applyHistoryOffset(1)}
         onTextColor={updateTextColor}
+        onToolbarInteractionStart={preserveActiveTextSelection}
         onToggleBold={() => toggleInlineFormat("strong")}
         onToggleItalic={() => toggleInlineFormat("em")}
         onToggleStrikethrough={() => toggleInlineFormat("s")}
@@ -285,6 +287,7 @@ function DeckToolbar(props: {
   onImage: () => void;
   onRedo: () => void;
   onTextColor: (color: string) => void;
+  onToolbarInteractionStart: () => void;
   onToggleBold: () => void;
   onToggleDirectTextEditMode: () => void;
   onToggleItalic: () => void;
@@ -298,7 +301,7 @@ function DeckToolbar(props: {
   const imageControlDisabled = props.activeObject?.objectType !== "image";
   const hasCurrentFontOption = deckFontOptions.some((option) => option.value === props.state.fontFamily);
   return (
-    <Toolbar className="relative overflow-visible" display={{ maxWidth: 1500, width: "content" }}>
+    <Toolbar className="relative overflow-visible" display={{ maxWidth: 1500, width: "content" }} onPointerDownCapture={props.onToolbarInteractionStart}>
       <ToolbarRow wrap className="gap-y-1.5">
         <ToolbarGroup>
           <ToolbarIconButton disabled={props.readOnly || !props.canUndo} title="Undo" onClick={props.onUndo}>

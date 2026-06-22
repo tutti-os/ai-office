@@ -20,6 +20,7 @@ import {
   currentBlockType$,
   currentFormat$,
   currentListType$,
+  convertSelectionToNode$,
   headingsPlugin,
   imagePlugin,
   insertCodeBlock$,
@@ -45,6 +46,7 @@ import {
   type ImageNode,
 } from "@mdxeditor/editor";
 import "@mdxeditor/editor/style.css";
+import { $createHeadingNode, $createQuoteNode, type HeadingTagType } from "@lexical/rich-text";
 import { AlignCenter, AlignLeft, AlignRight, Bold, Code2, Image, Italic, Link2, List, ListOrdered, ListTodo, Minus, Quote, Redo2, Replace, Strikethrough, Table2, Undo2 } from "lucide-react";
 import { ArtifactAgentProcessingOverlay, ArtifactExportToast, ArtifactWorkspaceHeader } from "@ai-app/ui/editor-frame";
 import type { ArtifactSaveState } from "@ai-app/ui/editor-frame";
@@ -114,7 +116,7 @@ const MarkdownToolbarContext = createContext<{
   canUndo: boolean;
   projectId: string | null;
   readOnly: boolean;
-  onBlockChange: (kind: MarkdownBlockKind) => void;
+  onToolbarInteractionStart: () => void;
   onRedo: () => void;
   runProgrammaticChange: <T>(mutation: () => T) => T | undefined;
   onUndo: () => void;
@@ -124,7 +126,7 @@ const MarkdownToolbarContext = createContext<{
   canUndo: false,
   projectId: null,
   readOnly: false,
-  onBlockChange: () => undefined,
+  onToolbarInteractionStart: () => undefined,
   onRedo: () => undefined,
   runProgrammaticChange: () => undefined,
   onUndo: () => undefined,
@@ -134,6 +136,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   const editorRef = useRef<MDXEditorMethods | null>(null);
   const markdownRef = useRef(props.runtime.content);
   const activeSelectionRangeRef = useRef<Range | null>(null);
+  const lastMarkdownSelectionRef = useRef<MarkdownSelection | null>(null);
   const activeTableCellEditorRef = useRef<MarkdownTableCellEditor | null>(null);
   const pendingTableCellEditRef = useRef(false);
   // Toolbar/plugin mutations update Lexical nodes first; this bridge is the single
@@ -171,7 +174,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     if (markdown === markdownRef.current) return false;
     markdownRef.current = markdown;
     programmaticChangePendingRef.current = false;
-    const selection = selectionFromEditor(editor, markdown);
+    const selection = selectionFromEditor(editor, markdown, lastMarkdownSelectionRef.current);
+    lastMarkdownSelectionRef.current = selection;
     setPendingTableCellEdit(false);
     props.onSelectionChange(selection);
     props.onChange(markdown, selection);
@@ -254,6 +258,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       programmaticCommitFrameRef.current = null;
     }
     activeSelectionRangeRef.current = null;
+    lastMarkdownSelectionRef.current = null;
     clearMarkdownPersistentSelectionHighlight();
     const editor = editorRef.current;
     if (!editor || editor.getMarkdown() === props.runtime.content) return;
@@ -270,7 +275,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     if (markdownCompositionActiveRef.current) return;
     const editor = editorRef.current;
     const markdown = editor?.getMarkdown() ?? markdownRef.current;
-    const selection = selectionFromEditor(editor, markdown);
+    const selection = selectionFromEditor(editor, markdown, lastMarkdownSelectionRef.current);
     const range = markdownSelectionRangeFromDocument();
     if (selection.selectedText && range) {
       activeSelectionRangeRef.current = range;
@@ -278,6 +283,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       activeSelectionRangeRef.current = null;
       clearMarkdownPersistentSelectionHighlight();
     }
+    lastMarkdownSelectionRef.current = selection;
     props.onSelectionChange(selection);
   }, [props]);
 
@@ -300,6 +306,12 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   }, []);
 
   const activateToolbar = useCallback(() => setToolbarActive(true), []);
+  const preserveMarkdownSelectionForToolbar = useCallback(() => {
+    if (markdownCompositionActiveRef.current) return;
+    const editor = editorRef.current;
+    const markdown = editor?.getMarkdown() ?? markdownRef.current;
+    lastMarkdownSelectionRef.current = selectionFromEditor(editor, markdown, lastMarkdownSelectionRef.current);
+  }, []);
   const handleEditorBlur = useCallback(() => {
     window.requestAnimationFrame(() => {
       const range = activeSelectionRangeRef.current;
@@ -330,12 +342,14 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     if (event.key !== "Tab") return;
     event.preventDefault();
     const markdown = editorRef.current?.getMarkdown() ?? markdownRef.current;
-    const selection = selectionFromEditor(editorRef.current, markdown);
+    const selection = selectionFromEditor(editorRef.current, markdown, lastMarkdownSelectionRef.current);
     const nextMarkdown = applyMarkdownLineIndent(markdown, selection, event.shiftKey);
     if (nextMarkdown === markdown) return;
     markdownRef.current = nextMarkdown;
     editorRef.current?.setMarkdown(nextMarkdown);
-    props.onChange(nextMarkdown, selectionFromOffsets(nextMarkdown, selection.start, selection.end));
+    const nextSelection = selectionFromOffsets(nextMarkdown, selection.start, selection.end);
+    lastMarkdownSelectionRef.current = nextSelection;
+    props.onChange(nextMarkdown, nextSelection);
   }, [activateToolbar, props]);
   const handleEditorClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
     if (blockMarkdownReadOnlyTableChromeEvent(event, props.readOnly)) return;
@@ -356,11 +370,12 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     (normalizedMarkdown: string, initialMarkdownNormalize: boolean) => {
       if (props.readOnly) {
         if (normalizedMarkdown !== markdownRef.current) editorRef.current?.setMarkdown(markdownRef.current);
-        props.onSelectionChange(selectionFromEditor(editorRef.current, markdownRef.current));
+        props.onSelectionChange(selectionFromEditor(editorRef.current, markdownRef.current, lastMarkdownSelectionRef.current));
         return;
       }
       markdownRef.current = normalizedMarkdown;
-      const selection = selectionFromEditor(editorRef.current, normalizedMarkdown);
+      const selection = selectionFromEditor(editorRef.current, normalizedMarkdown, lastMarkdownSelectionRef.current);
+      lastMarkdownSelectionRef.current = selection;
       props.onSelectionChange(selection);
       if (!initialMarkdownNormalize || programmaticChangePendingRef.current) {
         programmaticChangePendingRef.current = false;
@@ -397,20 +412,6 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     markdownCompositionDraftRef.current = null;
     commitNormalizedMarkdownChange(markdown, false);
   }, [commitNormalizedMarkdownChange]);
-
-  const applyBlockChange = useCallback(
-    (kind: MarkdownBlockKind) => {
-      if (props.readOnly) return;
-      const markdown = editorRef.current?.getMarkdown() ?? markdownRef.current;
-      const selection = selectionFromEditor(editorRef.current, markdown);
-      const nextMarkdown = applyMarkdownBlockToContent(markdown, selection, kind);
-      if (nextMarkdown === markdown) return;
-      markdownRef.current = nextMarkdown;
-      editorRef.current?.setMarkdown(nextMarkdown);
-      props.onChange(nextMarkdown, selectionFromOffsets(nextMarkdown, selection.start, selection.end));
-    },
-    [props],
-  );
 
   return (
     <section className="relative flex h-full min-h-0 flex-col bg-[#E6DDCD]">
@@ -468,7 +469,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
                 canUndo: !props.readOnly && props.runtime.history.currentIndex > 0,
                 projectId: props.projectId,
                 readOnly: props.readOnly,
-                onBlockChange: applyBlockChange,
+                onToolbarInteractionStart: preserveMarkdownSelectionForToolbar,
                 onRedo: props.onRedo,
                 runProgrammaticChange,
                 onUndo: props.onUndo,
@@ -658,6 +659,7 @@ function MarkdownToolbarAdapter() {
   const [currentFormat, currentListType, currentBlockType] = useCellValues(currentFormat$, currentListType$, currentBlockType$);
   const applyFormat = usePublisher(applyFormat$);
   const applyListType = usePublisher(applyListType$);
+  const convertSelectionToNode = usePublisher(convertSelectionToNode$);
   const insertMarkdown = usePublisher(insertMarkdown$);
   const insertImage = usePublisher(insertImage$);
   const insertTable = usePublisher(insertTable$);
@@ -673,6 +675,19 @@ function MarkdownToolbarAdapter() {
   const blockType = markdownBlockTypeFromEditor(currentBlockType);
   const listType = markdownListTypeFromEditor(currentListType);
   const linkActive = linkDialogState.type !== "inactive";
+  const applyBlockChange = (kind: MarkdownBlockKind) => {
+    if (toolbarContext.readOnly) return;
+    toolbarContext.runProgrammaticChange(() => {
+      const factory = () => {
+        if (kind === "p") return lexical.$createParagraphNode();
+        if (kind === "blockquote") return $createQuoteNode();
+        return $createHeadingNode(kind as HeadingTagType);
+      };
+      const apply = () => convertSelectionToNode(factory);
+      if (activeEditor) activeEditor.focus(apply);
+      else apply();
+    });
+  };
 
   useEffect(() => {
     if (!activeEditor) {
@@ -837,7 +852,7 @@ function MarkdownToolbarAdapter() {
 
   return (
     <>
-    <Toolbar className="relative -translate-y-1.5 overflow-visible" display={{ maxWidth: 1500, width: "content" }}>
+    <Toolbar className="relative -translate-y-1.5 overflow-visible" display={{ maxWidth: 1500, width: "content" }} onPointerDownCapture={toolbarContext.onToolbarInteractionStart}>
       <input ref={imageFileInputRef} className="hidden" type="file" accept="image/*" onChange={handleImageFileInputChange} />
       <ToolbarRow wrap className="gap-y-1.5">
         <ToolbarGroup>
@@ -846,7 +861,7 @@ function MarkdownToolbarAdapter() {
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup className="[column-gap:4px]">
-          <ToolbarSelect disabled={toolbarDisabled} title="Block style" value={blockType} onChange={(value) => toolbarContext.onBlockChange(value as MarkdownBlockKind)}>
+          <ToolbarSelect disabled={toolbarDisabled} title="Block style" value={blockType} onChange={(value) => applyBlockChange(value as MarkdownBlockKind)}>
             <option value="p">Normal Text</option>
             <option value="h1">Heading 1</option>
             <option value="h2">Heading 2</option>
@@ -888,7 +903,7 @@ function MarkdownToolbarAdapter() {
         ) : null}
         <ToolbarDivider />
         <ToolbarGroup>
-          <IconButtonLight active={blockType === "blockquote"} disabled={toolbarDisabled} title="Quote" onClick={() => toolbarContext.onBlockChange("blockquote")}><Quote size={18} /></IconButtonLight>
+          <IconButtonLight active={blockType === "blockquote"} disabled={toolbarDisabled} title="Quote" onClick={() => applyBlockChange("blockquote")}><Quote size={18} /></IconButtonLight>
           <IconButtonLight disabled={toolbarDisabled} title="Thematic break" onClick={insertThematicBreak}><Minus size={18} /></IconButtonLight>
           <IconButtonLight disabled={toolbarDisabled} title="Code block" onClick={() => insertCodeBlock({})}><Code2 size={18} /></IconButtonLight>
         </ToolbarGroup>
@@ -1067,8 +1082,12 @@ function PlainMarkdownCodeBlockEditor(props: CodeBlockEditorProps) {
   );
 }
 
-function selectionFromEditor(editor: MDXEditorMethods | null, markdown: string): MarkdownSelection {
-  const selectedText = markdownSelectedTextFromDocument() || editor?.getSelectionMarkdown() || "";
+function selectionFromEditor(editor: MDXEditorMethods | null, markdown: string, fallback: MarkdownSelection | null = null): MarkdownSelection {
+  const selectedTextFromDocument = markdownSelectedTextFromDocument();
+  if (selectedTextFromDocument) return selectionFromSelectedText(markdown, selectedTextFromDocument);
+  const selectedText = editor?.getSelectionMarkdown() || "";
+  if (selectedText) return selectionFromSelectedText(markdown, selectedText);
+  if (fallback) return clampMarkdownSelection(markdown, fallback);
   if (!selectedText) {
     return {
       start: markdown.length,
@@ -1076,6 +1095,11 @@ function selectionFromEditor(editor: MDXEditorMethods | null, markdown: string):
       selectedText: "",
     };
   }
+  return selectionFromSelectedText(markdown, selectedText);
+}
+
+function selectionFromSelectedText(markdown: string, selectedText: string): MarkdownSelection {
+  if (!selectedText) return selectionFromOffsets(markdown, markdown.length, markdown.length);
   const start = markdown.indexOf(selectedText);
   const safeStart = start >= 0 ? start : 0;
   return {
@@ -1083,6 +1107,10 @@ function selectionFromEditor(editor: MDXEditorMethods | null, markdown: string):
     end: safeStart + selectedText.length,
     selectedText,
   };
+}
+
+function clampMarkdownSelection(markdown: string, selection: MarkdownSelection) {
+  return selectionFromOffsets(markdown, selection.start, selection.end);
 }
 
 function markdownSelectedTextFromDocument() {
@@ -1102,26 +1130,6 @@ function selectionFromOffsets(markdown: string, start: number, end: number): Mar
     end: safeEnd,
     selectedText: markdown.slice(safeStart, safeEnd),
   };
-}
-
-function applyMarkdownBlockToContent(markdown: string, selection: MarkdownSelection, kind: MarkdownBlockKind) {
-  const lines = markdown.split("\n");
-  const targetIndex = markdownLineIndexForSelection(markdown, lines, selection);
-  if (targetIndex < 0) return markdown;
-  const line = lines[targetIndex] ?? "";
-  const indent = line.match(/^\s*/)?.[0] ?? "";
-  const body = line
-    .slice(indent.length)
-    .replace(/^(#{1,6})\s+/, "")
-    .replace(/^>\s?/, "");
-  if (kind === "p") {
-    lines[targetIndex] = `${indent}${body}`;
-  } else if (kind === "blockquote") {
-    lines[targetIndex] = `${indent}> ${body || "Quote"}`;
-  } else {
-    lines[targetIndex] = `${indent}${"#".repeat(Number(kind.slice(1)))} ${body || "Heading"}`;
-  }
-  return lines.join("\n");
 }
 
 function applyMarkdownLineIndent(markdown: string, selection: MarkdownSelection, outdent: boolean) {

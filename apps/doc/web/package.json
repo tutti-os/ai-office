@@ -14,6 +14,7 @@
     "@ai-app/shared": "workspace:*",
     "@ai-app/ui": "workspace:*",
     "@ai-doc/shared": "workspace:*",
+    "@lexical/rich-text": "^0.35.0",
     "@mdxeditor/editor": "^4.0.3",
     "@tutti-os/office-export": "0.0.0-test.20260622042235.056409236dee",
     "@tutti-os/office-preview": "0.0.0-test.20260622042235.056409236dee",

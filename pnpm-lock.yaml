@@ -75,6 +75,9 @@ importers:
       '@ai-doc/shared':
         specifier: workspace:*
         version: link:../shared
+      '@lexical/rich-text':
+        specifier: ^0.35.0
+        version: 0.35.0
       '@mdxeditor/editor':
         specifier: ^4.0.3
         version: 4.0.3(@codemirror/language@6.12.3)(@lezer/highlight@1.2.3)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(yjs@13.6.31)
