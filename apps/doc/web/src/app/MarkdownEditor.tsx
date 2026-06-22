@@ -490,6 +490,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
 type MarkdownBlockKind = "p" | "h1" | "h2" | "h3" | "h4" | "blockquote";
 const markdownPersistentSelectionHighlightName = "ai-agent-markdown-selection";
+const markdownPersistentSelectionHighlightStyleId = "ai-doc-markdown-persistent-selection-highlight";
 
 type CssHighlightRegistry = {
   delete: (name: string) => void;
@@ -556,6 +557,7 @@ function setMarkdownPersistentSelectionHighlight(range: Range) {
   const registry = markdownHighlightRegistry();
   const HighlightConstructor = markdownHighlightConstructor();
   if (!registry || !HighlightConstructor) return;
+  ensureMarkdownPersistentSelectionHighlightStyle();
   registry.set(markdownPersistentSelectionHighlightName, new HighlightConstructor(range));
 }
 
@@ -569,6 +571,19 @@ function markdownHighlightRegistry() {
 
 function markdownHighlightConstructor() {
   return (globalThis as typeof globalThis & { Highlight?: CssHighlightConstructor }).Highlight ?? null;
+}
+
+function ensureMarkdownPersistentSelectionHighlightStyle() {
+  if (document.getElementById(markdownPersistentSelectionHighlightStyleId)) return;
+  const style = document.createElement("style");
+  style.id = markdownPersistentSelectionHighlightStyleId;
+  style.textContent = `
+    ::highlight(${markdownPersistentSelectionHighlightName}) {
+      background-color: rgba(148, 163, 184, 0.36);
+      color: inherit;
+    }
+  `;
+  document.head.append(style);
 }
 
 function markdownToolbarPlugin() {

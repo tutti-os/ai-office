@@ -6,6 +6,7 @@ import type { SkillMaterializationFile, SkillMaterializationRecord } from "@tutt
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { extractOoxmlTextPreview } from "../artifact/ooxml-text.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
+import { deckSystemAuthoringPrompt } from "./deck-system-prompt.js";
 import type { RuntimeEditContext, SlideRuntimeProject } from "./runtime-provider.js";
 
 const noBrowserRenderVerification =
@@ -13,6 +14,8 @@ const noBrowserRenderVerification =
 
 const localFilesystemArtifactNotice =
   "This artifact is a local filesystem file or directory owned by the AI Slide app. It is not a Lark/Feishu Markdown file, cloud document, wiki page, sheet, or slide resource. Do not use Lark/Feishu cloud-document skills or tools, including lark-markdown, lark-doc, lark-drive, lark-sheets, or lark-slides, to inspect or edit this artifact unless the user explicitly asks to import, export, sync, publish, upload, download, or otherwise interact with Lark/Feishu.";
+
+const defaultLocalAgentTimeoutMs = 30 * 60_000;
 
 export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<SlideRun, SlideRuntimeProject, AiEditRequest> {
   constructor() {
@@ -27,7 +30,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
         AI_SLIDE_PROJECT_ID: context.project.id,
         AI_SLIDE_RUN_ID: context.run.id,
       }),
-      timeoutMs: () => Number(process.env.AI_SLIDE_LOCAL_AGENT_TIMEOUT_MS ?? 240_000),
+      timeoutMs: () => Number(process.env.AI_SLIDE_LOCAL_AGENT_TIMEOUT_MS ?? defaultLocalAgentTimeoutMs),
       sessionDirName: ".ai-slide",
     });
   }
@@ -55,7 +58,7 @@ async function buildProjectSkillManifest(context: RuntimeEditContext, workspaceR
       continue;
     }
     skills.push({
-      skillId: `ai-slide-template:${slug}`,
+      skillId: slug === "deck-authoring" ? "ai-slide-default:deck-authoring" : `ai-slide-template:${slug}`,
       slug,
       content,
       deliveryMode: "materialized-files",
@@ -140,6 +143,7 @@ function buildSystemPrompt(context: RuntimeEditContext) {
       "- Do not create orphan slide files that are not referenced by `manifest.json`.",
       "- Do not edit generated previews or thumbnails as the source of truth.",
     ].join("\n"),
+    deckSystemAuthoringPrompt,
     noBrowserRenderVerification,
   ].join("\n\n");
 }

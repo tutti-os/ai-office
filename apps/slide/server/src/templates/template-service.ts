@@ -2,19 +2,21 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SlideTemplate } from "@ai-slide/shared";
+import { isSupportedDeckCanvas, type SlideTemplate } from "@ai-slide/shared";
 import { slideTemplates as bundledSlideTemplates } from "../../../shared/src/generatedTemplates.js";
 
 const assetRoutePrefix = "/api/templates/assets";
 
 export function listTemplates(): SlideTemplate[] {
-  return bundledSlideTemplates.map((template) => ({
-    ...template,
-    coverImage: template.coverImage ? templateAssetUrl(template.coverImage) : "",
-    stripImages: template.stripImages.map(templateAssetUrl),
-    previewImages: template.previewImages.map(templateAssetUrl),
-    thumbnailImages: template.thumbnailImages.map(templateAssetUrl),
-  }));
+  return bundledSlideTemplates
+    .filter((template) => isSupportedDeckCanvas(template.canvas))
+    .map((template) => ({
+      ...template,
+      coverImage: template.coverImage ? templateAssetUrl(template.coverImage) : "",
+      stripImages: template.stripImages.map(templateAssetUrl),
+      previewImages: template.previewImages.map(templateAssetUrl),
+      thumbnailImages: template.thumbnailImages.map(templateAssetUrl),
+    }));
 }
 
 export function templateAssetRoot() {

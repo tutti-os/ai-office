@@ -1,0 +1,14 @@
+{
+  "name": "@ai-sheet/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @ai-sheet/server --filter @ai-sheet/web dev",
+    "dev:web": "pnpm --filter @ai-sheet/web dev",
+    "dev:server": "pnpm --filter @ai-sheet/server dev",
+    "build": "pnpm --filter @ai-sheet/shared build && pnpm --filter @ai-sheet/web build && pnpm --filter @ai-sheet/server build",
+    "check": "pnpm --filter @ai-sheet/shared check && pnpm --filter @ai-sheet/web check && pnpm --filter @ai-sheet/server check",
+    "package:tutti": "node ../../tooling/tutti/package-sheet-tutti-app.mjs"
+  }
+}

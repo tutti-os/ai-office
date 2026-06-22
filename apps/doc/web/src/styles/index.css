@@ -40,11 +40,6 @@ body {
   outline: none;
 }
 
-::highlight(ai-agent-markdown-selection) {
-  background-color: rgba(148, 163, 184, 0.36);
-  color: inherit;
-}
-
 .ai-markdown-editor-page .mdxeditor-root-contenteditable {
   width: 100%;
   max-width: 980px;

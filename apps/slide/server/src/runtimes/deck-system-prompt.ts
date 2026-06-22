@@ -1,0 +1,33 @@
+export const deckSystemAuthoringPrompt = [
+  [
+    "Deck authoring baseline:",
+    "- Work in `deck.slides/`; do not collapse the deck into one HTML file.",
+    "- Keep every slide as a fixed canvas from `deck.slides/manifest.json`. Scale happens in the app, not inside slide content.",
+    "- This app version supports authoring bundled and blank decks at 1920x1080. Do not change `manifest.json` canvas unless the user explicitly asks for a new format and the app contract has been updated for it.",
+    "- Author the actual slide root at the manifest canvas size. For a 1920x1080 manifest, the visible `.slide` should be exactly 1920px wide and 1080px tall.",
+    "- Use `deck.slides/manifest.json` as the source of truth for slide order, titles, canvas, and slide files.",
+    "- Edit `deck.slides/slides/*.html` for slide content and `deck.slides/assets/` for shared CSS/assets.",
+    "- When adding, deleting, or reordering slides, update `manifest.json` consistently.",
+  ].join("\n"),
+  [
+    "Deck design and layout quality gates:",
+    "- Preserve template-specific visual systems when a template skill is present. Treat these gates as the shared baseline underneath the template method.",
+    "- Establish or maintain a single visual system: 2-3 core colors plus one accent, consistent typography, repeated margins, columns, card geometry, headers, page numbers, and section markers.",
+    "- No element may cover unrelated content unless it is a deliberate modal-like focus layer and the covered content is visually irrelevant.",
+    "- Callouts, decision asks, warnings, and CTA bars must occupy their own reserved band, rail, or card. They must not cross through body cards, bullet lists, tables, or charts.",
+    "- A bright horizontal banner crossing cards or bullets is a layout failure. Use a reserved bottom band, right rail, dedicated recommendation slide, or an in-grid callout card instead.",
+    "- No text overflow, clipped text, hidden bullet tails, or card content below the viewport.",
+    "- No meaningful element may extend beyond the canvas bounds. A slide that needs browser scrolling, has `scrollWidth` greater than the canvas width, or has `scrollHeight` greater than the canvas height is invalid.",
+    "- Maintain at least 48px breathing room between independent blocks; use 72-120px for major sections.",
+    "- If content density is too high, create another slide instead of shrinking fonts below readable size.",
+    "- Keep contrast accessible. Body text should be comfortably readable on the chosen background.",
+  ].join("\n"),
+  [
+    "Before finishing deck edits, self-review each changed slide:",
+    "1. What is the intended reading order?",
+    "2. Is any element covering another element's text, chart, or important visual?",
+    "3. Does the slide have one clear primary emphasis?",
+    "4. Could this content be split into two slides and become clearer?",
+    "5. Does this slide still belong to the same visual system as the rest of the deck?",
+  ].join("\n"),
+].join("\n\n");

@@ -2,8 +2,15 @@
 set -eu
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-server_entry="$script_dir/server/dist/apps/slide/server/src/main.js"
+package_dir="${TUTTI_APP_PACKAGE_DIR:-$script_dir}"
+server_entry="$package_dir/server/dist/apps/slide/server/src/main.js"
+packaged_server_entry="$package_dir/server/server.js"
 web_dist="$script_dir/web/dist"
+
+if [ -f "$packaged_server_entry" ]; then
+  server_entry="$packaged_server_entry"
+  web_dist="$package_dir/dist"
+fi
 
 if [ ! -f "$server_entry" ] || [ ! -d "$web_dist" ]; then
   echo "AI Slide is not built yet. Run: pnpm package:slide-tutti" >&2

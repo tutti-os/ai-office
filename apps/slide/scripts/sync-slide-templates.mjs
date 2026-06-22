@@ -6,6 +6,7 @@ const projectRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname)
 const templateRoot = slideTemplateSourceRoot();
 const publicRoot = path.join(projectRoot, "templates", "generated", "templates");
 const outputPath = path.join(projectRoot, "shared", "src", "generatedTemplates.ts");
+const supportedCanvas = { width: 1920, height: 1080 };
 
 function publicPath(...parts) {
   return `/generated/templates/${parts.map(encodeURIComponent).join("/")}`;
@@ -45,6 +46,10 @@ function compactDescription(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function isSupportedTemplateCanvas(canvas) {
+  return (canvas?.width ?? supportedCanvas.width) === supportedCanvas.width && (canvas?.height ?? supportedCanvas.height) === supportedCanvas.height;
+}
+
 function slideTemplateSourceRoot() {
   const candidates = [
     process.env.AI_SLIDE_TEMPLATE_ROOT ? path.resolve(process.env.AI_SLIDE_TEMPLATE_ROOT) : "",
@@ -70,6 +75,7 @@ for (const entry of entries) {
   if (!(await fileExists(metadataPath))) continue;
 
   const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+  if (!isSupportedTemplateCanvas(metadata.canvas)) continue;
   const templatePublicDir = path.join(publicRoot, metadata.name);
   const previews = sortSlideAssets(metadata.files?.previews ?? []);
   const thumbnails = sortSlideAssets(metadata.files?.thumbnails ?? []);

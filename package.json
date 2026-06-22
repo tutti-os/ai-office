@@ -9,13 +9,18 @@
     "dev:doc:web": "pnpm --filter @ai-doc/web dev",
     "dev:doc:server": "pnpm --filter @ai-doc/server dev",
     "dev:slide": "pnpm --filter @ai-slide/app dev",
-    "build": "pnpm -r --filter \"./packages/*\" --if-present build && pnpm --filter @ai-doc/app build && pnpm --filter @ai-slide/app build",
-    "check": "pnpm -r --filter \"./packages/*\" --if-present check && pnpm --filter @ai-doc/app check && pnpm --filter @ai-slide/app check",
+    "dev:sheet": "pnpm --filter @ai-sheet/app dev",
+    "dev:sheet:web": "pnpm --filter @ai-sheet/web dev",
+    "dev:sheet:server": "pnpm --filter @ai-sheet/server dev",
+    "build": "pnpm -r --filter \"./packages/*\" --if-present build && pnpm --filter @ai-doc/app build && pnpm --filter @ai-slide/app build && pnpm --filter @ai-sheet/app build",
+    "check": "pnpm -r --filter \"./packages/*\" --if-present check && pnpm --filter @ai-doc/app check && pnpm --filter @ai-slide/app check && pnpm --filter @ai-sheet/app check",
     "check:i18n": "node scripts/check-doc-i18n.mjs",
+    "check:parity": "node scripts/check-doc-slide-parity.mjs",
     "validate:tutti": "node scripts/validate-tutti-app-package.mjs build/tutti-app/package",
     "package:tutti": "pnpm --filter @ai-doc/app package:tutti",
     "package:doc-tutti": "pnpm --filter @ai-doc/app package:tutti",
-    "package:slide-tutti": "pnpm --filter @ai-slide/app package:tutti"
+    "package:slide-tutti": "pnpm --filter @ai-slide/app package:tutti",
+    "package:sheet-tutti": "pnpm --filter @ai-sheet/app package:tutti"
   },
   "devDependencies": {
     "@ai-app/tutti-packager": "workspace:*",

@@ -385,42 +385,6 @@ export const slideTemplates: SlideTemplate[] = [
     ]
   },
   {
-    "id": "research-poster",
-    "name": "Write a Research Poster like a Top CS Lab Lead",
-    "slug": "research-poster",
-    "category": "academic-research",
-    "shortDescription": "3 metres away they should read your claim; 1 metre away they should want to argue.",
-    "description": "Write an academic poster the way a top CS lab lead actually designs one — readable at 3 metres, defensible at 1 metre, and laid out so the contribution sentence catches the eye before the title bar registers. A single A0 (1189×841 mm) or 48×36 inch poster designed as a one-page deck with a Better Poster-style billboard zone, a left-to-right reading flow, and a QR-code corner that takes the visitor to the arXiv PDF and the code repo. Three irreducible disciplines — Billboard takeaway at the top in 100+ pt type, the method figure given 40% of the canvas, and result numbers that come with units, baselines, and a 95% CI. Use for NeurIPS / ICML / CVPR / ACL poster sessions, lab open-house days, departmental research showcases, and MURI / DARPA program reviews.",
-    "language": "en-US",
-    "tags": [
-      "research-poster",
-      "academic-poster",
-      "a0-poster",
-      "conference-poster",
-      "better-poster",
-      "phd-research",
-      "neurips-poster",
-      "top-cs-lab",
-      "template"
-    ],
-    "updatedAt": "2026-05-19T16:37:40Z",
-    "slideCount": 1,
-    "canvas": {
-      "width": 1920,
-      "height": 1357
-    },
-    "coverImage": "/generated/templates/research-poster/cover.png",
-    "stripImages": [
-      "/generated/templates/research-poster/thumb-1.png"
-    ],
-    "previewImages": [
-      "/generated/templates/research-poster/preview-1.png"
-    ],
-    "thumbnailImages": [
-      "/generated/templates/research-poster/thumb-1.png"
-    ]
-  },
-  {
     "id": "academic-review-deck",
     "name": "Write an Academic Review Deck like a Top-Reviews-Journal Author",
     "slug": "academic-review-deck",

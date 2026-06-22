@@ -93,6 +93,7 @@ export function SlideEditorScreen(props: {
 
   return (
     <ArtifactEditorFrame
+      className="bg-[#E6DDCD] text-[#2A2620]"
       sidebar={
         <AgentConversationPanel
           activeSelectionText={props.activeSelectionText}
@@ -112,12 +113,14 @@ export function SlideEditorScreen(props: {
         />
       }
     >
-      <section className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#242424]">
+      <section className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#E6DDCD] text-[#2A2620]">
         <ArtifactWorkspaceHeader
           title={props.detail?.project.title ?? "Untitled Presentation"}
           saveState={headerSaveState}
           agentWorking={agentProcessing}
           exportItems={slideExportItems(artifactType, exportDeckPptx, exportPptxArtifact, pptxExporting)}
+          tone="lumen"
+          onBackHome={props.onBackHome}
         />
         <ArtifactExportToast message={exportNotice} onClose={() => setExportNotice("")} onOpenLocation={() => void openExportLocation()} />
         <div className="relative flex min-h-0 flex-1 flex-col">

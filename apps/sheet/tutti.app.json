@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "tutti.app.manifest.v1",
+  "appId": "ai-sheet",
+  "version": "0.1.0",
+  "name": "AI Sheet",
+  "description": "Local spreadsheet workbooks displayed with AI-ready project structure.",
+  "icon": {
+    "type": "asset",
+    "src": "icon.svg"
+  },
+  "runtime": {
+    "bootstrap": "bootstrap.sh",
+    "healthcheckPath": "/api/health"
+  },
+  "window": {
+    "minimizeBehavior": "keep-mounted",
+    "minWidth": 1120,
+    "minHeight": 720
+  },
+  "localizationInfo": {
+    "defaultLocale": "en",
+    "additionalLocales": [
+      {
+        "locale": "zh-CN",
+        "file": "locales/zh-CN/manifest.json"
+      }
+    ]
+  },
+  "author": {
+    "name": "Tutti"
+  },
+  "tags": ["local-first", "sheet", "xlsx", "viewer"]
+}

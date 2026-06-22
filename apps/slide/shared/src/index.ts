@@ -304,16 +304,22 @@ export const pptxArtifactFileRef = "slides.pptx";
 export const deckMimeType = "application/vnd.ai-slide.deck";
 export const pptxMimeType = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
+export const defaultDeckCanvas = {
+  width: 1920,
+  height: 1080,
+} as const;
+
+export function isSupportedDeckCanvas(canvas: { width?: number; height?: number } | null | undefined) {
+  return canvas?.width === defaultDeckCanvas.width && canvas?.height === defaultDeckCanvas.height;
+}
+
 
 export function createBlankDeckManifest(input: { title: string; createdAt?: string }): DeckManifest {
   const now = input.createdAt ?? new Date().toISOString();
   return {
     schemaVersion: "ai-slide.deck.v1",
     title: input.title,
-    canvas: {
-      width: 1920,
-      height: 1080,
-    },
+    canvas: { ...defaultDeckCanvas },
     slides: [
       {
         id: "slide-001",

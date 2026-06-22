@@ -4,17 +4,17 @@ import {
   Layers3,
   Search,
   Sparkles,
-  Trash2,
 } from "lucide-react";
 import { allCategoriesForTemplates, categoryCountsForTemplates, type OutputType, type SlideTemplate } from "./templates";
 import { HomeComposer } from "./app/HomeComposer";
 import { BlankTemplateCard, CategoryButton, ProjectHistory, TemplateCard, TemplatePreviewModal } from "./app/SlideHomePanels";
 import { SlideEditorScreen } from "./app/SlideEditorScreen";
 import { useAgentConversation } from "./app/useAgentConversation";
-import { cancelRun, clearProjectHistory, createProject, fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, getProject, installOfficeCli, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
+import { cancelRun, clearProjectHistory, createProject, deleteProject, fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, getProject, installOfficeCli, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
 import { DeckArtifactRuntimeAdapter, type DeckAgentRuntimeProvider } from "./artifact/deckArtifactAdapter";
 import { PptxArtifactRuntimeAdapter } from "./artifact/pptxArtifactAdapter";
 import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
+import { appShell, homePanelButtonClass } from "@ai-app/ui/app-shell";
 import type { ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { editableArtifactInteraction, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
 import type { LocalAgentProviderStatus, OfficeCliStatus, ProjectDetailResponse, RuntimeProfile, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
@@ -340,12 +340,28 @@ export function App() {
 
   const clearHistory = async () => {
     setError("");
+    setLoadingProject(true);
     try {
       const projects = await clearProjectHistory();
       setHistoryProjects(projects);
       setActivePanel("history");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingProject(false);
+    }
+  };
+
+  const deleteHistoryProject = async (projectId: string) => {
+    setError("");
+    setLoadingProject(true);
+    try {
+      const projects = await deleteProject(projectId);
+      setHistoryProjects(projects);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingProject(false);
     }
   };
 
@@ -441,17 +457,12 @@ export function App() {
   }
 
   return (
-    <main className="relative h-dvh overflow-auto bg-[#1f1f1f] px-3.5 pb-9 pt-14 font-sans text-white md:px-7 md:pb-12">
-      <button className="absolute right-7 top-7 z-20 flex h-8 items-center gap-2 rounded-full border border-[#5b332f] bg-[#3a241f] px-3 text-[12px] font-bold text-[#ffad9f]" type="button" title="Clear history data" onClick={() => void clearHistory()}>
-        <Trash2 size={14} />
-        Debug clear history
-      </button>
-
+    <main className={cn(appShell.page, "h-dvh px-3.5 pb-12 pt-14 font-sans md:px-7 md:pb-16")}>
       <section className="mx-auto flex w-full max-w-[820px] flex-col items-center text-center">
-        <div className="mb-5 grid size-10 place-items-center rounded-full bg-white text-black">
+        <div className={appShell.heroIcon}>
           <Sparkles size={18} />
         </div>
-        <h1 className="m-0 text-[34px] font-extrabold leading-[1.18] text-white md:text-[36px]">Ready to create any presentation?</h1>
+        <h1 className={cn("m-0", appShell.heroTitle)}>Ready to create any presentation?</h1>
         <HomeComposer
           creating={creating}
           officeCliInstalling={officeCliInstalling}
@@ -467,29 +478,29 @@ export function App() {
           onPromptChange={setPrompt}
           onSelectedAgentChange={setSelectedAgent}
         />
-        {error ? <div className="mt-4 w-full rounded-xl bg-[#3a241f] p-3 text-left text-[12px] leading-5 text-[#ffad9f]">{error}</div> : null}
+        {error ? <div className={appShell.error}>{error}</div> : null}
       </section>
 
-      <section className="mx-auto mt-9 w-full max-w-[1180px]">
+      <section className="mx-auto mt-10 w-full max-w-[1180px]">
         <div className="flex flex-col items-stretch justify-between gap-4 md:flex-row md:items-end">
           <div className="flex min-w-0 flex-col gap-2">
             <div className="flex items-center gap-2" aria-label="Home panels">
-              <button className={cn("inline-flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-bold", activePanel === "templates" ? "bg-white text-black" : "bg-[#303030] text-white/72 hover:bg-[#383838]")} type="button" onClick={() => setActivePanel("templates")}>
+              <button className={homePanelButtonClass(activePanel === "templates")} type="button" onClick={() => setActivePanel("templates")}>
                 <Layers3 size={15} />
                 Templates
               </button>
-              <button className={cn("inline-flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-bold", activePanel === "history" ? "bg-white text-black" : "bg-[#303030] text-white/72 hover:bg-[#383838]")} type="button" onClick={() => setActivePanel("history")}>
+              <button className={homePanelButtonClass(activePanel === "history")} type="button" onClick={() => setActivePanel("history")}>
                 <History size={15} />
                 History
               </button>
             </div>
-            <div className="text-[12px] font-bold text-white/44">
+            <div className={appShell.countText}>
               {activePanel === "templates" ? `${templatesLoading ? "Loading" : visibleTemplates.length} templates` : `${historyProjects.length} projects`}
             </div>
           </div>
-          <label className="flex h-[38px] w-full items-center gap-2 rounded-full border border-white/10 bg-[#303030] px-3.5 text-white/58 md:w-[min(340px,42vw)]">
+          <label className={appShell.searchShell}>
             <Search size={15} />
-            <input className="min-w-0 flex-1 border-0 bg-transparent text-[13px] font-semibold text-white outline-none placeholder:text-white/42" value={query} placeholder="Search templates" onChange={(event) => setQuery(event.currentTarget.value)} />
+            <input className={appShell.searchInput} value={query} placeholder="Search templates" onChange={(event) => setQuery(event.currentTarget.value)} />
           </label>
         </div>
 
@@ -520,7 +531,13 @@ export function App() {
             </div>
           </>
         ) : (
-          <ProjectHistory projects={historyProjects} onOpenProject={openHistoryProject} />
+          <ProjectHistory
+            loading={loadingProject}
+            projects={historyProjects}
+            onClearHistory={() => void clearHistory()}
+            onDeleteProject={(projectId) => void deleteHistoryProject(projectId)}
+            onOpenProject={openHistoryProject}
+          />
         )}
       </section>
       {selectedTemplate ? (

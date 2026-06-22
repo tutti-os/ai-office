@@ -8,6 +8,7 @@ import {
   createEmptyPptxManifest,
   deckArtifactFileRef,
   deckMimeType,
+  isSupportedDeckCanvas,
   parsePptxManifest,
   pptxArtifactFileRef,
   pptxMimeType,
@@ -25,6 +26,7 @@ import {
 import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
 import { getDb, rowOrNull, rows } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
+import { defaultDeckSkillFiles, defaultDeckSkillSlug } from "./default-deck-skill.js";
 
 const templateRoots = templateSourceRoots();
 
@@ -182,6 +184,28 @@ export class ProjectRepository {
     rmSync(appPaths.projectsDir, { force: true, recursive: true });
     ensureBaseDirs();
     return { projects: [] as SlideProject[] };
+  }
+
+  deleteProject(projectId: string) {
+    const project = this.getProject(projectId);
+    if (!project) return null;
+    const db = getDb();
+    db.exec("BEGIN");
+    try {
+      db.prepare(`DELETE FROM agent_conversation_messages WHERE project_id = ?`).run(projectId);
+      db.prepare(`DELETE FROM agent_conversation_sessions WHERE project_id = ?`).run(projectId);
+      db.prepare(`DELETE FROM slide_run_events WHERE project_id = ?`).run(projectId);
+      db.prepare(`DELETE FROM slide_runs WHERE project_id = ?`).run(projectId);
+      db.prepare(`DELETE FROM stream_events WHERE project_id = ?`).run(projectId);
+      db.prepare(`DELETE FROM artifacts WHERE project_id = ?`).run(projectId);
+      db.prepare(`DELETE FROM projects WHERE id = ?`).run(projectId);
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    rmSync(projectWorkspaceRoot(projectId), { force: true, recursive: true });
+    return { projects: this.listProjects() };
   }
 
   createRun(input: {
@@ -398,6 +422,7 @@ export class ProjectRepository {
     const root = ensureProjectDirs(project.id);
     if (artifact.type === "deck") materializeDeckProject(root, project, artifact);
     else materializePptxProject(root, project, artifact);
+    syncDefaultDeckSkill(root, project, artifact);
     syncProjectTemplateSkill(root, project, artifact);
     this.writeProjectAgentInstructions(project, artifact);
   }
@@ -407,7 +432,9 @@ export class ProjectRepository {
     if (!project) return null;
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact) return null;
-    syncProjectTemplateSkill(ensureProjectDirs(project.id), project, artifact);
+    const root = ensureProjectDirs(project.id);
+    syncDefaultDeckSkill(root, project, artifact);
+    syncProjectTemplateSkill(root, project, artifact);
     this.writeProjectAgentInstructions(project, artifact);
     return { project, artifact };
   }
@@ -547,12 +574,14 @@ function readTemplateDeckSource(templateId: string | null) {
   };
   const playlist = (manifest.playlist ?? []).filter((item) => typeof item === "string" && item.endsWith(".html"));
   if (!playlist.length) return null;
+  const canvas = {
+    width: Number.isFinite(manifest.canvas?.width) ? Number(manifest.canvas?.width) : 1920,
+    height: Number.isFinite(manifest.canvas?.height) ? Number(manifest.canvas?.height) : 1080,
+  };
+  if (!isSupportedDeckCanvas(canvas)) return null;
   return {
     title: manifest.metadata?.title ?? "",
-    canvas: {
-      width: Number.isFinite(manifest.canvas?.width) ? Number(manifest.canvas?.width) : 1920,
-      height: Number.isFinite(manifest.canvas?.height) ? Number(manifest.canvas?.height) : 1080,
-    },
+    canvas,
     pagesDir,
     assetsDir: join(templateDir, "assets"),
     playlist,
@@ -570,6 +599,21 @@ function syncProjectTemplateSkill(projectRoot: string, project: SlideProject, ar
   for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
     if (!entry.isDirectory() || !/^references?$/i.test(entry.name)) continue;
     cpSync(join(sourceDir, entry.name), join(skillRoot, entry.name), { recursive: true });
+  }
+}
+
+function syncDefaultDeckSkill(projectRoot: string, project: SlideProject, artifact: SlideArtifact) {
+  if (artifact.type !== "deck") return;
+  const skillRoot = join(projectRoot, ".ai-slide", "skills", defaultDeckSkillSlug);
+  if (project.templateId) {
+    rmSync(skillRoot, { force: true, recursive: true });
+    return;
+  }
+  rmSync(skillRoot, { force: true, recursive: true });
+  for (const file of defaultDeckSkillFiles) {
+    const targetPath = join(skillRoot, file.path);
+    mkdirSync(dirname(targetPath), { recursive: true });
+    writeFileSync(targetPath, file.content, "utf8");
   }
 }
 

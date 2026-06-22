@@ -14,7 +14,7 @@ function cn(...classes: Array<string | false | null | undefined>) {
 }
 
 const scrollbarHidden = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
-const slideFilmstripClass = cn("flex min-h-32 min-w-0 shrink-0 items-center gap-3 overflow-x-auto overflow-y-hidden border-t border-white/8 bg-[#242424] px-5 pb-4 pt-3.5", scrollbarHidden);
+const slideFilmstripClass = cn("flex min-h-32 min-w-0 shrink-0 items-center gap-3 overflow-x-auto overflow-y-hidden border-t border-[#B8A07C]/45 bg-[#E6DDCD] px-5 pb-4 pt-3.5", scrollbarHidden);
 
 type ActiveDeckObject = {
   slideId: string;
@@ -85,6 +85,7 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
     duplicateActiveObject,
     enterTextEditFromFramePoint,
     frameHeight,
+    frameWidth,
     handleSlideNavigationKey,
     hostRef,
     imageFileInputRef,
@@ -114,7 +115,7 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#2a2a2a] px-3 py-3.5 md:px-6 md:pb-6 md:pt-5">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#E6DDCD] px-3 py-3.5 md:px-6 md:pb-6 md:pt-5">
       <DeckToolbar
         activeObject={activeObject}
         directTextEditMode={directTextEditMode}
@@ -156,18 +157,23 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
               ? editingShieldRects(activeSelectionBox, Math.round(canvas.width * scale), frameHeight)
               : [];
             return (
-              <article className="w-[min(100%,1100px)] min-w-0 shrink-0" key={slide.id}>
+              <article className="min-w-0 shrink-0" key={slide.id} style={{ width: frameWidth || undefined }}>
                 <div className="mb-2 flex items-center gap-2.5">
-                  <span className="inline-flex h-6 items-center rounded-md bg-white/10 px-[7px] font-mono text-[12px] font-black text-white/72">{String(activeSlideIndex + 1).padStart(2, "0")}</span>
-                  <strong className="min-w-0 truncate text-[12px] font-extrabold text-white/78">{slide.title}</strong>
+                  <span className="inline-flex h-6 items-center rounded-md bg-[#5C6B50] px-[7px] font-mono text-[12px] font-black text-[#F4EFE6]">{String(activeSlideIndex + 1).padStart(2, "0")}</span>
+                  <strong className="min-w-0 truncate text-[12px] font-semibold text-[#2A2620]/78">{slide.title}</strong>
                 </div>
-                <div className={cn("relative overflow-hidden rounded-[2px] border border-black/30 bg-white shadow-[0_30px_90px_rgba(0,0,0,0.55)]", selectionMode === "object" && activeObject?.slideId === slide.id ? "border-blue-500/75" : "")} style={{ height: frameHeight || undefined }}>
+                <div
+                  className={cn("relative overflow-hidden rounded-[2px] border border-[#B8A07C]/60 bg-white shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)]", selectionMode === "object" && activeObject?.slideId === slide.id ? "border-[#5C6B50]" : "")}
+                  style={{ width: frameWidth || undefined, height: frameHeight || undefined }}
+                >
                   <iframe
                     className="absolute left-0 top-0 block origin-top-left border-0"
+                    height={canvas.height}
                     ref={(iframe) => {
                       if (iframe) initializeFrame(slide, iframe);
                     }}
                     src={projectAssetUrl(props.projectId, props.detail.artifact.fileRef, slide.file, props.detail.artifact.revision)}
+                    width={canvas.width}
                     style={{
                       width: canvas.width,
                       height: canvas.height,
@@ -242,7 +248,9 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
           if (!slide) return null;
           return (
             <iframe
-              src={projectAssetUrl(props.projectId, props.detail.artifact.fileRef, slide.file)}
+              height={canvas.height}
+              src={projectAssetUrl(props.projectId, props.detail.artifact.fileRef, slide.file, props.detail.artifact.revision)}
+              width={canvas.width}
               style={{
                 width: canvas.width,
                 height: canvas.height,

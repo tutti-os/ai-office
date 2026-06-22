@@ -11,6 +11,5 @@
     "check": "pnpm --filter @ai-slide/shared check && pnpm --filter @ai-slide/web check && pnpm --filter @ai-slide/server check",
     "package:tutti": "node ../../tooling/tutti/package-slide-tutti-app.mjs",
     "sync:templates": "node scripts/sync-slide-templates.mjs"
-  },
-  "packageManager": "pnpm@10.11.0"
+  }
 }

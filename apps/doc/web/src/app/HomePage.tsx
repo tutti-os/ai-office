@@ -5,6 +5,7 @@ import {
   allTemplatesLabel,
   type TuttiTemplate,
 } from "../templates/tuttiTemplates";
+import { historyActionsClass, historyCardClass, historyClearButtonClass, historyDeleteButtonClass, historyEmptyIconClass, historyEmptyStateClass } from "@ai-app/ui/app-shell";
 import { HomeComposer } from "./HomeComposer";
 import { useI18n } from "../i18n";
 import type { HomeAttachment } from "./useHomeAttachments";
@@ -293,9 +294,9 @@ function ProjectHistory(props: {
     return (
       <div className="mt-5">
         <HistoryPanelActions loading={props.loading} projectCount={props.projects.length} onClearHistory={props.onClearHistory} />
-        <div className="mt-3 grid min-h-[220px] place-items-center rounded-[20px] border border-[#B8A07C]/55 bg-[#F4EFE6]/50 px-6 text-center shadow-[0_1px_2px_rgba(0,0,0,0.05)] backdrop-blur">
+        <div className={`mt-3 px-6 ${historyEmptyStateClass}`}>
           <div>
-            <div className="mx-auto mb-3 grid size-9 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]">
+            <div className={`mx-auto mb-3 ${historyEmptyIconClass}`}>
               <History size={17} />
             </div>
             <div className="text-[13px] font-medium text-[#2A2620]">No history yet</div>
@@ -320,9 +321,9 @@ function ProjectHistory(props: {
 
 function HistoryPanelActions(props: { loading: boolean; projectCount: number; onClearHistory: () => void }) {
   return (
-    <div className="flex items-center justify-start">
+    <div className={historyActionsClass}>
       <button
-        className="flex h-8 items-center gap-2 rounded-full border border-[#B8A07C]/55 bg-[#F4EFE6]/55 px-3 text-[12px] font-medium text-[#8B8275] transition hover:border-[#5C6B50]/50 hover:text-[#5C6B50] disabled:cursor-not-allowed disabled:opacity-40"
+        className={historyClearButtonClass}
         type="button"
         disabled={props.loading || props.projectCount === 0}
         onClick={props.onClearHistory}
@@ -337,7 +338,7 @@ function HistoryPanelActions(props: { loading: boolean; projectCount: number; on
 
 function ProjectHistoryCard(props: { project: DocumentProject; onDelete: (projectId: string) => void; onOpen: (project: DocumentProject) => void }) {
   return (
-    <div className="group relative min-h-[132px] rounded-[20px] border border-[#B8A07C]/50 bg-[#F4EFE6]/58 shadow-[0_1px_2px_rgba(0,0,0,0.05)] backdrop-blur transition hover:-translate-y-0.5 hover:shadow-[0_12px_10px_rgba(0,0,0,0.08)]">
+    <div className={`group ${historyCardClass()}`}>
       <button
         aria-label={`Open ${props.project.title}`}
         className="block h-full min-h-[132px] w-full rounded-[20px] p-4 text-left"
@@ -361,7 +362,7 @@ function ProjectHistoryCard(props: { project: DocumentProject; onDelete: (projec
       </div>
       <button
         aria-label={`Delete ${props.project.title}`}
-        className="absolute bottom-3 right-3 grid size-7 place-items-center rounded-[16px] border border-[#B8A07C]/55 bg-[#F4EFE6]/70 text-[#8B8275] opacity-0 transition hover:border-[#5C6B50]/50 hover:text-[#5C6B50] focus-visible:opacity-100 group-hover:opacity-100"
+        className={historyDeleteButtonClass}
         type="button"
         title="Delete project"
         onClick={() => props.onDelete(props.project.id)}

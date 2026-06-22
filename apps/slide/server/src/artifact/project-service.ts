@@ -44,6 +44,10 @@ export class ProjectService {
     return this.repo.clearProjectHistory();
   }
 
+  deleteProject(projectId: string) {
+    return this.repo.deleteProject(projectId);
+  }
+
   async createProject(input: CreateProjectRequest) {
     if (input.artifactType === "pptx") await requireOfficeCli();
     const result = this.repo.createProject(input);

@@ -48,7 +48,7 @@ import {
   textTargetForObjectAtPoint,
 } from "./deckEditorDom";
 import { DeckEditorController } from "./DeckEditorController";
-import { fitScale, nextSlideIndex, scaledHeight, slideDirectionFromKey, thumbnailMetrics, useElementSize } from "./slideView";
+import { fitScale, nextSlideIndex, scaledHeight, scaledWidth, slideDirectionFromKey, thumbnailMetrics, useElementSize } from "./slideView";
 import { uploadDeckAsset } from "../api/projects";
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -206,6 +206,7 @@ export function useDeckEditorModel(props: {
   const availableFrameWidth = Math.max(0, hostWidth - 64);
   const availableFrameHeight = Math.max(0, hostHeight - 92);
   const scale = fitScale({ availableHeight: availableFrameHeight, availableWidth: availableFrameWidth, height: canvas.height, minScale: 0.4, width: canvas.width });
+  const frameWidth = scaledWidth({ scale, width: canvas.width });
   const frameHeight = scaledHeight({ height: canvas.height, scale });
   const deckThumbnail = thumbnailMetrics({ height: canvas.height, width: canvas.width });
   const activeHistory = useMemo(() => deckController.getHistory(activeSlideId), [activeSlideId, deckController, historyVersion]);
@@ -965,6 +966,7 @@ export function useDeckEditorModel(props: {
     duplicateActiveObject,
     enterTextEditFromFramePoint,
     frameHeight,
+    frameWidth,
     handleSlideNavigationKey,
     hostRef,
     imageFileInputRef,

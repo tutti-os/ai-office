@@ -1,4 +1,5 @@
 import { HomePage } from "./HomePage";
+import { DocumentSurfaceErrorFallback, ErrorBoundary } from "./AppErrorBoundary";
 import { DocxDocumentScreen, MarkdownDocumentScreen } from "./DocumentFormatScreens";
 import { DocumentLoadingScreen, HtmlEditorScreen } from "./HtmlEditorScreen";
 import { markdownParagraphCount, markdownWordCount } from "./documentWorkbenchContent";
@@ -171,186 +172,207 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           onSelectTemplate={loadTemplate}
         />
       ) : currentDocumentType === "markdown" && markdownRuntime ? (
-        <MarkdownDocumentScreen
-          activeSelectionText={activeSelectionText}
-          agentConversationError={agentConversation.error}
-          agentConversationItems={agentConversation.items}
-          agentConversationLoading={agentConversation.loading}
-          agentSending={agentBusy}
-          dirty={activeDirty}
-          error={error}
-          exportNotice={exportNotice}
-          localAgentProviders={localAgentProviders}
-          loading={loading}
-          projectId={currentProjectId}
-          runtime={markdownRuntime}
-          runtimeProfiles={runtimeProfiles}
-          agentProcessing={artifactAgentProcessing}
-          readOnly={artifactReadOnly}
-          saveState={activeDirty && markdownSaveState === "saved" ? "saving" : markdownSaveState}
-          selectedRuntimeProfileId={selectedRuntimeProfileId}
-          onBackHome={requestHomeRoute}
-          onCancelAgentRun={cancelAgentRun}
-          onDismissExportNotice={dismissExportNotice}
-          onOpenExportLocation={openCurrentProjectExportsDir}
-          onChange={(content, selection) => {
-            updateMarkdownContent(content, selection);
-            setEditorStats({ characterCount: content.length, wordCount: markdownWordCount(content), paragraphCount: markdownParagraphCount(content), elementCount: 0 });
-          }}
-          onPendingTableCellEditChange={setMarkdownTableCellEditPending}
-          onExportDocx={exportCurrentMarkdownDocx}
-          onExportMarkdown={exportCurrentMarkdown}
-          onExportPdf={exportCurrentMarkdownPdf}
-          pdfExportAvailable={pdfExportAvailable}
-          pdfExporting={pdfExporting}
-          onRedo={redoMarkdown}
-          onRuntimeProfileChange={setSelectedRuntimeProfileId}
-          onSelectionChange={updateMarkdownSelection}
-          onSendAgentPrompt={sendAgentPrompt}
-          onTableCellCommitterChange={setMarkdownTableCellCommitter}
-          onUndo={undoMarkdown}
-        />
+        <ErrorBoundary
+          resetKeys={[currentProjectId, currentDocumentType, markdownRuntime.revision]}
+          fallback={({ error, resetErrorBoundary }) => (
+            <DocumentSurfaceErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} onBackHome={requestHomeRoute} />
+          )}
+        >
+          <MarkdownDocumentScreen
+            activeSelectionText={activeSelectionText}
+            agentConversationError={agentConversation.error}
+            agentConversationItems={agentConversation.items}
+            agentConversationLoading={agentConversation.loading}
+            agentSending={agentBusy}
+            dirty={activeDirty}
+            error={error}
+            exportNotice={exportNotice}
+            localAgentProviders={localAgentProviders}
+            loading={loading}
+            projectId={currentProjectId}
+            runtime={markdownRuntime}
+            runtimeProfiles={runtimeProfiles}
+            agentProcessing={artifactAgentProcessing}
+            readOnly={artifactReadOnly}
+            saveState={activeDirty && markdownSaveState === "saved" ? "saving" : markdownSaveState}
+            selectedRuntimeProfileId={selectedRuntimeProfileId}
+            onBackHome={requestHomeRoute}
+            onCancelAgentRun={cancelAgentRun}
+            onDismissExportNotice={dismissExportNotice}
+            onOpenExportLocation={openCurrentProjectExportsDir}
+            onChange={(content, selection) => {
+              updateMarkdownContent(content, selection);
+              setEditorStats({ characterCount: content.length, wordCount: markdownWordCount(content), paragraphCount: markdownParagraphCount(content), elementCount: 0 });
+            }}
+            onPendingTableCellEditChange={setMarkdownTableCellEditPending}
+            onExportDocx={exportCurrentMarkdownDocx}
+            onExportMarkdown={exportCurrentMarkdown}
+            onExportPdf={exportCurrentMarkdownPdf}
+            pdfExportAvailable={pdfExportAvailable}
+            pdfExporting={pdfExporting}
+            onRedo={redoMarkdown}
+            onRuntimeProfileChange={setSelectedRuntimeProfileId}
+            onSelectionChange={updateMarkdownSelection}
+            onSendAgentPrompt={sendAgentPrompt}
+            onTableCellCommitterChange={setMarkdownTableCellCommitter}
+            onUndo={undoMarkdown}
+          />
+        </ErrorBoundary>
       ) : currentDocumentType === "docx" && docxRuntime ? (
-        <DocxDocumentScreen
-          activeSelectionText={activeSelectionText}
-          agentConversationError={agentConversation.error}
-          agentConversationItems={agentConversation.items}
-          agentConversationLoading={agentConversation.loading}
-          agentSending={agentBusy}
-          dirty={activeDirty}
-          error={error || docxError}
-          exportNotice={exportNotice}
-          localAgentProviders={localAgentProviders}
-          loading={loading || docxLoading}
-          projectId={currentProjectId}
-          runtime={docxRuntime}
-          runtimeProfiles={runtimeProfiles}
-          agentProcessing={artifactAgentProcessing}
-          pdfExportAvailable={pdfExportAvailable}
-          pdfExporting={pdfExporting}
-          selectedRuntimeProfileId={selectedRuntimeProfileId}
-          onBackHome={requestHomeRoute}
-          onCancelAgentRun={cancelAgentRun}
-          onDismissExportNotice={dismissExportNotice}
-          onExportPdf={exportCurrentDocxPdf}
-          onOpenExportLocation={openCurrentProjectExportsDir}
-          onRuntimeProfileChange={setSelectedRuntimeProfileId}
-          onSelectionChange={updateDocxSelection}
-          onSendAgentPrompt={sendAgentPrompt}
-        />
+        <ErrorBoundary
+          resetKeys={[currentProjectId, currentDocumentType, docxRuntime.revision]}
+          fallback={({ error, resetErrorBoundary }) => (
+            <DocumentSurfaceErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} onBackHome={requestHomeRoute} />
+          )}
+        >
+          <DocxDocumentScreen
+            activeSelectionText={activeSelectionText}
+            agentConversationError={agentConversation.error}
+            agentConversationItems={agentConversation.items}
+            agentConversationLoading={agentConversation.loading}
+            agentSending={agentBusy}
+            dirty={activeDirty}
+            error={error || docxError}
+            exportNotice={exportNotice}
+            localAgentProviders={localAgentProviders}
+            loading={loading || docxLoading}
+            projectId={currentProjectId}
+            runtime={docxRuntime}
+            runtimeProfiles={runtimeProfiles}
+            agentProcessing={artifactAgentProcessing}
+            pdfExportAvailable={pdfExportAvailable}
+            pdfExporting={pdfExporting}
+            selectedRuntimeProfileId={selectedRuntimeProfileId}
+            onBackHome={requestHomeRoute}
+            onCancelAgentRun={cancelAgentRun}
+            onDismissExportNotice={dismissExportNotice}
+            onExportPdf={exportCurrentDocxPdf}
+            onOpenExportLocation={openCurrentProjectExportsDir}
+            onRuntimeProfileChange={setSelectedRuntimeProfileId}
+            onSelectionChange={updateDocxSelection}
+            onSendAgentPrompt={sendAgentPrompt}
+          />
+        </ErrorBoundary>
       ) : !currentDocumentType ? (
         <DocumentLoadingScreen error={error} loading={loading} />
       ) : currentDocumentType === "html" && runtime ? (
-        <HtmlEditorScreen
-          activeSelectionText={activeSelectionText}
-          dirty={activeDirty}
-          error={error}
-          exportNotice={exportNotice}
-          frameRevision={frameRevision}
-          frameSrcDoc={frameSrcDoc}
-          iframeRef={iframeRef}
-          loading={loading}
-          agentConversationItems={agentConversation.items}
-          agentConversationLoading={agentConversation.loading}
-          agentConversationError={agentConversation.error}
-          agentSending={agentBusy}
-          localAgentProviders={localAgentProviders}
-          runtimeProfiles={runtimeProfiles}
-          selectedRuntimeProfileId={selectedRuntimeProfileId}
-          editorStats={editorStats}
-          runtime={runtime}
-          saveState={saveState}
-          docxExporting={htmlDocxExporting}
-          pdfExportAvailable={pdfExportAvailable}
-          pdfExporting={pdfExporting}
-          agentProcessing={artifactAgentProcessing}
-          readOnly={artifactReadOnly}
-          toolbarDisabled={!htmlToolbarActive || artifactReadOnly}
-          toolbarState={toolbarState}
-          linkDraft={linkDraft}
-          linkEditorOpen={linkEditorOpen}
-          operationDraft={operationDraft}
-          operationIsHtml={operationIsHtml}
-          operationPanelMode={operationPanelMode}
-          operationPosition={operationPosition}
-          operationWrapperTag={operationWrapperTag}
-          attributeDraft={attributeDraft}
-          imageDraft={imageDraft}
-          tableDraft={tableDraft}
-          styleDraft={styleDraft}
-          onBackHome={requestHomeRoute}
-          onDismissExportNotice={dismissExportNotice}
-          onOpenExportLocation={openCurrentProjectExportsDir}
-          onExportDocx={exportCurrentHtmlDocx}
-          onExportHtml={exportCurrentHtml}
-          onExportPdf={exportCurrentHtmlPdf}
-          onApplyLink={applyLink}
-          onCloseLinkEditor={() => setLinkEditorOpen(false)}
-          onCreateLink={openLinkEditor}
-          onLinkDraftChange={setLinkDraft}
-          onApplyOperation={applyOperationPanel}
-          onAttributeDraftChange={setAttributeDraft}
-          onCloseOperation={() => setOperationPanelMode(null)}
-          onOperationDraftChange={setOperationDraft}
-          onOperationHtmlChange={setOperationIsHtml}
-          onImageDraftChange={setImageDraft}
-          onPickImage={requestImageFileSelection}
-          onTableDraftChange={setTableDraft}
-          onStyleDraftChange={setStyleDraft}
-          onBackColor={applyBackColor}
-          onForeColor={applyForeColor}
-          onLineHeight={(lineHeight) => htmlEditorController.executeOperation(runtime, {
-            operationType: "setLineHeight",
-            description: `Set line height ${lineHeight || "normal"}`,
-            mutate: (doc, target) => setElementStyle(doc, target, { lineHeight }),
-          })}
-          onLetterSpacing={(letterSpacing) => htmlEditorController.executeOperation(runtime, {
-            operationType: "setLetterSpacing",
-            description: `Set letter spacing ${letterSpacing || "normal"}`,
-            mutate: (doc, target) => setElementStyle(doc, target, { letterSpacing }),
-          })}
-          onLayoutChange={(attributes) => htmlEditorController.executeOperation(runtime, {
-            operationType: "setLayout",
-            description: "Set layout",
-            mutate: (doc, target) => setElementStyle(doc, target, attributes),
-          })}
-          onOperationPositionChange={setOperationPosition}
-          onOperationWrapperTagChange={setOperationWrapperTag}
-          onRemoveLink={applyRemoveLink}
-          onAlignment={applyAlignment}
-          onFontFamily={applyFontFamily}
-          onFontSize={applyFontSize}
-          onFormat={applyFormat}
-          onHeading={applyHeading}
-          onIndent={() => htmlEditorController.executeOperation(runtime, {
-            operationType: "indent",
-            description: "Indent block",
-            mutate: (doc, target) => indentBlock(doc, target),
-          })}
-          onChecklist={() => htmlEditorController.executeOperation(runtime, {
-            operationType: "toggleChecklist",
-            description: "Toggle checklist",
-            mutate: (doc, target) => toggleChecklist(doc, target),
-          })}
-          onList={applyList}
-          onLoadFixture={() => void loadFixture()}
-          onMoreAction={applyToolbarMoreAction}
-          onMutation={(operationType, description) => htmlEditorController.syncMutation(operationType, description)}
-          onOutdent={() => htmlEditorController.executeOperation(runtime, {
-            operationType: "outdent",
-            description: "Outdent block",
-            mutate: (doc, target) => outdentBlock(doc, target),
-          })}
-          onSendAgentPrompt={sendAgentPrompt}
-          onRuntimeProfileChange={setSelectedRuntimeProfileId}
-          onCancelAgentRun={cancelAgentRun}
-          onRedo={() => htmlEditorController.applyHistoryOffset(runtime, 1)}
-          onResetFrame={resetFrameFromRuntime}
-          onSelection={() => htmlEditorController.syncSelection()}
-          onToolbarInteractionStart={() => htmlEditorController.preserveSelection(runtime)}
-          onUndo={() => htmlEditorController.applyHistoryOffset(runtime, -1)}
-          onFrameLoad={handleFrameLoad}
-        />
+        <ErrorBoundary
+          resetKeys={[currentProjectId, currentDocumentType, runtime.revision, frameRevision]}
+          fallback={({ error, resetErrorBoundary }) => (
+            <DocumentSurfaceErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} onBackHome={requestHomeRoute} />
+          )}
+        >
+          <HtmlEditorScreen
+            activeSelectionText={activeSelectionText}
+            dirty={activeDirty}
+            error={error}
+            exportNotice={exportNotice}
+            frameRevision={frameRevision}
+            frameSrcDoc={frameSrcDoc}
+            iframeRef={iframeRef}
+            loading={loading}
+            agentConversationItems={agentConversation.items}
+            agentConversationLoading={agentConversation.loading}
+            agentConversationError={agentConversation.error}
+            agentSending={agentBusy}
+            localAgentProviders={localAgentProviders}
+            runtimeProfiles={runtimeProfiles}
+            selectedRuntimeProfileId={selectedRuntimeProfileId}
+            editorStats={editorStats}
+            runtime={runtime}
+            saveState={saveState}
+            docxExporting={htmlDocxExporting}
+            pdfExportAvailable={pdfExportAvailable}
+            pdfExporting={pdfExporting}
+            agentProcessing={artifactAgentProcessing}
+            readOnly={artifactReadOnly}
+            toolbarDisabled={!htmlToolbarActive || artifactReadOnly}
+            toolbarState={toolbarState}
+            linkDraft={linkDraft}
+            linkEditorOpen={linkEditorOpen}
+            operationDraft={operationDraft}
+            operationIsHtml={operationIsHtml}
+            operationPanelMode={operationPanelMode}
+            operationPosition={operationPosition}
+            operationWrapperTag={operationWrapperTag}
+            attributeDraft={attributeDraft}
+            imageDraft={imageDraft}
+            tableDraft={tableDraft}
+            styleDraft={styleDraft}
+            onBackHome={requestHomeRoute}
+            onDismissExportNotice={dismissExportNotice}
+            onOpenExportLocation={openCurrentProjectExportsDir}
+            onExportDocx={exportCurrentHtmlDocx}
+            onExportHtml={exportCurrentHtml}
+            onExportPdf={exportCurrentHtmlPdf}
+            onApplyLink={applyLink}
+            onCloseLinkEditor={() => setLinkEditorOpen(false)}
+            onCreateLink={openLinkEditor}
+            onLinkDraftChange={setLinkDraft}
+            onApplyOperation={applyOperationPanel}
+            onAttributeDraftChange={setAttributeDraft}
+            onCloseOperation={() => setOperationPanelMode(null)}
+            onOperationDraftChange={setOperationDraft}
+            onOperationHtmlChange={setOperationIsHtml}
+            onImageDraftChange={setImageDraft}
+            onPickImage={requestImageFileSelection}
+            onTableDraftChange={setTableDraft}
+            onStyleDraftChange={setStyleDraft}
+            onBackColor={applyBackColor}
+            onForeColor={applyForeColor}
+            onLineHeight={(lineHeight) => htmlEditorController.executeOperation(runtime, {
+              operationType: "setLineHeight",
+              description: `Set line height ${lineHeight || "normal"}`,
+              mutate: (doc, target) => setElementStyle(doc, target, { lineHeight }),
+            })}
+            onLetterSpacing={(letterSpacing) => htmlEditorController.executeOperation(runtime, {
+              operationType: "setLetterSpacing",
+              description: `Set letter spacing ${letterSpacing || "normal"}`,
+              mutate: (doc, target) => setElementStyle(doc, target, { letterSpacing }),
+            })}
+            onLayoutChange={(attributes) => htmlEditorController.executeOperation(runtime, {
+              operationType: "setLayout",
+              description: "Set layout",
+              mutate: (doc, target) => setElementStyle(doc, target, attributes),
+            })}
+            onOperationPositionChange={setOperationPosition}
+            onOperationWrapperTagChange={setOperationWrapperTag}
+            onRemoveLink={applyRemoveLink}
+            onAlignment={applyAlignment}
+            onFontFamily={applyFontFamily}
+            onFontSize={applyFontSize}
+            onFormat={applyFormat}
+            onHeading={applyHeading}
+            onIndent={() => htmlEditorController.executeOperation(runtime, {
+              operationType: "indent",
+              description: "Indent block",
+              mutate: (doc, target) => indentBlock(doc, target),
+            })}
+            onChecklist={() => htmlEditorController.executeOperation(runtime, {
+              operationType: "toggleChecklist",
+              description: "Toggle checklist",
+              mutate: (doc, target) => toggleChecklist(doc, target),
+            })}
+            onList={applyList}
+            onLoadFixture={() => void loadFixture()}
+            onMoreAction={applyToolbarMoreAction}
+            onMutation={(operationType, description) => htmlEditorController.syncMutation(operationType, description)}
+            onOutdent={() => htmlEditorController.executeOperation(runtime, {
+              operationType: "outdent",
+              description: "Outdent block",
+              mutate: (doc, target) => outdentBlock(doc, target),
+            })}
+            onSendAgentPrompt={sendAgentPrompt}
+            onRuntimeProfileChange={setSelectedRuntimeProfileId}
+            onCancelAgentRun={cancelAgentRun}
+            onRedo={() => htmlEditorController.applyHistoryOffset(runtime, 1)}
+            onResetFrame={resetFrameFromRuntime}
+            onSelection={() => htmlEditorController.syncSelection()}
+            onToolbarInteractionStart={() => htmlEditorController.preserveSelection(runtime)}
+            onUndo={() => htmlEditorController.applyHistoryOffset(runtime, -1)}
+            onFrameLoad={handleFrameLoad}
+          />
+        </ErrorBoundary>
       ) : (
         <DocumentLoadingScreen error={error} loading={loading} />
       )}

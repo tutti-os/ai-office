@@ -33,7 +33,7 @@ export function AgentConversationPanel(props: AgentConversationPanelProps) {
         };
       })}
       selectedAgentId={props.selectedAgent}
-      variant="slide"
+      variant="document"
       copy={{
         homeLabel: "AI Slide",
         introTitle: "AI Slides Agent",

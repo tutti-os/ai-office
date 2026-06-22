@@ -158,3 +158,10 @@ export async function clearProjectHistory(): Promise<SlideProject[]> {
   });
   return response.projects;
 }
+
+export async function deleteProject(projectId: string): Promise<SlideProject[]> {
+  const response = await requestJson<ProjectsResponse>(`/api/projects/${encodeURIComponent(projectId)}`, {
+    method: "DELETE",
+  });
+  return response.projects;
+}
