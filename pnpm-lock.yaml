@@ -41,8 +41,8 @@ importers:
         specifier: ^11.2.0
         version: 11.2.0
       '@tutti-os/agent-acp-kit':
-        specifier: ^0.1.16
-        version: 0.1.16
+        specifier: ^0.2.2
+        version: 0.2.2
       fastify:
         specifier: ^5.6.2
         version: 5.8.5
@@ -225,8 +225,8 @@ importers:
         specifier: ^11.2.0
         version: 11.2.0
       '@tutti-os/agent-acp-kit':
-        specifier: ^0.1.16
-        version: 0.1.16
+        specifier: ^0.2.2
+        version: 0.2.2
       fastify:
         specifier: ^5.8.5
         version: 5.8.5
@@ -309,8 +309,8 @@ importers:
         specifier: workspace:*
         version: link:../ai-app-shared
       '@tutti-os/agent-acp-kit':
-        specifier: ^0.1.16
-        version: 0.1.16
+        specifier: ^0.2.2
+        version: 0.2.2
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.7)
@@ -1784,8 +1784,8 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
 
-  '@tutti-os/agent-acp-kit@0.1.16':
-    resolution: {integrity: sha512-SDD7JM79j59X6KrDU4VO3Z6qRG7/19WQTuak+pEgJTfq3+tSK3WBzhiqCAsYRndMA/hAtLsAmnbi9cKUhEYSqQ==}
+  '@tutti-os/agent-acp-kit@0.2.2':
+    resolution: {integrity: sha512-G6XlJHCJK0gZ8GAe21PMKT/9UwZbDWJ7XOtj/re+YbqYQsDxX1qEVbXeZ00jRIIiRalq8ZyqIiSAQU2T1qDkuA==}
 
   '@tutti-os/office-export@0.0.0-test.20260622042235.056409236dee':
     resolution: {integrity: sha512-1tGX3nVtZ4pHSncPjlPcX3qhD/dW8nuihTFwqrn4CNdlLW53yohemEGvlzUiu+mhlxR540ZDZeLoQGNN5dVMNA==}
@@ -4705,7 +4705,7 @@ snapshots:
       tailwindcss: 4.3.1
       vite: 7.3.5(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
 
-  '@tutti-os/agent-acp-kit@0.1.16':
+  '@tutti-os/agent-acp-kit@0.2.2':
     dependencies:
       '@anthropic-ai/claude-agent-sdk': 0.2.101(zod@4.4.3)
       zod: 4.4.3
