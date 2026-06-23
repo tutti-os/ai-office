@@ -61,6 +61,14 @@ export function useRunTimelineStream<
 
   useEffect(() => {
     if (!input.projectId) return undefined;
+    const hasActiveRun = items.some((item) => item.run.status === "accepted" || item.run.status === "running");
+    if (!hasActiveRun) return undefined;
+    const timer = window.setInterval(() => void reload(), 2500);
+    return () => window.clearInterval(timer);
+  }, [input.projectId, items, reload]);
+
+  useEffect(() => {
+    if (!input.projectId) return undefined;
     let closed = false;
     let socket: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;

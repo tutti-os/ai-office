@@ -374,6 +374,8 @@ export class DocumentService {
   }
 
   private emitRunCompleted(projectId: string, runId: string, resultPreview: string) {
+    const currentRun = this.repo.getRun(runId);
+    if (currentRun && !["accepted", "running"].includes(currentRun.status)) return currentRun;
     const finalRun = this.repo.updateRun(runId, { status: "completed", resultPreview });
     this.events.emit({ type: "run.completed", projectId, runId, payload: { run: finalRun } });
     return finalRun;
@@ -382,6 +384,7 @@ export class DocumentService {
   private async finalizeCancellation(runId: string, reason: string) {
     const run = this.repo.getRun(runId);
     if (!run) return null;
+    if (run.status === "cancelled") return { run };
     const finalRun = this.repo.updateRun(runId, { status: "cancelled", error: reason }) ?? run;
     this.events.emit({ type: "run.cancelled", projectId: run.projectId, runId, payload: { run: finalRun } });
     const assistantMessageId = this.runAssistantMessageIds.get(runId);
@@ -391,7 +394,6 @@ export class DocumentService {
         metadata: { status: "cancelled", runId },
       });
     }
-    this.cancelledRunIds.delete(runId);
     return { run: finalRun };
   }
 

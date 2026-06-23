@@ -23,22 +23,23 @@ export function HomeComposer(props: {
 }) {
   const { t } = useI18n();
   const pptxAvailable = props.officeCliStatus?.available === true;
+  const pptxInstalling = props.officeCliInstalling || props.officeCliStatus?.installing === true;
   const selectedOutputAvailable = props.outputType !== "pptx" || pptxAvailable;
   const canSubmit = props.prompt.trim().length > 0 && !props.creating && selectedOutputAvailable;
 
   return (
-    <div className={appShell.promptFrame}>
-      <div className={appShell.promptInner}>
+    <div className={cn(appShell.promptFrame, "!mt-6")}>
+      <div className={cn(appShell.promptInner, "!p-3.5")}>
         <PromptComposer
           canSubmit={canSubmit}
-          className={appShell.promptComposer}
+          className={cn(appShell.promptComposer, "!p-3")}
           footerClassName="flex-wrap gap-2.5 pt-1"
           leadingActionsClassName="mr-auto flex-1 basis-[204px] flex-wrap gap-2.5 md:flex-none md:basis-auto"
           placeholder={t("composer.placeholder")}
-          textareaClassName={cn("block pb-2", appShell.promptTextarea)}
+          textareaClassName={cn("block !h-[84px] pb-2", appShell.promptTextarea)}
           value={props.prompt}
           beforeTextarea={
-            <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-2">
+            <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-2">
               <FormatOption
                 active={props.outputType === "html"}
                 description={t("composer.deckDescription")}
@@ -49,9 +50,10 @@ export function HomeComposer(props: {
               <FormatOption
                 active={props.outputType === "pptx"}
                 description={formatPptxOutputDescription(props.officeCliStatus, t)}
-                disabled={!pptxAvailable}
+                disabled={!pptxAvailable || pptxInstalling}
+                downloadLabel={t("composer.downloadOfficeCli")}
                 icon={<FileText size={20} />}
-                installing={props.officeCliInstalling || props.officeCliStatus?.installing === true}
+                installing={pptxInstalling}
                 label="PPTX"
                 showInstall={!pptxAvailable && props.officeCliStatus?.canInstall === true}
                 title={!pptxAvailable ? props.officeCliStatus?.reason ?? t("composer.officeCliRequired") : undefined}
@@ -90,15 +92,16 @@ export function HomeComposer(props: {
 
 function formatPptxOutputDescription(officeCliStatus: OfficeCliStatus | null, t: ReturnType<typeof useI18n>["t"]) {
   if (!officeCliStatus) return t("composer.checkingOfficeCli");
-  if (officeCliStatus.available) return officeCliStatus.version ? `OfficeCLI ${officeCliStatus.version}` : t("composer.officeCliReady");
   if (officeCliStatus.installing) return t("composer.installingOfficeCli");
-  return t("composer.requiresOfficeCli");
+  if (officeCliStatus.available) return officeCliStatus.version ? `OfficeCLI ${officeCliStatus.version}` : t("composer.officeCliReady");
+  return t("composer.officeCliInstallRequired");
 }
 
 function FormatOption(props: {
   active: boolean;
   description: string;
   disabled?: boolean;
+  downloadLabel?: string;
   icon: ReactNode;
   installing?: boolean;
   label: string;
@@ -109,7 +112,7 @@ function FormatOption(props: {
 }) {
   return (
     <div
-      className={formatOptionClass(props.active, props.disabled)}
+      className={cn(formatOptionClass(props.active, props.disabled), "!min-h-[56px] !px-3 !py-2.5")}
       role="button"
       tabIndex={props.disabled && !props.showInstall ? -1 : 0}
       title={props.title}
@@ -127,7 +130,11 @@ function FormatOption(props: {
         <span className="truncate text-[14px] font-bold leading-none">{props.label}</span>
         <small className={cn("truncate text-[12px] font-medium", props.active ? "text-[#8B8275]" : props.disabled ? "text-[#8B8275]/78" : "text-[#E6DDCD]/62")}>{props.description}</small>
       </span>
-      {props.active ? (
+      {props.installing ? (
+        <span className="ml-auto grid size-6 shrink-0 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]">
+          <Loader2 className="animate-spin" size={14} />
+        </span>
+      ) : props.active ? (
         <span className="ml-auto grid size-6 shrink-0 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]">
           <Check size={14} />
         </span>
@@ -136,8 +143,8 @@ function FormatOption(props: {
           className="ml-auto grid size-7 shrink-0 place-items-center rounded-[16px] border border-[#B8A07C]/35 bg-[#D8CDB9]/50 text-[#8B8275] hover:border-[#5C6B50]/40 hover:text-[#5C6B50]"
           role="button"
           tabIndex={0}
-          title="Download OfficeCLI"
-          aria-label="Download OfficeCLI"
+          title={props.downloadLabel}
+          aria-label={props.downloadLabel}
           onClick={(event) => {
             event.stopPropagation();
             if (props.installing) return;

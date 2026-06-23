@@ -52,6 +52,7 @@ export function HomeComposer(props: {
   const { t } = useI18n();
   const selectedProfile = props.runtimeProfiles.find((profile) => profile.id === props.selectedRuntimeProfileId) ?? props.runtimeProfiles[0] ?? null;
   const docxAvailable = props.officeCliStatus?.available === true;
+  const docxInstalling = props.officeCliInstalling || props.officeCliStatus?.installing === true;
   const selectedOutputAvailable = props.outputType !== "docx" || docxAvailable;
   const canSubmit = !props.loading && selectedOutputAvailable && (props.prompt.trim().length > 0 || props.attachments.length > 0);
 
@@ -61,16 +62,16 @@ export function HomeComposer(props: {
   };
 
   return (
-    <div className="mt-8 w-full rounded-[21px] bg-[linear-gradient(to_right_bottom,#6F7D5F,#37362F)] p-px shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)]">
-      <div className="rounded-[20px] bg-[#5C6B50]/82 p-4 backdrop-blur">
-        <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+    <div className="mt-6 w-full rounded-[21px] bg-[linear-gradient(to_right_bottom,#6F7D5F,#37362F)] p-px shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)]">
+      <div className="rounded-[20px] bg-[#5C6B50]/82 p-3.5 backdrop-blur">
+        <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {outputFormatOptions.map((option) => {
-            const disabled = option.id === "docx" && !docxAvailable;
+            const disabled = option.id === "docx" && (!docxAvailable || docxInstalling);
             const active = option.id === props.outputType;
             return (
               <div
                 key={option.id}
-                className={`flex min-h-[64px] items-center justify-between gap-3 rounded-[16px] border px-4 py-3 text-left transition ${
+                className={`flex min-h-[56px] items-center justify-between gap-3 rounded-[16px] border px-3 py-2.5 text-left transition ${
                   active
                     ? "border-[#F4EFE6] bg-[#F4EFE6] text-[#2A2620] shadow-[0_12px_10px_rgba(0,0,0,0.08)]"
                     : disabled
@@ -106,7 +107,11 @@ export function HomeComposer(props: {
                     </div>
                   </div>
                 </div>
-                {active ? (
+                {option.id === "docx" && docxInstalling ? (
+                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#2A2620] text-[#F4EFE6]">
+                    <Loader2 className="animate-spin" size={15} />
+                  </span>
+                ) : active ? (
                   <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#2A2620] text-[#F4EFE6]">
                     <Check size={15} />
                   </span>
@@ -134,8 +139,8 @@ export function HomeComposer(props: {
         canSubmit={canSubmit}
         placeholder={t("composer.placeholder")}
         value={props.prompt}
-        className="border-[#D8CDB9]/70 bg-[#F4EFE6]/92 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-        textareaClassName="!text-[#2A2620] placeholder:!text-[#8B8275]"
+        className="!p-3 border-[#D8CDB9]/70 bg-[#F4EFE6]/92 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+        textareaClassName="!h-[84px] !text-[#2A2620] placeholder:!text-[#8B8275]"
         footerClassName="pt-1"
         beforeTextarea={props.attachments.length > 0 ? (
           <div className="mb-4 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -280,7 +285,7 @@ function formatOutputDescription(option: OutputFormatOption, officeCliStatus: Of
   if (option.id !== "docx") return t(option.description as Parameters<typeof t>[0]);
   if (!officeCliStatus) return t("composer.checkingOfficeCli");
   if (officeCliStatus.installing) return t("composer.installingOfficeCli");
-  if (!officeCliStatus.available && officeCliStatus.reason) return officeCliStatus.reason;
+  if (!officeCliStatus.available) return t("composer.officeCliInstallRequired");
   return t(option.description as Parameters<typeof t>[0]);
 }
 

@@ -265,6 +265,8 @@ export class ProjectService {
       complete: async ({ generatedText }) => {
         if (!refreshedArtifact) await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
         const detail = await this.getProject(runtimeProject.id);
+        const currentRun = this.repo.getRun(runId);
+        if (currentRun && !["accepted", "running"].includes(currentRun.status)) return;
         const finalRun = this.repo.updateRun(runId, {
           status: "completed",
           resultPreview: previewText(generatedText || runPreview(detail.artifact.type, detail.pptxManifest)),
@@ -365,6 +367,7 @@ export class ProjectService {
   private async finalizeCancellation(runId: string, reason: string) {
     const run = this.repo.getRun(runId);
     if (!run) return null;
+    if (run.status === "cancelled") return { run };
     const finalRun = this.repo.updateRun(runId, { status: "cancelled", error: reason }) ?? run;
     this.events.emit({ type: "run.cancelled", projectId: run.projectId, runId, payload: { run: finalRun } });
     const assistantMessageId = this.runAssistantMessageIds.get(runId);
@@ -374,7 +377,6 @@ export class ProjectService {
         metadata: { status: "cancelled", runId },
       });
     }
-    this.cancelledRunIds.delete(runId);
     return { run: finalRun };
   }
 }

@@ -7,6 +7,7 @@
     "./app-shell": "./src/app-shell/index.tsx",
     "./editor-frame": "./src/editor-frame/index.tsx",
     "./office-preview-runtime": "./src/office-preview-runtime/index.ts",
+    "./persistent-selection-highlight": "./src/persistent-selection-highlight/index.ts",
     "./prompt-composer": "./src/prompt-composer/index.tsx",
     "./rich-text": "./src/rich-text/index.ts",
     "./toolbar": "./src/toolbar/index.tsx"

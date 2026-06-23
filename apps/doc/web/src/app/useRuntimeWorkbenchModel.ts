@@ -813,6 +813,7 @@ export function useRuntimeWorkbenchModel() {
     setError("");
     try {
       await cancelRun(runId);
+      await agentConversation.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       throw err;

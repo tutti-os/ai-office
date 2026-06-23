@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Clock3, FileCode2, FileText, Hash, History, Plus, Sparkles, Trash2, Upload } from "lucide-react";
-import type { DocumentProject, DocumentType, LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
+import { parseDocxDocumentManifest, type DocumentProject, type DocumentType, type LocalAgentProviderStatus, type OfficeCliStatus, type RuntimeProfile } from "@ai-doc/shared";
 import {
   allTemplatesLabel,
   type TuttiTemplate,
@@ -60,7 +60,7 @@ export function HomePage(props: {
         }}
       />
       <button
-        className="absolute right-7 top-7 z-20 flex h-9 items-center gap-2 rounded-full bg-[#F4EFE6] px-4 text-[12px] font-medium text-[#2A2620] shadow-[0_12px_10px_rgba(0,0,0,0.08)] transition hover:text-[#5C6B50] disabled:opacity-50"
+        className="absolute right-7 top-6 z-20 flex h-9 items-center gap-2 rounded-full bg-[#F4EFE6] px-4 text-[12px] font-medium text-[#2A2620] shadow-[0_12px_10px_rgba(0,0,0,0.08)] transition hover:text-[#5C6B50] disabled:opacity-50"
         type="button"
         disabled={props.loading}
         onClick={() => importInputRef.current?.click()}
@@ -70,12 +70,12 @@ export function HomePage(props: {
         {t("home.import")}
       </button>
 
-      <div className="mx-auto flex w-full max-w-[1220px] flex-col px-7 pb-16 pt-14">
+      <div className="mx-auto flex w-full max-w-[1220px] flex-col px-7 pb-16 pt-10">
         <section className="mx-auto flex w-full max-w-[820px] flex-col items-center">
-          <div className="mb-5 grid size-10 place-items-center rounded-full border border-[#B8A07C]/70 bg-[#F4EFE6]/82 text-[#5C6B50] shadow-[0_12px_10px_rgba(0,0,0,0.08)] backdrop-blur">
-            <Sparkles size={18} />
+          <div className="mb-4 grid size-9 place-items-center rounded-full border border-[#B8A07C]/70 bg-[#F4EFE6]/82 text-[#5C6B50] shadow-[0_12px_10px_rgba(0,0,0,0.08)] backdrop-blur">
+            <Sparkles size={16} />
           </div>
-          <h1 className="w-[calc(100vw-56px)] max-w-[1180px] whitespace-nowrap text-center text-[20px] font-semibold leading-6 text-[#2A2620] sm:text-[36px] sm:leading-10 md:text-[48px] md:leading-[52px] lg:text-[62px] lg:leading-[66px] xl:text-[68px] xl:leading-[72px]">
+          <h1 className="w-[calc(100vw-56px)] max-w-[1180px] whitespace-nowrap text-center text-[20px] font-semibold leading-6 text-[#2A2620] sm:text-[34px] sm:leading-[38px] md:text-[44px] md:leading-[48px] lg:text-[54px] lg:leading-[58px] xl:text-[58px] xl:leading-[62px]">
             {t("home.heading")}
           </h1>
 
@@ -100,7 +100,7 @@ export function HomePage(props: {
           />
         </section>
 
-        <section className="mt-10">
+        <section className="mt-6">
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="flex min-w-0 flex-col gap-2">
@@ -214,7 +214,7 @@ function TemplateMasonry(props: {
   if (items.length === 0) return null;
 
   return (
-    <div ref={containerRef} className="mt-5 flex items-start gap-5">
+    <div ref={containerRef} className="mt-4 flex items-start gap-5">
       {columns.map((column, index) => (
         <div key={index} className="flex min-w-0 flex-1 flex-col gap-7">
           {column.map((item) => item.kind === "blank"
@@ -337,6 +337,7 @@ function HistoryPanelActions(props: { loading: boolean; projectCount: number; on
 }
 
 function ProjectHistoryCard(props: { project: DocumentProject; onDelete: (projectId: string) => void; onOpen: (project: DocumentProject) => void }) {
+  const { t } = useI18n();
   return (
     <div className={`group ${historyCardClass()}`}>
       <button
@@ -348,10 +349,10 @@ function ProjectHistoryCard(props: { project: DocumentProject; onDelete: (projec
         <div className="pr-14">
           <div className="min-w-0">
             <div className="truncate text-[13px] font-medium text-[#2A2620]">{props.project.title}</div>
-            <div className="mt-1 truncate text-[11px] text-[#8B8275]">{props.project.templateName ?? "Blank doc"}</div>
+            <div className="mt-1 truncate text-[11px] text-[#8B8275]">{projectTypeLabel(props.project.type, t)}</div>
           </div>
         </div>
-        <p className="mt-4 line-clamp-2 text-[12px] leading-5 text-[#2A2620]/62">{projectPreview(props.project.content)}</p>
+        <p className="mt-4 line-clamp-2 text-[12px] leading-5 text-[#2A2620]/62">{projectPreview(props.project, t)}</p>
         <div className="mt-4 flex items-center gap-1.5 pr-9 text-[11px] text-[#8B8275]">
           <Clock3 size={12} />
           {formatProjectDate(props.project.updatedAt)}
@@ -377,6 +378,12 @@ function ProjectTypeIcon(props: { type: DocumentProject["type"] }) {
   if (props.type === "markdown") return <Hash size={15} />;
   if (props.type === "docx") return <FileText size={15} />;
   return <FileCode2 size={15} />;
+}
+
+function projectTypeLabel(type: DocumentProject["type"], t: ReturnType<typeof useI18n>["t"]) {
+  if (type === "markdown") return t("history.typeMarkdown");
+  if (type === "docx") return t("history.typeDocx");
+  return t("history.typeHtml");
 }
 
 function TemplateCard(props: { template: TuttiTemplate; onSelect: (template: TuttiTemplate) => void }) {
@@ -415,9 +422,28 @@ function TemplateCard(props: { template: TuttiTemplate; onSelect: (template: Tut
   );
 }
 
-function projectPreview(html: string) {
-  const text = html.replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  return text || "Empty doc";
+function projectPreview(project: DocumentProject, t: ReturnType<typeof useI18n>["t"]) {
+  if (project.type === "docx") {
+    const manifest = parseDocxDocumentManifest(project.content);
+    if (!manifest.sha256) return t("history.docxEmptyPreview");
+    return t("history.docxPreview", {
+      fileName: manifest.fileName,
+      size: formatFileSize(manifest.sizeBytes),
+    });
+  }
+  const text = project.content
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/[#*_`>\-[\]()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text || t("history.emptyPreview");
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(size < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function formatProjectDate(value: string) {

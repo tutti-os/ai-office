@@ -11,6 +11,7 @@
   "composer.deckDescription": "可编辑幻灯片运行时",
   "composer.pptxDescription": "传统 Office 格式",
   "composer.officeCliRequired": "PPTX 需要 OfficeCLI",
+  "composer.officeCliInstallRequired": "安装 OfficeCLI 后可使用",
   "composer.downloadOfficeCli": "下载 OfficeCLI",
   "composer.checkingOfficeCli": "正在检查 OfficeCLI",
   "composer.officeCliReady": "OfficeCLI 已就绪",

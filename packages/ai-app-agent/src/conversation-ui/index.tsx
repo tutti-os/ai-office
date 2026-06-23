@@ -57,9 +57,11 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
   props: AgentConversationPanelProps<TRun, TEvent>,
 ) {
   const [draft, setDraft] = useState("");
+  const [cancellingRunId, setCancellingRunId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const messages = useMemo(() => timelineToMessages(props.items), [props.items]);
   const activeRun = useMemo(() => props.items.find((item) => item.run.status === "accepted" || item.run.status === "running")?.run ?? null, [props.items]);
+  const cancellingActiveRun = Boolean(activeRun && cancellingRunId === activeRun.id);
   const cx = classes[props.variant];
   const showQuickPrompts = props.quickPromptsVisible === true && props.copy.quickPrompts.length > 0;
   const showActiveSelection = props.activeSelectionVisible ?? Boolean(props.activeSelectionText.trim());
@@ -78,6 +80,16 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
       await props.onSend(prompt);
     } catch {
       setDraft(prompt);
+    }
+  };
+
+  const cancelActiveRun = async () => {
+    if (!activeRun || !props.onCancel || cancellingActiveRun) return;
+    setCancellingRunId(activeRun.id);
+    try {
+      await props.onCancel(activeRun.id);
+    } finally {
+      setCancellingRunId((current) => (current === activeRun.id ? null : current));
     }
   };
 
@@ -157,8 +169,8 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
             )}
             <div className={cx.composerActions}>
               {activeRun && props.onCancel ? (
-                <button className={cx.cancelButton} type="button" aria-label="Stop agent" onClick={() => void props.onCancel?.(activeRun.id)}>
-                  <Square size={13} />
+                <button className={cx.cancelButton} type="button" aria-label="Stop agent" disabled={cancellingActiveRun} onClick={() => void cancelActiveRun()}>
+                  {cancellingActiveRun ? <Loader2 className={cx.spin} size={13} /> : <Square size={13} />}
                 </button>
               ) : null}
               <button className={cx.sendButton} type="button" disabled={!draft.trim() || props.sending} onClick={() => void submit()}>
@@ -410,7 +422,7 @@ const classes: Record<AgentConversationVariant, ConversationClassNames> = {
     agentSelectWrap: "relative min-w-0 max-w-[176px] shrink",
     agentSelect: "h-8 w-full min-w-[108px] appearance-none rounded-full border border-[#B8A07C]/50 bg-[#F4EFE6]/70 py-0 pl-3.5 pr-8 text-[12px] font-semibold text-[#2A2620]/78 outline-none transition hover:border-[#5C6B50]/50 hover:text-[#5C6B50] focus:border-[#5C6B50]/60 focus:ring-2 focus:ring-[#B8A07C]/35 disabled:cursor-default disabled:opacity-50",
     agentSelectChevron: "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#8B8275]",
-    cancelButton: "grid size-8 place-items-center rounded-full border border-[#B8A07C]/50 bg-[#F4EFE6] text-[#7b2e24] hover:border-[#7b2e24]/40",
+    cancelButton: "grid size-8 place-items-center rounded-full border border-[#B8A07C]/50 bg-[#F4EFE6] text-[#7b2e24] hover:border-[#7b2e24]/40 disabled:cursor-wait disabled:opacity-70",
     sendButton: "grid size-8 place-items-center rounded-full bg-[#2A2620] text-[#F4EFE6] disabled:bg-[#B8A07C]/32 disabled:text-[#8B8275]",
     userRow: "flex justify-end",
     userMessage: "max-w-[88%] rounded-[20px] rounded-tr-md bg-[#5C6B50] px-3 py-2 text-[12px] leading-5 text-[#F4EFE6]",
@@ -494,7 +506,7 @@ const classes: Record<AgentConversationVariant, ConversationClassNames> = {
     agentSelectWrap: "relative min-w-0 max-w-[176px] shrink",
     agentSelect: "h-8 w-full min-w-[108px] appearance-none rounded-full border border-white/12 bg-[#242424] py-0 pl-3.5 pr-8 text-[12px] font-bold text-white/78 outline-none transition hover:border-white/18 hover:bg-[#292929] focus:border-white/26 focus:ring-2 focus:ring-white/10 disabled:cursor-default disabled:opacity-50",
     agentSelectChevron: "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/46",
-    cancelButton: "grid size-8 place-items-center rounded-full border border-white/10 bg-[#3a241f] text-[#ffad9f] hover:bg-[#4a2a24]",
+    cancelButton: "grid size-8 place-items-center rounded-full border border-white/10 bg-[#3a241f] text-[#ffad9f] hover:bg-[#4a2a24] disabled:cursor-wait disabled:opacity-70",
     sendButton: "grid size-8 place-items-center rounded-full border-0 bg-white text-black disabled:cursor-default disabled:bg-white/20 disabled:text-white/40",
     userRow: "flex justify-end",
     userMessage: "max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-white px-3 py-2 text-[12px] leading-[1.65] text-[#1f1f1f]",

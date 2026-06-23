@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FileText } from "lucide-react";
 import { darkScrollbarClass } from "@ai-app/ui/app-shell";
+import {
+  clearPersistentSelectionHighlight,
+  persistentSelectionRectsForRange,
+  setPersistentSelectionHighlight,
+  type PersistentSelectionRect,
+} from "@ai-app/ui/persistent-selection-highlight";
 import { PptxRenderer } from "@tutti-os/office-preview/pptx";
 import "@tutti-os/office-preview/styles/pptx.css";
 import type { PptxRenderPresentation } from "@tutti-os/office-preview/pptx";
@@ -18,8 +24,11 @@ const filmstripClass = "flex min-h-32 min-w-0 shrink-0 items-center gap-3 overfl
 
 export function PptxPreview(props: PptxPreviewProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const activeSelectionRangeRef = useRef<Range | null>(null);
+  const activeSelectionRectsRef = useRef<PersistentSelectionRect[]>([]);
   const { ref: stageRef, width: stageWidth, height: stageHeight } = useElementSize<HTMLDivElement>();
   const [activeSlideId, setActiveSlideId] = useState<string | null>(null);
+  const [persistentSelectionRects, setPersistentSelectionRects] = useState<PersistentSelectionRect[]>([]);
   const { onSelectionChange } = props;
   const presentation = props.runtime.preview?.renderPresentation ?? null;
   const visibleSlides = useMemo(() => presentation?.slides.filter((slide) => !slide.hidden) ?? [], [presentation]);
@@ -51,25 +60,60 @@ export function PptxPreview(props: PptxPreviewProps) {
   const frameHeight = scaledHeight({ height: slideHeight, scale: slideScale });
   const pptxThumbnail = thumbnailMetrics({ height: slideHeight, width: slideWidth });
 
+  const preserveSelectionHighlight = useCallback(() => {
+    const range = activeSelectionRangeRef.current;
+    if (!range) return;
+    if (setPersistentSelectionHighlight(pptxPersistentSelectionHighlightName, range)) {
+      setPersistentSelectionRects([]);
+    } else {
+      setPersistentSelectionRects(activeSelectionRectsRef.current);
+    }
+  }, []);
+
+  const clearPersistentSelection = useCallback(() => {
+    clearPersistentSelectionHighlight(pptxPersistentSelectionHighlightName);
+    setPersistentSelectionRects([]);
+  }, []);
+
   const syncSelection = useCallback(() => {
     const root = rootRef.current;
     const selection = window.getSelection();
     if (!root || !selection || selection.rangeCount === 0) {
-      onSelectionChange({ selectedText: "" });
+      preserveSelectionHighlight();
       return;
     }
     const range = selection.getRangeAt(0);
     if (!root.contains(range.commonAncestorContainer)) {
-      onSelectionChange({ selectedText: "" });
+      preserveSelectionHighlight();
       return;
     }
-    onSelectionChange({ selectedText: selection.toString().trim() });
-  }, [onSelectionChange]);
+    const selectedText = selection.toString().trim();
+    clearPersistentSelection();
+    if (selectedText) {
+      const clonedRange = range.cloneRange();
+      activeSelectionRangeRef.current = clonedRange;
+      activeSelectionRectsRef.current = persistentSelectionRectsForRange(root, clonedRange);
+    } else {
+      activeSelectionRangeRef.current = null;
+      activeSelectionRectsRef.current = [];
+    }
+    onSelectionChange({ selectedText });
+  }, [clearPersistentSelection, onSelectionChange, preserveSelectionHighlight]);
 
   useEffect(() => {
     document.addEventListener("selectionchange", syncSelection);
     return () => document.removeEventListener("selectionchange", syncSelection);
   }, [syncSelection]);
+
+  useEffect(() => {
+    activeSelectionRangeRef.current = null;
+    activeSelectionRectsRef.current = [];
+    clearPersistentSelection();
+  }, [clearPersistentSelection, props.runtime.revision]);
+
+  useEffect(() => {
+    return clearPersistentSelection;
+  }, [clearPersistentSelection]);
 
   useEffect(() => {
     if (!visibleSlides.length) {
@@ -109,6 +153,7 @@ export function PptxPreview(props: PptxPreviewProps) {
           className="relative shrink-0 overflow-hidden rounded-[2px] border border-black/30 bg-white text-[#202124] shadow-[0_30px_90px_rgba(0,0,0,0.45)] [&_.tsh-pptx-document]:block [&_.tsh-pptx-slide]:shadow-none"
           style={currentPresentation ? { width: frameWidth, height: frameHeight } : undefined}
           onKeyUp={syncSelection}
+          onMouseDownCapture={clearPersistentSelection}
           onMouseUp={syncSelection}
         >
           {currentPresentation ? (
@@ -129,6 +174,7 @@ export function PptxPreview(props: PptxPreviewProps) {
               <span className="max-w-[380px] text-[12px] leading-5">The agent can create or update the canonical PowerPoint file in this project workspace.</span>
             </div>
           )}
+          <PersistentSelectionOverlay rects={persistentSelectionRects} />
         </div>
       </div>
       {presentation && visibleSlides.length > 0 ? (
@@ -155,6 +201,23 @@ export function PptxPreview(props: PptxPreviewProps) {
         />
       ) : null}
     </section>
+  );
+}
+
+const pptxPersistentSelectionHighlightName = "ai-agent-pptx-selection";
+
+function PersistentSelectionOverlay(props: { rects: PersistentSelectionRect[] }) {
+  if (props.rects.length === 0) return null;
+  return (
+    <div className="pointer-events-none absolute left-0 top-0 z-10" aria-hidden="true">
+      {props.rects.map((rect, index) => (
+        <span
+          key={`${index}:${rect.left}:${rect.top}:${rect.width}:${rect.height}`}
+          className="absolute rounded-[2px] bg-[#94A3B8]/35"
+          style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
+        />
+      ))}
+    </div>
   );
 }
 

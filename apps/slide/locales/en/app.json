@@ -11,6 +11,7 @@
   "composer.deckDescription": "Editable slide runtime",
   "composer.pptxDescription": "Traditional Office format",
   "composer.officeCliRequired": "OfficeCLI is required for PPTX",
+  "composer.officeCliInstallRequired": "Available after installing OfficeCLI",
   "composer.downloadOfficeCli": "Download OfficeCLI",
   "composer.checkingOfficeCli": "Checking OfficeCLI",
   "composer.officeCliReady": "OfficeCLI ready",

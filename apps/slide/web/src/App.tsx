@@ -416,6 +416,7 @@ export function App() {
     setError("");
     try {
       await cancelRun(runId);
+      await agentConversation.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       throw err;
@@ -461,12 +462,12 @@ export function App() {
   }
 
   return (
-    <main className={cn(appShell.page, "h-dvh px-3.5 pb-12 pt-14 font-sans md:px-7 md:pb-16")}>
+    <main className={cn(appShell.page, "h-dvh px-3.5 pb-12 pt-10 font-sans md:px-7 md:pb-16")}>
       <section className="mx-auto flex w-full max-w-[820px] flex-col items-center text-center">
-        <div className={appShell.heroIcon}>
-          <Sparkles size={18} />
+        <div className="mb-4 grid size-9 place-items-center rounded-full border border-[#B8A07C]/70 bg-[#F4EFE6]/82 text-[#5C6B50] shadow-[0_12px_10px_rgba(0,0,0,0.08)] backdrop-blur transition-colors">
+          <Sparkles size={16} />
         </div>
-        <h1 className={cn("m-0", appShell.heroTitle)}>{t("home.heading")}</h1>
+        <h1 className="m-0 w-[calc(100vw-56px)] max-w-[1180px] whitespace-nowrap text-center text-[20px] font-semibold leading-6 text-[#2A2620] sm:text-[34px] sm:leading-[38px] md:text-[44px] md:leading-[48px] lg:text-[54px] lg:leading-[58px] xl:text-[58px] xl:leading-[62px]">{t("home.heading")}</h1>
         <HomeComposer
           creating={creating}
           officeCliInstalling={officeCliInstalling}
@@ -485,7 +486,7 @@ export function App() {
         {error ? <div className={appShell.error}>{error}</div> : null}
       </section>
 
-      <section className="mx-auto mt-10 w-full max-w-[1180px]">
+      <section className="mx-auto mt-6 w-full max-w-[1180px]">
         <div className="flex flex-col items-stretch justify-between gap-4 md:flex-row md:items-end">
           <div className="flex min-w-0 flex-col gap-2">
             <div className="flex items-center gap-2" aria-label="Home panels">
