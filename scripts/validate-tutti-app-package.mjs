@@ -63,6 +63,11 @@ function validateCliManifest(manifest) {
     if (!command.summary || !command.description || command.inputSchema?.type !== "object") {
       errors.push(`CLI command ${commandPath || "<unknown>"} is missing summary, description, or inputSchema`);
     }
+    for (const propertyKey of Object.keys(command.inputSchema?.properties ?? {})) {
+      if (!/^[a-z0-9-]+$/.test(propertyKey)) {
+        errors.push(`CLI command ${commandPath || "<unknown>"} input property ${propertyKey} must use lowercase letters, numbers, and hyphen only`);
+      }
+    }
     if (command.handler?.kind !== "http" || command.handler?.method !== "POST" || !command.handler?.path?.startsWith("/tutti/cli/")) {
       errors.push(`CLI command ${commandPath || "<unknown>"} must use an HTTP POST /tutti/cli handler`);
     }

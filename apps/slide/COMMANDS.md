@@ -17,6 +17,6 @@ Lists recent slide projects. Optional input:
 Creates a new presentation project. Inputs:
 
 - `title`: optional project title.
-- `artifactType`: `deck` or `pptx`; defaults to `deck`.
+- `artifact-type`: `deck` or `pptx`; defaults to `deck`.
 
 The command returns the created project and artifact as JSON.

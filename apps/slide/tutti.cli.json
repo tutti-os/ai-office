@@ -67,7 +67,7 @@
             "type": "string",
             "description": "Project title."
           },
-          "artifactType": {
+          "artifact-type": {
             "type": "string",
             "description": "Artifact type: deck or pptx."
           }

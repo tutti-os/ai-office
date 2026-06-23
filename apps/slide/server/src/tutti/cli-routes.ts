@@ -40,7 +40,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
 
   server.post<{ Body: CliInvokeEnvelope | Record<string, unknown> }>("/tutti/cli/create", async (request, reply) => {
     const input = commandInput(request.body);
-    const artifactType = normalizeArtifactType(input.artifactType);
+    const artifactType = normalizeArtifactType(input["artifact-type"] ?? input.artifactType);
     if (!artifactType) return sendCliError(reply, 400, "invalid_input", "artifactType must be deck or pptx");
     const result = await projects.createProject({
       title: typeof input.title === "string" ? input.title : undefined,
