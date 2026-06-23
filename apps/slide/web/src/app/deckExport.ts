@@ -1,4 +1,5 @@
 import { exportPptxFromIframes } from "@tutti-os/office-export";
+import { assetPathFromRelativeUrl, rewriteAssetReferencesInElement } from "@ai-app/shared/artifact-assets";
 import { deckSlideDisplayName, pptxMimeType, type DeckManifest, type DeckManifestSlide, type SlideArtifact } from "@ai-slide/shared";
 import { writeProjectExport } from "../api/projects";
 import { projectAssetUrl } from "./deckEditorDom";
@@ -46,25 +47,34 @@ export async function saveDeckPdfExport(input: {
   projectId: string;
   title: string;
 }) {
-  const bytes = await printHtmlToPdfWithTutti({
-    baseUrl: `${window.location.origin}/`,
-    html: deckPdfPrintHtml(input),
-    margin: {
-      top: "0px",
-      right: "0px",
-      bottom: "0px",
-      left: "0px",
-    },
-    pageSize: slidePdfPageSize,
-    preferCSSPageSize: true,
-    printBackground: true,
-    title: input.title || "Untitled Presentation",
+  const frames = await createExportFrames({
+    artifact: input.artifact,
+    manifest: input.manifest,
+    projectId: input.projectId,
   });
-  return writeProjectExport(input.projectId, {
-    fileName: `${safeExportFileName(input.title || "slides")}.pdf`,
-    mimeType: pdfMimeType,
-    content: bytes,
-  });
+  try {
+    const bytes = await printHtmlToPdfWithTutti({
+      baseUrl: `${window.location.origin}/`,
+      html: deckPdfPrintHtml({ ...input, frames }),
+      margin: {
+        top: "0px",
+        right: "0px",
+        bottom: "0px",
+        left: "0px",
+      },
+      pageSize: slidePdfPageSize,
+      preferCSSPageSize: true,
+      printBackground: true,
+      title: input.title || "Untitled Presentation",
+    });
+    return writeProjectExport(input.projectId, {
+      fileName: `${safeExportFileName(input.title || "slides")}.pdf`,
+      mimeType: pdfMimeType,
+      content: bytes,
+    });
+  } finally {
+    for (const frame of frames) frame.remove();
+  }
 }
 
 async function createExportFrames(input: { artifact: SlideArtifact; manifest: DeckManifest; projectId: string }) {
@@ -135,6 +145,7 @@ function waitForFrameLoad(frame: HTMLIFrameElement) {
 
 function deckPdfPrintHtml(input: {
   artifact: SlideArtifact;
+  frames: HTMLIFrameElement[];
   manifest: DeckManifest;
   projectId: string;
   title: string;
@@ -144,8 +155,15 @@ function deckPdfPrintHtml(input: {
   const slideScale = Math.min(pageWidthPx / input.manifest.canvas.width, pageHeightPx / input.manifest.canvas.height);
   const pages = input.manifest.slides
     .map((slide, index) => {
-      const src = projectAssetUrl(input.projectId, input.artifact.fileRef, slide.file, input.artifact.revision);
-      return `<section class="ai-slide-pdf-page" aria-label="${escapeHtml(deckSlideDisplayName(slide, index))}"><iframe src="${escapeHtml(src)}"></iframe></section>`;
+      const frame = input.frames[index];
+      if (!frame?.contentDocument) throw new Error(`Unable to read slide ${index + 1} for PDF export`);
+      return deckPdfPageHtml({
+        artifact: input.artifact,
+        frame,
+        index,
+        projectId: input.projectId,
+        slide,
+      });
     })
     .join("\n");
   return `<!DOCTYPE html>
@@ -182,14 +200,15 @@ function deckPdfPrintHtml(input: {
       page-break-after: auto;
     }
 
-    .ai-slide-pdf-page iframe {
+    .ai-slide-pdf-canvas {
       display: block;
       width: ${input.manifest.canvas.width}px;
       height: ${input.manifest.canvas.height}px;
-      border: 0;
       margin: 0;
       padding: 0;
       background: #fff;
+      overflow: hidden;
+      position: relative;
       transform: scale(${slideScale});
       transform-origin: 0 0;
     }
@@ -199,6 +218,73 @@ function deckPdfPrintHtml(input: {
 ${pages}
 </body>
 </html>`;
+}
+
+function deckPdfPageHtml(input: {
+  artifact: SlideArtifact;
+  frame: HTMLIFrameElement;
+  index: number;
+  projectId: string;
+  slide: DeckManifestSlide;
+}) {
+  const sourceDocument = input.frame.contentDocument;
+  if (!sourceDocument) throw new Error(`Unable to read ${deckSlideDisplayName(input.slide, input.index)} for PDF export`);
+  const html = sourceDocument.documentElement.cloneNode(true) as HTMLElement;
+  absolutizeDeckSlideAssetReferences(html, input);
+  const head = html.querySelector("head");
+  const body = html.querySelector("body");
+  const headAssets = Array.from(head?.querySelectorAll("style, link[rel='stylesheet'], link[rel~='stylesheet']") ?? [])
+    .map((element) => element.outerHTML)
+    .join("\n");
+  const bodyClass = body?.getAttribute("class") ?? "";
+  const canvasStyle = [body?.getAttribute("style") ?? "", pdfCanvasInheritedStyle(sourceDocument)].filter(Boolean).join("; ");
+  return `<section class="ai-slide-pdf-page" aria-label="${escapeHtml(deckSlideDisplayName(input.slide, input.index))}">
+  <div class="ai-slide-pdf-canvas ${escapeHtml(bodyClass)}" style="${escapeHtml(canvasStyle)}">
+${headAssets}
+${body?.innerHTML ?? ""}
+  </div>
+</section>`;
+}
+
+function pdfCanvasInheritedStyle(sourceDocument: Document) {
+  const win = sourceDocument.defaultView;
+  if (!win || !sourceDocument.body) return "";
+  const bodyStyle = win.getComputedStyle(sourceDocument.body);
+  const htmlStyle = sourceDocument.documentElement ? win.getComputedStyle(sourceDocument.documentElement) : null;
+  const backgroundSource = bodyStyle.backgroundImage !== "none" || bodyStyle.backgroundColor !== "rgba(0, 0, 0, 0)"
+    ? bodyStyle
+    : htmlStyle;
+  return [
+    cssDeclaration("background-color", backgroundSource?.backgroundColor),
+    cssDeclaration("background-image", backgroundSource?.backgroundImage, "none"),
+    cssDeclaration("background-position", backgroundSource?.backgroundPosition),
+    cssDeclaration("background-size", backgroundSource?.backgroundSize),
+    cssDeclaration("background-repeat", backgroundSource?.backgroundRepeat),
+    cssDeclaration("color", bodyStyle.color),
+    cssDeclaration("font-family", bodyStyle.fontFamily),
+  ].filter(Boolean).join("; ");
+}
+
+function cssDeclaration(property: string, value: string | undefined, emptyValue = "") {
+  return value && value !== emptyValue ? `${property}: ${value}` : "";
+}
+
+function absolutizeDeckSlideAssetReferences(
+  root: ParentNode,
+  input: {
+    artifact: SlideArtifact;
+    projectId: string;
+  },
+) {
+  rewriteAssetReferencesInElement(root, (url) => {
+    if (url.startsWith("/local-assets/")) return new URL(url, window.location.origin).href;
+    const assetPath = assetPathFromRelativeUrl(url, ["../assets/", "./assets/", "assets/"]);
+    if (!assetPath) return null;
+    return new URL(
+      projectAssetUrl(input.projectId, input.artifact.fileRef, `assets/${assetPath}`, input.artifact.revision),
+      window.location.origin,
+    ).href;
+  });
 }
 
 function safeExportFileName(value: string) {
