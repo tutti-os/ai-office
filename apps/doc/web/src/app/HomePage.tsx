@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Clock3, FileCode2, FileText, Hash, History, Plus, Sparkles, Trash2, Upload } from "lucide-react";
+import { Clock3, FileCode2, FileText, Hash, History, Plus, Trash2, Upload } from "lucide-react";
 import { parseDocxDocumentManifest, type DocumentProject, type DocumentType, type LocalAgentProviderStatus, type OfficeCliStatus, type RuntimeProfile } from "@ai-doc/shared";
 import {
   allTemplatesLabel,
@@ -72,9 +72,6 @@ export function HomePage(props: {
 
       <div className="mx-auto flex w-full max-w-[1220px] flex-col px-7 pb-16 pt-10">
         <section className="mx-auto flex w-full max-w-[820px] flex-col items-center">
-          <div className="mb-4 grid size-9 place-items-center rounded-full border border-[#B8A07C]/70 bg-[#F4EFE6]/82 text-[#5C6B50] shadow-[0_12px_10px_rgba(0,0,0,0.08)] backdrop-blur">
-            <Sparkles size={16} />
-          </div>
           <h1 className="w-[calc(100vw-56px)] max-w-[1180px] whitespace-nowrap text-center text-[20px] font-semibold leading-6 text-[#2A2620] sm:text-[34px] sm:leading-[38px] md:text-[44px] md:leading-[48px] lg:text-[54px] lg:leading-[58px] xl:text-[58px] xl:leading-[62px]">
             {t("home.heading")}
           </h1>
