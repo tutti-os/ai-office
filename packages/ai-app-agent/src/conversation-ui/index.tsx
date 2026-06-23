@@ -11,7 +11,7 @@ import {
   WandSparkles,
   XCircle,
 } from "lucide-react";
-import type { BaseRun, BaseRunEvent, BaseRunTimelineItem } from "@ai-app/shared/types";
+import type { BaseRun, BaseRunEvent, BaseRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { timelineToMessages, type AgentConversationBlock, type AgentConversationMessage } from "@ai-app/agent/conversation";
 import { MarkdownText } from "./markdown.js";
 import { ToolGroupBlock } from "./toolGroup.js";
@@ -52,6 +52,49 @@ export type AgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent e
   onCancel?: (runId: string) => Promise<void>;
   onSend: (prompt: string) => Promise<void>;
 };
+
+export type ArtifactAgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent extends BaseRunEvent = BaseRunEvent> =
+  Omit<AgentConversationPanelProps<TRun, TEvent>, "agentOptions" | "copy" | "onAgentChange" | "selectedAgentId" | "variant"> & {
+    copy: AgentConversationCopy;
+    formatUnavailableRuntimeProfileLabel?: (profile: RuntimeProfile, provider: LocalAgentProviderStatus | null) => string;
+    localAgentProviders?: LocalAgentProviderStatus[];
+    runtimeProfiles?: RuntimeProfile[];
+    selectedRuntimeProfileId?: string;
+    onRuntimeProfileChange?: (profileId: string) => void;
+  };
+
+export function ArtifactAgentConversationPanel<TRun extends BaseRun, TEvent extends BaseRunEvent>(
+  props: ArtifactAgentConversationPanelProps<TRun, TEvent>,
+) {
+  const {
+    formatUnavailableRuntimeProfileLabel,
+    localAgentProviders = [],
+    runtimeProfiles = [],
+    selectedRuntimeProfileId,
+    onRuntimeProfileChange,
+    ...panelProps
+  } = props;
+  const agentOptions = runtimeProfiles.map((profile) => {
+    const provider = profile.kind === "local-agent" ? localAgentProviders.find((item) => item.provider === profile.provider) ?? null : null;
+    return {
+      id: profile.id,
+      label: !provider || provider.available
+        ? profile.displayName
+        : formatUnavailableRuntimeProfileLabel?.(profile, provider) ?? `${profile.displayName} (${provider.authState})`,
+      disabled: provider ? !provider.available : false,
+    };
+  });
+
+  return (
+    <AgentConversationPanel<TRun, TEvent>
+      {...panelProps}
+      agentOptions={agentOptions.length ? agentOptions : undefined}
+      selectedAgentId={selectedRuntimeProfileId}
+      variant="document"
+      onAgentChange={onRuntimeProfileChange}
+    />
+  );
+}
 
 export function AgentConversationPanel<TRun extends BaseRun, TEvent extends BaseRunEvent>(
   props: AgentConversationPanelProps<TRun, TEvent>,

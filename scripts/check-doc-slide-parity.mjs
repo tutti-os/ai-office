@@ -34,6 +34,9 @@ for (const app of ["doc", "slide", "sheet"]) {
   for (const dir of ["shared/src", "server/src/artifact", "server/src/local", "web/src/app", "web/src/artifact", "web/src/api"]) {
     if (!existsSync(join(root, "apps", app, dir))) fail(`apps/${app}/${dir} is missing`);
   }
+  for (const file of ["COMMANDS.md", "tutti.cli.json"]) {
+    if (!existsSync(join(root, "apps", app, file))) fail(`apps/${app}/${file} is missing`);
+  }
 }
 
 for (const path of ["apps/doc/bootstrap.sh", "apps/slide/bootstrap.sh", "apps/sheet/bootstrap.sh"]) {
@@ -80,6 +83,18 @@ if (docManifest.references && !slideManifest.references) warn("AI Slide does not
 if (docManifest.cli && !sheetManifest.cli) warn("AI Sheet does not expose a Tutti CLI manifest yet.");
 if (docManifest.references && !sheetManifest.references) warn("AI Sheet does not expose Tutti reference endpoints yet.");
 
+for (const [app, scope] of [["doc", "doc"], ["slide", "slide"], ["sheet", "sheet"]]) {
+  const cliManifest = json(`apps/${app}/tutti.cli.json`);
+  if (cliManifest.scope !== scope) fail(`apps/${app}/tutti.cli.json must use scope ${scope}`);
+  for (const command of ["status", "list-projects", "create"]) {
+    if (!cliManifest.commands?.some((item) => item.path?.[0] === command)) {
+      fail(`apps/${app}/tutti.cli.json is missing ${command}`);
+    }
+  }
+  expectIncludes(`apps/${app}/server/src/main.ts`, "registerTuttiCliRoutes", "Tutti CLI route registration");
+  expectIncludes(`apps/${app}/server/src/main.ts`, "registerTuttiReferenceRoutes", "Tutti reference route registration");
+}
+
 if (warnings.length) {
   console.log("Parity warnings:");
   for (const item of warnings) console.log(`- ${item}`);
@@ -91,4 +106,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Doc/slide parity check passed.");
+console.log("Doc/slide/sheet parity check passed.");

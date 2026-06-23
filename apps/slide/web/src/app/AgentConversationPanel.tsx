@@ -1,4 +1,4 @@
-import { AgentConversationPanel as SharedAgentConversationPanel } from "@ai-app/agent/conversation-ui";
+import { ArtifactAgentConversationPanel } from "@ai-app/agent/conversation-ui";
 import type { ArtifactEditorKind } from "@ai-app/ui/editor-frame";
 import type { LocalAgentProviderStatus, RuntimeProfile, SlideRun, SlideRunEvent, SlideRunTimelineItem } from "@ai-slide/shared";
 
@@ -23,19 +23,8 @@ type AgentConversationPanelProps = {
 
 export function AgentConversationPanel(props: AgentConversationPanelProps) {
   return (
-    <SharedAgentConversationPanel<SlideRun, SlideRunEvent>
+    <ArtifactAgentConversationPanel<SlideRun, SlideRunEvent>
       {...props}
-      agentOptions={props.runtimeProfiles.map((profile) => {
-        const status = profile.kind === "local-agent" ? props.localAgentProviders.find((provider) => provider.provider === profile.provider) : null;
-        const available = status?.available ?? true;
-        return {
-          id: profile.id,
-          label: available ? profile.displayName : `${profile.displayName} unavailable`,
-          disabled: !available,
-        };
-      })}
-      selectedAgentId={props.selectedAgent}
-      variant="document"
       copy={{
         homeLabel: "AI Slide",
         introTitle: "AI Slides Agent",
@@ -43,7 +32,9 @@ export function AgentConversationPanel(props: AgentConversationPanelProps) {
         placeholder: "Ask AI to edit this deck...",
         quickPrompts: ["Rewrite slide", "Add speaker notes", "Polish story", "Tighten visuals"],
       }}
-      onAgentChange={props.onSelectedAgentChange}
+      formatUnavailableRuntimeProfileLabel={(profile) => `${profile.displayName} unavailable`}
+      selectedRuntimeProfileId={props.selectedAgent}
+      onRuntimeProfileChange={props.onSelectedAgentChange}
     />
   );
 }

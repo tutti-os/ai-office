@@ -3,7 +3,7 @@
   "appId": "ai-sheet",
   "version": "0.1.0",
   "name": "AI Sheet",
-  "description": "Local spreadsheet workbooks displayed with AI-ready project structure.",
+  "description": "Local spreadsheet workbooks rendered as first-class XLSX artifacts.",
   "icon": {
     "type": "asset",
     "src": "icon.svg"
@@ -11,6 +11,13 @@
   "runtime": {
     "bootstrap": "bootstrap.sh",
     "healthcheckPath": "/api/health"
+  },
+  "cli": {
+    "manifest": "tutti.cli.json"
+  },
+  "references": {
+    "listEndpoint": "/tutti/references/list",
+    "searchEndpoint": "/tutti/references/search"
   },
   "window": {
     "minimizeBehavior": "keep-mounted",
@@ -29,5 +36,5 @@
   "author": {
     "name": "Tutti"
   },
-  "tags": ["local-first", "sheet", "xlsx", "viewer"]
+  "tags": ["local-first", "sheet", "xlsx", "workbook"]
 }

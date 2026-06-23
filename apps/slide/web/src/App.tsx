@@ -14,7 +14,7 @@ import { DeckArtifactRuntimeAdapter, type DeckAgentRuntimeProvider } from "./art
 import { PptxArtifactRuntimeAdapter } from "./artifact/pptxArtifactAdapter";
 import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
 import { useI18n } from "./i18n";
-import { appShell, homePanelButtonClass } from "@ai-app/ui/app-shell";
+import { appShell, HomePanelToggle, HomePageShell, homeTitleClass } from "@ai-app/ui/app-shell";
 import type { ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { editableArtifactInteraction, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
 import type { LocalAgentProviderStatus, OfficeCliStatus, ProjectDetailResponse, RuntimeProfile, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
@@ -461,9 +461,9 @@ export function App() {
   }
 
   return (
-    <main className={cn(appShell.page, "h-dvh px-3.5 pb-12 pt-10 font-sans md:px-7 md:pb-16")}>
+    <HomePageShell className="h-dvh px-3.5 pb-12 pt-10 font-sans md:px-7 md:pb-16">
       <section className="mx-auto flex w-full max-w-[820px] flex-col items-center text-center">
-        <h1 className="m-0 w-[calc(100vw-56px)] max-w-[1180px] whitespace-nowrap text-center text-[20px] font-semibold leading-6 text-[#2A2620] sm:text-[34px] sm:leading-[38px] md:text-[44px] md:leading-[48px] lg:text-[54px] lg:leading-[58px] xl:text-[58px] xl:leading-[62px]">{t("home.heading")}</h1>
+        <h1 className={cn("m-0", homeTitleClass)}>{t("home.heading")}</h1>
         <HomeComposer
           creating={creating}
           officeCliInstalling={officeCliInstalling}
@@ -486,14 +486,8 @@ export function App() {
         <div className="flex flex-col items-stretch justify-between gap-4 md:flex-row md:items-end">
           <div className="flex min-w-0 flex-col gap-2">
             <div className="flex items-center gap-2" aria-label="Home panels">
-              <button className={homePanelButtonClass(activePanel === "templates")} type="button" onClick={() => setActivePanel("templates")}>
-                <Layers3 size={15} />
-                {t("home.templates")}
-              </button>
-              <button className={homePanelButtonClass(activePanel === "history")} type="button" onClick={() => setActivePanel("history")}>
-                <History size={15} />
-                {t("home.history")}
-              </button>
+              <HomePanelToggle active={activePanel === "templates"} icon={<Layers3 size={15} />} label={t("home.templates")} onClick={() => setActivePanel("templates")} />
+              <HomePanelToggle active={activePanel === "history"} icon={<History size={15} />} label={t("home.history")} onClick={() => setActivePanel("history")} />
             </div>
             <div className={appShell.countText}>
               {activePanel === "templates"
@@ -555,7 +549,7 @@ export function App() {
           onUseTemplate={createFromTemplate}
         />
       ) : null}
-    </main>
+    </HomePageShell>
   );
 }
 

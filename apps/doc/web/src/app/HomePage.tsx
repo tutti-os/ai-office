@@ -1,11 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Clock3, FileCode2, FileText, Hash, History, Plus, Trash2, Upload } from "lucide-react";
+import { FileCode2, FileText, Hash, History, Plus, Upload } from "lucide-react";
 import { parseDocxDocumentManifest, type DocumentProject, type DocumentType, type LocalAgentProviderStatus, type OfficeCliStatus, type RuntimeProfile } from "@ai-doc/shared";
 import {
   allTemplatesLabel,
   type TuttiTemplate,
 } from "../templates/tuttiTemplates";
-import { historyActionsClass, historyCardClass, historyClearButtonClass, historyDeleteButtonClass, historyEmptyIconClass, historyEmptyStateClass, scrollbarClass } from "@ai-app/ui/app-shell";
+import {
+  ArtifactHistoryPanel,
+  homeContentClass,
+  HomeCategoryPill,
+  homeHeroSectionClass,
+  HomePageShell,
+  HomePanelToggle,
+  homeTitleClass,
+  HomeTopAction,
+  homeWorkSectionClass,
+} from "@ai-app/ui/app-shell";
 import { HomeComposer } from "./HomeComposer";
 import { useI18n } from "../i18n";
 import type { HomeAttachment } from "./useHomeAttachments";
@@ -47,7 +57,7 @@ export function HomePage(props: {
   const { t } = useI18n();
 
   return (
-    <div className={`relative h-full overflow-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] ${scrollbarClass}`}>
+    <HomePageShell>
       <input
         ref={importInputRef}
         className="hidden"
@@ -59,22 +69,18 @@ export function HomePage(props: {
           if (file) props.onImportFile(file);
         }}
       />
-      <button
-        className="absolute right-7 top-6 z-20 flex h-9 items-center gap-2 rounded-full bg-[#F4EFE6] px-4 text-[12px] font-medium text-[#2A2620] shadow-[0_12px_10px_rgba(0,0,0,0.08)] transition hover:text-[#5C6B50] disabled:opacity-50"
-        type="button"
+      <HomeTopAction
         disabled={props.loading}
-        onClick={() => importInputRef.current?.click()}
+        icon={<Upload size={14} />}
         title={t("home.importTitle")}
+        onClick={() => importInputRef.current?.click()}
       >
-        <Upload size={14} />
         {t("home.import")}
-      </button>
+      </HomeTopAction>
 
-      <div className="mx-auto flex w-full max-w-[1220px] flex-col px-7 pb-16 pt-10">
-        <section className="mx-auto flex w-full max-w-[820px] flex-col items-center">
-          <h1 className="w-[calc(100vw-56px)] max-w-[1180px] whitespace-nowrap text-center text-[20px] font-semibold leading-6 text-[#2A2620] sm:text-[34px] sm:leading-[38px] md:text-[44px] md:leading-[48px] lg:text-[54px] lg:leading-[58px] xl:text-[58px] xl:leading-[62px]">
-            {t("home.heading")}
-          </h1>
+      <div className={homeContentClass}>
+        <section className={homeHeroSectionClass}>
+          <h1 className={homeTitleClass}>{t("home.heading")}</h1>
 
           <HomeComposer
             attachments={props.attachments}
@@ -97,13 +103,13 @@ export function HomePage(props: {
           />
         </section>
 
-        <section className="mt-6">
+        <section className={homeWorkSectionClass}>
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="flex min-w-0 flex-col gap-2">
                 <div className="flex items-center gap-2">
-                  <HomePanelButton active={props.activePanel === "templates"} kind="templates" onClick={() => props.onActivePanelChange("templates")} />
-                  <HomePanelButton active={props.activePanel === "history"} kind="history" onClick={() => props.onActivePanelChange("history")} />
+                  <HomePanelToggle active={props.activePanel === "templates"} icon={<FileText size={15} />} label={t("home.templates")} onClick={() => props.onActivePanelChange("templates")} />
+                  <HomePanelToggle active={props.activePanel === "history"} icon={<History size={15} />} label={t("home.history")} onClick={() => props.onActivePanelChange("history")} />
                 </div>
                 <div className="text-[12px] font-medium text-[#8B8275]">
                   {props.activePanel === "templates"
@@ -120,17 +126,13 @@ export function HomePage(props: {
                   const active = item === props.selectedCategory;
                   const count = props.templateCounts[item] ?? 0;
                   return (
-                    <button
+                    <HomeCategoryPill
                       key={item}
-                      className={`h-8 shrink-0 rounded-full px-4 text-[12px] font-medium transition ${
-                        active ? "bg-[#5C6B50] text-[#F4EFE6] shadow-[0_12px_10px_rgba(0,0,0,0.08)]" : "border border-[#B8A07C]/55 bg-[#F4EFE6]/50 text-[#2A2620]/72 hover:border-[#5C6B50]/50 hover:text-[#5C6B50]"
-                      }`}
-                      type="button"
+                      active={active}
+                      count={count}
+                      label={item}
                       onClick={() => props.onCategoryChange(item)}
-                    >
-                      {item}
-                      <span className={active ? "ml-2 text-[#F4EFE6]/58" : "ml-2 text-[#8B8275]"}>{count}</span>
-                    </button>
+                    />
                   );
                 })}
               </div>
@@ -155,7 +157,7 @@ export function HomePage(props: {
           )}
         </section>
       </div>
-    </div>
+    </HomePageShell>
   );
 }
 
@@ -263,23 +265,6 @@ function BlankTemplateCard(props: { onCreate: () => void }) {
   );
 }
 
-function HomePanelButton(props: { active: boolean; kind: "templates" | "history"; onClick: () => void }) {
-  const { t } = useI18n();
-  const Icon = props.kind === "templates" ? FileText : History;
-  return (
-    <button
-      className={`flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-medium transition ${
-        props.active ? "bg-[#2A2620] text-[#F4EFE6]" : "border border-[#B8A07C]/55 bg-[#F4EFE6]/44 text-[#2A2620]/68 hover:text-[#5C6B50]"
-      }`}
-      type="button"
-      onClick={props.onClick}
-    >
-      <Icon size={15} />
-      {props.kind === "templates" ? t("home.templates") : t("home.history")}
-    </button>
-  );
-}
-
 function ProjectHistory(props: {
   loading: boolean;
   projects: DocumentProject[];
@@ -287,87 +272,24 @@ function ProjectHistory(props: {
   onDeleteProject: (projectId: string) => void;
   onOpenProject: (project: DocumentProject) => void;
 }) {
-  if (props.projects.length === 0) {
-    return (
-      <div className="mt-5">
-        <HistoryPanelActions loading={props.loading} projectCount={props.projects.length} onClearHistory={props.onClearHistory} />
-        <div className={`mt-3 px-6 ${historyEmptyStateClass}`}>
-          <div>
-            <div className={`mx-auto mb-3 ${historyEmptyIconClass}`}>
-              <History size={17} />
-            </div>
-            <div className="text-[13px] font-medium text-[#2A2620]">No history yet</div>
-            <div className="mt-1 text-[12px] text-[#8B8275]">Create a doc or open a template to see it here.</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-5">
-      <HistoryPanelActions loading={props.loading} projectCount={props.projects.length} onClearHistory={props.onClearHistory} />
-      <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-4">
-        {props.projects.map((project) => (
-          <ProjectHistoryCard key={project.id} project={project} onDelete={props.onDeleteProject} onOpen={props.onOpenProject} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function HistoryPanelActions(props: { loading: boolean; projectCount: number; onClearHistory: () => void }) {
-  return (
-    <div className={historyActionsClass}>
-      <button
-        className={historyClearButtonClass}
-        type="button"
-        disabled={props.loading || props.projectCount === 0}
-        onClick={props.onClearHistory}
-        title="Clear history"
-      >
-        <Trash2 size={13} />
-        Clear history
-      </button>
-    </div>
-  );
-}
-
-function ProjectHistoryCard(props: { project: DocumentProject; onDelete: (projectId: string) => void; onOpen: (project: DocumentProject) => void }) {
   const { t } = useI18n();
   return (
-    <div className={`group ${historyCardClass()}`}>
-      <button
-        aria-label={`Open ${props.project.title}`}
-        className="block h-full min-h-[132px] w-full rounded-[20px] p-4 text-left"
-        type="button"
-        onClick={() => props.onOpen(props.project)}
-      >
-        <div className="pr-14">
-          <div className="min-w-0">
-            <div className="truncate text-[13px] font-medium text-[#2A2620]">{props.project.title}</div>
-            <div className="mt-1 truncate text-[11px] text-[#8B8275]">{projectTypeLabel(props.project.type, t)}</div>
-          </div>
-        </div>
-        <p className="mt-4 line-clamp-2 text-[12px] leading-5 text-[#2A2620]/62">{projectPreview(props.project, t)}</p>
-        <div className="mt-4 flex items-center gap-1.5 pr-9 text-[11px] text-[#8B8275]">
-          <Clock3 size={12} />
-          {formatProjectDate(props.project.updatedAt)}
-        </div>
-      </button>
-      <div className="absolute right-3 top-3 grid size-8 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]">
-        <ProjectTypeIcon type={props.project.type} />
-      </div>
-      <button
-        aria-label={`Delete ${props.project.title}`}
-        className={historyDeleteButtonClass}
-        type="button"
-        title="Delete project"
-        onClick={() => props.onDelete(props.project.id)}
-      >
-        <Trash2 size={13} />
-      </button>
-    </div>
+    <ArtifactHistoryPanel
+      emptyDescription="Create a doc or open a template to see it here."
+      emptyIcon={<History size={17} />}
+      emptyTitle="No history yet"
+      getId={(project) => project.id}
+      getPreview={(project) => projectPreview(project, t)}
+      getSubtitle={(project) => projectTypeLabel(project.type, t)}
+      getTitle={(project) => project.title}
+      getUpdatedAt={(project) => project.updatedAt}
+      icon={(project) => <ProjectTypeIcon type={project.type} />}
+      loading={props.loading}
+      projects={props.projects}
+      onClearHistory={props.onClearHistory}
+      onDeleteProject={props.onDeleteProject}
+      onOpenProject={props.onOpenProject}
+    />
   );
 }
 
@@ -441,15 +363,4 @@ function formatFileSize(size: number) {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(size < 10 * 1024 ? 1 : 0)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function formatProjectDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown date";
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
 }

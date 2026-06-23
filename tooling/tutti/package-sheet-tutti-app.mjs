@@ -23,6 +23,7 @@ export AI_SHEET_HOME="\${TUTTI_APP_DATA_DIR:-$package_dir/.data}"
 export AI_SHEET_RUNTIME_ROOT="\${TUTTI_APP_RUNTIME_DIR:-$AI_SHEET_HOME/.runtime}"
 export AI_SHEET_LOG_ROOT="\${TUTTI_APP_LOG_DIR:-$AI_SHEET_RUNTIME_ROOT/logs}"
 export AI_SHEET_WORKSPACE_ROOT="\${TUTTI_WORKSPACE_ROOT:-$AI_SHEET_HOME}"
+export AI_SHEET_TUTTI_CLI="\${TUTTI_CLI:-}"
 
 base_url="\${TUTTI_APP_BASE_URL:-http://$HOST:$PORT}"
 export AI_SHEET_SERVER_URL="$base_url"
@@ -54,9 +55,20 @@ This package runs AI Sheet as a local Tutti workspace app.
 - \`bootstrap.sh\` maps \`TUTTI_APP_*\` variables into \`AI_SHEET_*\` variables.
 - \`server/server.js\` is the bundled Fastify server.
 - \`dist/\` is the built React/Vite frontend.
+- \`tutti.app.json\` declares the app runtime, localized metadata, CLI surface, and references endpoints.
+- \`tutti.cli.json\` exposes \`sheet status\`, \`sheet list-projects\`, and \`sheet create\` for other Tutti apps and agents.
 - Durable app data is stored under \`AI_SHEET_HOME\`.
+- Runtime scratch data is stored under \`AI_SHEET_RUNTIME_ROOT\`.
+- Backend logs, if added later, must stay under \`AI_SHEET_LOG_ROOT\`.
 - OfficeCLI auto-install uses the shared AI Office toolchain cache, not \`AI_SHEET_HOME\`; override with \`AI_SHEET_OFFICECLI_PATH\`, \`TUTTI_APP_OFFICECLI_PATH\`, or an \`*_OFFICECLI_INSTALL_ROOT\` env var.
-- AI Sheet currently supports XLSX display only. The editable source file for a project is \`workbook.xlsx\` under the app-owned project workspace.
+- AI Sheet renders XLSX directly. The editable source file for a project is \`workbook.xlsx\` under the app-owned project workspace.
+- Use \`AI_SHEET_TUTTI_CLI\` for app-to-app calls. It is populated from \`TUTTI_CLI\` by \`bootstrap.sh\`.
+
+Endpoints:
+
+- \`GET /api/health\` is the runtime healthcheck.
+- \`POST /tutti/cli/status\`, \`POST /tutti/cli/list-projects\`, and \`POST /tutti/cli/create\` implement the CLI manifest.
+- \`POST /tutti/references/list\` and \`POST /tutti/references/search\` expose app-data-relative workbook files and exports.
 `;
 }
 
@@ -71,6 +83,9 @@ export async function packageTuttiApp() {
     webBuildFilter: "@ai-sheet/web",
     webDistDir: path.join(appDir, "web", "dist"),
     serverEntry: "apps/sheet/server/src/main.ts",
+    cliManifestFile: "tutti.cli.json",
+    documentationFiles: ["COMMANDS.md"],
+    packageAssets: [{ source: path.join(appDir, "locales"), target: "locales", required: true }],
     renderBootstrap,
     renderIcon,
     renderPackageGuide,

@@ -10,6 +10,7 @@
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@ai-app/agent": "workspace:*",
     "@ai-app/shared": "workspace:*",
     "@ai-app/ui": "workspace:*",
     "@ai-sheet/shared": "workspace:*",

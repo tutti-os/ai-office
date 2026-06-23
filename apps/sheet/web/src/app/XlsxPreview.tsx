@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { scrollbarClass } from "@ai-app/ui/app-shell";
 import { XlsxRenderer } from "@tutti-os/office-preview/xlsx";
 import "@tutti-os/office-preview/styles/xlsx.css";
@@ -8,6 +9,31 @@ export function XlsxPreview(props: {
   loading: boolean;
   error: string;
 }) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const onWheel = (event: WheelEvent) => {
+      if (!event.cancelable || Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+      const target = event.target instanceof Element
+        ? event.target.closest<HTMLElement>(".tsh-xlsx-canvas-scroll, .tsh-xlsx-tabs")
+        : null;
+      if (!target || !root.contains(target)) return;
+
+      const maxScrollLeft = Math.max(0, target.scrollWidth - target.clientWidth);
+      event.preventDefault();
+      if (maxScrollLeft <= 0) return;
+
+      const deltaX = normalizeWheelDeltaX(event, target.clientWidth);
+      target.scrollLeft = Math.max(0, Math.min(maxScrollLeft, target.scrollLeft + deltaX));
+    };
+
+    root.addEventListener("wheel", onWheel, { capture: true, passive: false });
+    return () => root.removeEventListener("wheel", onWheel, { capture: true });
+  }, [props.workbook]);
+
   if (props.loading) {
     return <PreviewState title="Loading workbook" body="Preparing the spreadsheet preview." />;
   }
@@ -18,10 +44,19 @@ export function XlsxPreview(props: {
     return <PreviewState title="No workbook loaded" body="Import an XLSX workbook to view it here." />;
   }
   return (
-    <div className={`h-full min-h-0 overflow-auto bg-white ${scrollbarClass}`}>
+    <div
+      ref={rootRef}
+      className={`h-full min-h-0 overflow-hidden bg-white ${scrollbarClass} [&_.tsh-xlsx-canvas-scroll]:bg-white [&_.tsh-xlsx-canvas-viewport]:min-h-0 [&_.tsh-xlsx-renderer]:h-full [&_.tsh-xlsx-renderer]:min-h-0`}
+    >
       <XlsxRenderer workbook={props.workbook} />
     </div>
   );
+}
+
+function normalizeWheelDeltaX(event: WheelEvent, pageWidth: number) {
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaX * 16;
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return event.deltaX * pageWidth;
+  return event.deltaX;
 }
 
 function PreviewState(props: { title: string; body: string }) {

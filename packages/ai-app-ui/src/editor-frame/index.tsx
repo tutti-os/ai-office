@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, ChevronDown, Download, X } from "lucide-react";
 
-export type ArtifactEditorKind = "html" | "markdown" | "docx" | "deck" | "pptx";
+export type ArtifactEditorKind = "html" | "markdown" | "docx" | "deck" | "pptx" | "xlsx";
 
 export const artifactEditorGridClass =
   "grid h-dvh min-h-0 grid-cols-[400px_minmax(0,1fr)] overflow-hidden bg-[#1f1f1f] font-sans text-white";

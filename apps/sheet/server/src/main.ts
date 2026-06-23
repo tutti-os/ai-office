@@ -8,7 +8,10 @@ import { type ApplySheetCommandsRequest, xlsxMimeType } from "@ai-sheet/shared";
 import { SheetRepository } from "./artifact/sheet-repository.js";
 import { SheetService } from "./artifact/sheet-service.js";
 import { XlsxStorageAdapter } from "./artifact/xlsx-storage-adapter.js";
+import { listTemplates } from "./templates/template-service.js";
 import { getOfficeCliStatus, installOfficeCli } from "./toolchains/officecli.js";
+import { registerTuttiCliRoutes } from "./tutti/cli-routes.js";
+import { registerTuttiReferenceRoutes } from "./tutti/reference-routes.js";
 import { EventHub } from "./ws/event-hub.js";
 
 const webDist = process.env.AI_SHEET_WEB_DIST ? resolve(process.env.AI_SHEET_WEB_DIST) : resolve(process.cwd(), "../web/dist");
@@ -25,6 +28,8 @@ server.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bod
 });
 
 await server.register(fastifyWebsocket);
+registerTuttiCliRoutes(server, sheets);
+registerTuttiReferenceRoutes(server);
 
 if (existsSync(webDist)) {
   await server.register(fastifyStatic, {
@@ -38,7 +43,7 @@ new ArtifactAppHttpRoutes({
   appId: "ai-sheet",
   service: sheets,
   events,
-  listTemplates: () => [],
+  listTemplates,
   toolchain: {
     responseKey: "officecli",
     getStatus: getOfficeCliStatus,

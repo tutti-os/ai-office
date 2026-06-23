@@ -1293,6 +1293,800 @@ const profiles = {
       "#fff": "#FBFAF7",
     },
   },
+  "sbir-rd-grant-deck": {
+    name: "federal lab grant blue",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');",
+    bodyFont: "'Source Sans 3','Inter',system-ui,sans-serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(27,58,111,0.055), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(200,147,43,0.12), transparent 24%), #FBFAF4",
+    textureCss:
+      "linear-gradient(90deg, rgba(27,58,111,0.035) 1px, transparent 1px), linear-gradient(0deg, rgba(200,147,43,0.025) 1px, transparent 1px)",
+    textureSize: "58px 58px",
+    replacements: {
+      "#1B3A6F": "#1C427A",
+      "#1F3A5F": "#244164",
+      "#3D5C8C": "#436390",
+      "#5A85B7": "#5C86B3",
+      "#9CC2FF": "#A0C0F4",
+      "#C8932B": "#BF8D2F",
+      "#F0DA7B": "#E3CE73",
+      "#E2DED3": "#E1DED4",
+      "#FAFAF7": "#FBFAF4",
+      "#FFFFFF": "#FBFAF4",
+      "#1B1B1B": "#1B2026",
+      "#5C6470": "#606873",
+    },
+  },
+  "gdpr-ai-act-compliance-deck": {
+    name: "compliance docket burgundy",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');",
+    bodyFont: "'Libre Franklin','Inter',system-ui,sans-serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "radial-gradient(circle at 90% 12%, rgba(166,25,46,0.10), transparent 24%), linear-gradient(135deg, rgba(21,39,63,0.055), rgba(255,255,255,0) 45%), #FBFAF6",
+    textureCss:
+      "linear-gradient(90deg, rgba(21,39,63,0.035) 1px, transparent 1px), linear-gradient(0deg, rgba(166,25,46,0.024) 1px, transparent 1px)",
+    textureSize: "54px 54px",
+    replacements: {
+      "#15273F": "#182A43",
+      "#142A47": "#19304F",
+      "#334155": "#38495C",
+      "#64748B": "#68788E",
+      "#A6192E": "#A72A3C",
+      "#7A1F2B": "#7E2A35",
+      "#9A2B2B": "#933033",
+      "#B91C1C": "#B23636",
+      "#F2A2A6": "#EDA7AA",
+      "#FBE3E4": "#F7E1E2",
+      "#F1F5F9": "#F0F2EC",
+      "#F8FAFC": "#F8F8F2",
+      "#FFFFFF": "#FBFAF6",
+      "#0F172A": "#141E2C",
+    },
+  },
+  "policy-briefing-deck": {
+    name: "public memo slate",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600;6..72,700&family=Source+Sans+3:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');",
+    bodyFont: "'Source Sans 3','Inter',system-ui,sans-serif",
+    serifFont: "'Newsreader','Source Serif 4',Georgia,serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(31,58,95,0.055), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(183,121,31,0.12), transparent 24%), #FCFAF3",
+    textureCss:
+      "linear-gradient(90deg, rgba(31,58,95,0.035) 1px, transparent 1px), linear-gradient(0deg, rgba(183,121,31,0.024) 1px, transparent 1px)",
+    textureSize: "64px 64px",
+    replacements: {
+      "#1B3A6B": "#223F69",
+      "#1F3A5F": "#253F65",
+      "#3D5B7E": "#425F81",
+      "#5C6470": "#606975",
+      "#9FB3CC": "#9AAFC5",
+      "#B7791F": "#A87320",
+      "#D9531E": "#CE5A2B",
+      "#E8ECF2": "#E7E9E4",
+      "#F7F9FC": "#F7F7F1",
+      "#FAFAF7": "#FCFAF3",
+      "#FFFFFF": "#FCFAF3",
+      "#1B1B1B": "#1C2024",
+    },
+  },
+  "municipal-hearing-deck": {
+    name: "civic hearing cobalt",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');",
+    bodyFont: "'Atkinson Hyperlegible','Inter',system-ui,sans-serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "radial-gradient(circle at 90% 12%, rgba(252,204,0,0.13), transparent 24%), linear-gradient(135deg, rgba(0,51,153,0.055), rgba(255,255,255,0) 45%), #FFFCF3",
+    textureCss:
+      "linear-gradient(90deg, rgba(0,51,153,0.035) 1px, transparent 1px), linear-gradient(0deg, rgba(252,204,0,0.026) 1px, transparent 1px)",
+    textureSize: "52px 52px",
+    replacements: {
+      "#003399": "#1248A0",
+      "#00226B": "#163277",
+      "#102648": "#172D50",
+      "#475569": "#506174",
+      "#94A3B8": "#94A2B4",
+      "#FFCC00": "#E6B800",
+      "#FFF4CC": "#F7EBC1",
+      "#C9252D": "#C03A3F",
+      "#FCD5D5": "#F5D2D0",
+      "#F4EFE6": "#F4EDE2",
+      "#FFFFFF": "#FFFCF3",
+      "#1B1B1B": "#1B2024",
+    },
+  },
+  "nonprofit-fundraising-deck": {
+    name: "mission pledge green rose",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650;9..144,750&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');",
+    bodyFont: "'Manrope','Inter',system-ui,sans-serif",
+    serifFont: "'Fraunces','Source Serif 4',Georgia,serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(19,119,82,0.055), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(169,42,58,0.10), transparent 24%), #FFFBF5",
+    textureCss:
+      "linear-gradient(90deg, rgba(19,119,82,0.035) 1px, transparent 1px), linear-gradient(0deg, rgba(169,42,58,0.024) 1px, transparent 1px)",
+    textureSize: "62px 62px",
+    replacements: {
+      "#137752": "#1D7956",
+      "#1F7A4D": "#277A55",
+      "#B5D5C0": "#B7D6C1",
+      "#BFE0D0": "#C0E0CF",
+      "#DDEEE3": "#DEEEE2",
+      "#A6192E": "#A72F3E",
+      "#7A1F2B": "#802C36",
+      "#F0B6B9": "#ECB7BA",
+      "#FBEAEA": "#F8E7E6",
+      "#F7F2E8": "#F7F0E5",
+      "#FFFFFF": "#FFFBF5",
+      "#1B1B1B": "#1A211E",
+    },
+  },
+  "curiosity-hobby-deck": {
+    name: "specimen cabinet amber",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600;6..72,700&family=Source+Sans+3:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');",
+    bodyFont: "'Source Sans 3','Inter',system-ui,sans-serif",
+    serifFont: "'Newsreader','Source Serif 4',Georgia,serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "radial-gradient(circle at 90% 12%, rgba(196,133,62,0.14), transparent 24%), linear-gradient(135deg, rgba(30,93,58,0.055), rgba(255,255,255,0) 45%), #FAF7F0",
+    textureCss:
+      "linear-gradient(90deg, rgba(22,19,16,0.032) 1px, transparent 1px), linear-gradient(0deg, rgba(196,133,62,0.024) 1px, transparent 1px)",
+    textureSize: "66px 66px",
+    replacements: {
+      "#C4853E": "#B87B38",
+      "#D9A521": "#C9962B",
+      "#E97725": "#D96A2E",
+      "#B0492A": "#A84B31",
+      "#1E5D3A": "#28613E",
+      "#0E7C66": "#1A7B69",
+      "#F4EBD6": "#F1E5CF",
+      "#FAFAF7": "#FAF7F0",
+      "#FAF9F6": "#FAF7F0",
+      "#FFFFFF": "#FAF7F0",
+      "#fff": "#FAF7F0",
+      "#1A1A1A": "#1B1815",
+      "#2D2D2D": "#302D28",
+    },
+  },
+  "tedx-18min-resident-talk-deck": {
+    name: "stage talk red ink",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,500;6..72,650;6..72,750&family=IBM+Plex+Mono:wght@400;500&display=swap');",
+    bodyFont: "'Archivo','Inter',system-ui,sans-serif",
+    serifFont: "'Newsreader','Source Serif 4',Georgia,serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "radial-gradient(circle at 88% 12%, rgba(230,43,30,0.12), transparent 24%), linear-gradient(135deg, rgba(5,5,5,0.055), rgba(255,255,255,0) 45%), #FFFCF7",
+    textureCss:
+      "linear-gradient(90deg, rgba(5,5,5,0.036) 1px, transparent 1px), linear-gradient(0deg, rgba(230,43,30,0.024) 1px, transparent 1px)",
+    textureSize: "50px 50px",
+    replacements: {
+      "#E62B1E": "#D9342B",
+      "#B5365E": "#B73A62",
+      "#0A0A0A": "#101010",
+      "#050505": "#080808",
+      "#131313": "#151515",
+      "#2D2D2D": "#2E3032",
+      "#4B5563": "#545C68",
+      "#C9CDD4": "#CACBC8",
+      "#F2F4F8": "#F1F1EA",
+      "#FFFFFF": "#FFFCF7",
+      "#fff": "#FFFCF7",
+    },
+  },
+  "life-event-storyboard-deck": {
+    name: "family archive indigo",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650;9..144,750&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');",
+    bodyFont: "'Manrope','Inter',system-ui,sans-serif",
+    serifFont: "'Fraunces','Source Serif 4',Georgia,serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(45,63,142,0.055), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(196,133,62,0.12), transparent 24%), #FAF7F2",
+    textureCss:
+      "linear-gradient(90deg, rgba(45,63,142,0.032) 1px, transparent 1px), linear-gradient(0deg, rgba(196,133,62,0.024) 1px, transparent 1px)",
+    textureSize: "62px 62px",
+    replacements: {
+      "#3949AB": "#35499D",
+      "#2D3F8E": "#31428A",
+      "#1F2D6E": "#283675",
+      "#5B3A8F": "#60428C",
+      "#DDE0F1": "#DCDEF0",
+      "#C8CFDC": "#C8CDD8",
+      "#C4853E": "#B9803D",
+      "#F5EFE3": "#F3EBDD",
+      "#F7F3EB": "#F7F1E8",
+      "#FAF9F6": "#FAF7F2",
+      "#FFFFFF": "#FAF7F2",
+      "#1A1A1A": "#1B1B20",
+    },
+  },
+  "travel-photo-essay-deck": {
+    name: "photo essay dusk ochre",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Literata:wght@400;500;600;700&family=Libre+Franklin:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');",
+    bodyFont: "'Libre Franklin','Inter',system-ui,sans-serif",
+    serifFont: "'Literata','Source Serif 4',Georgia,serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(31,78,121,0.055), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(201,137,44,0.13), transparent 24%), #FAF7F0",
+    textureCss:
+      "linear-gradient(90deg, rgba(31,78,121,0.032) 1px, transparent 1px), linear-gradient(0deg, rgba(201,137,44,0.024) 1px, transparent 1px)",
+    textureSize: "64px 64px",
+    replacements: {
+      "#1F4E79": "#25577F",
+      "#C4853E": "#C08238",
+      "#E97725": "#D96D2E",
+      "#B0492A": "#A95033",
+      "#F4EBD6": "#F1E5D0",
+      "#E8E4DC": "#E7E1D8",
+      "#F0ECE2": "#EFE8DE",
+      "#FAF7F2": "#FAF7F0",
+      "#FFFFFF": "#FAF7F0",
+      "#fff": "#FAF7F0",
+      "#1A1A1A": "#1C1A18",
+      "#4A4A4A": "#4A4A46",
+    },
+  },
+  "event-sponsorship-pitch-deck": {
+    name: "sponsorship arena neon",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');",
+    bodyFont: "'Archivo','Inter',system-ui,sans-serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "radial-gradient(circle at 90% 12%, rgba(62,226,166,0.14), transparent 24%), linear-gradient(135deg, rgba(15,23,42,0.065), rgba(255,255,255,0) 45%), #FAFBF6",
+    textureCss:
+      "linear-gradient(90deg, rgba(15,23,42,0.038) 1px, transparent 1px), linear-gradient(0deg, rgba(62,226,166,0.026) 1px, transparent 1px)",
+    textureSize: "48px 48px",
+    replacements: {
+      "#0F172A": "#101A2B",
+      "#1E293B": "#223047",
+      "#334155": "#3A4A5F",
+      "#475569": "#536174",
+      "#64748B": "#6A788D",
+      "#94A3B8": "#98A7B8",
+      "#3EE2A6": "#26C993",
+      "#9BE15D": "#95D94F",
+      "#D7263D": "#D8434F",
+      "#E11D74": "#D72A72",
+      "#E2E8F0": "#E3E7E5",
+      "#F8FAFC": "#FAFBF6",
+      "#FFFFFF": "#FAFBF6",
+      "#fff": "#FAFBF6",
+    },
+  },
+  "social-carousel-content-deck": {
+    name: "social studio candy",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');",
+    bodyFont: "'Space Grotesk','Inter',system-ui,sans-serif",
+    monoFont: "'Space Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "radial-gradient(circle at 88% 10%, rgba(255,90,95,0.13), transparent 24%), linear-gradient(135deg, rgba(43,107,255,0.055), rgba(255,255,255,0) 45%), #FFFCF7",
+    textureCss:
+      "linear-gradient(90deg, rgba(43,107,255,0.034) 1px, transparent 1px), linear-gradient(0deg, rgba(255,90,95,0.024) 1px, transparent 1px)",
+    textureSize: "46px 46px",
+    replacements: {
+      "#2B6BFF": "#336DFF",
+      "#002A8F": "#123EA0",
+      "#3F62A8": "#4468AE",
+      "#9AA8BE": "#98A8BD",
+      "#FF5A5F": "#F05A62",
+      "#FFC7C9": "#F8C4C4",
+      "#FFE9EA": "#FBE7E6",
+      "#F2B544": "#E7A93A",
+      "#F4F5F7": "#F5F3EC",
+      "#FFFFFF": "#FFFCF7",
+      "#fff": "#FFFCF7",
+      "#0A0A0A": "#101113",
+      "#6B7280": "#707783",
+    },
+  },
+  "kol-campaign-recap-deck": {
+    name: "creator analytics rose",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');",
+    bodyFont: "'DM Sans','Inter',system-ui,sans-serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "radial-gradient(circle at 90% 12%, rgba(225,29,116,0.11), transparent 24%), linear-gradient(135deg, rgba(15,27,45,0.055), rgba(255,255,255,0) 45%), #FCFAF5",
+    textureCss:
+      "linear-gradient(90deg, rgba(15,27,45,0.036) 1px, transparent 1px), linear-gradient(0deg, rgba(225,29,116,0.024) 1px, transparent 1px)",
+    textureSize: "52px 52px",
+    replacements: {
+      "#0F1B2D": "#132033",
+      "#1F2A3D": "#253044",
+      "#5B6B82": "#607083",
+      "#7E8DA7": "#7D8CA2",
+      "#E11D74": "#D72A76",
+      "#B01457": "#A92D61",
+      "#FCE4EE": "#F7E2EA",
+      "#D7263D": "#C9414E",
+      "#15803D": "#23824B",
+      "#E4E8EF": "#E4E6E2",
+      "#F3F5F9": "#F3F3EC",
+      "#FFFFFF": "#FCFAF5",
+      "#fff": "#FCFAF5",
+      "#101418": "#111820",
+    },
+  },
+  "brand-identity-portfolio": {
+    name: "portfolio gallery graphite",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600;6..72,700&family=Libre+Franklin:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');",
+    bodyFont: "'Libre Franklin','Inter',system-ui,sans-serif",
+    serifFont: "'Newsreader','Source Serif 4',Georgia,serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(16,20,24,0.052), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(200,208,220,0.18), transparent 24%), #F7F6F2",
+    textureCss:
+      "linear-gradient(90deg, rgba(16,20,24,0.034) 1px, transparent 1px), linear-gradient(0deg, rgba(217,200,168,0.026) 1px, transparent 1px)",
+    textureSize: "68px 68px",
+    replacements: {
+      "#101418": "#151719",
+      "#0F131C": "#141821",
+      "#0A0D14": "#10131A",
+      "#3A3A3A": "#3B3B39",
+      "#6B7280": "#6F747C",
+      "#8A99AE": "#8A98A8",
+      "#C8D0DC": "#C8CDD6",
+      "#DDDDDA": "#DCDAD3",
+      "#E5E2D9": "#E4DFD4",
+      "#D9C8A8": "#D7C6A6",
+      "#F7F6F2": "#F7F6F2",
+      "#FAFBFC": "#F7F6F2",
+      "#FFFFFF": "#F7F6F2",
+      "#fff": "#F7F6F2",
+    },
+  },
+  "kol-influencer-deck": {
+    name: "influencer dealroom teal",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');",
+    bodyFont: "'Manrope','Inter',system-ui,sans-serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(14,92,88,0.055), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(29,143,138,0.13), transparent 24%), #F8FBF6",
+    textureCss:
+      "linear-gradient(90deg, rgba(14,92,88,0.036) 1px, transparent 1px), linear-gradient(0deg, rgba(229,39,92,0.022) 1px, transparent 1px)",
+    textureSize: "54px 54px",
+    replacements: {
+      "#0E5C58": "#136762",
+      "#0E5C3F": "#176448",
+      "#1D8F8A": "#218C87",
+      "#2F7A23": "#387C2E",
+      "#4E7A1F": "#5B812D",
+      "#B7E0DD": "#B9DDDA",
+      "#E2F3F2": "#E3F1EF",
+      "#ECF8DB": "#EAF5D9",
+      "#E5275C": "#D83B64",
+      "#B33B3F": "#A94349",
+      "#F4F5F7": "#F3F4EE",
+      "#FFFFFF": "#F8FBF6",
+      "#fff": "#F8FBF6",
+      "#0A1422": "#101B2A",
+    },
+  },
+  "pm-feature-business-case-deck": {
+    name: "product memo violet mint",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');",
+    bodyFont: "'DM Sans','Inter',system-ui,sans-serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "radial-gradient(circle at 90% 12%, rgba(99,91,255,0.12), transparent 24%), linear-gradient(135deg, rgba(0,128,96,0.055), rgba(255,255,255,0) 45%), #FBFCF7",
+    textureCss:
+      "linear-gradient(90deg, rgba(15,23,42,0.034) 1px, transparent 1px), linear-gradient(0deg, rgba(99,91,255,0.024) 1px, transparent 1px)",
+    textureSize: "52px 52px",
+    replacements: {
+      "#635BFF": "#665CDA",
+      "#312E81": "#3F3A93",
+      "#008060": "#0E8064",
+      "#0F5E47": "#17634F",
+      "#E6F2EE": "#E4F0EA",
+      "#F4F2FF": "#F0EEFB",
+      "#0F172A": "#121B2D",
+      "#1F2937": "#243042",
+      "#475569": "#536273",
+      "#94A3B8": "#96A4B5",
+      "#E2E8F0": "#E2E6E4",
+      "#FFFFFF": "#FBFCF7",
+      "#fff": "#FBFCF7",
+    },
+  },
+  "prd-product-roadmap-deck": {
+    name: "roadmap workshop blue amber",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');",
+    bodyFont: "'Source Sans 3','Inter',system-ui,sans-serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(10,37,64,0.055), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(217,119,6,0.12), transparent 24%), #FCFAF3",
+    textureCss:
+      "linear-gradient(90deg, rgba(10,37,64,0.035) 1px, transparent 1px), linear-gradient(0deg, rgba(217,119,6,0.024) 1px, transparent 1px)",
+    textureSize: "58px 58px",
+    replacements: {
+      "#0A2540": "#0F2E4C",
+      "#08427B": "#164D82",
+      "#1168BD": "#226BB7",
+      "#438DD5": "#4A8FD0",
+      "#85BBF0": "#86B9E9",
+      "#D97706": "#C87517",
+      "#B45309": "#A86616",
+      "#FFF7E6": "#F6EBD4",
+      "#F0F6FC": "#EEF4F5",
+      "#F6F9FC": "#F5F6F0",
+      "#FFFFFF": "#FCFAF3",
+      "#fff": "#FCFAF3",
+      "#1B1B1B": "#1B2026",
+    },
+  },
+  "architecture-review-deck": {
+    name: "systems review cyan slate",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');",
+    bodyFont: "'Inter',system-ui,sans-serif",
+    monoFont: "'JetBrains Mono','IBM Plex Mono',ui-monospace,monospace",
+    backgroundCss:
+      "radial-gradient(circle at 88% 10%, rgba(96,165,250,0.12), transparent 24%), linear-gradient(135deg, rgba(15,23,42,0.06), rgba(255,255,255,0) 45%), #FAFBF6",
+    textureCss:
+      "linear-gradient(90deg, rgba(15,23,42,0.038) 1px, transparent 1px), linear-gradient(0deg, rgba(96,165,250,0.024) 1px, transparent 1px)",
+    textureSize: "48px 48px",
+    replacements: {
+      "#0F172A": "#111B2C",
+      "#111827": "#141D2B",
+      "#1E293B": "#243044",
+      "#334155": "#3B4C60",
+      "#64748B": "#68788C",
+      "#94A3B8": "#96A4B5",
+      "#2563EB": "#2F6EDB",
+      "#60A5FA": "#5B9FEA",
+      "#DBEAFE": "#DCE9F7",
+      "#E2E8F0": "#E3E7E5",
+      "#F8FAFC": "#FAFBF6",
+      "#FFFFFF": "#FAFBF6",
+      "#fff": "#FAFBF6",
+    },
+  },
+  "incident-postmortem-deck": {
+    name: "incident review graphite red",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');",
+    bodyFont: "'Libre Franklin','Inter',system-ui,sans-serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "radial-gradient(circle at 90% 12%, rgba(220,38,38,0.10), transparent 24%), linear-gradient(135deg, rgba(15,23,42,0.055), rgba(255,255,255,0) 45%), #FBFAF5",
+    textureCss:
+      "linear-gradient(90deg, rgba(15,23,42,0.036) 1px, transparent 1px), linear-gradient(0deg, rgba(220,38,38,0.024) 1px, transparent 1px)",
+    textureSize: "54px 54px",
+    replacements: {
+      "#0F172A": "#111B2C",
+      "#1F2937": "#242F3E",
+      "#374151": "#3D4856",
+      "#6B7280": "#6F7783",
+      "#9CA3AF": "#9EA5AD",
+      "#DC2626": "#C93A3A",
+      "#991B1B": "#8F2B2B",
+      "#F87171": "#E97979",
+      "#FEE2E2": "#F6DFDC",
+      "#FEF2F2": "#F8EDEC",
+      "#F9FAFB": "#F6F5EF",
+      "#FFFFFF": "#FBFAF5",
+      "#fff": "#FBFAF5",
+    },
+  },
+  "rfc-technical-proposal-deck": {
+    name: "rfc proposal green terminal",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;500;700&display=swap');",
+    bodyFont: "'Atkinson Hyperlegible','Inter',system-ui,sans-serif",
+    monoFont: "'JetBrains Mono','IBM Plex Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(6,95,70,0.055), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(52,211,153,0.13), transparent 24%), #FAFCF5",
+    textureCss:
+      "linear-gradient(90deg, rgba(6,95,70,0.035) 1px, transparent 1px), linear-gradient(0deg, rgba(15,23,42,0.024) 1px, transparent 1px)",
+    textureSize: "50px 50px",
+    replacements: {
+      "#065F46": "#0E684F",
+      "#047857": "#157C5C",
+      "#059669": "#1D946C",
+      "#10B981": "#2AB77F",
+      "#34D399": "#43C88F",
+      "#A7F3D0": "#A8E9C9",
+      "#D1FAE5": "#D4F2E3",
+      "#ECFDF5": "#EEF9F1",
+      "#0F172A": "#111B2C",
+      "#334155": "#3B4A5E",
+      "#64748B": "#69798B",
+      "#E2E8F0": "#E3E7E2",
+      "#FFFFFF": "#FAFCF5",
+      "#fff": "#FAFCF5",
+    },
+  },
+  "personal-finance-client-edu-deck": {
+    name: "advisor briefing navy gold",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700;800&family=Literata:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');",
+    bodyFont: "'Source Sans 3','Inter',system-ui,sans-serif",
+    serifFont: "'Literata','Source Serif 4',Georgia,serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(11,37,64,0.055), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(242,169,59,0.13), transparent 24%), #FCFAF2",
+    textureCss:
+      "linear-gradient(90deg, rgba(11,37,64,0.035) 1px, transparent 1px), linear-gradient(0deg, rgba(242,169,59,0.024) 1px, transparent 1px)",
+    textureSize: "60px 60px",
+    replacements: {
+      "#0B2540": "#12304E",
+      "#173A5E": "#21466B",
+      "#3D5A80": "#436185",
+      "#6B8FB5": "#6D8FAE",
+      "#F2A93B": "#DFA23A",
+      "#D98A1E": "#C98724",
+      "#8A5A00": "#8D6514",
+      "#FCE7BD": "#F4DEB2",
+      "#FFF8EE": "#F7EEDF",
+      "#F4F4F2": "#F3F1E8",
+      "#FFFFFF": "#FCFAF2",
+      "#fff": "#FCFAF2",
+      "#1A1F24": "#1C2328",
+    },
+  },
+  "patient-public-health-edu-deck": {
+    name: "public health calm teal",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');",
+    bodyFont: "'Atkinson Hyperlegible','Inter',system-ui,sans-serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(0,98,89,0.055), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(188,235,230,0.24), transparent 24%), #F8FCF7",
+    textureCss:
+      "linear-gradient(90deg, rgba(0,98,89,0.034) 1px, transparent 1px), linear-gradient(0deg, rgba(31,122,76,0.024) 1px, transparent 1px)",
+    textureSize: "56px 56px",
+    replacements: {
+      "#006259": "#147068",
+      "#00857C": "#19857D",
+      "#1F7A4C": "#2C8059",
+      "#1E6F4A": "#2A7350",
+      "#5B8C6E": "#639476",
+      "#7FB9A0": "#84BAA2",
+      "#BCEBE6": "#C0E9E4",
+      "#E2F0E9": "#E4F0E8",
+      "#F4F8F6": "#F8FCF7",
+      "#FFFFFF": "#F8FCF7",
+      "#ffffff": "#F8FCF7",
+      "#1B1B1B": "#17211E",
+    },
+  },
+  "ocw-stem-lecture-deck": {
+    name: "chalkboard lecture amber",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600;6..72,700&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');",
+    bodyFont: "'Source Sans 3','Inter',system-ui,sans-serif",
+    serifFont: "'Newsreader','Source Serif 4',Georgia,serif",
+    monoFont: "'JetBrains Mono','IBM Plex Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(14,42,71,0.06), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(200,85,61,0.11), transparent 24%), #F8F6EF",
+    textureCss:
+      "linear-gradient(90deg, rgba(14,42,71,0.034) 1px, transparent 1px), linear-gradient(0deg, rgba(200,85,61,0.024) 1px, transparent 1px)",
+    textureSize: "64px 64px",
+    replacements: {
+      "#0E2A47": "#173655",
+      "#081A2E": "#10253C",
+      "#14365B": "#1D4264",
+      "#3A4257": "#424A5D",
+      "#566069": "#5D656D",
+      "#8A8E99": "#898D94",
+      "#C8553D": "#B85A45",
+      "#B0410E": "#A94B20",
+      "#E26A4E": "#D16650",
+      "#FCEFE0": "#F6E7D6",
+      "#F8F3EA": "#F8F1E6",
+      "#F4F4F2": "#F8F6EF",
+      "#FFFFFF": "#F8F6EF",
+      "#fff": "#F8F6EF",
+    },
+  },
+  "executive-90day-onboarding-deck": {
+    name: "executive operating cadence",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');",
+    bodyFont: "'Libre Franklin','Inter',system-ui,sans-serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(35,42,61,0.055), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(155,27,48,0.10), transparent 24%), #FBFAF5",
+    textureCss:
+      "linear-gradient(90deg, rgba(35,42,61,0.035) 1px, transparent 1px), linear-gradient(0deg, rgba(155,27,48,0.023) 1px, transparent 1px)",
+    textureSize: "58px 58px",
+    replacements: {
+      "#232A3D": "#283148",
+      "#2C3447": "#30384C",
+      "#525B66": "#58616B",
+      "#6B7689": "#707A8A",
+      "#A9B7C7": "#A7B4C2",
+      "#9B1B30": "#A03346",
+      "#F2A8B7": "#E8A7B1",
+      "#FBEAE8": "#F5E5E1",
+      "#FAEEEE": "#F7EAEA",
+      "#EEF1F4": "#EEEFEA",
+      "#F4F6FA": "#F4F4EF",
+      "#FFFFFF": "#FBFAF5",
+      "#fff": "#FBFAF5",
+      "#1A1F24": "#1B2026",
+    },
+  },
+  "cert-exam-prep-deck": {
+    name: "exam drill cobalt saffron",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Roboto+Slab:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');",
+    bodyFont: "'Manrope','Inter',system-ui,sans-serif",
+    serifFont: "'Roboto Slab','Zilla Slab','Source Serif Pro',Georgia,serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "radial-gradient(circle at 90% 12%, rgba(245,166,35,0.13), transparent 24%), linear-gradient(135deg, rgba(0,59,92,0.055), rgba(255,255,255,0) 45%), #FBFAF4",
+    textureCss:
+      "linear-gradient(90deg, rgba(0,59,92,0.035) 1px, transparent 1px), linear-gradient(0deg, rgba(245,166,35,0.024) 1px, transparent 1px)",
+    textureSize: "50px 50px",
+    replacements: {
+      "#003B5C": "#0F4A68",
+      "#1B3D63": "#254D70",
+      "#5C7794": "#607C96",
+      "#C9D1D8": "#CAD2D6",
+      "#D9E2EC": "#DAE3E8",
+      "#F5A623": "#E49B28",
+      "#B8531C": "#AB5628",
+      "#C8392E": "#B9463E",
+      "#FCE3E3": "#F5DFDC",
+      "#FBF1DE": "#F7EBD7",
+      "#FFFFFF": "#FBFAF4",
+      "#fff": "#FBFAF4",
+      "#1A1F2E": "#1D2534",
+    },
+  },
+  "phd-survey-defense-deck": {
+    name: "committee survey oxblood",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Literata:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');",
+    bodyFont: "'Source Sans 3','Inter',system-ui,sans-serif",
+    serifFont: "'Literata','Source Serif 4',Georgia,serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(27,42,78,0.055), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(164,30,30,0.10), transparent 24%), #FBF8F1",
+    textureCss:
+      "linear-gradient(90deg, rgba(27,42,78,0.034) 1px, transparent 1px), linear-gradient(0deg, rgba(164,30,30,0.024) 1px, transparent 1px)",
+    textureSize: "64px 64px",
+    replacements: {
+      "#1B2A4E": "#20345C",
+      "#13223C": "#182A48",
+      "#3A4A6F": "#3F5375",
+      "#7A8AA3": "#798AA0",
+      "#A41E1E": "#9B2A2B",
+      "#8C1515": "#8C2424",
+      "#C03A2B": "#B34238",
+      "#FDE8EA": "#F5E4E2",
+      "#D6DCE6": "#D7D9D2",
+      "#EAF0F7": "#E8EEE9",
+      "#FFFFFF": "#FBF8F1",
+      "#fff": "#FBF8F1",
+      "#1A1A1A": "#1A1B1D",
+    },
+  },
+  "stem-student-research-project-deck": {
+    name: "science fair cobalt lime",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;500;700&display=swap');",
+    bodyFont: "'Atkinson Hyperlegible','Inter',system-ui,sans-serif",
+    monoFont: "'JetBrains Mono','IBM Plex Mono',ui-monospace,monospace",
+    backgroundCss:
+      "radial-gradient(circle at 90% 12%, rgba(60,227,164,0.15), transparent 24%), linear-gradient(135deg, rgba(15,77,146,0.055), rgba(255,255,255,0) 45%), #FAFCF6",
+    textureCss:
+      "linear-gradient(90deg, rgba(15,77,146,0.035) 1px, transparent 1px), linear-gradient(0deg, rgba(60,227,164,0.026) 1px, transparent 1px)",
+    textureSize: "50px 50px",
+    replacements: {
+      "#0F4D92": "#1B5C9A",
+      "#0A356A": "#164272",
+      "#1F6FB2": "#2C75B1",
+      "#5BA9E8": "#62A7DF",
+      "#7FA9D1": "#80A8CC",
+      "#3CE3A4": "#37C990",
+      "#28A745": "#32A65D",
+      "#E9F7EE": "#E8F5EC",
+      "#D6DCE4": "#D6DCE0",
+      "#F4F6F9": "#F3F6EF",
+      "#FFFFFF": "#FAFCF6",
+      "#fff": "#FAFCF6",
+      "#212529": "#20272B",
+    },
+  },
+  "self-study-explainer-deck": {
+    name: "self study notebook blue",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600;6..72,700&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');",
+    bodyFont: "'Manrope','Inter',system-ui,sans-serif",
+    serifFont: "'Newsreader','Source Serif 4',Georgia,serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(26,46,78,0.055), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(226,165,61,0.12), transparent 24%), #FCFAF2",
+    textureCss:
+      "linear-gradient(90deg, rgba(26,46,78,0.034) 1px, transparent 1px), linear-gradient(0deg, rgba(226,165,61,0.024) 1px, transparent 1px)",
+    textureSize: "60px 60px",
+    replacements: {
+      "#1A2E4E": "#233B60",
+      "#1B2A41": "#22344F",
+      "#3A536F": "#425C76",
+      "#8FA7C9": "#8EA6C2",
+      "#E2A53D": "#D39B35",
+      "#E8B400": "#D6A924",
+      "#A06F00": "#A06C13",
+      "#FFF1D6": "#F6E9CB",
+      "#F4F4F2": "#F4F0E6",
+      "#FFFFFF": "#FCFAF2",
+      "#fff": "#FCFAF2",
+      "#1A1A1A": "#1B1D20",
+    },
+  },
+  "preclinical-nursing-class-deck": {
+    name: "clinical classroom teal red",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');",
+    bodyFont: "'Libre Franklin','Inter',system-ui,sans-serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "linear-gradient(135deg, rgba(46,125,91,0.055), rgba(255,255,255,0) 45%), radial-gradient(circle at 90% 12%, rgba(216,38,56,0.10), transparent 24%), #FAFCF7",
+    textureCss:
+      "linear-gradient(90deg, rgba(46,125,91,0.034) 1px, transparent 1px), linear-gradient(0deg, rgba(216,38,56,0.023) 1px, transparent 1px)",
+    textureSize: "56px 56px",
+    replacements: {
+      "#2E7D5B": "#347F61",
+      "#1F7A4D": "#2D7E57",
+      "#D72638": "#C83A47",
+      "#B23A48": "#A93F4A",
+      "#7A1616": "#7E2626",
+      "#E8786A": "#E17768",
+      "#FBE8E5": "#F6E4E0",
+      "#E1F1E8": "#E1F0E7",
+      "#D6DCE6": "#D7DDD8",
+      "#F4F5F7": "#F3F5EF",
+      "#FFFFFF": "#FAFCF7",
+      "#fff": "#FAFCF7",
+      "#1A1A1A": "#1B211E",
+    },
+  },
+  "cross-language-seminar-deck": {
+    name: "comparative seminar ink",
+    fontImport:
+      "@import url('https://fonts.googleapis.com/css2?family=Literata:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');",
+    bodyFont: "'Source Sans 3','Inter',system-ui,sans-serif",
+    serifFont: "'Literata','Source Serif 4',Georgia,serif",
+    monoFont: "'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace",
+    backgroundCss:
+      "radial-gradient(circle at 90% 12%, rgba(192,58,43,0.10), transparent 24%), linear-gradient(135deg, rgba(27,42,61,0.055), rgba(255,255,255,0) 45%), #FAF7F0",
+    textureCss:
+      "linear-gradient(90deg, rgba(27,42,61,0.034) 1px, transparent 1px), linear-gradient(0deg, rgba(192,58,43,0.023) 1px, transparent 1px)",
+    textureSize: "66px 66px",
+    replacements: {
+      "#1B2A3D": "#223247",
+      "#0F1B2C": "#172538",
+      "#2E445F": "#354A64",
+      "#5C6B7A": "#626F7C",
+      "#C03A2B": "#B7473A",
+      "#D7263D": "#C9414D",
+      "#F5EFE3": "#F2E8D8",
+      "#F7F3EB": "#F6EFE5",
+      "#FAF7F2": "#FAF7F0",
+      "#FFFFFF": "#FAF7F0",
+      "#fff": "#FAF7F0",
+      "#000000": "#111111",
+      "#000": "#111111",
+    },
+  },
 };
 
 const requestedIds = parseIds(process.argv);
@@ -1370,7 +2164,9 @@ function replaceFonts(source, profile) {
   if (profile.serifFont) {
     next = next
       .replace(/font-family\s*:\s*'Source Serif Pro'([^;"}]*)/g, `font-family:${profile.serifFont}`)
-      .replace(/font-family\s*:\s*'Source Serif 4'([^;"}]*)/g, `font-family:${profile.serifFont}`);
+      .replace(/font-family\s*:\s*'Source Serif 4'([^;"}]*)/g, `font-family:${profile.serifFont}`)
+      .replace(/font-family\s*:\s*"Roboto Slab"([^;"}]*)/g, `font-family:${profile.serifFont}`)
+      .replace(/font-family\s*:\s*'Roboto Slab'([^;"}]*)/g, `font-family:${profile.serifFont}`);
   }
   next = next
     .replace(/--sans\s*:\s*[^;]+;/g, `--sans: ${profile.bodyFont};`)
@@ -1396,7 +2192,7 @@ function injectRestyleBlock(source, profile) {
 }
 
 function appendCssTokens(source, profile) {
-  const serifRule = profile.serifFont ? `.serif{font-family:${profile.serifFont};}\n` : "";
+  const serifRule = profile.serifFont ? `.serif,.slab{font-family:${profile.serifFont};}\n` : "";
   const block = `\n\n/* AI Office restyle profile: ${profile.name} */\n${profile.fontImport}\nbody,.sans{font-family:${profile.bodyFont};}\n${serifRule}.mono{font-family:${profile.monoFont};}\n`;
   if (source.includes("AI Office restyle profile:")) {
     return source.replace(/\/\* AI Office restyle profile:[\s\S]*$/m, block.trimStart());
@@ -1405,7 +2201,7 @@ function appendCssTokens(source, profile) {
 }
 
 function restyleHtmlBlock(profile) {
-  const serifRule = profile.serifFont ? `.serif{font-family:${profile.serifFont};}\n  ` : "";
+  const serifRule = profile.serifFont ? `.serif,.slab{font-family:${profile.serifFont};}\n  ` : "";
   return `<style data-ai-office-restyle="v1">
   ${profile.fontImport}
   body{font-family:${profile.bodyFont};background:${profile.backgroundCss};}

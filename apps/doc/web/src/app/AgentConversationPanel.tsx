@@ -1,4 +1,4 @@
-import { AgentConversationPanel as SharedAgentConversationPanel } from "@ai-app/agent/conversation-ui";
+import { ArtifactAgentConversationPanel } from "@ai-app/agent/conversation-ui";
 import type { ArtifactEditorKind } from "@ai-app/ui/editor-frame";
 import type { DocumentRun, DocumentRunEvent, DocumentRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
 
@@ -21,18 +21,8 @@ type AgentConversationPanelProps = {
 
 export function AgentConversationPanel(props: AgentConversationPanelProps) {
   return (
-    <SharedAgentConversationPanel<DocumentRun, DocumentRunEvent>
+    <ArtifactAgentConversationPanel<DocumentRun, DocumentRunEvent>
       {...props}
-      agentOptions={props.runtimeProfiles.map((profile) => {
-        const provider = profile.kind === "local-agent" ? props.localAgentProviders.find((item) => item.provider === profile.provider) : null;
-        return {
-          id: profile.id,
-          label: formatRuntimeProfileLabel(profile, props.localAgentProviders),
-          disabled: provider ? !provider.available : false,
-        };
-      })}
-      selectedAgentId={props.selectedRuntimeProfileId}
-      variant="document"
       copy={{
         homeLabel: "AI Doc",
         introTitle: "AI Doc Agent",
@@ -40,14 +30,9 @@ export function AgentConversationPanel(props: AgentConversationPanelProps) {
         placeholder: "Ask AI to edit this doc...",
         quickPrompts: ["Rewrite selection", "Continue writing", "Polish tone", "Format section"],
       }}
-      onAgentChange={props.onRuntimeProfileChange}
+      formatUnavailableRuntimeProfileLabel={(profile, provider) => `${profile.displayName} (${provider?.authState ?? "unknown"})`}
+      selectedRuntimeProfileId={props.selectedRuntimeProfileId}
+      onRuntimeProfileChange={props.onRuntimeProfileChange}
     />
   );
-}
-
-function formatRuntimeProfileLabel(profile: RuntimeProfile, providers: LocalAgentProviderStatus[]) {
-  if (profile.kind !== "local-agent") return profile.displayName;
-  const provider = providers.find((item) => item.provider === profile.provider);
-  if (!provider || provider.available) return profile.displayName;
-  return `${profile.displayName} (${provider.authState})`;
 }

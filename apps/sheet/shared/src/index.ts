@@ -1,4 +1,5 @@
 import type {
+  AiEditMode,
   Id,
   RunEventType,
   RunStatus,
@@ -112,7 +113,7 @@ export interface SheetRun {
   provider: string;
   model: string;
   status: SheetRunStatus;
-  mode: string;
+  mode: AiEditMode;
   instruction: string;
   selectionType: SheetSelectionType;
   selectionPath: string;
@@ -135,6 +136,11 @@ export interface SheetRunEvent {
   metadata: Record<string, unknown> | null;
   sortOrder: number;
   createdAt: string;
+}
+
+export interface SheetRunTimelineItem {
+  run: SheetRun;
+  events: SheetRunEvent[];
 }
 
 export interface SheetProjectRecord {
@@ -200,7 +206,7 @@ export interface TemplatesResponse {
 }
 
 export interface ProjectRunsResponse {
-  runs: Array<{ run: SheetRun; events: SheetRunEvent[] }>;
+  runs: SheetRunTimelineItem[];
 }
 
 export interface LocalAgentProviderStatusResponse {

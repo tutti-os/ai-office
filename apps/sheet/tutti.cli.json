@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "tutti.app.cli.v1",
+  "scope": "sheet",
+  "description": "Import and inspect AI Sheet workbook projects.",
+  "documentation": {
+    "file": "COMMANDS.md"
+  },
+  "commands": [
+    {
+      "path": ["status"],
+      "summary": "Show AI Sheet status",
+      "description": "Return app health, project counts, runtime provider counts, and Tutti CLI availability.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/status",
+        "timeoutMs": 10000
+      }
+    },
+    {
+      "path": ["list-projects"],
+      "summary": "List workbook projects",
+      "description": "List recent AI Sheet projects as a table for agents and other Tutti apps.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of projects to return."
+          }
+        }
+      },
+      "output": {
+        "defaultMode": "table",
+        "json": true,
+        "table": {
+          "columns": [
+            { "key": "title", "label": "Title" },
+            { "key": "type", "label": "Type" },
+            { "key": "updated-at", "label": "Updated" }
+          ]
+        }
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/list-projects",
+        "timeoutMs": 10000
+      }
+    },
+    {
+      "path": ["create"],
+      "summary": "Create a workbook project",
+      "description": "Create a new workbook project by importing an existing XLSX file.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["path"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute or workspace-visible path to an .xlsx file."
+          },
+          "title": {
+            "type": "string",
+            "description": "Optional project title."
+          }
+        }
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/create",
+        "timeoutMs": 30000
+      }
+    }
+  ]
+}

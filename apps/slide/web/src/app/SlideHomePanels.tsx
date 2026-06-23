@@ -1,5 +1,5 @@
-import { ChevronLeft, ChevronRight, Clock3, Copy, FileCode2, FileText, History, Plus, Trash2, X } from "lucide-react";
-import { appShell, categoryPillClass, historyActionsClass, historyCardClass, historyClearButtonClass, historyDeleteButtonClass, historyEmptyIconClass, historyEmptyStateClass, scrollbarClass, templateCardClass } from "@ai-app/ui/app-shell";
+import { ChevronLeft, ChevronRight, Copy, FileCode2, FileText, Plus, X } from "lucide-react";
+import { appShell, ArtifactHistoryPanel, HomeCategoryPill, scrollbarClass, templateCardClass } from "@ai-app/ui/app-shell";
 import type { SlideProject } from "@ai-slide/shared";
 import type { OutputType, SlideTemplate } from "../templates";
 
@@ -9,10 +9,7 @@ function cn(...classes: Array<string | false | null | undefined>) {
 
 export function CategoryButton(props: { active: boolean; count: number; label: string; onClick: () => void }) {
   return (
-    <button className={cn(categoryPillClass(props.active), "inline-flex items-center gap-2")} type="button" onClick={props.onClick}>
-      <span>{humanizeCategory(props.label)}</span>
-      <small className={props.active ? "text-[#F4EFE6]/58" : "text-[#8B8275]"}>{props.count}</small>
-    </button>
+    <HomeCategoryPill active={props.active} count={props.count} label={humanizeCategory(props.label)} onClick={props.onClick} />
   );
 }
 
@@ -154,96 +151,23 @@ export function ProjectHistory(props: {
   onDeleteProject: (projectId: string) => void;
   onOpenProject: (project: SlideProject) => void;
 }) {
-  if (props.projects.length === 0) {
-    return (
-      <div className="mt-5">
-        <HistoryPanelActions loading={props.loading} projectCount={props.projects.length} onClearHistory={props.onClearHistory} />
-        <RecentEmptyState />
-      </div>
-    );
-  }
   return (
-    <div className="mt-5">
-      <HistoryPanelActions loading={props.loading} projectCount={props.projects.length} onClearHistory={props.onClearHistory} />
-      <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-4">
-        {props.projects.map((project) => (
-          <ProjectHistoryCard key={project.id} project={project} onDelete={props.onDeleteProject} onOpen={props.onOpenProject} />
-        ))}
-      </div>
-    </div>
+    <ArtifactHistoryPanel
+      emptyDescription="Create a presentation or open a template to see it here."
+      emptyIcon={<FileText size={17} />}
+      emptyTitle="No history yet"
+      getId={(project) => project.id}
+      getSubtitle={(project) => project.templateName ?? "Blank deck"}
+      getTitle={(project) => project.title}
+      getUpdatedAt={(project) => project.updatedAt}
+      icon={(project) => project.templateId ? <FileCode2 size={15} /> : <FileText size={15} />}
+      loading={props.loading}
+      projects={props.projects}
+      onClearHistory={props.onClearHistory}
+      onDeleteProject={props.onDeleteProject}
+      onOpenProject={props.onOpenProject}
+    />
   );
-}
-
-function HistoryPanelActions(props: { loading: boolean; projectCount: number; onClearHistory: () => void }) {
-  return (
-    <div className={historyActionsClass}>
-      <button
-        className={historyClearButtonClass}
-        type="button"
-        disabled={props.loading || props.projectCount === 0}
-        onClick={props.onClearHistory}
-        title="Clear history"
-      >
-        <Trash2 size={13} />
-        Clear history
-      </button>
-    </div>
-  );
-}
-
-function ProjectHistoryCard(props: { project: SlideProject; onDelete: (projectId: string) => void; onOpen: (project: SlideProject) => void }) {
-  return (
-    <div className={cn("group", historyCardClass())}>
-      <button
-        aria-label={`Open ${props.project.title}`}
-        className="block h-full min-h-[132px] w-full rounded-[20px] p-4 text-left"
-        type="button"
-        onClick={() => props.onOpen(props.project)}
-      >
-        <div className="pr-12">
-          <div className="truncate text-[13px] font-medium text-[#2A2620]">{props.project.title}</div>
-          <div className="mt-1 truncate text-[11px] text-[#8B8275]">{props.project.templateName ?? "Blank deck"}</div>
-        </div>
-        <div className="mt-5 flex items-center gap-1.5 text-[11px] text-[#8B8275]">
-          <Clock3 size={12} />
-          {formatProjectDate(props.project.updatedAt)}
-        </div>
-      </button>
-      <div className="absolute right-3 top-3 grid size-8 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]">
-        {props.project.templateId ? <FileCode2 size={15} /> : <FileText size={15} />}
-      </div>
-      <button
-        aria-label={`Delete ${props.project.title}`}
-        className={historyDeleteButtonClass}
-        type="button"
-        title="Delete project"
-        onClick={() => props.onDelete(props.project.id)}
-      >
-        <Trash2 size={13} />
-      </button>
-    </div>
-  );
-}
-
-export function RecentEmptyState() {
-  return (
-    <div className={cn("mt-3", historyEmptyStateClass)}>
-      <div className={historyEmptyIconClass}><History size={17} /></div>
-      <strong className="text-[14px] font-medium text-[#2A2620]">No history yet</strong>
-      <span className="max-w-[420px] text-[13px] leading-relaxed text-[#8B8275]">Create a presentation or open a template to see it here.</span>
-    </div>
-  );
-}
-
-function formatProjectDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown date";
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
 }
 
 function humanizeCategory(value: string) {
