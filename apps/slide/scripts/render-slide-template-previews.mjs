@@ -73,12 +73,7 @@ async function renderTemplate(browser, sharp, id) {
 }
 
 async function canonicalPagePaths(templateDir) {
-  const deckDir = path.join(templateDir, "deck");
-  if (!existsSync(deckDir)) return null;
-  const entries = await readdir(deckDir, { withFileTypes: true }).catch(() => []);
-  const slidesDir = entries.find((entry) => entry.isDirectory() && entry.name.endsWith(".slides"))?.name;
-  if (!slidesDir) return null;
-  const manifestPath = path.join(deckDir, slidesDir, "manifest.json");
+  const manifestPath = path.join(templateDir, "deck.slides", "manifest.json");
   if (!existsSync(manifestPath)) return null;
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   const playlist = Array.isArray(manifest.playlist) ? manifest.playlist.filter((item) => typeof item === "string" && item.endsWith(".html")) : [];

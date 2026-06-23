@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, readdir } from "node:fs/promises";
 import { dirname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -126,7 +126,9 @@ export async function ensureTemplateDirs() {
 }
 
 function listLocalTemplates(): SlideTemplate[] {
+  const allowedTemplateIds = localTemplateIdFilter();
   return bundledSlideTemplates
+    .filter((template) => !allowedTemplateIds || allowedTemplateIds.has(template.id))
     .filter((template) => isSupportedDeckCanvas(template.canvas))
     .map((template) => ({
       ...template,
@@ -140,13 +142,10 @@ function listLocalTemplates(): SlideTemplate[] {
 async function loadLocalTemplateDeckSource(templateId: string): Promise<TemplateDeckSource | null> {
   const templateDir = localTemplateSourceRoots().map((root) => join(root, templateId)).find((candidate) => existsSync(candidate));
   if (!templateDir) return null;
-  const deckDir = join(templateDir, "deck");
+  const deckDir = join(templateDir, "deck.slides");
   const pagesDir = join(templateDir, "pages");
   if (!existsSync(deckDir) || !existsSync(pagesDir)) return null;
-  const deckEntries = await readdir(deckDir, { withFileTypes: true }).catch(() => []);
-  const slidesDirName = deckEntries.find((entry) => entry.isDirectory() && entry.name.endsWith(".slides"))?.name;
-  if (!slidesDirName) return null;
-  const manifestPath = join(deckDir, slidesDirName, "manifest.json");
+  const manifestPath = join(deckDir, "manifest.json");
   if (!existsSync(manifestPath)) return null;
   const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as CloudDeckManifest;
   const slides = normalizeCloudSlides(manifest).filter((slide) => slide.fileName.endsWith(".html"));
@@ -347,6 +346,15 @@ function templateBaseUrl(template: CloudSlideTemplateManifestEntry, sourceUrl: s
 
 function templateProviderKind(): TemplateProviderKind {
   return process.env.AI_SLIDE_TEMPLATE_PROVIDER === "local" ? "local" : "cloud";
+}
+
+function localTemplateIdFilter() {
+  const inlineIds = process.env.AI_SLIDE_TEMPLATE_IDS?.split(",") ?? [];
+  const fileIds = process.env.AI_SLIDE_TEMPLATE_ID_FILE && existsSync(process.env.AI_SLIDE_TEMPLATE_ID_FILE)
+    ? readFileSync(process.env.AI_SLIDE_TEMPLATE_ID_FILE, "utf8").split(/\r?\n/)
+    : [];
+  const ids = [...inlineIds, ...fileIds].map((id) => id.trim()).filter(Boolean);
+  return ids.length ? new Set(ids) : null;
 }
 
 function templateAssetUrl(value: string) {

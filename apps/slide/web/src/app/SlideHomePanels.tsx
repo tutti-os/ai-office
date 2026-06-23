@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { ChevronLeft, ChevronRight, Copy, FileCode2, FileText, Plus, X } from "lucide-react";
 import { appShell, ArtifactHistoryPanel, HomeCategoryPill, scrollbarClass, templateCardClass } from "@ai-app/ui/app-shell";
 import type { SlideProject } from "@ai-slide/shared";
@@ -70,6 +71,17 @@ export function TemplatePreviewModal(props: {
     props.onSelectIndex((selectedIndex + offset + thumbnails.length) % thumbnails.length);
   };
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.key !== "Escape") return;
+      event.preventDefault();
+      props.onClose();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [props.onClose]);
+
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-[#2A2620]/62 p-[18px]" role="presentation" onMouseDown={props.onClose}>
       <section
@@ -118,7 +130,7 @@ export function TemplatePreviewModal(props: {
             <span className="text-[13px] font-medium text-[#8B8275]">{slideCount} slides</span>
           </div>
 
-          <div className="flex flex-wrap gap-4 px-[34px] pb-24 max-md:px-[18px]">
+          <div className="flex flex-wrap gap-4 px-[34px] pb-[34px] max-md:px-[18px]">
             {thumbnails.map((image, index) => (
               <button
                 key={`${image}-${index}`}
@@ -134,7 +146,7 @@ export function TemplatePreviewModal(props: {
           </div>
         </div>
 
-        <div className="absolute inset-x-0 bottom-0 flex justify-end border-t border-[#B8A07C]/45 bg-[#F4EFE6]/96 px-[34px] py-4 backdrop-blur max-md:px-[18px]">
+        <div className="flex shrink-0 justify-end border-t border-[#B8A07C]/45 bg-[#F4EFE6]/96 px-[34px] py-4 backdrop-blur max-md:px-[18px]">
           <button className="h-10 rounded-full border-0 bg-[#2A2620] px-7 text-[15px] font-medium text-[#F4EFE6] disabled:cursor-default disabled:bg-[#B8A07C]/32 disabled:text-[#8B8275]" type="button" disabled={props.creating} onClick={() => props.onUseTemplate(props.template)}>
             {props.creating ? "Adding..." : "Use"}
           </button>

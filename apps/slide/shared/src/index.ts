@@ -111,8 +111,8 @@ export interface SlideTemplate {
   shortDescription: string;
   description: string;
   language: string;
-  tags: string[];
-  updatedAt: string;
+  tags?: string[];
+  updatedAt?: string;
   slideCount: number;
   canvas: { width: number; height: number };
   coverImage: string;

@@ -67,6 +67,7 @@ async function listFilesRecursive(root, current = "") {
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
   const results = [];
   for (const entry of entries) {
+    if (entry.name.startsWith(".")) continue;
     const relativePath = current ? `${current}/${entry.name}` : entry.name;
     if (entry.isDirectory()) results.push(...(await listFilesRecursive(root, relativePath)));
     else if (entry.isFile()) results.push(relativePath);
@@ -110,20 +111,12 @@ function metadataLocale(metadata) {
   return metadata.locale ?? metadata.lang ?? "en-US";
 }
 
-function metadataUpdatedAt(metadata) {
-  return metadata.updatedAt ?? metadata.updated_at ?? "";
-}
-
 function metadataDeck(metadata) {
   return metadata.deck ?? {};
 }
 
 async function readDeckManifest(templateDir) {
-  const deckDir = path.join(templateDir, "deck");
-  const entries = await readdir(deckDir, { withFileTypes: true }).catch(() => []);
-  const slidesDirName = entries.find((entry) => entry.isDirectory() && entry.name.endsWith(".slides"))?.name;
-  if (!slidesDirName) return null;
-  const manifestPath = path.join(deckDir, slidesDirName, "manifest.json");
+  const manifestPath = path.join(templateDir, "deck.slides", "manifest.json");
   if (!(await fileExists(manifestPath))) return null;
   return readJson(manifestPath);
 }
@@ -175,7 +168,11 @@ function selectTemplates(candidates) {
 
 async function stageTemplate(candidate) {
   const targetDir = path.join(stagingRoot, "templates", candidate.id);
-  await cp(candidate.sourceDir, targetDir, { recursive: true, force: true });
+  await cp(candidate.sourceDir, targetDir, {
+    recursive: true,
+    force: true,
+    filter: (source) => !path.basename(source).startsWith("."),
+  });
 
   const assets = (await listFilesRecursive(path.join(candidate.sourceDir, "assets"))).sort((a, b) => a.localeCompare(b));
   const metadataDeckInfo = metadataDeck(candidate.metadata);
@@ -209,8 +206,6 @@ async function stageTemplate(candidate) {
     shortDescription: compactDescription(metadataSummary(candidate.metadata)),
     description: compactDescription(candidate.metadata.description),
     language: metadataLocale(candidate.metadata),
-    tags: candidate.metadata.tags ?? [],
-    updatedAt: metadataUpdatedAt(candidate.metadata),
     slideCount: candidate.playlist.length,
     canvas,
     metadataUrl: templateFileUrl(candidate.id, "metadata.json"),

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   History,
   Layers3,
-  Search,
+  // 模版量较少，所以不需要搜索；保留代码，后续模板量变大时可恢复。
+  // Search,
 } from "lucide-react";
 import { allCategoriesForTemplates, categoryCountsForTemplates, type OutputType, type SlideTemplate } from "./templates";
 import { HomeComposer } from "./app/HomeComposer";
@@ -56,7 +57,8 @@ export function App() {
   const [prompt, setPrompt] = useState("");
   const [outputType, setOutputType] = useState<OutputType>("html");
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [query, setQuery] = useState("");
+  // 模版量较少，所以不需要搜索；保留代码，后续模板量变大时可恢复。
+  // const [query, setQuery] = useState("");
   const [selectedAgent, setSelectedAgent] = useState("");
   const [activePanel, setActivePanel] = useState<"templates" | "history">("templates");
   const [creating, setCreating] = useState(false);
@@ -107,21 +109,26 @@ export function App() {
     deckAgentRuntimeProviderRef.current = provider;
   }, []);
 
-  const visibleTemplates = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return slideTemplates.filter((template) => {
-      const categoryMatch = selectedCategory === "All" || template.category === selectedCategory;
-      if (!categoryMatch) return false;
-      if (!normalizedQuery) return true;
-      return [
-        template.name,
-        template.category,
-        template.shortDescription,
-        template.description,
-        ...template.tags,
-      ].some((value) => value.toLowerCase().includes(normalizedQuery));
-    });
-  }, [query, selectedCategory, slideTemplates]);
+  // 模版量较少，所以不需要搜索；保留代码，后续模板量变大时可恢复。
+  // const visibleTemplates = useMemo(() => {
+  //   const normalizedQuery = query.trim().toLowerCase();
+  //   return slideTemplates.filter((template) => {
+  //     const categoryMatch = selectedCategory === "All" || template.category === selectedCategory;
+  //     if (!categoryMatch) return false;
+  //     if (!normalizedQuery) return true;
+  //     return [
+  //       template.name,
+  //       template.category,
+  //       template.shortDescription,
+  //       template.description,
+  //       ...template.tags,
+  //     ].some((value) => value.toLowerCase().includes(normalizedQuery));
+  //   });
+  // }, [query, selectedCategory, slideTemplates]);
+  const visibleTemplates = useMemo(
+    () => slideTemplates.filter((template) => selectedCategory === "All" || template.category === selectedCategory),
+    [selectedCategory, slideTemplates],
+  );
 
   const hasUnsavedChanges = route.name === "slide" && (artifactSaveState === "saving" || artifactSaveState === "error");
 
@@ -497,10 +504,11 @@ export function App() {
                 : t("home.projectCount", { count: historyProjects.length })}
             </div>
           </div>
-          <label className={appShell.searchShell}>
+          {/* 模版量较少，所以不需要搜索；保留代码，后续模板量变大时可恢复。 */}
+          {/* <label className={appShell.searchShell}>
             <Search size={15} />
             <input className={appShell.searchInput} value={query} placeholder={t("home.searchTemplates")} onChange={(event) => setQuery(event.currentTarget.value)} />
-          </label>
+          </label> */}
         </div>
 
         {activePanel === "templates" ? (

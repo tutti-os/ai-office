@@ -659,10 +659,6 @@ function syncProjectTemplateSkill(projectRoot: string, project: SlideProject, ar
   rmSync(skillRoot, { force: true, recursive: true });
   mkdirSync(skillRoot, { recursive: true });
   cpSync(join(sourceDir, "SKILL.md"), join(skillRoot, "SKILL.md"));
-  for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !/^references?$/i.test(entry.name)) continue;
-    cpSync(join(sourceDir, entry.name), join(skillRoot, entry.name), { recursive: true });
-  }
 }
 
 function syncDefaultDeckSkill(projectRoot: string, project: SlideProject, artifact: SlideArtifact) {

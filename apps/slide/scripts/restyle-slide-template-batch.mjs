@@ -2107,7 +2107,6 @@ for (const id of ids) {
     changed += 1;
     if (!dryRun) await writeFile(file, after, "utf8");
   }
-  if (!dryRun) await writeFile(path.join(templateDir, ".restyle-profile.json"), `${JSON.stringify({ id, profile: profile.name, updatedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
   console.log(`${dryRun ? "Would restyle" : "Restyled"} ${id} (${profile.name}) — ${changed} files`);
 }
 

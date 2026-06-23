@@ -66,10 +66,6 @@ function metadataLocale(metadata) {
   return metadata.locale ?? metadata.lang ?? "en-US";
 }
 
-function metadataUpdatedAt(metadata) {
-  return metadata.updatedAt ?? metadata.updated_at ?? "";
-}
-
 function metadataDeck(metadata) {
   return metadata.deck ?? {};
 }
@@ -129,8 +125,6 @@ for (const entry of entries) {
     shortDescription: compactDescription(metadataSummary(metadata)),
     description: compactDescription(metadata.description),
     language: metadataLocale(metadata),
-    tags: metadata.tags ?? [],
-    updatedAt: metadataUpdatedAt(metadata),
     slideCount: pages.length,
     canvas: {
       width: canvas?.width ?? 1920,
