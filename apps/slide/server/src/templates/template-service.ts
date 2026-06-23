@@ -105,8 +105,6 @@ export function localTemplateSourceRoots() {
   return [
     process.env.AI_SLIDE_TEMPLATE_ROOT ? resolve(process.env.AI_SLIDE_TEMPLATE_ROOT) : "",
     resolve(root, "templates", "source"),
-    resolve(root, "../../../tutti/slide/template"),
-    resolve(root, "../../../genspark/slide/template"),
   ].filter(Boolean);
 }
 
@@ -352,14 +350,14 @@ function templateProviderKind(): TemplateProviderKind {
 }
 
 function templateAssetUrl(value: string) {
-  const assetPath = value.replace(/^\/generated\/templates\//, "");
+  const assetPath = value.replace(/^\/generated\/(?:templates\/)?/, "");
   return `${assetRoutePrefix}/${assetPath.split("/").map(encodeURIComponent).join("/")}`;
 }
 
 function templateAssetRoots() {
   return [
     process.env.AI_SLIDE_TEMPLATE_ASSET_ROOT ? resolve(process.env.AI_SLIDE_TEMPLATE_ASSET_ROOT) : "",
-    resolve(appRoot(), "templates", "generated", "templates"),
+    resolve(appRoot(), "templates", "generated"),
   ].filter(Boolean);
 }
 

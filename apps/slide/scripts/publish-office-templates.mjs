@@ -94,6 +94,30 @@ function normalizeCanvas(canvas) {
   };
 }
 
+function metadataId(metadata, fallback) {
+  return String(metadata.id ?? metadata.name ?? fallback);
+}
+
+function metadataTitle(metadata, fallback) {
+  return String(metadata.title ?? metadata.display_name ?? metadata.name ?? fallback);
+}
+
+function metadataSummary(metadata) {
+  return metadata.summary ?? metadata.short_description ?? metadata.description;
+}
+
+function metadataLocale(metadata) {
+  return metadata.locale ?? metadata.lang ?? "en-US";
+}
+
+function metadataUpdatedAt(metadata) {
+  return metadata.updatedAt ?? metadata.updated_at ?? "";
+}
+
+function metadataDeck(metadata) {
+  return metadata.deck ?? {};
+}
+
 async function readDeckManifest(templateDir) {
   const deckDir = path.join(templateDir, "deck");
   const entries = await readdir(deckDir, { withFileTypes: true }).catch(() => []);
@@ -116,7 +140,7 @@ async function collectCandidates() {
     const deck = await readDeckManifest(sourceDir);
     const playlist = (deck?.playlist ?? []).filter((item) => typeof item === "string" && item.endsWith(".html"));
     if (!playlist.length) continue;
-    const templateId = String(metadata.name || entry.name);
+    const templateId = metadataId(metadata, entry.name);
     candidates.push({
       id: templateId,
       sourceDir,
@@ -124,7 +148,7 @@ async function collectCandidates() {
       deck,
       playlist,
       category: String(metadata.category || "uncategorized"),
-      name: String(metadata.display_name || metadata.name || templateId),
+      name: metadataTitle(metadata, templateId),
     });
   }
   return candidates;
@@ -154,7 +178,8 @@ async function stageTemplate(candidate) {
   await cp(candidate.sourceDir, targetDir, { recursive: true, force: true });
 
   const assets = (await listFilesRecursive(path.join(candidate.sourceDir, "assets"))).sort((a, b) => a.localeCompare(b));
-  const canvas = normalizeCanvas(candidate.deck?.canvas ?? candidate.metadata.canvas);
+  const metadataDeckInfo = metadataDeck(candidate.metadata);
+  const canvas = normalizeCanvas(candidate.deck?.canvas ?? metadataDeckInfo.canvas ?? candidate.metadata.canvas);
   const deck = {
     schemaVersion: "ai-slide.template.deck.v1",
     title: candidate.deck?.metadata?.title || candidate.name,
@@ -169,8 +194,8 @@ async function stageTemplate(candidate) {
     "utf8",
   );
 
-  const previews = sortSlideAssets(candidate.metadata.files?.previews ?? []);
-  const thumbnails = sortSlideAssets(candidate.metadata.files?.thumbnails ?? []);
+  const previews = sortSlideAssets(metadataDeckInfo.previews ?? candidate.metadata.files?.previews ?? []);
+  const thumbnails = sortSlideAssets(metadataDeckInfo.thumbnails ?? candidate.metadata.files?.thumbnails ?? []);
   const coverImage = previews[0] || thumbnails[0] || "";
   const previewImages = previews.map((item) => templateFileUrl(candidate.id, item));
   const thumbnailImages = thumbnails.map((item) => templateFileUrl(candidate.id, item));
@@ -181,11 +206,11 @@ async function stageTemplate(candidate) {
     name: candidate.name,
     slug: candidate.id,
     category: candidate.category,
-    shortDescription: compactDescription(candidate.metadata.short_description ?? candidate.metadata.description),
+    shortDescription: compactDescription(metadataSummary(candidate.metadata)),
     description: compactDescription(candidate.metadata.description),
-    language: candidate.metadata.lang ?? "en-US",
+    language: metadataLocale(candidate.metadata),
     tags: candidate.metadata.tags ?? [],
-    updatedAt: candidate.metadata.updated_at ?? "",
+    updatedAt: metadataUpdatedAt(candidate.metadata),
     slideCount: candidate.playlist.length,
     canvas,
     metadataUrl: templateFileUrl(candidate.id, "metadata.json"),

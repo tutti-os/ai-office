@@ -4,12 +4,12 @@ import path from "node:path";
 
 const projectRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const templateRoot = slideTemplateSourceRoot();
-const publicRoot = path.join(projectRoot, "templates", "generated", "templates");
+const publicRoot = path.join(projectRoot, "templates", "generated");
 const outputPath = path.join(projectRoot, "shared", "src", "generatedTemplates.ts");
 const supportedCanvas = { width: 1920, height: 1080 };
 
 function publicPath(...parts) {
-  return `/generated/templates/${parts.map(encodeURIComponent).join("/")}`;
+  return `/generated/${parts.map(encodeURIComponent).join("/")}`;
 }
 
 async function fileExists(filePath) {
@@ -50,13 +50,34 @@ function isSupportedTemplateCanvas(canvas) {
   return (canvas?.width ?? supportedCanvas.width) === supportedCanvas.width && (canvas?.height ?? supportedCanvas.height) === supportedCanvas.height;
 }
 
+function metadataId(metadata, fallback) {
+  return String(metadata.id ?? metadata.name ?? fallback);
+}
+
+function metadataTitle(metadata, fallback) {
+  return String(metadata.title ?? metadata.display_name ?? metadata.name ?? fallback);
+}
+
+function metadataSummary(metadata) {
+  return metadata.summary ?? metadata.short_description ?? metadata.description;
+}
+
+function metadataLocale(metadata) {
+  return metadata.locale ?? metadata.lang ?? "en-US";
+}
+
+function metadataUpdatedAt(metadata) {
+  return metadata.updatedAt ?? metadata.updated_at ?? "";
+}
+
+function metadataDeck(metadata) {
+  return metadata.deck ?? {};
+}
+
 function slideTemplateSourceRoot() {
   const candidates = [
     process.env.AI_SLIDE_TEMPLATE_ROOT ? path.resolve(process.env.AI_SLIDE_TEMPLATE_ROOT) : "",
     path.join(projectRoot, "templates", "source"),
-    path.resolve(projectRoot, "../../tutti/slide/template"),
-    path.resolve(projectRoot, "../../../tutti/slide/template"),
-    path.resolve(projectRoot, "../../../genspark/slide/template"),
   ].filter(Boolean);
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
@@ -75,11 +96,14 @@ for (const entry of entries) {
   if (!(await fileExists(metadataPath))) continue;
 
   const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
-  if (!isSupportedTemplateCanvas(metadata.canvas)) continue;
-  const templatePublicDir = path.join(publicRoot, metadata.name);
-  const previews = sortSlideAssets(metadata.files?.previews ?? []);
-  const thumbnails = sortSlideAssets(metadata.files?.thumbnails ?? []);
-  const pages = sortSlideAssets(metadata.files?.pages ?? []);
+  const templateId = metadataId(metadata, entry.name);
+  const deck = metadataDeck(metadata);
+  const canvas = deck.canvas ?? metadata.canvas;
+  if (!isSupportedTemplateCanvas(canvas)) continue;
+  const templatePublicDir = path.join(publicRoot, templateId);
+  const previews = sortSlideAssets(deck.previews ?? metadata.files?.previews ?? []);
+  const thumbnails = sortSlideAssets(deck.thumbnails ?? metadata.files?.thumbnails ?? []);
+  const pages = sortSlideAssets(deck.pages ?? metadata.files?.pages ?? []);
   const coverSource =
     (await copyFirstExisting(templateDir, [...previews.slice(0, 1), ...thumbnails.slice(0, 1)], path.join(templatePublicDir, "cover.png"))) ??
     "";
@@ -89,30 +113,30 @@ for (const entry of entries) {
   const thumbnailImages = [];
   for (const [index, source] of previews.entries()) {
     const copied = await copyFirstExisting(templateDir, [source], path.join(templatePublicDir, `preview-${index + 1}.png`));
-    if (copied) previewImages.push(publicPath(metadata.name, `preview-${index + 1}.png`));
+    if (copied) previewImages.push(publicPath(templateId, `preview-${index + 1}.png`));
   }
   for (const [index, source] of thumbnails.entries()) {
     const copied = await copyFirstExisting(templateDir, [source], path.join(templatePublicDir, `thumb-${index + 1}.png`));
-    if (copied) thumbnailImages.push(publicPath(metadata.name, `thumb-${index + 1}.png`));
+    if (copied) thumbnailImages.push(publicPath(templateId, `thumb-${index + 1}.png`));
   }
   stripImages.push(...thumbnailImages.slice(0, 4));
 
   templates.push({
-    id: metadata.name,
-    name: metadata.display_name ?? metadata.name,
-    slug: metadata.name,
+    id: templateId,
+    name: metadataTitle(metadata, templateId),
+    slug: templateId,
     category: metadata.category ?? "uncategorized",
-    shortDescription: compactDescription(metadata.short_description ?? metadata.description),
+    shortDescription: compactDescription(metadataSummary(metadata)),
     description: compactDescription(metadata.description),
-    language: metadata.lang ?? "en-US",
+    language: metadataLocale(metadata),
     tags: metadata.tags ?? [],
-    updatedAt: metadata.updated_at ?? "",
+    updatedAt: metadataUpdatedAt(metadata),
     slideCount: pages.length,
     canvas: {
-      width: metadata.canvas?.width ?? 1920,
-      height: metadata.canvas?.height ?? 1080,
+      width: canvas?.width ?? 1920,
+      height: canvas?.height ?? 1080,
     },
-    coverImage: coverSource ? publicPath(metadata.name, "cover.png") : "",
+    coverImage: coverSource ? publicPath(templateId, "cover.png") : "",
     stripImages,
     previewImages,
     thumbnailImages,

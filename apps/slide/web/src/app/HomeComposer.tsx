@@ -1,6 +1,6 @@
 import { Check, ChevronDown, Download, FileCode2, FileText, Loader2, Plus, Wand2 } from "lucide-react";
 import type { ReactNode } from "react";
-import { AgentSelectShell, appShell, formatOptionClass, formatOptionIconClass } from "@ai-app/ui/app-shell";
+import { AgentSelectShell, appShell } from "@ai-app/ui/app-shell";
 import { PromptComposer } from "@ai-app/ui/prompt-composer";
 import type { LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-slide/shared";
 import { useI18n } from "../i18n";
@@ -113,8 +113,9 @@ function FormatOption(props: {
   return (
     <div
       className={cn(formatOptionClass(props.active, props.disabled), "!min-h-[56px] !px-3 !py-2.5")}
+      aria-disabled={props.disabled ? true : undefined}
       role="button"
-      tabIndex={props.disabled && !props.showInstall ? -1 : 0}
+      tabIndex={props.disabled ? -1 : 0}
       title={props.title}
       onClick={() => {
         if (!props.disabled) props.onClick();
@@ -126,9 +127,9 @@ function FormatOption(props: {
       }}
     >
       <span className={formatOptionIconClass(props.active, props.disabled)}>{props.icon}</span>
-      <span className="grid min-w-0 gap-1">
+      <span className="mr-auto grid min-w-0 flex-1 gap-1">
         <span className="truncate text-[14px] font-bold leading-none">{props.label}</span>
-        <small className={cn("truncate text-[12px] font-medium", props.active ? "text-[#8B8275]" : props.disabled ? "text-[#8B8275]/78" : "text-[#E6DDCD]/62")}>{props.description}</small>
+        <small className={cn("truncate text-[12px] font-medium", props.active ? "text-[#8B8275]" : props.disabled ? "text-[#8B8275]/72" : "text-[#8B8275]")}>{props.description}</small>
       </span>
       {props.installing ? (
         <span className="ml-auto grid size-6 shrink-0 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]">
@@ -162,6 +163,24 @@ function FormatOption(props: {
         </span>
       ) : null}
     </div>
+  );
+}
+
+function formatOptionClass(active: boolean, disabled?: boolean) {
+  return cn(
+    "flex min-h-16 items-center justify-between gap-3 rounded-2xl border p-3 text-left transition-colors",
+    active && "border-[#D8CDB9]/80 bg-[#F4EFE6] text-[#2A2620] shadow-[0_12px_10px_rgba(0,0,0,0.08)]",
+    disabled && "border-[#D8CDB9]/48 bg-[#E6DDCD]/42 text-[#8B8275]/80",
+    !active && !disabled && "border-[#B8A07C]/42 bg-[#E6DDCD]/36 text-[#2A2620]/82 hover:border-[#5C6B50]/36 hover:bg-[#E6DDCD]/52 hover:text-[#2A2620]",
+  );
+}
+
+function formatOptionIconClass(active: boolean, disabled?: boolean) {
+  return cn(
+    "grid size-9 shrink-0 place-items-center rounded-[14px]",
+    active && "bg-[#5C6B50] text-[#F4EFE6]",
+    disabled && "bg-[#D8CDB9]/58 text-[#8B8275]/72",
+    !active && !disabled && "bg-[#F4EFE6]/82 text-[#5C6B50]",
   );
 }
 
