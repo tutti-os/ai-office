@@ -2,8 +2,13 @@ import type {
   AppSnapshot,
   ApplySheetCommandsRequest,
   ApplySheetCommandsResponse,
+  AiEditRequest,
+  AiEditResponse,
+  CreateProjectRequest,
+  LocalAgentProviderStatusResponse,
   OfficeCliStatusResponse,
   ProjectDetailResponse,
+  ProjectRunsResponse,
   ProjectResponse,
   ProjectsResponse,
   SheetProject,
@@ -13,6 +18,13 @@ import { requestArrayBuffer, requestJson } from "@ai-app/shared/api-client";
 
 export async function fetchBootstrapSnapshot() {
   return requestJson<AppSnapshot>("/api/bootstrap");
+}
+
+export async function createProject(input: CreateProjectRequest) {
+  return requestJson<ProjectDetailResponse>("/api/projects", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export async function importProjectFile(file: File) {
@@ -39,8 +51,25 @@ export async function fetchOfficeCliStatus() {
   return requestJson<OfficeCliStatusResponse>("/api/toolchains/officecli");
 }
 
+export async function fetchLocalAgentProviders() {
+  return requestJson<LocalAgentProviderStatusResponse>("/api/local-agent/providers");
+}
+
 export async function installOfficeCli() {
   return requestJson<OfficeCliStatusResponse>("/api/toolchains/officecli/install", { method: "POST" });
+}
+
+export async function listProjectRuns(projectId: string) {
+  const response = await requestJson<ProjectRunsResponse>(`/api/projects/${encodeURIComponent(projectId)}/runs`);
+  return response.runs;
+}
+
+export async function startAiEdit(projectId: string, input: AiEditRequest) {
+  const response = await requestJson<AiEditResponse>(`/api/projects/${encodeURIComponent(projectId)}/ai-edit`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return response.run;
 }
 
 export async function updateProject(projectId: string, input: UpdateProjectRequest) {

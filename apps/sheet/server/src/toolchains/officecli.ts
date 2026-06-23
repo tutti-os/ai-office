@@ -11,3 +11,4 @@ export const getOfficeCliStatus = officeCli.getOfficeCliStatus;
 export const installOfficeCli = officeCli.installOfficeCli;
 export const requireOfficeCli = officeCli.requireOfficeCli;
 export const officeCliEnv = officeCli.officeCliEnv;
+export const officeCliEnvSync = officeCli.officeCliEnvSync;

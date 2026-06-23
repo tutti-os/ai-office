@@ -7,24 +7,54 @@ import {
   type CreateProjectRequest,
   type SheetArtifact,
   type SheetProject,
+  type SheetRun,
+  type SheetRunEvent,
   type UpdateProjectRequest,
   type XlsxManifest,
   xlsxArtifactFileRef,
   xlsxMimeType,
 } from "@ai-sheet/shared";
+import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
 import { getDb, rowOrNull, rows } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
 
 export class SheetRepository {
+  private readonly conversations = new SqliteAgentConversationStore(getDb, {
+    createSessionId: randomUUID,
+    createMessageId: randomUUID,
+  });
+  private readonly runs = new SqliteRunStore<SheetRun, SheetRunEvent>(getDb, {
+    runsTable: "sheet_runs",
+    eventsTable: "sheet_run_events",
+    createRunId: randomUUID,
+    createEventId: randomUUID,
+  });
+  private readonly runtimeProfiles = new RuntimeProfileStore(getDb, {
+    defaultProfiles: defaultRuntimeProfiles({
+      demoModel: "sheet-demo",
+      demoDisplayName: "Demo sheet editor",
+    }),
+  });
+
+  ensureSeedData() {
+    this.runtimeProfiles.ensureSeedData();
+  }
+
   snapshot() {
+    this.ensureSeedData();
     const db = getDb();
     return {
       projects: rows<ProjectRow>(db.prepare(`SELECT * FROM projects ORDER BY updated_at DESC`).all()).map(rowToProject),
       artifacts: rows<ArtifactRow>(db.prepare(`SELECT * FROM artifacts ORDER BY updated_at DESC`).all()).map(rowToArtifact),
-      activeRuns: [],
-      runEvents: [],
+      runtimeProfiles: this.runtimeProfiles.list(),
+      activeRuns: this.runs.listActiveRuns(),
+      runEvents: this.runs.listRecentRunEvents(),
       lastSeq: (db.prepare(`SELECT COALESCE(MAX(seq), 0) AS seq FROM stream_events`).get() as { seq: number }).seq,
     };
+  }
+
+  interruptActiveRuns(reason: string) {
+    return this.runs.interruptActiveRuns(reason);
   }
 
   listProjects() {
@@ -39,6 +69,16 @@ export class SheetRepository {
   getArtifact(artifactId: string) {
     const row = rowOrNull<ArtifactRow>(getDb().prepare(`SELECT * FROM artifacts WHERE id = ?`).get(artifactId));
     return row ? rowToArtifact(row) : null;
+  }
+
+  getRuntimeProfile(profileId: string | null | undefined) {
+    this.ensureSeedData();
+    return this.runtimeProfiles.get(profileId);
+  }
+
+  getRuntimeProfileForRun(run: Pick<SheetRun, "runtime" | "provider" | "model">) {
+    this.ensureSeedData();
+    return this.runtimeProfiles.getForRun(run);
   }
 
   createProject(input: CreateProjectRequest = {}) {
@@ -229,7 +269,47 @@ export class SheetRepository {
   listProjectRuns(projectId: string) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
-    return [];
+    return this.runs.listProjectRuns(projectId);
+  }
+
+  createRun(input: Parameters<SqliteRunStore<SheetRun, SheetRunEvent>["createRun"]>[0]) {
+    return this.runs.createRun(input);
+  }
+
+  getRun(runId: string) {
+    return this.runs.getRun(runId);
+  }
+
+  updateRun(runId: string, input: Partial<Pick<SheetRun, "status" | "error" | "resultPreview">>) {
+    return this.runs.updateRun(runId, input);
+  }
+
+  createRunEvent(input: Parameters<SqliteRunStore<SheetRun, SheetRunEvent>["createRunEvent"]>[0]) {
+    return this.runs.createRunEvent(input);
+  }
+
+  listRunEvents(runId: string) {
+    return this.runs.listRunEvents(runId);
+  }
+
+  ensureConversationSession(projectId: string, title: string) {
+    return this.conversations.ensureProjectSession(projectId, title);
+  }
+
+  createConversationMessage(input: Parameters<SqliteAgentConversationStore["createMessage"]>[0]) {
+    return this.conversations.createMessage(input);
+  }
+
+  updateConversationMessage(messageId: string, input: Parameters<SqliteAgentConversationStore["updateMessage"]>[1]) {
+    return this.conversations.updateMessage(messageId, input);
+  }
+
+  conversationHistory(sessionId: string, currentPrompt: string) {
+    return this.conversations.normalizedHistory({ sessionId, currentPrompt });
+  }
+
+  updateProjectSessionTitle(projectId: string, title: string) {
+    return this.conversations.updateProjectSessionTitle(projectId, title);
   }
 }
 

@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { createDatabaseProvider, json, parseJson, rowOrNull, rows } from "@ai-app/shared/project-store";
+import { agentConversationSchemaSql, createDatabaseProvider, json, parseJson, rowOrNull, rows } from "@ai-app/shared/project-store";
 import { appPaths, ensureBaseDirs } from "../local/paths.js";
 
 export const getDb = createDatabaseProvider({
@@ -34,6 +34,18 @@ function migrate(database: DatabaseSync) {
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_artifacts_project ON artifacts(project_id, updated_at);
+
+    CREATE TABLE IF NOT EXISTS runtime_profiles (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      model TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      capabilities TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
 
     CREATE TABLE IF NOT EXISTS sheet_runs (
       id TEXT PRIMARY KEY,
@@ -83,6 +95,7 @@ function migrate(database: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_stream_events_seq ON stream_events(seq);
   `);
+  database.exec(agentConversationSchemaSql);
 }
 
 export { json, parseJson, rowOrNull, rows };

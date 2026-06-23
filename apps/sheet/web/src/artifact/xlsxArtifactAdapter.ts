@@ -105,8 +105,15 @@ export class XlsxArtifactRuntimeAdapter
   }
 
   createAiEditRequest(input: XlsxAgentEditRequestInput): AiEditRequest {
+    const selection = this.getSelection(input.runtime);
     return {
       userPrompt: input.userPrompt,
+      mode: "write",
+      runtimeProfileId: input.runtimeProfileId ?? null,
+      selectionType: selection?.type === "none" ? "write" : selection?.type ?? "write",
+      selectionPath: selection?.path ?? "",
+      selectedText: selection?.text ?? "",
+      selectedHtml: "",
     };
   }
 }

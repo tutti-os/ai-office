@@ -10,6 +10,7 @@
     "start": "node dist/apps/sheet/server/src/main.js"
   },
   "dependencies": {
+    "@ai-app/agent": "workspace:*",
     "@ai-app/shared": "workspace:*",
     "@ai-sheet/shared": "workspace:*",
     "@fastify/static": "^9.1.3",

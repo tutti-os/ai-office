@@ -6,6 +6,13 @@ import { officeCliEnv, requireOfficeCli } from "../toolchains/officecli.js";
 const execFileAsync = promisify(execFile);
 
 export class XlsxStorageAdapter {
+  async createBlankWorkbook(input: { workbookPath: string }) {
+    const status = await requireOfficeCli();
+    if (!status.executablePath) throw new Error("OfficeCLI executable path is missing.");
+    const env = { ...process.env, ...(await officeCliEnv()) };
+    await execFileAsync(status.executablePath, ["create", input.workbookPath, "--type", "xlsx", "--force", "--json"], { env, timeout: 30_000 });
+  }
+
   async applyCommands(input: { commands: SheetCommand[]; workbookPath: string }) {
     const status = await requireOfficeCli();
     if (!status.executablePath) throw new Error("OfficeCLI executable path is missing.");

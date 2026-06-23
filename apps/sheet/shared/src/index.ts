@@ -1,6 +1,9 @@
 import type {
   AiEditMode,
   Id,
+  LocalAgentProviderStatus,
+  ReasoningEffort,
+  RuntimeProfile,
   RunEventType,
   RunStatus,
   StreamEvent as BaseStreamEvent,
@@ -11,10 +14,12 @@ import type { AgentArtifactContextBase, ArtifactSelectionBase } from "@ai-app/sh
 export type {
   AiEditMode,
   Id,
+  LocalAgentProviderModel,
   LocalAgentProviderStatus,
   ReasoningEffort,
   RunEventType,
   RunStatus,
+  RuntimeKind,
   RuntimeProfile,
   WsClientMessage,
 } from "@ai-app/shared/types";
@@ -155,6 +160,7 @@ export interface SheetProjectDetail extends SheetProjectRecord {
 export interface AppSnapshot {
   projects: SheetProject[];
   artifacts: SheetArtifact[];
+  runtimeProfiles: RuntimeProfile[];
   activeRuns: SheetRun[];
   runEvents: SheetRunEvent[];
   lastSeq: number;
@@ -210,7 +216,7 @@ export interface ProjectRunsResponse {
 }
 
 export interface LocalAgentProviderStatusResponse {
-  providers: [];
+  providers: LocalAgentProviderStatus[];
 }
 
 export type OfficeCliSource = "env" | "bundled" | "tutti" | "missing";
@@ -231,6 +237,13 @@ export interface OfficeCliStatusResponse {
 
 export interface AiEditRequest {
   userPrompt: string;
+  mode: AiEditMode;
+  runtimeProfileId?: string | null;
+  reasoningEffort?: ReasoningEffort | null;
+  selectionType?: SheetSelectionType;
+  selectionPath?: string;
+  selectedText?: string;
+  selectedHtml?: string;
 }
 
 export interface AiEditResponse {

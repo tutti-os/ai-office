@@ -123,6 +123,9 @@ importers:
 
   apps/sheet/server:
     dependencies:
+      '@ai-app/agent':
+        specifier: workspace:*
+        version: link:../../../packages/ai-app-agent
       '@ai-app/shared':
         specifier: workspace:*
         version: link:../../../packages/ai-app-shared

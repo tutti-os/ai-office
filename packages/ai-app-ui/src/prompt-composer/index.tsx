@@ -4,6 +4,7 @@ type PromptComposerProps = {
   value: string;
   placeholder: string;
   canSubmit: boolean;
+  disabled?: boolean;
   beforeTextarea?: ReactNode;
   leadingActions?: ReactNode;
   trailingActions?: ReactNode;
@@ -28,7 +29,8 @@ export function PromptComposer(props: PromptComposerProps) {
     <div className={cx("rounded-[20px] border border-white/10 bg-[#303030] p-4 shadow-[0_22px_80px_rgba(0,0,0,0.42)]", props.className)}>
       {props.beforeTextarea}
       <textarea
-        className={cx("h-[108px] w-full resize-none border-0 bg-transparent px-1 text-[15px] leading-6 text-white outline-none placeholder:text-white/42", props.textareaClassName)}
+        className={cx("h-[108px] w-full resize-none border-0 bg-transparent px-1 text-[15px] leading-6 text-white outline-none placeholder:text-white/42 disabled:cursor-not-allowed disabled:opacity-60", props.textareaClassName)}
+        disabled={props.disabled}
         value={props.value}
         placeholder={props.placeholder}
         onChange={(event) => props.onChange(event.currentTarget.value)}

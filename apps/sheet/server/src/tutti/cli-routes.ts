@@ -10,7 +10,7 @@ interface CliInvokeEnvelope {
 export function registerTuttiCliRoutes(server: FastifyInstance, sheets: SheetService) {
   server.post("/tutti/cli/status", async (_request, reply) => {
     const projects = sheets.listProjects().projects;
-    const providers = sheets.listLocalAgentProviders();
+    const providers = await sheets.listLocalAgentProviders().catch(() => ({ providers: [] }));
     const latestProject = projects[0] ?? null;
     return reply.send(jsonOutput({
       ok: true,

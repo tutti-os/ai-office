@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ArtifactEditorFrame, ArtifactExportToast, ArtifactWorkspaceHeader, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
-import type { ProjectDetailResponse } from "@ai-sheet/shared";
+import type { ProjectDetailResponse, SheetRunTimelineItem } from "@ai-sheet/shared";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { XlsxPreview } from "./XlsxPreview";
 import type { XlsxRuntimeState } from "../artifact/xlsxArtifactAdapter";
@@ -12,12 +12,16 @@ export function SheetViewerScreen(props: {
   error: string;
   saveState: ArtifactSaveState;
   exportMessage: string;
+  conversationError: string;
+  conversationItems: SheetRunTimelineItem[];
+  conversationLoading: boolean;
+  sending: boolean;
   onBackHome: () => void;
   onExportXlsx: () => void;
   onOpenExportLocation: () => void;
   onDismissExport: () => void;
+  onSendPrompt: (prompt: string) => Promise<void>;
 }) {
-  const [conversationError, setConversationError] = useState("");
   const manifest = props.detail.xlsxManifest;
   const sheets = props.runtime?.renderWorkbook?.sheets.length ?? 0;
   const activeSelectionText = useMemo(() => {
@@ -30,10 +34,6 @@ export function SheetViewerScreen(props: {
     sheets ? `${sheets} sheets` : props.detail.artifact.type.toUpperCase(),
     `Revision ${props.detail.artifact.revision}`,
   ];
-  const sendComingSoonPrompt = useCallback(async () => {
-    const message = "Smart Sheet agent is coming soon. XLSX source viewing and export are available now.";
-    setConversationError(message);
-  }, []);
 
   return (
     <ArtifactEditorFrame
@@ -45,12 +45,12 @@ export function SheetViewerScreen(props: {
           activeSelectionVisible={false}
           artifactLabel="xlsx"
           dirty={false}
-          error={conversationError || props.error}
-          items={[]}
-          loading={props.loading}
-          sending={false}
+          error={props.conversationError || props.error}
+          items={props.conversationItems}
+          loading={props.loading || props.conversationLoading}
+          sending={props.sending}
           onBackHome={props.onBackHome}
-          onSend={sendComingSoonPrompt}
+          onSend={props.onSendPrompt}
         />
       }
     >
