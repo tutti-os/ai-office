@@ -32,6 +32,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
         AI_SLIDE_PROJECT_ID: context.project.id,
         AI_SLIDE_RUN_ID: context.run.id,
       }),
+      useProviderResume: (context) => context.project.artifact.type !== "deck",
       timeoutMs: () => Number(process.env.AI_SLIDE_LOCAL_AGENT_TIMEOUT_MS ?? defaultLocalAgentTimeoutMs),
       sessionDirName: ".ai-slide",
       buildMcpServers: buildSlideAppToolMcpServers,

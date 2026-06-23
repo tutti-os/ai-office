@@ -36,6 +36,7 @@ export interface LocalAgentRuntimeProviderOptions<
   buildSkillManifest?: (context: RuntimeEditContext<TRun, TProject, TRequest>, workspaceRoot: string) => SkillMaterializationRecord[] | Promise<SkillMaterializationRecord[]>;
   buildMcpServers?: (context: RuntimeEditContext<TRun, TProject, TRequest>) => LocalAgentMcpServer[];
   buildEnv?: (context: RuntimeEditContext<TRun, TProject, TRequest>, workspaceRoot: string) => Record<string, string>;
+  useProviderResume?: (context: RuntimeEditContext<TRun, TProject, TRequest>) => boolean;
   timeoutMs?: () => number;
   sessionDirName?: string;
   extraAllowedDirs?: (context: RuntimeEditContext<TRun, TProject, TRequest>, workspaceRoot: string) => string[];
@@ -111,7 +112,8 @@ export class LocalAgentRuntimeProvider<
     try {
       const sessionStore = new LocalAgentSessionStore(workspaceRoot, this.options.sessionDirName ?? ".ai-app");
       const conversationSessionId = context.conversation?.sessionId ?? context.project.id;
-      const previousSession = sessionStore.read(conversationSessionId);
+      const providerResumeEnabled = this.options.useProviderResume?.(context) ?? true;
+      const previousSession = providerResumeEnabled ? sessionStore.read(conversationSessionId) : null;
       const resume =
         previousSession?.provider === provider && (previousSession.providerSessionId || previousSession.resumeToken)
           ? {
@@ -127,6 +129,7 @@ export class LocalAgentRuntimeProvider<
           context,
           controller,
           provider,
+          persistProviderSession: providerResumeEnabled,
           resume,
           sessionStore,
           workspaceRoot,
@@ -141,6 +144,7 @@ export class LocalAgentRuntimeProvider<
             context,
             controller,
             provider,
+            persistProviderSession: providerResumeEnabled,
             resume: { mode: "fresh" },
             sessionStore,
             workspaceRoot,
@@ -159,12 +163,13 @@ export class LocalAgentRuntimeProvider<
   private async *runWithResume(input: {
     context: RuntimeEditContext<TRun, TProject, TRequest>;
     controller: AbortController;
+    persistProviderSession: boolean;
     provider: string;
     resume: { mode: "provider"; providerSessionId?: string; resumeToken?: string } | { mode: "fresh" };
     sessionStore: LocalAgentSessionStore;
     workspaceRoot: string;
   }) {
-    const { context, controller, provider, resume, sessionStore, workspaceRoot } = input;
+    const { context, controller, persistProviderSession, provider, resume, sessionStore, workspaceRoot } = input;
     let lastError: Extract<AgentEvent, { type: "error" }> | undefined;
     const skillManifest = (await this.options.buildSkillManifest?.(context, workspaceRoot)) ?? [];
     const conversationId = context.conversation?.conversationId ?? context.project.id;
@@ -200,7 +205,7 @@ export class LocalAgentRuntimeProvider<
         throw new Error((event as any).message);
       } else if ((event as any).type === "done") {
         const done = event as any;
-        if (done.sessionId || done.resumeToken) {
+        if (persistProviderSession && (done.sessionId || done.resumeToken)) {
           sessionStore.write(sessionId, {
             provider,
             providerSessionId: done.sessionId,
