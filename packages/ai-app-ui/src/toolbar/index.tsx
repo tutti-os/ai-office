@@ -190,6 +190,7 @@ export function Toolbar(props: {
         display.tone === "dark" ? "border-white/8 bg-[#303030] text-white" : "",
         props.className,
       )}
+      data-ai-toolbar-root="true"
       data-toolbar-skip-selection-preserve={props.skipSelectionPreserve ? "true" : undefined}
       onMouseDownCapture={props.onMouseDownCapture}
       onPointerDownCapture={props.onPointerDownCapture}

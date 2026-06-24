@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useState, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 
 export const toolbarIconButton =
   "inline-grid size-7 shrink-0 place-items-center rounded-[10px] border-0 bg-transparent text-[#2A2620]/72 outline-none transition hover:not-disabled:bg-[#E6DDCD]/70 hover:not-disabled:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275] disabled:opacity-45 [&_svg]:size-[18px]";
@@ -22,6 +23,7 @@ const floatingMenuAnchorGap = 8;
 const floatingMenuDefaultWidth = 224;
 const floatingMenuDefaultMaxHeight = 320;
 const floatingMenuMinimumMaxHeight = 96;
+const toolbarRootSelector = "[data-ai-toolbar-root='true']";
 
 export function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -47,7 +49,7 @@ export function ToolbarFloatingMenu(props: {
   width?: number;
 }) {
   const width = props.position.width ?? props.width;
-  return (
+  return createPortal(
     <div
       ref={props.menuRef}
       className={toolbarFloatingMenu}
@@ -56,7 +58,8 @@ export function ToolbarFloatingMenu(props: {
       style={{ left: props.position.left, top: props.position.top, maxHeight: props.position.maxHeight, width }}
     >
       {props.children}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -84,7 +87,7 @@ export function useToolbarFloatingMenuPosition(
     const anchor = anchorRef.current;
     const menu = menuRef.current;
     if (!anchor || !menu) return;
-    const next = getToolbarFloatingMenuPosition(anchor.getBoundingClientRect(), menu, options);
+    const next = getToolbarFloatingMenuPosition(anchor, menu, options);
     setPosition((current) =>
       current.left === next.left && current.top === next.top && current.width === next.width && current.maxHeight === next.maxHeight ? current : next,
     );
@@ -117,14 +120,15 @@ export function useToolbarFloatingMenuPosition(
   return position;
 }
 
-function getToolbarFloatingMenuPosition(anchorRect: DOMRect, menu: HTMLElement, options: {
+function getToolbarFloatingMenuPosition(anchor: HTMLElement, menu: HTMLElement, options: {
   align?: FloatingMenuAlign;
   gap?: number;
   maxHeight?: number;
   viewportMargin?: number;
   width?: number;
 }): ToolbarFloatingMenuPosition {
-  const viewport = getVisualViewportRect();
+  const anchorRect = anchor.getBoundingClientRect();
+  const viewport = getFloatingBoundaryRect(anchor);
   const margin = options.viewportMargin ?? floatingMenuViewportMargin;
   const gap = options.gap ?? floatingMenuAnchorGap;
   const maxConfiguredHeight = options.maxHeight ?? floatingMenuDefaultMaxHeight;
@@ -164,6 +168,53 @@ function getVisualViewportRect() {
     width: viewport?.width ?? window.innerWidth,
     height: viewport?.height ?? window.innerHeight,
   };
+}
+
+function getFloatingBoundaryRect(anchor: HTMLElement) {
+  const viewport = getVisualViewportRect();
+  const boundary = {
+    left: viewport.left,
+    top: viewport.top,
+    right: viewport.left + viewport.width,
+    bottom: viewport.top + viewport.height,
+  };
+  let element = anchor.parentElement;
+  let skippingToolbarInternals = Boolean(anchor.closest(toolbarRootSelector));
+
+  while (element && element !== document.documentElement) {
+    if (skippingToolbarInternals) {
+      if (element.matches(toolbarRootSelector)) skippingToolbarInternals = false;
+      element = element.parentElement;
+      continue;
+    }
+
+    const style = window.getComputedStyle(element);
+    const clipsX = clipsOverflow(style.overflowX);
+    const clipsY = clipsOverflow(style.overflowY);
+    if (clipsX || clipsY) {
+      const rect = element.getBoundingClientRect();
+      if (clipsX) {
+        boundary.left = Math.max(boundary.left, rect.left);
+        boundary.right = Math.min(boundary.right, rect.right);
+      }
+      if (clipsY) {
+        boundary.top = Math.max(boundary.top, rect.top);
+        boundary.bottom = Math.min(boundary.bottom, rect.bottom);
+      }
+    }
+    element = element.parentElement;
+  }
+
+  return {
+    left: boundary.left,
+    top: boundary.top,
+    width: Math.max(0, boundary.right - boundary.left),
+    height: Math.max(0, boundary.bottom - boundary.top),
+  };
+}
+
+function clipsOverflow(value: string) {
+  return value !== "visible";
 }
 
 export function useDismissableFloatingLayer(open: boolean, onOpenChange: (open: boolean) => void, ref: RefObject<HTMLElement | null>) {

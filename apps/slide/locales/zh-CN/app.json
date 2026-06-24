@@ -13,7 +13,7 @@
   "history.typeDeck": "Deck",
   "history.typePptx": "PPTX",
   "composer.deckDescription": "可在线编辑的演示文稿",
-  "composer.pptxDescription": "使用 Office CLI 生成文件",
+  "composer.pptxDescription": "传统 Office 格式",
   "composer.officeCliRequired": "PPTX 需要 OfficeCLI",
   "composer.officeCliInstallRequired": "安装 OfficeCLI 后可使用",
   "composer.downloadOfficeCli": "下载 OfficeCLI",

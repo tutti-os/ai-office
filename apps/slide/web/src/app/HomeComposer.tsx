@@ -97,6 +97,6 @@ function slideFormatOptions(input: {
 function formatPptxOutputDescription(officeCliStatus: OfficeCliStatus | null, t: ReturnType<typeof useI18n>["t"]) {
   if (!officeCliStatus) return t("composer.checkingOfficeCli");
   if (officeCliStatus.installing) return t("composer.installingOfficeCli");
-  if (officeCliStatus.available) return officeCliStatus.version ? `OfficeCLI ${officeCliStatus.version}` : t("composer.officeCliReady");
+  if (officeCliStatus.available) return t("composer.pptxDescription");
   return t("composer.officeCliInstallRequired");
 }

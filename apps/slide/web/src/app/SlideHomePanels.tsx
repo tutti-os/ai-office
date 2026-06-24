@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, FileCode2, FileText, Loader2, Plus, X } from "lucide-react";
 import { appShell, ArtifactHistoryPanel, HomeCategoryPill, scrollbarClass, templateCardClass } from "@ai-app/ui/app-shell";
 import type { SlideArtifactType, SlideProject } from "@ai-slide/shared";
@@ -56,13 +56,15 @@ export function TemplatePreviewModal(props: {
   onSelectIndex: (index: number) => void;
   onUseTemplate: (template: SlideTemplate) => void;
 }) {
-  const imageCount = Math.max(props.template.previewImages.length, props.template.thumbnailImages.length, props.template.coverImage ? 1 : 0);
-  const previewSlides = Array.from({ length: imageCount }, (_, index) => ({
-    preview: props.template.previewImages[index] ?? props.template.thumbnailImages[index] ?? (index === 0 ? props.template.coverImage : ""),
-    thumbnail: props.template.thumbnailImages[index] ?? props.template.previewImages[index] ?? (index === 0 ? props.template.coverImage : ""),
-  })).filter((slide) => slide.preview || slide.thumbnail);
+  const previewSlides = useMemo(() => {
+    const imageCount = Math.max(props.template.previewImages.length, props.template.thumbnailImages.length, props.template.coverImage ? 1 : 0);
+    return Array.from({ length: imageCount }, (_, index) => ({
+      preview: props.template.previewImages[index] ?? props.template.thumbnailImages[index] ?? (index === 0 ? props.template.coverImage : ""),
+      thumbnail: props.template.thumbnailImages[index] ?? props.template.previewImages[index] ?? (index === 0 ? props.template.coverImage : ""),
+    })).filter((slide) => slide.preview || slide.thumbnail);
+  }, [props.template.coverImage, props.template.previewImages, props.template.thumbnailImages]);
   const selectedIndex = Math.min(Math.max(props.selectedIndex, 0), Math.max(previewSlides.length - 1, 0));
-  const selectedImage = previewSlides[selectedIndex]?.preview ?? props.template.coverImage;
+  const selectedSlide = previewSlides[selectedIndex];
   const slideCount = Math.max(previewSlides.length, props.template.slideCount);
 
   const move = (offset: -1 | 1) => {
@@ -81,6 +83,20 @@ export function TemplatePreviewModal(props: {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [props.creating, props.onClose]);
+
+  useEffect(() => {
+    if (previewSlides.length < 2) return;
+    const adjacentIndexes = [
+      (selectedIndex + 1) % previewSlides.length,
+      (selectedIndex - 1 + previewSlides.length) % previewSlides.length,
+    ];
+    for (const index of adjacentIndexes) {
+      const src = previewSlides[index]?.preview;
+      if (!src) continue;
+      const image = new Image();
+      image.src = src;
+    }
+  }, [previewSlides, selectedIndex]);
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-[#2A2620]/62 p-[18px]" role="presentation" onMouseDown={props.creating ? undefined : props.onClose}>
@@ -106,7 +122,11 @@ export function TemplatePreviewModal(props: {
           </div>
 
           <div className="relative self-center overflow-hidden rounded-[20px] border border-[#B8A07C]/45 bg-white shadow-[inset_0_0_0_1px_rgba(17,24,39,0.02)]">
-            {selectedImage ? <img className="block aspect-video w-full object-cover" src={selectedImage} alt="" draggable={false} /> : <div className="grid aspect-video w-full place-items-center bg-[#f3f0ea] p-7 text-center text-[18px] font-extrabold text-[#202124]">{props.template.name}</div>}
+            <TemplatePreviewImage
+              fallbackLabel={props.template.name}
+              preview={selectedSlide?.preview ?? props.template.coverImage}
+              thumbnail={selectedSlide?.thumbnail ?? selectedSlide?.preview ?? props.template.coverImage}
+            />
             {previewSlides.length > 1 ? (
               <>
                 <button className="absolute left-3 top-1/2 z-[2] grid size-[46px] -translate-y-1/2 place-items-center rounded-full border border-[#202124]/8 bg-white/86 text-[#202124] shadow-[0_10px_24px_rgba(0,0,0,0.12)]" type="button" aria-label="Previous slide" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => {
@@ -159,6 +179,38 @@ export function TemplatePreviewModal(props: {
           </button>
         </div>
       </section>
+    </div>
+  );
+}
+
+function TemplatePreviewImage(props: { fallbackLabel: string; preview?: string; thumbnail?: string }) {
+  const preview = props.preview || "";
+  const thumbnail = props.thumbnail || preview;
+  const [loadedPreview, setLoadedPreview] = useState(preview === thumbnail ? preview : "");
+
+  useEffect(() => {
+    setLoadedPreview(preview === thumbnail ? preview : "");
+  }, [preview, thumbnail]);
+
+  if (!preview && !thumbnail) {
+    return <div className="grid aspect-video w-full place-items-center bg-[#f3f0ea] p-7 text-center text-[18px] font-extrabold text-[#202124]">{props.fallbackLabel}</div>;
+  }
+
+  if (!preview || preview === thumbnail) {
+    return <img className="block aspect-video w-full object-cover" src={thumbnail} alt="" draggable={false} />;
+  }
+
+  return (
+    <div className="relative aspect-video w-full overflow-hidden bg-[#f3f0ea]">
+      <img className="absolute inset-0 block size-full object-cover" src={thumbnail} alt="" draggable={false} />
+      <img
+        key={preview}
+        className={cn("absolute inset-0 block size-full object-cover transition-opacity duration-150", loadedPreview === preview ? "opacity-100" : "opacity-0")}
+        src={preview}
+        alt=""
+        draggable={false}
+        onLoad={() => setLoadedPreview(preview)}
+      />
     </div>
   );
 }

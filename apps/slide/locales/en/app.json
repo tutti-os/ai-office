@@ -13,7 +13,7 @@
   "history.typeDeck": "Deck",
   "history.typePptx": "PPTX",
   "composer.deckDescription": "Online-editable presentation",
-  "composer.pptxDescription": "Generated with Office CLI",
+  "composer.pptxDescription": "Traditional Office format",
   "composer.officeCliRequired": "OfficeCLI is required for PPTX",
   "composer.officeCliInstallRequired": "Available after installing OfficeCLI",
   "composer.downloadOfficeCli": "Download OfficeCLI",

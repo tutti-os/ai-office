@@ -38,7 +38,7 @@ export type OfficeCliToolchainOptions = {
 };
 
 export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): OfficeCliToolchain {
-  const officeCliVersion = options.version ?? process.env[`${options.envPrefix}_OFFICECLI_VERSION`] ?? options.defaultVersion ?? "1.0.103";
+  const officeCliVersion = options.version ?? process.env[`${options.envPrefix}_OFFICECLI_VERSION`] ?? options.defaultVersion ?? "1.0.120";
   const installRoot = resolveOfficeCliInstallRoot(options, officeCliVersion);
   const installedBinaryPath = join(installRoot, officeCliBinaryName());
   const legacyBinaryPaths = resolveLegacyOfficeCliBinaryPaths(options, officeCliVersion, installedBinaryPath);
