@@ -65,13 +65,13 @@ export class RuntimeRunExecutor<
   ) {}
 
   async execute(input: RuntimeRunExecutorInput<TRun, TEvent, TProject, TRequest>) {
-    const run = this.input.repo.getRun(input.runId);
+    const run = this.safeGetRun(input.runId);
     if (!run) return;
-    const provider = this.input.runtimes.getProvider(input.runtimeProfile);
     const recorder = new RuntimeRunRecorder(this.input.repo, this.input.events, input.project.id, input.runId);
     let generatedText = "";
 
     try {
+      const provider = this.input.runtimes.getProvider(input.runtimeProfile);
       await input.beforeRun?.();
       this.input.repo.updateRun(input.runId, { status: "running" } as Partial<Pick<TRun, "status" | "error" | "resultPreview">>);
       this.input.events.emit({
@@ -93,7 +93,7 @@ export class RuntimeRunExecutor<
         history: input.history,
       })) {
         if (input.isCancelled()) {
-          await input.finalizeCancellation(input.runId, "Cancelled by user");
+          await this.finalizeCancellation(input, "Cancelled by user");
           return;
         }
         const event = typeof rawEvent === "string" ? ({ type: "text_delta", text: rawEvent } as const) : rawEvent;
@@ -103,23 +103,76 @@ export class RuntimeRunExecutor<
       }
 
       if (input.isCancelled()) {
-        await input.finalizeCancellation(input.runId, "Cancelled by user");
+        await this.finalizeCancellation(input, "Cancelled by user");
         return;
       }
 
       await input.complete({ generatedText, run });
     } catch (error) {
       if (input.isCancelled()) {
-        await input.finalizeCancellation(input.runId, "Cancelled by user");
+        await this.finalizeCancellation(input, "Cancelled by user");
         return;
       }
       const message = error instanceof Error ? error.message : "AI edit failed";
-      recorder.recordError(message);
-      const finalRun = this.input.repo.updateRun(input.runId, { status: "failed", error: message } as Partial<Pick<TRun, "status" | "error" | "resultPreview">>);
-      this.input.events.emit({ type: "run.failed", projectId: input.project.id, runId: input.runId, payload: { run: finalRun } });
-      await input.onFailure?.({ error: message, run });
+      const currentRun = this.safeGetRun(input.runId);
+      if (!currentRun) return;
+      await this.recordFailure(input, recorder, currentRun, message);
     } finally {
-      input.onFinally?.();
+      try {
+        input.onFinally?.();
+      } catch {
+        // Cleanup hooks are best-effort for background runs.
+      }
+    }
+  }
+
+  private safeGetRun(runId: string) {
+    try {
+      return this.input.repo.getRun(runId);
+    } catch {
+      return null;
+    }
+  }
+
+  private safeUpdateRun(runId: string, input: Partial<Pick<TRun, "status" | "error" | "resultPreview">>) {
+    try {
+      return this.input.repo.updateRun(runId, input);
+    } catch {
+      return null;
+    }
+  }
+
+  private safeEmit(event: Parameters<RunEventHub<TRun, TEvent>["emit"]>[0]) {
+    try {
+      this.input.events.emit(event);
+    } catch {
+      // Stream notifications are secondary to keeping the runtime process alive.
+    }
+  }
+
+  private async finalizeCancellation(input: RuntimeRunExecutorInput<TRun, TEvent, TProject, TRequest>, reason: string) {
+    try {
+      await input.finalizeCancellation(input.runId, reason);
+    } catch {
+      // Cancellation can race with project deletion; either way the background run should stop quietly.
+    }
+  }
+
+  private async recordFailure(
+    input: RuntimeRunExecutorInput<TRun, TEvent, TProject, TRequest>,
+    recorder: RuntimeRunRecorder<TRun, TEvent>,
+    run: TRun,
+    message: string,
+  ) {
+    recorder.recordError(message);
+    const finalRun = this.safeUpdateRun(input.runId, { status: "failed", error: message } as Partial<
+      Pick<TRun, "status" | "error" | "resultPreview">
+    >);
+    this.safeEmit({ type: "run.failed", projectId: input.project.id, runId: input.runId, payload: { run: finalRun } });
+    try {
+      await input.onFailure?.({ error: message, run });
+    } catch {
+      // Failure callbacks should not turn an already-failed run into an unhandled background rejection.
     }
   }
 }
@@ -168,16 +221,26 @@ class RuntimeRunRecorder<TRun extends BaseRun, TEvent extends BaseRunEvent> {
     type: RuntimeStreamEvent["type"] | "error",
     input: { content?: string; status?: BaseRunEvent["status"]; metadata?: Record<string, unknown> | null } = {},
   ) {
-    const event = this.repo.createRunEvent({
-      runId: this.runId,
-      projectId: this.projectId,
-      type: type as TEvent["type"],
-      content: input.content,
-      status: input.status,
-      metadata: input.metadata,
-      sortOrder: this.sortOrder++,
-    });
-    this.events.emit({ type: "run.event.created", projectId: this.projectId, runId: this.runId, payload: { event } });
+    let event: TEvent;
+    try {
+      if (!this.repo.getRun(this.runId)) return null;
+      event = this.repo.createRunEvent({
+        runId: this.runId,
+        projectId: this.projectId,
+        type: type as TEvent["type"],
+        content: input.content,
+        status: input.status,
+        metadata: input.metadata,
+        sortOrder: this.sortOrder++,
+      });
+    } catch {
+      return null;
+    }
+    try {
+      this.events.emit({ type: "run.event.created", projectId: this.projectId, runId: this.runId, payload: { event } });
+    } catch {
+      // Persisting the run event succeeded; websocket stream replay can recover even if live emit fails.
+    }
     return event;
   }
 }
