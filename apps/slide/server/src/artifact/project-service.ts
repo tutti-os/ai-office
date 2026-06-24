@@ -69,6 +69,22 @@ export class ProjectService {
     };
   }
 
+  async importPptxProjectFile(input: { fileName: string; mimeType: string; bytes: Buffer; title?: string }) {
+    await requireOfficeCli();
+    if (input.bytes.byteLength === 0) throw new Error("PPTX file is empty");
+    if (input.bytes.byteLength > maxPptxImportBytes) throw new Error("PPTX file is too large");
+    if (!isSupportedPptxImport(input.fileName, input.mimeType)) throw new Error("Only PPTX files are supported");
+    const imported = await this.repo.importPptxProjectFromBytes(input);
+    const detail = {
+      project: imported.project,
+      artifact: imported.artifact,
+      deckManifest: null,
+      pptxManifest: imported.pptxManifest,
+    };
+    this.events.emit({ type: "project.created", projectId: imported.project.id, payload: detail });
+    return detail;
+  }
+
   async getProject(projectId: string) {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
@@ -383,10 +399,15 @@ export class ProjectService {
 
 const maxDeckAssetBytes = 20 * 1024 * 1024;
 const maxDeckExportBytes = 50 * 1024 * 1024;
+const maxPptxImportBytes = 50 * 1024 * 1024;
 const pdfMimeType = "application/pdf";
 
 function isSupportedExportMimeType(mimeType: string) {
   return mimeType === pptxMimeType || mimeType === pdfMimeType;
+}
+
+function isSupportedPptxImport(fileName: string, mimeType: string) {
+  return fileName.toLowerCase().endsWith(".pptx") || mimeType.toLowerCase() === pptxMimeType;
 }
 
 function isSupportedImageMimeType(mimeType: string) {

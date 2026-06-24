@@ -1,5 +1,5 @@
 import { Check, ChevronDown, Download, FileCode2, FileText, Loader2, Plus, Wand2 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useRef, type ChangeEvent, type ReactNode } from "react";
 import { AgentSelectShell, appShell } from "@ai-app/ui/app-shell";
 import { PromptComposer } from "@ai-app/ui/prompt-composer";
 import type { LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-slide/shared";
@@ -16,20 +16,35 @@ export function HomeComposer(props: {
   runtimeProfiles: RuntimeProfile[];
   selectedAgent: string;
   onCreate: () => void;
+  onImportFile: (file: File) => void;
   onInstallOfficeCli: () => void;
   onOutputTypeChange: (type: OutputType) => void;
   onPromptChange: (value: string) => void;
   onSelectedAgentChange: (value: string) => void;
 }) {
   const { t } = useI18n();
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const pptxAvailable = props.officeCliStatus?.available === true;
   const pptxInstalling = props.officeCliInstalling || props.officeCliStatus?.installing === true;
   const selectedOutputAvailable = props.outputType !== "pptx" || pptxAvailable;
   const canSubmit = props.prompt.trim().length > 0 && !props.creating && selectedOutputAvailable;
 
+  const handleImportInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0] ?? null;
+    event.currentTarget.value = "";
+    if (file) props.onImportFile(file);
+  };
+
   return (
     <div className={cn(appShell.promptFrame, "!mt-6")}>
       <div className={cn(appShell.promptInner, "!p-3.5")}>
+        <input
+          ref={importInputRef}
+          className="hidden"
+          type="file"
+          accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+          onChange={handleImportInputChange}
+        />
         <PromptComposer
           canSubmit={canSubmit}
           className={cn(appShell.promptComposer, "!p-3")}
@@ -64,7 +79,14 @@ export function HomeComposer(props: {
           }
           leadingActions={
             <>
-              <button className={appShell.iconAction} type="button" title={t("composer.addSourceFiles")}>
+              <button
+                className={appShell.iconAction}
+                type="button"
+                title={t("composer.addSourceFiles")}
+                aria-label={t("composer.addSourceFiles")}
+                disabled={props.creating}
+                onClick={() => importInputRef.current?.click()}
+              >
                 <Plus size={20} />
               </button>
               <AgentMenu

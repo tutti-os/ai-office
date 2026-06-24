@@ -108,11 +108,11 @@ export function HomeComposer(props: {
                   </div>
                 </div>
                 {option.id === "docx" && docxInstalling ? (
-                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#2A2620] text-[#F4EFE6]">
+                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]">
                     <Loader2 className="animate-spin" size={15} />
                   </span>
                 ) : active ? (
-                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#2A2620] text-[#F4EFE6]">
+                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]">
                     <Check size={15} />
                   </span>
                 ) : option.id === "docx" && !docxAvailable && props.officeCliStatus?.canInstall ? (
@@ -152,7 +152,7 @@ export function HomeComposer(props: {
         leadingActions={
           <>
             <label
-              className="grid size-9 shrink-0 place-items-center rounded-full bg-[#2A2620] text-[#F4EFE6] shadow-[0_12px_10px_rgba(0,0,0,0.08)] hover:text-[#E6DDCD]"
+              className="grid size-9 shrink-0 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6] shadow-[0_12px_10px_rgba(0,0,0,0.08)] transition-colors hover:bg-[#4C5E42]"
               title={t("composer.addContext")}
               aria-label={t("composer.addContext")}
             >
@@ -169,7 +169,7 @@ export function HomeComposer(props: {
         }
         trailingActions={
           <button
-            className="grid size-10 place-items-center rounded-full bg-[#2A2620] text-[#F4EFE6] shadow-[0_12px_10px_rgba(0,0,0,0.08)] disabled:bg-[#B8A07C]/32 disabled:text-[#8B8275]"
+            className="grid size-10 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6] shadow-[0_12px_10px_rgba(0,0,0,0.08)] transition-colors hover:bg-[#4C5E42] disabled:bg-[#D8CDB9]/70 disabled:text-[#8B8275] disabled:shadow-none"
             type="button"
             disabled={!canSubmit}
             title={t("composer.createFromPrompt")}

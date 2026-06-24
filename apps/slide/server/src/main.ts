@@ -76,6 +76,23 @@ server.post<{ Body: { path?: string; title?: string } }>("/api/dev/projects/impo
   }
 });
 
+server.post<{ Body: Buffer }>("/api/projects/import", async (request, reply) => {
+  try {
+    const fileNameHeader = request.headers["x-file-name"];
+    const mimeTypeHeader = request.headers["x-file-mime-type"];
+    return await projects.importPptxProjectFile({
+      fileName: typeof fileNameHeader === "string" ? decodeURIComponent(fileNameHeader) : "slides.pptx",
+      mimeType: typeof mimeTypeHeader === "string"
+        ? decodeURIComponent(mimeTypeHeader).split(";")[0]?.trim().toLowerCase() || "application/octet-stream"
+        : "application/octet-stream",
+      bytes: Buffer.isBuffer(request.body) ? request.body : Buffer.from(request.body ?? ""),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to import PPTX project";
+    return reply.code(400).send({ error: message });
+  }
+});
+
 server.get<{ Params: { projectId: string } }>("/api/projects/:projectId/files/slides.pptx", async (request, reply) => {
   try {
     const file = await projects.readPptxFile(request.params.projectId);

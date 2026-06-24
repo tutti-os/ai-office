@@ -146,6 +146,23 @@ export class ProjectRepository {
     };
   }
 
+  async importPptxProjectFromBytes(input: { fileName: string; bytes: Buffer; title?: string }) {
+    const created = await this.createProject({
+      title: input.title?.trim() || importedProjectTitle(input.fileName),
+      artifactType: "pptx",
+    });
+    await writeFile(pptxFilePath(created.project.id, created.artifact), input.bytes);
+    const refresh = await this.refreshPptxArtifactFromFile(created.project.id, "human");
+    const project = this.getProject(created.project.id);
+    const artifact = this.getArtifact(created.artifact.id);
+    if (!project || !artifact) throw new Error("Unable to import PPTX project");
+    return {
+      project,
+      artifact,
+      pptxManifest: refresh?.manifest ?? (await readPptxManifestFromFile(project.id, artifact)),
+    };
+  }
+
   updateProject(projectId: string, input: UpdateProjectRequest) {
     const current = this.getProject(projectId);
     if (!current) return null;
@@ -737,6 +754,11 @@ function safeExportDirectoryName(value: string) {
     .replace(/^-+|-+$/g, "")
     .replace(/\.+$/g, "")
     .slice(0, 80) || "slides";
+}
+
+function importedProjectTitle(fileName: string) {
+  const baseName = basename(fileName || "slides", extname(fileName || "slides"));
+  return baseName.trim() || "Imported Presentation";
 }
 
 function safeAssetFileName(fileName: string, mimeType: string) {

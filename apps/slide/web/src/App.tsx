@@ -10,7 +10,7 @@ import { HomeComposer } from "./app/HomeComposer";
 import { BlankTemplateCard, CategoryButton, ProjectHistory, TemplateCard, TemplatePreviewModal } from "./app/SlideHomePanels";
 import { SlideEditorScreen } from "./app/SlideEditorScreen";
 import { useAgentConversation } from "./app/useAgentConversation";
-import { cancelRun, clearProjectHistory, createProject, deleteProject, fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, getProject, installOfficeCli, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
+import { cancelRun, clearProjectHistory, createProject, deleteProject, fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, getProject, importProjectFile, installOfficeCli, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
 import { DeckArtifactRuntimeAdapter, type DeckAgentRuntimeProvider } from "./artifact/deckArtifactAdapter";
 import { PptxArtifactRuntimeAdapter } from "./artifact/pptxArtifactAdapter";
 import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
@@ -327,6 +327,22 @@ export function App() {
     void createAndOpenProject({ title: "Untitled Presentation", initialPrompt: prompt.trim() });
   };
 
+  const importFile = async (file: File) => {
+    setCreating(true);
+    setError("");
+    try {
+      if (officeCliStatus?.available !== true) throw new Error(officeCliStatus?.reason ?? "OfficeCLI is required for PPTX presentations.");
+      if (!file.name.toLowerCase().endsWith(".pptx")) throw new Error("Only PPTX files are supported.");
+      const detail = await importProjectFile(file);
+      setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
+      setRoute(pushSlideRoute(detail.project.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const createBlank = () => {
     void createAndOpenProject({ title: "Untitled Presentation" });
   };
@@ -481,6 +497,7 @@ export function App() {
           localAgentProviders={localAgentProviders}
           runtimeProfiles={runtimeProfiles}
           onCreate={createFromPrompt}
+          onImportFile={(file) => void importFile(file)}
           onInstallOfficeCli={downloadOfficeCli}
           onOutputTypeChange={setOutputType}
           onPromptChange={setPrompt}

@@ -29,6 +29,18 @@ export async function createProject(input: CreateProjectRequest) {
   });
 }
 
+export async function importProjectFile(file: File) {
+  return requestJson<ProjectDetailResponse>("/api/projects/import", {
+    method: "POST",
+    headers: {
+      "content-type": "application/octet-stream",
+      "x-file-name": encodeURIComponent(file.name || "slides.pptx"),
+      "x-file-mime-type": encodeURIComponent(file.type || "application/octet-stream"),
+    },
+    body: await file.arrayBuffer(),
+  });
+}
+
 export async function getProject(projectId: string) {
   return requestJson<ProjectDetailResponse>(`/api/projects/${encodeURIComponent(projectId)}`);
 }
