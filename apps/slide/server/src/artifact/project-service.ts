@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { extname, join } from "node:path";
 import { deckSlideDisplayName, pptxMimeType, type AiEditRequest, type CreateProjectRequest, type DeckAssetUploadResponse, type RuntimeProfile, type SlideRun, type SlideRunEvent, type UpdateDeckSlideHtmlRequest, type UpdateProjectRequest } from "@ai-slide/shared";
 import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
 import { openPathInFileManager } from "@ai-app/shared/local-open";
@@ -152,6 +152,14 @@ export class ProjectService {
       mimeType: asset.mimeType,
       sizeBytes: asset.sizeBytes,
     };
+  }
+
+  async uploadProjectAsset(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }): Promise<DeckAssetUploadResponse> {
+    if (!this.repo.getProject(projectId)) throw new Error("Project not found");
+    if (!isSupportedProjectAsset(input.fileName, input.mimeType)) throw new Error("Only image, PDF, text, and Office document assets are supported");
+    if (input.bytes.byteLength === 0) throw new Error("Asset file is empty");
+    if (input.bytes.byteLength > maxProjectAssetBytes) throw new Error("Asset file is too large");
+    return this.repo.writeProjectAsset(projectId, input);
   }
 
   async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
@@ -398,9 +406,54 @@ export class ProjectService {
 }
 
 const maxDeckAssetBytes = 20 * 1024 * 1024;
+const maxProjectAssetBytes = 30 * 1024 * 1024;
 const maxDeckExportBytes = 50 * 1024 * 1024;
 const maxPptxImportBytes = 50 * 1024 * 1024;
 const pdfMimeType = "application/pdf";
+const supportedProjectAssetMimeTypes = new Set([
+  "application/json",
+  "application/msword",
+  "application/pdf",
+  "application/rtf",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/svg+xml",
+  "image/webp",
+  "text/csv",
+  "text/html",
+  "text/markdown",
+  "text/plain",
+]);
+const supportedProjectAssetExtensions = new Set([
+  ".csv",
+  ".doc",
+  ".docx",
+  ".gif",
+  ".htm",
+  ".html",
+  ".jpeg",
+  ".jpg",
+  ".json",
+  ".md",
+  ".markdown",
+  ".odt",
+  ".pdf",
+  ".png",
+  ".ppt",
+  ".pptx",
+  ".rtf",
+  ".svg",
+  ".txt",
+  ".webp",
+  ".xls",
+  ".xlsx",
+]);
 
 function isSupportedExportMimeType(mimeType: string) {
   return mimeType === pptxMimeType || mimeType === pdfMimeType;
@@ -412,6 +465,12 @@ function isSupportedPptxImport(fileName: string, mimeType: string) {
 
 function isSupportedImageMimeType(mimeType: string) {
   return ["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"].includes(mimeType);
+}
+
+function isSupportedProjectAsset(fileName: string, mimeType: string) {
+  const normalizedMimeType = mimeType.toLowerCase();
+  if (supportedProjectAssetMimeTypes.has(normalizedMimeType)) return true;
+  return supportedProjectAssetExtensions.has(extname(fileName).toLowerCase());
 }
 
 async function hashDirectory(root: string) {

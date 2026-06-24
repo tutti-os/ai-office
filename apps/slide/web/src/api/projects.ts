@@ -124,6 +124,22 @@ export async function uploadDeckAsset(projectId: string, file: File) {
   return data;
 }
 
+export async function uploadProjectAsset(projectId: string, file: File) {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/assets`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/octet-stream",
+      "x-file-name": encodeURIComponent(file.name || "asset"),
+      "x-file-mime-type": encodeURIComponent(file.type || "application/octet-stream"),
+    },
+    body: await file.arrayBuffer(),
+  });
+  const data = (await response.json().catch(() => null)) as DeckAssetUploadResponse | { error?: string } | null;
+  if (!response.ok) throw new Error(data && "error" in data && data.error ? data.error : `Asset upload failed: ${response.status}`);
+  if (!data || !("path" in data)) throw new Error("Asset upload response is missing asset path");
+  return data;
+}
+
 export type ProjectExportWriteResponse = {
   path: string;
   absolutePath: string;

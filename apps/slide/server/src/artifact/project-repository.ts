@@ -405,6 +405,25 @@ export class ProjectRepository {
     };
   }
 
+  async writeProjectAsset(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    const artifact = this.getArtifact(project.activeArtifactId);
+    if (!artifact) throw new Error("Project artifact not found");
+    const root = ensureProjectDirs(projectId);
+    const assetsDir = join(root, "assets");
+    mkdirSync(assetsDir, { recursive: true });
+    const fileName = uniqueAssetFileName(assetsDir, input.fileName, input.mimeType);
+    writeFileSync(join(assetsDir, fileName), input.bytes);
+    this.writeProjectAgentInstructions(project, artifact);
+    return {
+      path: `./assets/${fileName}`,
+      fileName,
+      mimeType: input.mimeType,
+      sizeBytes: input.bytes.byteLength,
+    };
+  }
+
   async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
@@ -784,11 +803,24 @@ function safeExportFileName(fileName: string, mimeType: string) {
 }
 
 function extensionForMimeType(mimeType: string) {
+  if (mimeType === "application/json") return ".json";
+  if (mimeType === "application/msword") return ".doc";
+  if (mimeType === "application/pdf") return ".pdf";
+  if (mimeType === "application/rtf") return ".rtf";
+  if (mimeType === "application/vnd.ms-excel") return ".xls";
+  if (mimeType === "application/vnd.ms-powerpoint") return ".ppt";
+  if (mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation") return ".pptx";
+  if (mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") return ".xlsx";
+  if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return ".docx";
   if (mimeType === "image/png") return ".png";
   if (mimeType === "image/jpeg") return ".jpg";
   if (mimeType === "image/webp") return ".webp";
   if (mimeType === "image/gif") return ".gif";
   if (mimeType === "image/svg+xml") return ".svg";
+  if (mimeType === "text/csv") return ".csv";
+  if (mimeType === "text/html") return ".html";
+  if (mimeType === "text/markdown") return ".md";
+  if (mimeType === "text/plain") return ".txt";
   return ".bin";
 }
 
@@ -1408,6 +1440,7 @@ function writeStoredPptxManifest(projectId: string, artifact: SlideArtifact, man
 }
 
 function projectAgentInstructions(artifact: SlideArtifact) {
+  const projectAssets = projectAssetInstructions(artifact.projectId);
   if (artifact.type === "pptx") {
     const targetPptxPath = join(projectWorkspaceRoot(artifact.projectId), artifact.fileRef);
     return [
@@ -1416,6 +1449,7 @@ function projectAgentInstructions(artifact: SlideArtifact) {
       "You are editing a slide presentation with the local AI Slide app.",
       `Current focused file: ${targetPptxPath}`,
       "When asked to create or edit the presentation as PPTX, write the final file to the focused file with filesystem tools.",
+      projectAssets,
     ].join("\n");
   }
   const targetDeckPath = join(projectWorkspaceRoot(artifact.projectId), artifact.fileRef);
@@ -1433,7 +1467,58 @@ function projectAgentInstructions(artifact: SlideArtifact) {
     "To rename the project, call the `set_project_title` app tool.",
     "If MCP app tools are not visible, call the run-scoped HTTP fallback with `$AI_APP_TOOL_GATEWAY_URL` and `$AI_APP_TOOL_TOKEN` instead of editing app databases or importing server repositories directly.",
     "Do not collapse the deck into a single HTML file.",
+    projectAssets,
   ].join("\n");
+}
+
+function projectAssetInstructions(projectId: string) {
+  const assets = listProjectAssets(projectId);
+  if (assets.length === 0) return "";
+  return [
+    "",
+    "Project context attachments:",
+    ...assets.map((asset) => `- ${asset.fileName} (${asset.mimeType}, ${asset.sizeBytes} bytes): ${asset.path}`),
+    "Use these files as source context when they are relevant to the user's request.",
+  ].join("\n");
+}
+
+function listProjectAssets(projectId: string) {
+  const assetsDir = join(projectWorkspaceRoot(projectId), "assets");
+  if (!existsSync(assetsDir)) return [];
+  return readdirSync(assetsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => {
+      const absolutePath = join(assetsDir, entry.name);
+      return {
+        fileName: entry.name,
+        path: `./assets/${entry.name}`,
+        mimeType: mimeTypeForAssetFileName(entry.name),
+        sizeBytes: statSync(absolutePath).size,
+      };
+    });
+}
+
+function mimeTypeForAssetFileName(fileName: string) {
+  const ext = extname(fileName).toLowerCase();
+  if (ext === ".csv") return "text/csv";
+  if (ext === ".doc") return "application/msword";
+  if (ext === ".docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (ext === ".gif") return "image/gif";
+  if (ext === ".htm" || ext === ".html") return "text/html";
+  if (ext === ".jpeg" || ext === ".jpg") return "image/jpeg";
+  if (ext === ".json") return "application/json";
+  if (ext === ".md" || ext === ".markdown") return "text/markdown";
+  if (ext === ".pdf") return "application/pdf";
+  if (ext === ".png") return "image/png";
+  if (ext === ".ppt") return "application/vnd.ms-powerpoint";
+  if (ext === ".pptx") return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+  if (ext === ".rtf") return "application/rtf";
+  if (ext === ".svg") return "image/svg+xml";
+  if (ext === ".txt") return "text/plain";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".xls") return "application/vnd.ms-excel";
+  if (ext === ".xlsx") return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  return "application/octet-stream";
 }
 
 function appRoot() {

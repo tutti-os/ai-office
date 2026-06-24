@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   History,
   Layers3,
+  Upload,
   // 模版量较少，所以不需要搜索；保留代码，后续模板量变大时可恢复。
   // Search,
 } from "lucide-react";
@@ -10,12 +11,13 @@ import { HomeComposer } from "./app/HomeComposer";
 import { BlankTemplateCard, CategoryButton, ProjectHistory, TemplateCard, TemplatePreviewModal } from "./app/SlideHomePanels";
 import { SlideEditorScreen } from "./app/SlideEditorScreen";
 import { useAgentConversation } from "./app/useAgentConversation";
-import { cancelRun, clearProjectHistory, createProject, deleteProject, fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, getProject, importProjectFile, installOfficeCli, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
+import { useHomeAttachments, type HomeAttachment } from "./app/useHomeAttachments";
+import { cancelRun, clearProjectHistory, createProject, deleteProject, fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, getProject, importProjectFile, installOfficeCli, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml, uploadProjectAsset } from "./api/projects";
 import { DeckArtifactRuntimeAdapter, type DeckAgentRuntimeProvider } from "./artifact/deckArtifactAdapter";
 import { PptxArtifactRuntimeAdapter } from "./artifact/pptxArtifactAdapter";
 import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
 import { useI18n } from "./i18n";
-import { appShell, HomePanelToggle, HomePageShell, homeTitleClass } from "@ai-app/ui/app-shell";
+import { appShell, HomePanelToggle, HomePageShell, HomeTopAction, homeTitleClass } from "@ai-app/ui/app-shell";
 import type { ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { editableArtifactInteraction, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
 import type { LocalAgentProviderStatus, OfficeCliStatus, ProjectDetailResponse, RuntimeProfile, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
@@ -77,7 +79,9 @@ export function App() {
   const [selectedSlideIndex, setSelectedSlideIndex] = useState(0);
   const [agentSending, setAgentSending] = useState(false);
   const [artifactSaveState, setArtifactSaveState] = useState<ArtifactSaveState>("saved");
+  const homeAttachments = useHomeAttachments();
   const currentProjectId = route.name === "slide" ? route.projectId : null;
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const deckAgentRuntimeProviderRef = useRef<DeckAgentRuntimeProvider | null>(null);
   const routeRef = useRef<AppRoute>(readCurrentRoute());
   const hasUnsavedChangesRef = useRef(false);
@@ -266,7 +270,7 @@ export function App() {
     route.name,
   ]);
 
-  const createAndOpenProject = async (input: { title: string; template?: SlideTemplate; artifactType?: SlideArtifactType; initialPrompt?: string }) => {
+  const createAndOpenProject = async (input: { title: string; template?: SlideTemplate; artifactType?: SlideArtifactType; initialPrompt?: string; attachments?: HomeAttachment[] }) => {
     setCreating(true);
     setError("");
     try {
@@ -281,7 +285,8 @@ export function App() {
         templateName: input.template?.name ?? null,
       });
       setHistoryProjects((projects) => [response.project, ...projects.filter((project) => project.id !== response.project.id)]);
-      const initialPrompt = input.initialPrompt?.trim();
+      const uploadedAttachments = input.attachments?.length ? await uploadHomeContextAttachments(response.project.id, input.attachments) : [];
+      const initialPrompt = initialPromptWithAttachmentContext(input.initialPrompt?.trim() ?? "", uploadedAttachments).trim();
       if (initialPrompt) {
         await startAiEdit(response.project.id, {
           userPrompt: initialPrompt,
@@ -294,6 +299,7 @@ export function App() {
           runtimeProfileId: selectedAgent || null,
         });
       }
+      if (input.attachments?.length) homeAttachments.clearAttachments();
       setRoute(pushSlideRoute(response.project.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -323,8 +329,14 @@ export function App() {
   };
 
   const createFromPrompt = () => {
-    if (!prompt.trim()) return;
-    void createAndOpenProject({ title: "Untitled Presentation", initialPrompt: prompt.trim() });
+    const attachments = homeAttachments.attachments;
+    if (!prompt.trim() && attachments.length === 0) return;
+    const attachmentTitle = attachments[0]?.name ? `Deck from ${attachments[0].name}` : "Untitled Presentation";
+    void createAndOpenProject({
+      title: attachmentTitle.length > 80 ? `${attachmentTitle.slice(0, 80).trim()}...` : attachmentTitle,
+      initialPrompt: prompt.trim(),
+      attachments,
+    });
   };
 
   const importFile = async (file: File) => {
@@ -485,9 +497,29 @@ export function App() {
 
   return (
     <HomePageShell className="h-dvh px-3.5 pb-12 pt-10 font-sans md:px-7 md:pb-16">
+      <input
+        ref={importInputRef}
+        className="hidden"
+        type="file"
+        accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0] ?? null;
+          event.currentTarget.value = "";
+          if (file) void importFile(file);
+        }}
+      />
+      <HomeTopAction
+        disabled={creating}
+        icon={<Upload size={14} />}
+        title={t("home.importTitle")}
+        onClick={() => importInputRef.current?.click()}
+      >
+        {t("home.import")}
+      </HomeTopAction>
       <section className="mx-auto flex w-full max-w-[820px] flex-col items-center text-center">
         <h1 className={cn("m-0", homeTitleClass)}>{t("home.heading")}</h1>
         <HomeComposer
+          attachments={homeAttachments.attachments}
           creating={creating}
           officeCliInstalling={officeCliInstalling}
           officeCliStatus={officeCliStatus}
@@ -496,11 +528,12 @@ export function App() {
           selectedAgent={selectedAgent}
           localAgentProviders={localAgentProviders}
           runtimeProfiles={runtimeProfiles}
+          onAddFiles={homeAttachments.addFiles}
           onCreate={createFromPrompt}
-          onImportFile={(file) => void importFile(file)}
           onInstallOfficeCli={downloadOfficeCli}
           onOutputTypeChange={setOutputType}
           onPromptChange={setPrompt}
+          onRemoveAttachment={homeAttachments.removeAttachment}
           onSelectedAgentChange={setSelectedAgent}
         />
         {error ? <div className={appShell.error}>{error}</div> : null}
@@ -576,6 +609,53 @@ export function App() {
       ) : null}
     </HomePageShell>
   );
+}
+
+type UploadedHomeContextAttachment = {
+  originalName: string;
+  fileName: string;
+  path: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+async function uploadHomeContextAttachments(projectId: string, attachments: HomeAttachment[]): Promise<UploadedHomeContextAttachment[]> {
+  const uploaded: UploadedHomeContextAttachment[] = [];
+  for (const attachment of attachments) {
+    const asset = await uploadProjectAsset(projectId, attachment.file);
+    uploaded.push({
+      originalName: attachment.name,
+      fileName: asset.fileName,
+      path: asset.path,
+      mimeType: asset.mimeType,
+      sizeBytes: asset.sizeBytes,
+    });
+  }
+  return uploaded;
+}
+
+function initialPromptWithAttachmentContext(userPrompt: string, attachments: UploadedHomeContextAttachment[]) {
+  if (attachments.length === 0) return userPrompt;
+  const instruction = userPrompt.trim() || "Create a presentation from the attached context files.";
+  return [
+    instruction,
+    "",
+    "Context attachments uploaded with this project:",
+    ...attachments.map((attachment, index) => {
+      const displayName = attachment.originalName === attachment.fileName ? attachment.fileName : `${attachment.originalName} saved as ${attachment.fileName}`;
+      return `${index + 1}. ${displayName} (${attachment.mimeType}, ${formatBytes(attachment.sizeBytes)}): ${attachment.path}`;
+    }),
+    "",
+    "Use these files as source context. Read them from the project workspace before drafting or editing the presentation.",
+  ].join("\n");
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  const kib = bytes / 1024;
+  if (kib < 1024) return `${kib.toFixed(kib >= 10 ? 0 : 1)} KB`;
+  const mib = kib / 1024;
+  return `${mib.toFixed(mib >= 10 ? 0 : 1)} MB`;
 }
 
 function isNewerProjectDetail(next: ProjectDetailResponse, current: ProjectDetailResponse | null) {

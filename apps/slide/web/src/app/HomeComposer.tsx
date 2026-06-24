@@ -1,12 +1,14 @@
-import { Check, ChevronDown, Download, FileCode2, FileText, Loader2, Plus, Wand2 } from "lucide-react";
+import { Check, ChevronDown, Download, File, FileCode2, FileImage, FileText, Loader2, Plus, Wand2, X } from "lucide-react";
 import { useRef, type ChangeEvent, type ReactNode } from "react";
 import { AgentSelectShell, appShell } from "@ai-app/ui/app-shell";
 import { PromptComposer } from "@ai-app/ui/prompt-composer";
 import type { LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-slide/shared";
 import { useI18n } from "../i18n";
 import type { OutputType } from "../templates";
+import type { HomeAttachment } from "./useHomeAttachments";
 
 export function HomeComposer(props: {
+  attachments: HomeAttachment[];
   creating: boolean;
   localAgentProviders: LocalAgentProviderStatus[];
   officeCliInstalling: boolean;
@@ -15,11 +17,12 @@ export function HomeComposer(props: {
   prompt: string;
   runtimeProfiles: RuntimeProfile[];
   selectedAgent: string;
+  onAddFiles: (files: File[]) => void;
   onCreate: () => void;
-  onImportFile: (file: File) => void;
   onInstallOfficeCli: () => void;
   onOutputTypeChange: (type: OutputType) => void;
   onPromptChange: (value: string) => void;
+  onRemoveAttachment: (id: string) => void;
   onSelectedAgentChange: (value: string) => void;
 }) {
   const { t } = useI18n();
@@ -27,12 +30,12 @@ export function HomeComposer(props: {
   const pptxAvailable = props.officeCliStatus?.available === true;
   const pptxInstalling = props.officeCliInstalling || props.officeCliStatus?.installing === true;
   const selectedOutputAvailable = props.outputType !== "pptx" || pptxAvailable;
-  const canSubmit = props.prompt.trim().length > 0 && !props.creating && selectedOutputAvailable;
+  const canSubmit = (props.prompt.trim().length > 0 || props.attachments.length > 0) && !props.creating && selectedOutputAvailable;
 
-  const handleImportInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0] ?? null;
+  const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files ?? []);
     event.currentTarget.value = "";
-    if (file) props.onImportFile(file);
+    if (files.length > 0) props.onAddFiles(files);
   };
 
   return (
@@ -42,7 +45,8 @@ export function HomeComposer(props: {
           ref={importInputRef}
           className="hidden"
           type="file"
-          onChange={handleImportInputChange}
+          multiple
+          onChange={handleFileInputChange}
         />
         <PromptComposer
           canSubmit={canSubmit}
@@ -53,28 +57,37 @@ export function HomeComposer(props: {
           textareaClassName={cn("block !h-[84px] pb-2", appShell.promptTextarea)}
           value={props.prompt}
           beforeTextarea={
-            <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-              <FormatOption
-                active={props.outputType === "html"}
-                description={t("composer.deckDescription")}
-                icon={<FileCode2 size={20} />}
-                label="Deck"
-                onClick={() => props.onOutputTypeChange("html")}
-              />
-              <FormatOption
-                active={props.outputType === "pptx"}
-                description={formatPptxOutputDescription(props.officeCliStatus, t)}
-                disabled={!pptxAvailable || pptxInstalling}
-                downloadLabel={t("composer.downloadOfficeCli")}
-                icon={<FileText size={20} />}
-                installing={pptxInstalling}
-                label="PPTX"
-                showInstall={!pptxAvailable && props.officeCliStatus?.canInstall === true}
-                title={!pptxAvailable ? props.officeCliStatus?.reason ?? t("composer.officeCliRequired") : undefined}
-                onInstall={props.onInstallOfficeCli}
-                onClick={() => props.onOutputTypeChange("pptx")}
-              />
-            </div>
+            <>
+              <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                <FormatOption
+                  active={props.outputType === "html"}
+                  description={t("composer.deckDescription")}
+                  icon={<FileCode2 size={20} />}
+                  label="Deck"
+                  onClick={() => props.onOutputTypeChange("html")}
+                />
+                <FormatOption
+                  active={props.outputType === "pptx"}
+                  description={formatPptxOutputDescription(props.officeCliStatus, t)}
+                  disabled={!pptxAvailable || pptxInstalling}
+                  downloadLabel={t("composer.downloadOfficeCli")}
+                  icon={<FileText size={20} />}
+                  installing={pptxInstalling}
+                  label="PPTX"
+                  showInstall={!pptxAvailable && props.officeCliStatus?.canInstall === true}
+                  title={!pptxAvailable ? props.officeCliStatus?.reason ?? t("composer.officeCliRequired") : undefined}
+                  onInstall={props.onInstallOfficeCli}
+                  onClick={() => props.onOutputTypeChange("pptx")}
+                />
+              </div>
+              {props.attachments.length > 0 ? (
+                <div className="mb-4 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {props.attachments.map((attachment) => (
+                    <AttachmentPreview key={attachment.id} attachment={attachment} onRemove={props.onRemoveAttachment} />
+                  ))}
+                </div>
+              ) : null}
+            </>
           }
           leadingActions={
             <>
@@ -228,6 +241,40 @@ function AgentMenu(props: {
       <ChevronDown className="pointer-events-none absolute right-3 text-[#8B8275]" size={14} />
     </AgentSelectShell>
   );
+}
+
+function AttachmentPreview(props: { attachment: HomeAttachment; onRemove: (id: string) => void }) {
+  return (
+    <div className="group relative flex h-[72px] w-[220px] shrink-0 items-center gap-3 rounded-[16px] border border-[#B8A07C]/45 bg-[#E6DDCD]/54 p-2">
+      <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-[16px] bg-[#F4EFE6] text-[#5C6B50]">
+        {props.attachment.previewUrl ? (
+          <img className="h-full w-full object-cover" src={props.attachment.previewUrl} alt="" draggable={false} />
+        ) : props.attachment.mimeType.startsWith("image/") ? (
+          <FileImage size={22} />
+        ) : (
+          <File size={22} />
+        )}
+      </div>
+      <div className="min-w-0 pr-7">
+        <div className="truncate text-[13px] font-medium text-[#2A2620]">{props.attachment.name}</div>
+        <div className="mt-1 text-[12px] font-medium text-[#8B8275]">{formatFileSize(props.attachment.size)}</div>
+      </div>
+      <button
+        className="absolute right-2 top-2 z-10 grid size-6 place-items-center rounded-full bg-[#2A2620] text-[#F4EFE6] shadow-lg hover:text-[#E6DDCD]"
+        type="button"
+        aria-label={`Remove ${props.attachment.name}`}
+        onClick={() => props.onRemove(props.attachment.id)}
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(size < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function cn(...classes: Array<string | false | null | undefined>) {

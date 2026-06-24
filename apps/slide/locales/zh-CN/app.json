@@ -1,5 +1,7 @@
 {
   "app.title": "AI 幻灯片",
+  "home.import": "导入",
+  "home.importTitle": "导入本地演示文稿",
   "home.heading": "准备好创建任何演示文稿了吗？",
   "home.templates": "模板",
   "home.history": "历史",

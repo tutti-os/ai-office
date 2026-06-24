@@ -93,6 +93,25 @@ server.post<{ Body: Buffer }>("/api/projects/import", async (request, reply) => 
   }
 });
 
+server.post<{ Params: { projectId: string }; Body: Buffer }>("/api/projects/:projectId/assets", async (request, reply) => {
+  try {
+    const fileNameHeader = request.headers["x-file-name"];
+    const mimeTypeHeader = request.headers["x-file-mime-type"];
+    const contentType = typeof mimeTypeHeader === "string"
+      ? decodeURIComponent(mimeTypeHeader).split(";")[0]?.trim().toLowerCase() || "application/octet-stream"
+      : request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() ?? "application/octet-stream";
+    const asset = await projects.uploadProjectAsset(request.params.projectId, {
+      fileName: typeof fileNameHeader === "string" ? decodeURIComponent(fileNameHeader) : "asset",
+      mimeType: contentType,
+      bytes: Buffer.isBuffer(request.body) ? request.body : Buffer.from(request.body ?? ""),
+    });
+    return reply.send(asset);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to upload asset";
+    return reply.code(message.includes("not found") ? 404 : 400).send({ error: message });
+  }
+});
+
 server.get<{ Params: { projectId: string } }>("/api/projects/:projectId/files/slides.pptx", async (request, reply) => {
   try {
     const file = await projects.readPptxFile(request.params.projectId);

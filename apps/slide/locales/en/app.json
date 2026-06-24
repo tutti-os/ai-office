@@ -1,5 +1,7 @@
 {
   "app.title": "AI Slide",
+  "home.import": "Import",
+  "home.importTitle": "Import local presentation",
   "home.heading": "Ready to create any presentation?",
   "home.templates": "Templates",
   "home.history": "History",
