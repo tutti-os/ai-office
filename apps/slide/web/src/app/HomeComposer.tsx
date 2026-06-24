@@ -42,7 +42,6 @@ export function HomeComposer(props: {
           ref={importInputRef}
           className="hidden"
           type="file"
-          accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
           onChange={handleImportInputChange}
         />
         <PromptComposer
