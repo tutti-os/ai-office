@@ -1,8 +1,7 @@
-import { exportPptxFromIframes } from "@tutti-os/office-export";
 import { assetPathFromRelativeUrl, rewriteAssetReferencesInElement } from "@ai-app/shared/artifact-assets";
-import { deckSlideDisplayName, pptxMimeType, type DeckManifest, type DeckManifestSlide, type SlideArtifact } from "@ai-slide/shared";
+import { deckSlideDisplayName, type DeckManifest, type DeckManifestSlide, type SlideArtifact } from "@ai-slide/shared";
 import { writeProjectExport } from "../api/projects";
-import { projectAssetUrl } from "./deckEditorDom";
+import { projectAssetUrl } from "./deckAssetUrls";
 import { printHtmlToPdfWithTutti } from "./tuttiPdfBridge";
 
 const hiddenFrameTimeoutMs = 15_000;
@@ -12,34 +11,6 @@ const slidePdfPageSize = {
   height: 7.5,
 } as const;
 const cssPixelsPerInch = 96;
-
-export async function saveDeckPptxExport(input: {
-  artifact: SlideArtifact;
-  manifest: DeckManifest;
-  projectId: string;
-  title: string;
-}) {
-  const frames = await createExportFrames({
-    artifact: input.artifact,
-    manifest: input.manifest,
-    projectId: input.projectId,
-  });
-  try {
-    const result = await exportPptxFromIframes(frames, {
-      assetBaseUrl: import.meta.env.DEV ? "/office-export-dev/ooxml-export/" : "/office-export/ooxml-export/",
-      height: input.manifest.canvas.height,
-      title: input.title || "Untitled Presentation",
-      width: input.manifest.canvas.width,
-    });
-    return writeProjectExport(input.projectId, {
-      fileName: `${safeExportFileName(input.title || "slides")}.pptx`,
-      mimeType: pptxMimeType,
-      content: result.bytes,
-    });
-  } finally {
-    for (const frame of frames) frame.remove();
-  }
-}
 
 export async function saveDeckPdfExport(input: {
   artifact: SlideArtifact;
@@ -288,7 +259,12 @@ function absolutizeDeckSlideAssetReferences(
 }
 
 function safeExportFileName(value: string) {
-  return value.trim().replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "slides";
+  return value
+    .trim()
+    .replace(/[^\p{L}\p{N}._-]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/\.+$/g, "")
+    .slice(0, 80) || "slides";
 }
 
 function escapeHtml(value: string) {

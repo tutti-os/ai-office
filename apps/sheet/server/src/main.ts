@@ -3,8 +3,10 @@ import { join, resolve } from "node:path";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import Fastify from "fastify";
+import { installArtifactProcessErrorHandlers, registerArtifactServerErrorHandlers } from "@ai-app/shared/server-errors";
+import { addArtifactBufferContentTypeParsers, readArtifactExportRequest, readArtifactUploadRequest, sendArtifactBinaryFile } from "@ai-app/shared/server-files";
 import { ArtifactAppHttpRoutes } from "@ai-app/shared/server-routes";
-import { type ApplySheetCommandsRequest, xlsxMimeType } from "@ai-sheet/shared";
+import { type AiEditRequest, type ApplySheetCommandsRequest, xlsxMimeType } from "@ai-sheet/shared";
 import { SheetRepository } from "./artifact/sheet-repository.js";
 import { SheetService } from "./artifact/sheet-service.js";
 import { XlsxStorageAdapter } from "./artifact/xlsx-storage-adapter.js";
@@ -19,12 +21,14 @@ const port = Number(process.env.PORT ?? 8792);
 const host = process.env.HOST ?? "127.0.0.1";
 
 const server = Fastify({ logger: true, bodyLimit: 90 * 1024 * 1024 });
+registerArtifactServerErrorHandlers(server, { appId: "ai-sheet" });
+installArtifactProcessErrorHandlers({ appId: "ai-sheet", logger: server.log });
 const events = new EventHub();
 const repo = new SheetRepository();
 const sheets = new SheetService(repo, events, new XlsxStorageAdapter());
 
-server.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bodyLimit: 90 * 1024 * 1024 }, (_request, body, done) => {
-  done(null, body);
+addArtifactBufferContentTypeParsers(server, {
+  octetStreamBodyLimit: 90 * 1024 * 1024,
 });
 
 await server.register(fastifyWebsocket);
@@ -44,6 +48,10 @@ new ArtifactAppHttpRoutes({
   service: sheets,
   events,
   listTemplates,
+  defaultAiEditInput: {
+    userPrompt: "",
+    mode: "write",
+  } satisfies AiEditRequest,
   toolchain: {
     responseKey: "officecli",
     getStatus: getOfficeCliStatus,
@@ -82,10 +90,10 @@ server.post<{ Body: { path?: string; title?: string } }>("/api/dev/projects/impo
 
 server.post<{ Body: Buffer }>("/api/projects/import", async (request, reply) => {
   try {
-    const fileNameHeader = request.headers["x-file-name"];
+    const upload = readArtifactUploadRequest(request, { defaultFileName: "workbook.xlsx" });
     return await sheets.importXlsxProjectFile({
-      fileName: typeof fileNameHeader === "string" ? decodeURIComponent(fileNameHeader) : "workbook.xlsx",
-      bytes: Buffer.isBuffer(request.body) ? request.body : Buffer.from(request.body ?? ""),
+      fileName: upload.fileName,
+      bytes: upload.bytes,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to import XLSX project";
@@ -96,10 +104,7 @@ server.post<{ Body: Buffer }>("/api/projects/import", async (request, reply) => 
 server.get<{ Params: { projectId: string } }>("/api/projects/:projectId/files/workbook.xlsx", async (request, reply) => {
   try {
     const file = await sheets.readXlsxFile(request.params.projectId);
-    return reply
-      .type(file.mimeType)
-      .header("content-disposition", `inline; filename="${file.fileName}"`)
-      .send(file.bytes);
+    return sendArtifactBinaryFile(reply, file);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to read XLSX file";
     return reply.code(message.includes("not found") || message.includes("no such file") ? 404 : 400).send({ error: message });
@@ -108,17 +113,25 @@ server.get<{ Params: { projectId: string } }>("/api/projects/:projectId/files/wo
 
 server.post<{ Params: { projectId: string }; Body: Buffer }>("/api/projects/:projectId/exports", async (request, reply) => {
   try {
-    const fileNameHeader = request.headers["x-file-name"];
-    const mimeTypeHeader = request.headers["x-mime-type"];
-    const contentType = String(request.headers["content-type"] ?? "application/octet-stream").split(";")[0]?.trim().toLowerCase() ?? "application/octet-stream";
-    const exported = await sheets.writeProjectExport(request.params.projectId, {
-      fileName: typeof fileNameHeader === "string" ? decodeURIComponent(fileNameHeader) : "workbook.xlsx",
-      mimeType: typeof mimeTypeHeader === "string" ? decodeURIComponent(mimeTypeHeader).split(";")[0]?.trim().toLowerCase() || contentType : xlsxMimeType,
-      bytes: Buffer.isBuffer(request.body) ? request.body : Buffer.from(request.body ?? ""),
-    });
+    const exported = await sheets.writeProjectExport(request.params.projectId, readArtifactExportRequest(request, {
+      defaultFileName: "workbook.xlsx",
+      defaultMimeType: xlsxMimeType,
+    }));
     return reply.send(exported);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to write export";
+    return reply.code(message.toLowerCase().includes("not found") ? 404 : 400).send({ error: message });
+  }
+});
+
+server.post<{ Params: { projectId: string }; Body: Buffer }>("/api/projects/:projectId/context-attachments", async (request, reply) => {
+  try {
+    const attachment = await sheets.uploadContextAttachment(request.params.projectId, readArtifactUploadRequest(request, {
+      defaultFileName: "attachment",
+    }));
+    return reply.send(attachment);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to upload context attachment";
     return reply.code(message.toLowerCase().includes("not found") ? 404 : 400).send({ error: message });
   }
 });

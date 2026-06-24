@@ -1,4 +1,3 @@
-import { exportDocxFromMarkdown } from "@tutti-os/office-export";
 import { writeProjectExport } from "../api/projects";
 import { renderHtmlProjectAssetReferences } from "../artifact/runtime/projectAssets";
 import { renderMarkdownPreview } from "../artifact/markdownPreview";
@@ -6,33 +5,13 @@ import { defaultPdfMargin, safeExportFileName } from "./htmlExport";
 import { printHtmlToPdfWithTutti } from "./tuttiPdfBridge";
 
 const markdownMimeType = "text/markdown";
-const docxMimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const pdfMimeType = "application/pdf";
-const docxExportTimeoutMs = 30000;
 
 export async function saveMarkdownArtifactExport(input: { projectId: string; title: string; markdown: string }) {
   return writeProjectExport(input.projectId, {
     fileName: `${safeExportFileName(input.title || "doc")}.md`,
     mimeType: markdownMimeType,
     content: input.markdown,
-  });
-}
-
-export async function saveMarkdownArtifactDocxExport(input: { projectId: string; title: string; markdown: string }) {
-  const result = await withTimeout(
-    exportDocxFromMarkdown(renderHtmlProjectAssetReferences(input.markdown, input.projectId), {
-      assetBaseUrl: import.meta.env.DEV ? "/office-export-dev/ooxml-export/" : "/office-export/ooxml-export/",
-      baseUrl: `${window.location.origin}/`,
-      timeoutMs: 10000,
-      title: input.title || "Untitled Doc",
-    }),
-    docxExportTimeoutMs,
-    "DOCX export timed out. Please try Markdown export while DOCX generation is unavailable.",
-  );
-  return writeProjectExport(input.projectId, {
-    fileName: `${safeExportFileName(input.title || "doc")}.docx`,
-    mimeType: docxMimeType,
-    content: result.bytes,
   });
 }
 
@@ -86,20 +65,4 @@ function markdownPrintHtml(input: { title: string; markdown: string }) {
 
 function escapeHtml(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
-  return new Promise<T>((resolve, reject) => {
-    const timeout = window.setTimeout(() => reject(new Error(message)), timeoutMs);
-    promise.then(
-      (value) => {
-        window.clearTimeout(timeout);
-        resolve(value);
-      },
-      (error) => {
-        window.clearTimeout(timeout);
-        reject(error);
-      },
-    );
-  });
 }

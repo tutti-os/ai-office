@@ -24,5 +24,8 @@
   "composer.installingOfficeCli": "正在安装 OfficeCLI",
   "composer.placeholder": "提需求，创建任何内容...",
   "composer.addContext": "添加上下文",
-  "composer.createFromPrompt": "从提示创建"
+  "composer.createFromPrompt": "从提示创建",
+  "composer.create": "创建",
+  "composer.selectAgent": "选择 ACP Agent",
+  "composer.agentUnavailable": "不可用"
 }

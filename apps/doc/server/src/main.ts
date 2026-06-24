@@ -4,8 +4,10 @@ import { join, resolve } from "node:path";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import Fastify from "fastify";
+import { installArtifactProcessErrorHandlers, registerArtifactServerErrorHandlers } from "@ai-app/shared/server-errors";
+import { addArtifactBufferContentTypeParsers, readArtifactExportRequest, readArtifactUploadRequest, sendArtifactBinaryFile } from "@ai-app/shared/server-files";
 import { ArtifactAppHttpRoutes } from "@ai-app/shared/server-routes";
-import type { ApplyTemplateRequest } from "@ai-doc/shared";
+import type { AiEditRequest, ApplyTemplateRequest } from "@ai-doc/shared";
 import { registerDocAgentToolRoutes } from "./agent-tools.js";
 import { DocumentRepository } from "./artifact/document-repository.js";
 import { DocumentService } from "./artifact/document-service.js";
@@ -22,15 +24,15 @@ const port = Number(process.env.PORT ?? 8790);
 const host = process.env.HOST ?? "127.0.0.1";
 
 const server = Fastify({ logger: true, bodyLimit: 30 * 1024 * 1024 });
+registerArtifactServerErrorHandlers(server, { appId: "ai-doc" });
+installArtifactProcessErrorHandlers({ appId: "ai-doc", logger: server.log });
 const events = new EventHub();
 const repo = new DocumentRepository();
 const documents = new DocumentService(repo, events);
 
-server.addContentTypeParser(/^image\/.*/i, { parseAs: "buffer", bodyLimit: 30 * 1024 * 1024 }, (_request, body, done) => {
-  done(null, body);
-});
-server.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bodyLimit: 30 * 1024 * 1024 }, (_request, body, done) => {
-  done(null, body);
+addArtifactBufferContentTypeParsers(server, {
+  imageBodyLimit: 30 * 1024 * 1024,
+  octetStreamBodyLimit: 30 * 1024 * 1024,
 });
 
 await server.register(fastifyWebsocket);
@@ -71,16 +73,9 @@ server.get<{ Params: { templateId: string } }>("/api/templates/:templateId/scree
 
 server.post<{ Body: Buffer }>("/api/projects/import", async (request, reply) => {
   try {
-    const fileNameHeader = request.headers["x-file-name"];
-    const mimeTypeHeader = request.headers["x-file-mime-type"];
-    const contentType = typeof mimeTypeHeader === "string"
-      ? decodeURIComponent(mimeTypeHeader).split(";")[0]?.trim().toLowerCase() || "application/octet-stream"
-      : request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() ?? "application/octet-stream";
-    return await documents.importProjectFile({
-      fileName: typeof fileNameHeader === "string" ? decodeURIComponent(fileNameHeader) : "imported-doc",
-      mimeType: contentType,
-      bytes: Buffer.isBuffer(request.body) ? request.body : Buffer.from([]),
-    });
+    return await documents.importProjectFile(readArtifactUploadRequest(request, {
+      defaultFileName: "imported-doc",
+    }));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to import project";
     return reply.code(message.includes("OfficeCLI") ? 503 : 400).send({ error: message });
@@ -100,6 +95,11 @@ new ArtifactAppHttpRoutes({
   service: documents,
   events,
   listTemplates,
+  defaultAiEditInput: {
+    htmlContent: "",
+    userPrompt: "",
+    mode: "write",
+  } satisfies AiEditRequest,
   requireAiPrompt: true,
   toolchain: {
     responseKey: "officecli",
@@ -120,10 +120,7 @@ new ArtifactAppHttpRoutes({
 server.get<{ Params: { projectId: string } }>("/api/projects/:projectId/files/document.docx", async (request, reply) => {
   try {
     const file = await documents.getDocxFile(request.params.projectId);
-    return reply
-      .type(file.mimeType)
-      .header("content-disposition", `inline; filename="${file.fileName}"`)
-      .send(file.bytes);
+    return sendArtifactBinaryFile(reply, file);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to read DOCX file";
     return reply.code(message.includes("not found") || message.includes("no such file") ? 404 : 400).send({ error: message });
@@ -132,16 +129,9 @@ server.get<{ Params: { projectId: string } }>("/api/projects/:projectId/files/do
 
 server.post<{ Params: { projectId: string }; Body: Buffer }>("/api/projects/:projectId/assets", async (request, reply) => {
   try {
-    const fileNameHeader = request.headers["x-file-name"];
-    const mimeTypeHeader = request.headers["x-file-mime-type"];
-    const contentType = typeof mimeTypeHeader === "string"
-      ? decodeURIComponent(mimeTypeHeader).split(";")[0]?.trim().toLowerCase() || "application/octet-stream"
-      : request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() ?? "application/octet-stream";
-    const asset = await documents.uploadProjectAsset(request.params.projectId, {
-      fileName: typeof fileNameHeader === "string" ? decodeURIComponent(fileNameHeader) : "image",
-      mimeType: contentType,
-      bytes: Buffer.isBuffer(request.body) ? request.body : Buffer.from([]),
-    });
+    const asset = await documents.uploadProjectAsset(request.params.projectId, readArtifactUploadRequest(request, {
+      defaultFileName: "image",
+    }));
     return reply.send(asset);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to upload asset";
@@ -149,16 +139,24 @@ server.post<{ Params: { projectId: string }; Body: Buffer }>("/api/projects/:pro
   }
 });
 
+server.post<{ Params: { projectId: string }; Body: Buffer }>("/api/projects/:projectId/context-attachments", async (request, reply) => {
+  try {
+    const attachment = await documents.uploadContextAttachment(request.params.projectId, readArtifactUploadRequest(request, {
+      defaultFileName: "attachment",
+    }));
+    return reply.send(attachment);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to upload context attachment";
+    return reply.code(message.includes("not found") ? 404 : 400).send({ error: message });
+  }
+});
+
 server.post<{ Params: { projectId: string }; Body: Buffer }>("/api/projects/:projectId/exports", async (request, reply) => {
   try {
-    const fileNameHeader = request.headers["x-file-name"];
-    const mimeTypeHeader = request.headers["x-mime-type"];
-    const contentType = request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() ?? "application/octet-stream";
-    const exported = await documents.writeProjectExport(request.params.projectId, {
-      fileName: typeof fileNameHeader === "string" ? decodeURIComponent(fileNameHeader) : "export",
-      mimeType: typeof mimeTypeHeader === "string" ? decodeURIComponent(mimeTypeHeader).split(";")[0]?.trim().toLowerCase() || contentType : contentType,
-      bytes: Buffer.isBuffer(request.body) ? request.body : Buffer.from([]),
-    });
+    const exported = await documents.writeProjectExport(request.params.projectId, readArtifactExportRequest(request, {
+      defaultFileName: "export",
+      defaultMimeType: "application/octet-stream",
+    }));
     return reply.send(exported);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to write export";
@@ -178,10 +176,7 @@ server.post<{ Params: { projectId: string } }>("/api/projects/:projectId/exports
 server.get<{ Params: { projectId: string; fileName: string } }>("/api/projects/:projectId/assets/:fileName", async (request, reply) => {
   try {
     const file = await documents.getProjectAsset(request.params.projectId, decodeURIComponent(request.params.fileName));
-    return reply
-      .type(file.mimeType)
-      .header("cache-control", "no-store")
-      .send(file.bytes);
+    return reply.type(file.mimeType).header("cache-control", "no-store").send(file.bytes);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to read asset";
     return reply.code(message.includes("not found") || message.includes("no such file") ? 404 : 400).send({ error: message });

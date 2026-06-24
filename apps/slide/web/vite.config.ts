@@ -10,24 +10,12 @@ const officePreviewAssetsRoot = resolve(
   import.meta.dirname,
   "node_modules/@tutti-os/office-preview/dist/ooxml-convert",
 );
-const officeExportAssetsRoot = firstExistingPath([
-  resolve(import.meta.dirname, "node_modules/@tutti-os/office-export/dist/ooxml-export"),
-  resolve(import.meta.dirname, "node_modules/@tutti-os/office-export/public"),
-]);
 
 export default defineConfig({
   plugins: [officeAssetDevRoutes(), react(), tailwindcss()],
-  optimizeDeps: {
-    exclude: ["@tutti-os/office-export"],
-  },
   build: {
     modulePreload: {
       polyfill: false,
-    },
-  },
-  resolve: {
-    alias: {
-      "@tutti-os/office-export": resolve(import.meta.dirname, "node_modules/@tutti-os/office-export/dist/index.js"),
     },
   },
   server: {
@@ -48,7 +36,6 @@ function officeAssetDevRoutes(): Plugin {
     name: "ai-slide-office-dev-assets",
     configureServer(server: ViteDevServer) {
       serveAssetRoot(server, "/office-preview-dev/ooxml-convert", officePreviewAssetsRoot);
-      serveAssetRoot(server, "/office-export-dev/ooxml-export", officeExportAssetsRoot);
     },
   };
 }
@@ -66,8 +53,4 @@ function serveAssetRoot(server: ViteDevServer, routePrefix: string, assetRoot: s
     if (ext === ".wasm") response.setHeader("content-type", "application/wasm");
     createReadStream(filePath).pipe(response);
   });
-}
-
-function firstExistingPath(paths: string[]) {
-  return paths.find((path) => existsSync(path)) ?? "";
 }

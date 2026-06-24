@@ -5,10 +5,13 @@ import type { PointerEvent } from "react";
 import type { InlineFormatTag, RichTextStyle } from "@ai-app/ui/rich-text";
 import { deckSlideDisplayName } from "@ai-slide/shared";
 import { DeckInteractionLayer } from "../artifact/deckInteractionLayerView";
-import type { DeckObjectAlignment, DeckObjectElement, DeckObjectGeometry, DeckObjectGeometryPatch, DeckResizeHandle, DeckSnapGuide } from "../artifact/deckInteractionLayer";
+import type { DeckObjectAlignment, DeckObjectElement, DeckObjectGeometry, DeckObjectGeometryPatch, DeckSnapGuide } from "../artifact/deckInteractionLayer";
 import { EditorInfoPanel } from "./EditorInfoPanel";
 import { SlideFilmstrip } from "./SlideFilmstrip";
-import { editingShieldRects, fontFamilyLabel, normalizeCssSize, projectAssetUrl } from "./deckEditorDom";
+import { projectAssetUrl } from "./deckAssetUrls";
+import { editingShieldRects } from "./deckEditorGeometry";
+import { deckFontOptions, type ActiveDeckObject, type ActiveDeckSelectionBox, type DeckSelectionMode, type DeckToolbarState, type ResizeHandle } from "./deckEditorTypes";
+import { fontFamilyLabel, normalizeCssSize } from "./deckEditorDom";
 import type { useDeckEditorModel } from "./useDeckEditorModel";
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -17,52 +20,6 @@ function cn(...classes: Array<string | false | null | undefined>) {
 
 const scrollbarHidden = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 const slideFilmstripClass = cn("flex min-h-32 min-w-0 shrink-0 items-center gap-3 overflow-x-auto overflow-y-hidden border-t border-[#B8A07C]/45 bg-[#E6DDCD] px-5 pb-4 pt-3.5", scrollbarHidden);
-
-type ActiveDeckObject = {
-  slideId: string;
-  objectId: string;
-  objectType: string;
-  label: string;
-  movable: boolean;
-};
-
-type ActiveDeckSelectionBox = {
-  slideId: string;
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-  rotation: number;
-};
-
-type DeckSelectionMode = "idle" | "object" | "text";
-
-type ResizeHandle = DeckResizeHandle;
-
-type DeckToolbarState = {
-  block: "normal" | "heading" | "shape" | "image";
-  fontFamily: string;
-  fontSize: string;
-  bold: boolean;
-  italic: boolean;
-  underline: boolean;
-  strikethrough: boolean;
-  textColor: string;
-  fillColor: string;
-  align: "left" | "center" | "right" | "";
-};
-
-const deckFontOptions = [
-  { value: "'PingFang SC', sans-serif", label: "PingFang SC" },
-  { value: "Inter, sans-serif", label: "Inter" },
-  { value: "'IBM Plex Sans', sans-serif", label: "IBM Plex Sans" },
-  { value: "'IBM Plex Mono', monospace", label: "IBM Plex Mono" },
-  { value: "'JetBrains Mono', monospace", label: "JetBrains Mono" },
-  { value: "'STIX Two Text', serif", label: "STIX Two Text" },
-  { value: "Arial, sans-serif", label: "Arial" },
-  { value: "Georgia, serif", label: "Georgia" },
-  { value: "'Times New Roman', serif", label: "Times" },
-];
 
 export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorModel> }) {
   const {

@@ -1,24 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from "react";
-import { AlignCenter, AlignLeft, AlignRight, Bold, Crosshair, Image, Italic, PaintBucket, Redo2, Strikethrough, Underline, Undo2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from "react";
 import { type ArtifactSaveState } from "@ai-app/ui/editor-frame";
-import { applyInlineFormat, applyPresentationStyle, captureRichTextSelection, restoreRichTextSelection, selectionBelongsToElement, type InlineFormatTag, type RichTextSelectionState, type RichTextStyle } from "@ai-app/ui/rich-text";
-import { Toolbar, ToolbarColorInput, ToolbarDivider, ToolbarGroup, ToolbarIconButton, ToolbarNumberInput, ToolbarRow, ToolbarSelect } from "@ai-app/ui/toolbar";
+import { captureRichTextSelection, restoreRichTextSelection, selectionBelongsToElement } from "@ai-app/ui/rich-text";
 import { isArtifactReadOnly, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
 import { deckSlideDisplayName, type DeckManifestSlide, type ProjectDetailResponse, type SlideArtifactSelection } from "@ai-slide/shared";
-import { DeckInteractionLayer } from "../artifact/deckInteractionLayerView";
-import { alignedDeckObjectRect, applyDeckObjectRect, applyDeckObjectRotation, collectDeckSnapTargets, isMovableDeckObject, movedDeckRectForDelta, readDeckObjectGeometry, readDeckObjectRect, resizedDeckRectForHandle, snappedDeckDragRect, type DeckObjectAlignment, type DeckObjectElement, type DeckObjectGeometry, type DeckObjectGeometryPatch, type DeckResizeHandle, type DeckSnapGuide } from "../artifact/deckInteractionLayer";
+import { isMovableDeckObject, readDeckObjectGeometry, type DeckObjectElement, type DeckObjectGeometry, type DeckSnapGuide } from "../artifact/deckInteractionLayer";
 import type { DeckAgentRuntimeProvider } from "../artifact/deckArtifactAdapter";
-import { EditorInfoPanel } from "./EditorInfoPanel";
-import { SlideFilmstrip } from "./SlideFilmstrip";
 import {
-  angleDelta,
   applySlideHtmlSnapshot,
-  applyTextAlignmentToObject,
-  applyTextColorToObject,
   deckObjectSelectionPath,
   deckTextSelectionPath,
-  editingShieldRects,
-  enableTextResizeWrapping,
   ensureTextTargetId,
   findTextTargetById,
   fontFamilyLabel,
@@ -26,137 +16,28 @@ import {
   hitTestDeckObjectFromElementPoint,
   isElement,
   isHtmlElement,
-  isInsideEditable,
   isInsideKeyboardInput,
   nearestElement,
   normalizeCssSize,
-  offsetPx,
   placeCaretInElement,
-  pointerAngle,
   prepareSlideEditorDocument,
-  projectAssetUrl,
   queueTextEditCaretPlacement,
   readActualDeckToolbarState,
   readDeckToolbarState,
   readSelectionBox,
-  replaceDeckImageObjectSource,
   selectElementText,
   serializeDeckObjectForAgent,
   serializeSlideDocument,
-  snapRotation,
   textTargetForObject,
   textTargetForObjectAtPoint,
 } from "./deckEditorDom";
+import { editingShieldRects } from "./deckEditorGeometry";
+import { useDeckObjectPointerActions } from "./useDeckObjectPointerActions";
+import { useDeckObjectMutations } from "./useDeckObjectMutations";
+import { attachDeckFrameEventHandlers } from "./deckFrameEvents";
+import { defaultDeckToolbarState, type ActiveDeckObject, type ActiveDeckSelectionBox, type ActiveTextEdit, type ActiveTextSelection, type DeckSelectionMode, type DeckToolbarState, type SlideNavigationKeyboardEvent, type TextEditEntryOptions } from "./deckEditorTypes";
 import { DeckEditorController } from "./DeckEditorController";
 import { fitScale, nextSlideIndex, scaledHeight, scaledWidth, slideDirectionFromKey, thumbnailMetrics, useElementSize } from "./slideView";
-import { uploadDeckAsset } from "../api/projects";
-
-function cn(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
-}
-
-const scrollbarHidden = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
-const slideFilmstripClass = cn("flex min-h-32 min-w-0 shrink-0 items-center gap-3 overflow-x-auto overflow-y-hidden border-t border-white/8 bg-[#242424] px-5 pb-4 pt-3.5", scrollbarHidden);
-
-type ActiveDeckObject = {
-  slideId: string;
-  objectId: string;
-  objectType: string;
-  label: string;
-  movable: boolean;
-};
-
-type ActiveDeckSelectionBox = {
-  slideId: string;
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-  rotation: number;
-};
-
-type ActiveTextEdit = {
-  slideId: string;
-  objectId: string;
-  textTargetId: string;
-};
-
-type ActiveTextSelection = ActiveTextEdit & {
-  selection: RichTextSelectionState;
-};
-
-type TextEditEntryOptions = {
-  caretPoint?: { x: number; y: number };
-  deferToNativeSelection?: boolean;
-  selectContents?: boolean;
-  useObjectTextRoot?: boolean;
-};
-
-type DeckSelectionMode = "idle" | "object" | "text";
-
-type ResizeHandle = DeckResizeHandle;
-
-type SlideNavigationKeyboardEvent = {
-  altKey: boolean;
-  ctrlKey: boolean;
-  key: string;
-  metaKey: boolean;
-  shiftKey: boolean;
-  target: EventTarget | null;
-  preventDefault: () => void;
-  stopPropagation: () => void;
-};
-
-type DeckToolbarState = {
-  block: "normal" | "heading" | "shape" | "image";
-  fontFamily: string;
-  fontSize: string;
-  bold: boolean;
-  italic: boolean;
-  underline: boolean;
-  strikethrough: boolean;
-  textColor: string;
-  fillColor: string;
-  align: "left" | "center" | "right" | "";
-};
-
-const defaultDeckToolbarState: DeckToolbarState = {
-  block: "normal",
-  fontFamily: "'PingFang SC', sans-serif",
-  fontSize: "16",
-  bold: false,
-  italic: false,
-  underline: false,
-  strikethrough: false,
-  textColor: "#1f2937",
-  fillColor: "#ffffff",
-  align: "",
-};
-
-const selectedDeckObjectToolbarState: DeckToolbarState = {
-  block: "normal",
-  fontFamily: "Inter, sans-serif",
-  fontSize: "16",
-  bold: false,
-  italic: false,
-  underline: false,
-  strikethrough: false,
-  textColor: "#000000",
-  fillColor: "#ffffff",
-  align: "",
-};
-
-const deckFontOptions = [
-  { value: "'PingFang SC', sans-serif", label: "PingFang SC" },
-  { value: "Inter, sans-serif", label: "Inter" },
-  { value: "'IBM Plex Sans', sans-serif", label: "IBM Plex Sans" },
-  { value: "'IBM Plex Mono', monospace", label: "IBM Plex Mono" },
-  { value: "'JetBrains Mono', monospace", label: "JetBrains Mono" },
-  { value: "'STIX Two Text', serif", label: "STIX Two Text" },
-  { value: "Arial, sans-serif", label: "Arial" },
-  { value: "Georgia, serif", label: "Georgia" },
-  { value: "'Times New Roman', serif", label: "Times" },
-];
 
 export function useDeckEditorModel(props: {
   detail: ProjectDetailResponse;
@@ -533,79 +414,21 @@ export function useDeckEditorModel(props: {
     deckController.markFrameInitialized(doc);
     prepareSlideEditorDocument(doc, { fileRef: props.detail.artifact.fileRef, projectId: props.projectId });
     if (doc.location.href !== "about:blank") ensureInitialSlideHistory(slide.id, doc);
-    doc.addEventListener(
-      "mousedown",
-      (event) => {
-        if (!directTextEditModeRef.current || event.button !== 0 || isInsideEditable(event.target)) return;
-        if (readOnlyRef.current) return;
-        const target = isElement(event.target) ? event.target.closest<DeckObjectElement>('[data-object="true"]') : null;
-        if (!target || target.getAttribute("data-object-type") !== "textbox") return;
-        setActiveSlideId(slide.id);
-        // Enable the whole textbox before the browser's default mousedown selection runs.
-        enterTextEditMode(slide.id, target, target, {
-          deferToNativeSelection: true,
-          selectContents: false,
-          useObjectTextRoot: true,
-        });
-      },
-      true,
-    );
-    doc.addEventListener(
-      "click",
-      (event) => {
-        setActiveSlideId(slide.id);
-        const target = isElement(event.target) ? event.target.closest<DeckObjectElement>('[data-object="true"]') : null;
-        if (!target) {
-          clearActiveSelection({ preserveToolbar: true });
-          return;
-        }
-        if (isInsideEditable(event.target)) return;
-        event.preventDefault();
-        event.stopPropagation();
-        if (!readOnlyRef.current && target.getAttribute("data-object-type") === "textbox" && directTextEditModeRef.current) {
-          enterTextEditMode(slide.id, target, target, {
-            caretPoint: event instanceof MouseEvent ? { x: event.clientX, y: event.clientY } : undefined,
-            selectContents: false,
-            useObjectTextRoot: true,
-          });
-        } else {
-          selectObject(slide.id, target);
-        }
-      },
-      true,
-    );
-    doc.addEventListener(
-      "dblclick",
-      (event) => {
-        setActiveSlideId(slide.id);
-        const target = isElement(event.target) ? event.target.closest<DeckObjectElement>('[data-object="true"]') : null;
-        if (!target) return;
-        if (!readOnlyRef.current && target.getAttribute("data-object-type") === "textbox") enterTextEditMode(slide.id, target, isElement(event.target) ? event.target : undefined);
-        else selectObject(slide.id, target);
-      },
-      true,
-    );
-    doc.addEventListener(
-      "input",
-      () => {
-        if (readOnlyRef.current) return;
-        rememberTextSelection(slide.id, doc);
-        recordSlideHistory(slide.id, doc);
-        scheduleSlideSave(slide.id);
-      },
-      true,
-    );
-    doc.addEventListener("selectionchange", () => rememberTextSelection(slide.id, doc));
-    doc.addEventListener("keyup", () => rememberTextSelection(slide.id, doc), true);
-    doc.addEventListener("mouseup", () => rememberTextSelection(slide.id, doc), true);
-    doc.addEventListener(
-      "keydown",
-      (event) => {
-        handleSlideNavigationKeyboardEvent(event, slide.id);
-        handleHistoryShortcut(event, slide.id);
-      },
-      true,
-    );
+    attachDeckFrameEventHandlers({
+      slide,
+      doc,
+      directTextEditModeRef,
+      readOnlyRef,
+      clearActiveSelection,
+      enterTextEditMode,
+      handleHistoryShortcut,
+      handleSlideNavigationKeyboardEvent,
+      recordSlideHistory,
+      rememberTextSelection,
+      scheduleSlideSave,
+      selectObject,
+      setActiveSlideId,
+    });
   };
 
   const selectObjectFromFramePoint = (slide: DeckManifestSlide, clientX: number, clientY: number) => {
@@ -686,283 +509,43 @@ export function useDeckEditorModel(props: {
     rememberCurrentSelection();
   };
 
-  const beginResizeObject = (handle: ResizeHandle, event: PointerEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (readOnlyRef.current) return;
-    const object = findActiveObject();
-    if (!object || !activeObject || !activeSelectionBox || scale <= 0) return;
-    const initialRect = readDeckObjectRect(object);
-    const startClientX = event.clientX;
-    const startClientY = event.clientY;
-    event.currentTarget.setPointerCapture(event.pointerId);
+  const { beginDragObject, beginResizeObject, beginRotateObject } = useDeckObjectPointerActions({
+    activeObject,
+    activeSelectionBox,
+    canvas,
+    findActiveObject,
+    readOnlyRef,
+    scale,
+    recordSlideHistory,
+    scheduleSlideSave,
+    setActiveObjectGeometry,
+    setActiveSelectionBox,
+    setSnapGuides,
+  });
 
-    const onPointerMove = (moveEvent: globalThis.PointerEvent) => {
-      moveEvent.preventDefault();
-      const deltaX = (moveEvent.clientX - startClientX) / scale;
-      const deltaY = (moveEvent.clientY - startClientY) / scale;
-      const nextRect = resizedDeckRectForHandle(handle, initialRect, deltaX, deltaY, canvas.width, canvas.height);
-      applyDeckObjectRect(object, nextRect, { onTextboxResize: enableTextResizeWrapping });
-      setActiveObjectGeometry(readDeckObjectGeometry(object));
-      setActiveSelectionBox(readSelectionBox(activeObject.slideId, object, scale));
-    };
-
-    const onPointerEnd = (endEvent: globalThis.PointerEvent) => {
-      endEvent.preventDefault();
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerEnd);
-      window.removeEventListener("pointercancel", onPointerEnd);
-      setActiveSelectionBox(readSelectionBox(activeObject.slideId, object, scale));
-      setActiveObjectGeometry(readDeckObjectGeometry(object));
-      recordSlideHistory(activeObject.slideId, object.ownerDocument);
-      scheduleSlideSave(activeObject.slideId);
-    };
-
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerEnd);
-    window.addEventListener("pointercancel", onPointerEnd);
-  };
-
-  const beginDragObject = (event: PointerEvent<HTMLElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (readOnlyRef.current) return;
-    const object = findActiveObject();
-    if (!object || !activeObject || scale <= 0 || !isMovableDeckObject(object)) return;
-    const initialRect = readDeckObjectRect(object);
-    const snapTargets = collectDeckSnapTargets(object, canvas.width, canvas.height);
-    const startClientX = event.clientX;
-    const startClientY = event.clientY;
-    let didMove = false;
-    event.currentTarget.setPointerCapture(event.pointerId);
-
-    const onPointerMove = (moveEvent: globalThis.PointerEvent) => {
-      moveEvent.preventDefault();
-      const deltaX = (moveEvent.clientX - startClientX) / scale;
-      const deltaY = (moveEvent.clientY - startClientY) / scale;
-      if (!didMove && Math.hypot(moveEvent.clientX - startClientX, moveEvent.clientY - startClientY) < 2) return;
-      didMove = true;
-      const rawRect = movedDeckRectForDelta(initialRect, deltaX, deltaY, canvas.width, canvas.height);
-      const snapped = snappedDeckDragRect(rawRect, snapTargets, 8 / scale, canvas.width, canvas.height);
-      applyDeckObjectRect(object, snapped.rect, { onTextboxResize: enableTextResizeWrapping, preserveSize: true });
-      setActiveObjectGeometry(readDeckObjectGeometry(object));
-      setActiveSelectionBox(readSelectionBox(activeObject.slideId, object, scale));
-      setSnapGuides(snapped.guides);
-    };
-
-    const onPointerEnd = (endEvent: globalThis.PointerEvent) => {
-      endEvent.preventDefault();
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerEnd);
-      window.removeEventListener("pointercancel", onPointerEnd);
-      setSnapGuides([]);
-      setActiveSelectionBox(readSelectionBox(activeObject.slideId, object, scale));
-      setActiveObjectGeometry(readDeckObjectGeometry(object));
-      if (!didMove) return;
-      recordSlideHistory(activeObject.slideId, object.ownerDocument);
-      scheduleSlideSave(activeObject.slideId);
-    };
-
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerEnd);
-    window.addEventListener("pointercancel", onPointerEnd);
-  };
-
-  const beginRotateObject = (event: PointerEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (readOnlyRef.current) return;
-    const object = findActiveObject();
-    if (!object || !activeObject || !activeSelectionBox || scale <= 0) return;
-    const selectionElement = event.currentTarget.parentElement;
-    const stage = selectionElement?.offsetParent instanceof HTMLElement ? selectionElement.offsetParent : null;
-    const stageRect = stage?.getBoundingClientRect();
-    if (!stageRect) return;
-    const initialGeometry = readDeckObjectGeometry(object);
-    const centerClientX = stageRect.left + activeSelectionBox.left + activeSelectionBox.width / 2;
-    const centerClientY = stageRect.top + activeSelectionBox.top + activeSelectionBox.height / 2;
-    let previousAngle = pointerAngle(event.clientX, event.clientY, centerClientX, centerClientY);
-    let rawRotation = initialGeometry.rotation;
-    let totalDelta = 0;
-    let didRotate = false;
-    event.currentTarget.setPointerCapture(event.pointerId);
-
-    const onPointerMove = (moveEvent: globalThis.PointerEvent) => {
-      moveEvent.preventDefault();
-      const nextAngle = pointerAngle(moveEvent.clientX, moveEvent.clientY, centerClientX, centerClientY);
-      const delta = angleDelta(previousAngle, nextAngle);
-      previousAngle = nextAngle;
-      rawRotation += delta;
-      totalDelta += delta;
-      if (!didRotate && Math.abs(totalDelta) < 0.5) return;
-      didRotate = true;
-      const rotation = moveEvent.shiftKey ? snapRotation(rawRotation, 15) : rawRotation;
-      applyDeckObjectRotation(object, rotation);
-      setActiveObjectGeometry(readDeckObjectGeometry(object));
-      setActiveSelectionBox(readSelectionBox(activeObject.slideId, object, scale));
-    };
-
-    const onPointerEnd = (endEvent: globalThis.PointerEvent) => {
-      endEvent.preventDefault();
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerEnd);
-      window.removeEventListener("pointercancel", onPointerEnd);
-      setActiveObjectGeometry(readDeckObjectGeometry(object));
-      setActiveSelectionBox(readSelectionBox(activeObject.slideId, object, scale));
-      if (!didRotate) return;
-      recordSlideHistory(activeObject.slideId, object.ownerDocument);
-      scheduleSlideSave(activeObject.slideId);
-    };
-
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerEnd);
-    window.addEventListener("pointercancel", onPointerEnd);
-  };
-
-  const mutateActiveObject = (mutate: (object: DeckObjectElement, textTarget: DeckObjectElement) => void) => {
-    if (readOnlyRef.current) return;
-    const object = findActiveObject();
-    if (!object || !activeObject) return;
-    const textTarget = findActiveTextTarget(object);
-    mutate(object, textTarget);
-    if (!activeTextEdit) object.setAttribute("data-ai-slide-selected", "true");
-    setActiveObjectGeometry(readDeckObjectGeometry(object));
-    setActiveSelectionBox(readSelectionBox(activeObject.slideId, object, scale));
-    setToolbarState(activeTextEdit ? readActualDeckToolbarState(object, textTarget) : readDeckToolbarState(object));
-    recordSlideHistory(activeObject.slideId, object.ownerDocument);
-    scheduleSlideSave(activeObject.slideId);
-  };
-
-  const applyActiveTextOperation = (operation: (doc: Document, textTarget: HTMLElement) => boolean) => {
-    if (!activeTextEdit) return;
-    mutateActiveObject((_object, textTarget) => {
-      if (!isHtmlElement(textTarget)) return;
-      restoreActiveTextSelection(textTarget);
-      operation(textTarget.ownerDocument, textTarget);
-      const selection = captureRichTextSelection(textTarget.ownerDocument, textTarget);
-      if (selection) activeTextSelectionRef.current = { ...activeTextEdit, selection };
-    });
-  };
-
-  const updateTextStyle = (style: RichTextStyle) => {
-    applyActiveTextOperation((doc, textTarget) => applyPresentationStyle(doc, style, textTarget));
-  };
-
-  const updateTextAlignment = (align: "left" | "center" | "right") => {
-    if (activeTextEdit) {
-      updateTextStyle({ textAlign: align });
-      return;
-    }
-    mutateActiveObject((object) => {
-      applyTextAlignmentToObject(object, align);
-    });
-  };
-
-  const updateTextColor = (color: string) => {
-    if (activeTextEdit) {
-      updateTextStyle({ color });
-      return;
-    }
-    mutateActiveObject((object) => {
-      applyTextColorToObject(object, color);
-    });
-  };
-
-  const toggleInlineFormat = (tagName: InlineFormatTag) => {
-    applyActiveTextOperation((doc, textTarget) => applyInlineFormat(doc, tagName, textTarget));
-  };
-
-  const updateObjectStyle = (style: Partial<CSSStyleDeclaration>) => {
-    mutateActiveObject((object) => {
-      Object.assign(object.style, style);
-    });
-  };
-
-  const requestImageReplacement = () => {
-    if (readOnlyRef.current) return;
-    if (activeObject?.objectType !== "image") return;
-    const input = imageFileInputRef.current;
-    if (!input) return;
-    input.value = "";
-    input.click();
-  };
-
-  const replaceActiveImageFromFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = "";
-    if (readOnlyRef.current) return;
-    if (!file || !file.type.startsWith("image/")) return;
-    try {
-      const asset = await uploadDeckAsset(props.projectId, file);
-      const src = projectAssetUrl(props.projectId, props.detail.artifact.fileRef, `assets/${asset.fileName}`);
-      mutateActiveObject((object) => {
-        replaceDeckImageObjectSource(object, src);
-      });
-    } catch {
-      setSaveState("error");
-    }
-  };
-
-  const updateActiveObjectGeometry = (patch: DeckObjectGeometryPatch) => {
-    mutateActiveObject((object) => {
-      const current = readDeckObjectGeometry(object);
-      const nextRect = {
-        left: patch.left ?? current.left,
-        top: patch.top ?? current.top,
-        width: patch.width ?? current.width,
-        height: patch.height ?? current.height,
-      };
-      const rectChanged =
-        nextRect.left !== current.left ||
-        nextRect.top !== current.top ||
-        nextRect.width !== current.width ||
-        nextRect.height !== current.height;
-      if (rectChanged) {
-        const sizeChanged = patch.width !== undefined || patch.height !== undefined;
-        applyDeckObjectRect(object, nextRect, { onTextboxResize: enableTextResizeWrapping, preserveSize: !sizeChanged });
-      }
-      if (patch.rotation !== undefined) applyDeckObjectRotation(object, patch.rotation);
-    });
-  };
-
-  const alignActiveObjectGeometry = (alignment: DeckObjectAlignment) => {
-    mutateActiveObject((object) => {
-      const current = readDeckObjectGeometry(object);
-      const nextRect = alignedDeckObjectRect(current, alignment, canvas.width, canvas.height);
-      applyDeckObjectRect(object, nextRect, { onTextboxResize: enableTextResizeWrapping, preserveSize: true });
-    });
-  };
-
-  const duplicateActiveObject = () => {
-    mutateActiveObject((object) => {
-      const clone = object.cloneNode(true) as DeckObjectElement;
-      clone.removeAttribute("data-ai-slide-selected");
-      clone.removeAttribute("contenteditable");
-      clone.querySelectorAll?.("[contenteditable], [data-ai-slide-text-edit-id]").forEach((element) => {
-        element.removeAttribute("contenteditable");
-        element.removeAttribute("spellcheck");
-        element.removeAttribute("data-ai-slide-text-edit-id");
-      });
-      clone.setAttribute("data-ai-slide-object-id", `object-${Date.now().toString(36)}`);
-      clone.style.left = offsetPx(clone.style.left, 24);
-      clone.style.top = offsetPx(clone.style.top, 24);
-      object.after(clone);
-    });
-  };
-
-  const deleteActiveObject = () => {
-    if (readOnlyRef.current) return;
-    const object = findActiveObject();
-    if (!object || !activeObject) return;
-    object.remove();
-    setActiveObject(null);
-    setActiveObjectGeometry(null);
-    setActiveSelectionBox(null);
-    setActiveTextEdit(null);
-    setSelectionMode("idle");
-    recordSlideHistory(activeObject.slideId, object.ownerDocument);
-    scheduleSlideSave(activeObject.slideId);
-  };
+  const { alignActiveObjectGeometry, deleteActiveObject, duplicateActiveObject, replaceActiveImageFromFile, requestImageReplacement, toggleInlineFormat, updateActiveObjectGeometry, updateObjectStyle, updateTextAlignment, updateTextColor, updateTextStyle } = useDeckObjectMutations({
+    activeObject,
+    activeTextEdit,
+    activeTextSelectionRef,
+    canvas,
+    fileRef: props.detail.artifact.fileRef,
+    findActiveObject,
+    findActiveTextTarget,
+    imageFileInputRef,
+    projectId: props.projectId,
+    readOnlyRef,
+    restoreActiveTextSelection,
+    scale,
+    recordSlideHistory,
+    scheduleSlideSave,
+    setActiveObject,
+    setActiveObjectGeometry,
+    setActiveSelectionBox,
+    setActiveTextEdit,
+    setSaveState,
+    setSelectionMode,
+    setToolbarState,
+  });
 
   return {
     activeObject,

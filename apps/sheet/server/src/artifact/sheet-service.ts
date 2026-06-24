@@ -1,5 +1,6 @@
 import { openPathInFileManager } from "@ai-app/shared/local-open";
 import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
+import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
 import type { RuntimeProfile } from "@ai-app/shared/types";
 import type { AiEditRequest, ApplySheetCommandsRequest, CreateProjectRequest, SheetRun, SheetRunEvent, UpdateProjectRequest } from "@ai-sheet/shared";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
@@ -177,6 +178,13 @@ export class SheetService {
     return this.repo.writeProjectExport(projectId, input);
   }
 
+  async uploadContextAttachment(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }): Promise<ContextAttachmentUploadResponse> {
+    if (!this.repo.getProject(projectId)) throw new Error("Project not found");
+    if (input.bytes.byteLength === 0) throw new Error("Context attachment is empty");
+    if (input.bytes.byteLength > maxContextAttachmentBytes) throw new Error("Context attachment is too large");
+    return this.repo.writeContextAttachment(projectId, input);
+  }
+
   async exportXlsxFile(projectId: string) {
     const detail = await this.getProject(projectId);
     const file = await this.repo.readXlsxFile(projectId);
@@ -333,6 +341,8 @@ function runPreview(manifest: { exists: boolean; sizeBytes: number } | null | un
   if (!manifest?.exists) return "XLSX run completed. No workbook.xlsx change was detected.";
   return `XLSX preview refreshed: ${manifest.sizeBytes} bytes`;
 }
+
+const maxContextAttachmentBytes = 30 * 1024 * 1024;
 
 function previewText(value: string) {
   const text = value

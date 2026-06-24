@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { ChevronLeft, ChevronRight, FileCode2, FileText, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileCode2, FileText, Loader2, Plus, X } from "lucide-react";
 import { appShell, ArtifactHistoryPanel, HomeCategoryPill, scrollbarClass, templateCardClass } from "@ai-app/ui/app-shell";
 import type { SlideArtifactType, SlideProject } from "@ai-slide/shared";
 import type { OutputType, SlideTemplate } from "../templates";
@@ -56,42 +56,41 @@ export function TemplatePreviewModal(props: {
   onSelectIndex: (index: number) => void;
   onUseTemplate: (template: SlideTemplate) => void;
 }) {
-  const thumbnails =
-    props.template.thumbnailImages.length > 0
-      ? props.template.thumbnailImages
-      : props.template.previewImages.length > 0
-        ? props.template.previewImages
-        : [props.template.coverImage].filter(Boolean);
-  const previews = props.template.previewImages.length > 0 ? props.template.previewImages : thumbnails;
-  const selectedIndex = Math.min(Math.max(props.selectedIndex, 0), Math.max(thumbnails.length - 1, 0));
-  const selectedImage = previews[selectedIndex] ?? thumbnails[selectedIndex] ?? props.template.coverImage;
-  const slideCount = Math.max(thumbnails.length, previews.length, props.template.slideCount);
+  const imageCount = Math.max(props.template.previewImages.length, props.template.thumbnailImages.length, props.template.coverImage ? 1 : 0);
+  const previewSlides = Array.from({ length: imageCount }, (_, index) => ({
+    preview: props.template.previewImages[index] ?? props.template.thumbnailImages[index] ?? (index === 0 ? props.template.coverImage : ""),
+    thumbnail: props.template.thumbnailImages[index] ?? props.template.previewImages[index] ?? (index === 0 ? props.template.coverImage : ""),
+  })).filter((slide) => slide.preview || slide.thumbnail);
+  const selectedIndex = Math.min(Math.max(props.selectedIndex, 0), Math.max(previewSlides.length - 1, 0));
+  const selectedImage = previewSlides[selectedIndex]?.preview ?? props.template.coverImage;
+  const slideCount = Math.max(previewSlides.length, props.template.slideCount);
 
   const move = (offset: -1 | 1) => {
-    if (thumbnails.length === 0) return;
-    props.onSelectIndex((selectedIndex + offset + thumbnails.length) % thumbnails.length);
+    if (previewSlides.length === 0) return;
+    props.onSelectIndex((selectedIndex + offset + previewSlides.length) % previewSlides.length);
   };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.key !== "Escape") return;
       event.preventDefault();
+      if (props.creating) return;
       props.onClose();
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [props.onClose]);
+  }, [props.creating, props.onClose]);
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-[#2A2620]/62 p-[18px]" role="presentation" onMouseDown={props.onClose}>
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-[#2A2620]/62 p-[18px]" role="presentation" onMouseDown={props.creating ? undefined : props.onClose}>
       <section
         aria-modal="true"
         className={cn("relative flex h-[min(900px,calc(100vh_-_24px))] w-[min(960px,calc(100vw_-_24px))] flex-col overflow-hidden rounded-[20px] bg-[#F4EFE6] text-[#2A2620] max-md:h-auto max-md:max-h-[calc(100vh_-_20px)] max-md:w-[calc(100vw_-_20px)]", appShell.cardShadow)}
         role="dialog"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <button className="absolute right-7 top-5 z-[3] grid size-9 place-items-center rounded-full border border-[#B8A07C]/45 bg-[#F4EFE6]/70 text-[#8B8275] hover:text-[#5C6B50] max-md:right-4 max-md:top-3" type="button" aria-label="Close template preview" onClick={props.onClose}>
+        <button className="absolute right-7 top-5 z-[3] grid size-9 place-items-center rounded-full border border-[#B8A07C]/45 bg-[#F4EFE6]/70 text-[#8B8275] hover:text-[#5C6B50] disabled:cursor-default disabled:opacity-50 max-md:right-4 max-md:top-3" type="button" aria-label="Close template preview" disabled={props.creating} onClick={props.onClose}>
           <X size={26} />
         </button>
 
@@ -108,12 +107,18 @@ export function TemplatePreviewModal(props: {
 
           <div className="relative self-center overflow-hidden rounded-[20px] border border-[#B8A07C]/45 bg-white shadow-[inset_0_0_0_1px_rgba(17,24,39,0.02)]">
             {selectedImage ? <img className="block aspect-video w-full object-cover" src={selectedImage} alt="" draggable={false} /> : <div className="grid aspect-video w-full place-items-center bg-[#f3f0ea] p-7 text-center text-[18px] font-extrabold text-[#202124]">{props.template.name}</div>}
-            {thumbnails.length > 1 ? (
+            {previewSlides.length > 1 ? (
               <>
-                <button className="absolute left-3 top-1/2 grid size-[46px] -translate-y-1/2 place-items-center rounded-full border border-[#202124]/8 bg-white/86 text-[#202124] shadow-[0_10px_24px_rgba(0,0,0,0.12)]" type="button" aria-label="Previous slide" onClick={() => move(-1)}>
+                <button className="absolute left-3 top-1/2 z-[2] grid size-[46px] -translate-y-1/2 place-items-center rounded-full border border-[#202124]/8 bg-white/86 text-[#202124] shadow-[0_10px_24px_rgba(0,0,0,0.12)]" type="button" aria-label="Previous slide" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => {
+                  event.stopPropagation();
+                  move(-1);
+                }}>
                   <ChevronLeft size={30} />
                 </button>
-                <button className="absolute right-3 top-1/2 grid size-[46px] -translate-y-1/2 place-items-center rounded-full border border-[#202124]/8 bg-white/86 text-[#202124] shadow-[0_10px_24px_rgba(0,0,0,0.12)]" type="button" aria-label="Next slide" onClick={() => move(1)}>
+                <button className="absolute right-3 top-1/2 z-[2] grid size-[46px] -translate-y-1/2 place-items-center rounded-full border border-[#202124]/8 bg-white/86 text-[#202124] shadow-[0_10px_24px_rgba(0,0,0,0.12)]" type="button" aria-label="Next slide" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => {
+                  event.stopPropagation();
+                  move(1);
+                }}>
                   <ChevronRight size={30} />
                 </button>
               </>
@@ -131,24 +136,26 @@ export function TemplatePreviewModal(props: {
           </div>
 
           <div className="flex flex-wrap gap-4 px-[34px] pb-[34px] max-md:px-[18px]">
-            {thumbnails.map((image, index) => (
+            {previewSlides.map((slide, index) => (
               <button
-                key={`${image}-${index}`}
+                key={`${slide.thumbnail || slide.preview}-${index}`}
                 className={cn("relative basis-[calc(33.333%_-_11px)] overflow-hidden rounded-xl border border-[#e5e7eb] bg-white p-0 text-left shadow-[0_10px_24px_rgba(0,0,0,0.08)] max-md:basis-full", index === selectedIndex ? "border-[#202124] ring-2 ring-[#202124]/12" : "")}
                 type="button"
                 aria-label={`Preview slide ${index + 1}`}
+                disabled={props.creating}
                 onClick={() => props.onSelectIndex(index)}
               >
                 <span className="absolute left-2 top-2 z-[2] rounded-md bg-black/58 px-1.5 py-1 font-mono text-[10px] font-black text-white">{String(index + 1).padStart(2, "0")}</span>
-                <img className="block aspect-video w-full object-cover" src={image} alt="" loading="lazy" draggable={false} />
+                <img className="block aspect-video w-full object-cover" src={slide.thumbnail || slide.preview} alt="" loading="lazy" draggable={false} />
               </button>
             ))}
           </div>
         </div>
 
         <div className="flex shrink-0 justify-end border-t border-[#B8A07C]/45 bg-[#F4EFE6]/96 px-[34px] py-4 backdrop-blur max-md:px-[18px]">
-          <button className="h-10 rounded-full border-0 bg-[#2A2620] px-7 text-[15px] font-medium text-[#F4EFE6] disabled:cursor-default disabled:bg-[#B8A07C]/32 disabled:text-[#8B8275]" type="button" disabled={props.creating} onClick={() => props.onUseTemplate(props.template)}>
-            {props.creating ? "Adding..." : "Use"}
+          <button className="inline-flex h-10 min-w-[96px] items-center justify-center gap-2 rounded-full border-0 bg-[#2A2620] px-7 text-[15px] font-medium text-[#F4EFE6] disabled:cursor-default disabled:bg-[#B8A07C]/32 disabled:text-[#8B8275]" type="button" disabled={props.creating} onClick={() => props.onUseTemplate(props.template)}>
+            {props.creating ? <Loader2 className="animate-spin" size={17} /> : null}
+            <span>{props.creating ? "Adding..." : "Use"}</span>
           </button>
         </div>
       </section>

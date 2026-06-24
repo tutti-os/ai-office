@@ -1,14 +1,20 @@
-export type ArtifactAppRouteService = {
+import { artifactErrorResponse, notFoundOrBadRequest } from "@ai-app/shared/server-errors";
+
+export type ArtifactAppRouteService<
+  TCreateProjectInput = unknown,
+  TUpdateProjectInput = unknown,
+  TAiEditInput = unknown,
+> = {
   bootstrap(): unknown | Promise<unknown>;
   listLocalAgentProviders(): unknown | Promise<unknown>;
   listProjects(): unknown | Promise<unknown>;
-  createProject(input: unknown): unknown | Promise<unknown>;
+  createProject(input: TCreateProjectInput): unknown | Promise<unknown>;
   clearProjectHistory(): unknown | Promise<unknown>;
   deleteProject?(projectId: string): unknown | Promise<unknown>;
   getProject(projectId: string): unknown | Promise<unknown>;
-  updateProject(projectId: string, input: unknown): unknown | Promise<unknown>;
+  updateProject(projectId: string, input: TUpdateProjectInput): unknown | Promise<unknown>;
   listProjectRuns(projectId: string): unknown | Promise<unknown>;
-  startAiEdit(projectId: string, input: unknown): unknown | Promise<unknown>;
+  startAiEdit(projectId: string, input: TAiEditInput): unknown | Promise<unknown>;
   cancelRun(runId: string): unknown | Promise<unknown>;
 };
 
@@ -27,33 +33,70 @@ export type ArtifactAppToolchainRoutes<TStatus> = {
   responseKey: string;
 };
 
-export type ArtifactAppHttpRoutesInput<TStatus> = {
+export type ArtifactAppHttpRoutesInput<
+  TStatus,
+  TCreateProjectInput = unknown,
+  TUpdateProjectInput = unknown,
+  TAiEditInput = unknown,
+  TTemplate = unknown,
+> = {
   appId: string;
-  service: ArtifactAppRouteService;
+  service: ArtifactAppRouteService<TCreateProjectInput, TUpdateProjectInput, TAiEditInput>;
   events: ArtifactAppEventHub;
-  listTemplates: () => unknown[] | Promise<unknown[]>;
+  listTemplates: () => TTemplate[] | Promise<TTemplate[]>;
   toolchain: ArtifactAppToolchainRoutes<TStatus>;
+  defaultAiEditInput: TAiEditInput;
   requireAiPrompt?: boolean;
 };
 
-export class ArtifactAppHttpRoutes<TStatus> {
-  constructor(private readonly input: ArtifactAppHttpRoutesInput<TStatus>) {}
+type ArtifactRouteReply = {
+  code(statusCode: number): ArtifactRouteReply;
+  send(payload: unknown): unknown;
+};
 
-  register(server: any) {
+type ArtifactRouteRequest<TParams = Record<string, string>, TBody = unknown> = {
+  params: TParams;
+  body?: TBody;
+};
+
+type ArtifactWebSocket = {
+  send(payload: string): void;
+  on(event: "message", handler: (raw: Buffer) => void): void;
+  on(event: "close", handler: () => void): void;
+};
+
+type ArtifactRouteServer = {
+  get(path: string, handler: unknown): void;
+  get(path: string, options: unknown, handler: unknown): void;
+  post(path: string, handler: unknown): void;
+  patch(path: string, handler: unknown): void;
+  delete(path: string, handler: unknown): void;
+};
+
+export class ArtifactAppHttpRoutes<
+  TStatus,
+  TCreateProjectInput = unknown,
+  TUpdateProjectInput = unknown,
+  TAiEditInput = unknown,
+  TTemplate = unknown,
+> {
+  constructor(private readonly input: ArtifactAppHttpRoutesInput<TStatus, TCreateProjectInput, TUpdateProjectInput, TAiEditInput, TTemplate>) {}
+
+  register(server: ArtifactRouteServer) {
     this.registerAppRoutes(server);
     this.registerToolchainRoutes(server);
     this.registerProjectRoutes(server);
     this.registerWsRoute(server);
   }
 
-  private registerAppRoutes(server: any) {
+  private registerAppRoutes(server: ArtifactRouteServer) {
     server.get("/api/health", async () => ({ ok: true, app: this.input.appId }));
     server.get("/api/bootstrap", async () => this.input.service.bootstrap());
     server.get("/api/templates", async () => ({ templates: await this.input.listTemplates() }));
     server.get("/api/local-agent/providers", async () => this.input.service.listLocalAgentProviders());
   }
 
-  private registerToolchainRoutes(server: any) {
+  private registerToolchainRoutes(server: ArtifactRouteServer) {
     server.get("/api/toolchains/officecli", async () => {
       try {
         return { [this.input.toolchain.responseKey]: await this.input.toolchain.getStatus() };
@@ -62,7 +105,7 @@ export class ArtifactAppHttpRoutes<TStatus> {
       }
     });
 
-    server.post("/api/toolchains/officecli/install", async (_request: unknown, reply: any) => {
+    server.post("/api/toolchains/officecli/install", async (_request: unknown, reply: ArtifactRouteReply) => {
       const status = await this.input.toolchain.install();
       if (!this.input.toolchain.isAvailable(status)) {
         return reply.code(400).send({
@@ -74,67 +117,67 @@ export class ArtifactAppHttpRoutes<TStatus> {
     });
   }
 
-  private registerProjectRoutes(server: any) {
+  private registerProjectRoutes(server: ArtifactRouteServer) {
     server.get("/api/projects", async () => this.input.service.listProjects());
-    server.post("/api/projects", async (request: any, reply: any) => {
+    server.post("/api/projects", async (request: ArtifactRouteRequest<Record<string, string>, TCreateProjectInput>, reply: ArtifactRouteReply) => {
       try {
-        return await this.input.service.createProject(request.body ?? {});
+        return await this.input.service.createProject(request.body ?? ({} as TCreateProjectInput));
       } catch (error) {
-        return reply.code(400).send({ error: errorMessage(error, "Unable to create project") });
+        return sendError(reply, error, "Unable to create project", 400);
       }
     });
     server.delete("/api/projects", async () => this.input.service.clearProjectHistory());
     if (typeof this.input.service.deleteProject === "function") {
-      server.delete("/api/projects/:projectId", async (request: any, reply: any) => {
+      server.delete("/api/projects/:projectId", async (request: ArtifactRouteRequest<{ projectId: string }>, reply: ArtifactRouteReply) => {
         try {
           const result = await this.input.service.deleteProject?.(request.params.projectId);
           if (!result) return reply.code(404).send({ error: "Project not found" });
           return result;
         } catch (error) {
-          return reply.code(notFoundOrBadRequest(error)).send({ error: errorMessage(error, "Unable to delete project") });
+          return sendError(reply, error, "Unable to delete project", notFoundOrBadRequest(error));
         }
       });
     }
-    server.get("/api/projects/:projectId/runs", async (request: any, reply: any) => {
+    server.get("/api/projects/:projectId/runs", async (request: ArtifactRouteRequest<{ projectId: string }>, reply: ArtifactRouteReply) => {
       try {
         return await this.input.service.listProjectRuns(request.params.projectId);
       } catch (error) {
-        return reply.code(notFoundOrBadRequest(error)).send({ error: errorMessage(error, "Project not found") });
+        return sendError(reply, error, "Project not found", notFoundOrBadRequest(error));
       }
     });
-    server.get("/api/projects/:projectId", async (request: any, reply: any) => {
+    server.get("/api/projects/:projectId", async (request: ArtifactRouteRequest<{ projectId: string }>, reply: ArtifactRouteReply) => {
       try {
         return await this.input.service.getProject(request.params.projectId);
       } catch (error) {
-        return reply.code(notFoundOrBadRequest(error)).send({ error: errorMessage(error, "Project not found") });
+        return sendError(reply, error, "Project not found", notFoundOrBadRequest(error));
       }
     });
-    server.patch("/api/projects/:projectId", async (request: any, reply: any) => {
+    server.patch("/api/projects/:projectId", async (request: ArtifactRouteRequest<{ projectId: string }, TUpdateProjectInput>, reply: ArtifactRouteReply) => {
       try {
-        const result = await this.input.service.updateProject(request.params.projectId, request.body ?? {});
+        const result = await this.input.service.updateProject(request.params.projectId, request.body ?? ({} as TUpdateProjectInput));
         if (!result) return reply.code(404).send({ error: "Project not found" });
         return result;
       } catch (error) {
-        return reply.code(notFoundOrBadRequest(error)).send({ error: errorMessage(error, "Unable to update project") });
+        return sendError(reply, error, "Unable to update project", notFoundOrBadRequest(error));
       }
     });
-    server.post("/api/projects/:projectId/ai-edit", async (request: any, reply: any) => {
+    server.post("/api/projects/:projectId/ai-edit", async (request: ArtifactRouteRequest<{ projectId: string }, TAiEditInput & { userPrompt?: string }>, reply: ArtifactRouteReply) => {
       try {
         if (this.input.requireAiPrompt && !request.body?.userPrompt?.trim()) return reply.code(400).send({ error: "userPrompt is required" });
-        return await this.input.service.startAiEdit(request.params.projectId, request.body ?? { userPrompt: "", mode: "write" });
+        return await this.input.service.startAiEdit(request.params.projectId, request.body ?? this.input.defaultAiEditInput);
       } catch (error) {
-        return reply.code(notFoundOrBadRequest(error)).send({ error: errorMessage(error, "Unable to start AI edit") });
+        return sendError(reply, error, "Unable to start AI edit", notFoundOrBadRequest(error));
       }
     });
-    server.post("/api/runs/:runId/cancel", async (request: any, reply: any) => {
+    server.post("/api/runs/:runId/cancel", async (request: ArtifactRouteRequest<{ runId: string }>, reply: ArtifactRouteReply) => {
       const result = await this.input.service.cancelRun(request.params.runId);
       if (!result) return reply.code(404).send({ error: "Run not found" });
       return result;
     });
   }
 
-  private registerWsRoute(server: any) {
-    server.get("/api/ws", { websocket: true }, (socket: any) => {
+  private registerWsRoute(server: ArtifactRouteServer) {
+    server.get("/api/ws", { websocket: true }, (socket: ArtifactWebSocket) => {
       const dispose = this.input.events.addClient(socket);
       socket.send(JSON.stringify({ type: "hello", lastSeq: this.input.events.lastSeq() }));
 
@@ -160,12 +203,7 @@ export class ArtifactAppHttpRoutes<TStatus> {
   }
 }
 
-function notFoundOrBadRequest(error: unknown) {
-  const message = errorMessage(error, "");
-  if (message.includes("not found") || message.includes("no such file")) return 404;
-  return 400;
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
+function sendError(reply: ArtifactRouteReply, error: unknown, fallback: string, statusCode: number) {
+  const response = artifactErrorResponse(error, fallback);
+  return reply.code(response.statusCode === 500 ? statusCode : response.statusCode).send(response.body);
 }

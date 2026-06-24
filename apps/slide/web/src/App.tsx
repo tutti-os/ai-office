@@ -1,25 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { hasActiveAgentRun } from "@ai-app/agent/conversation";
 import {
   History,
   Layers3,
   Upload,
-  // 模版量较少，所以不需要搜索；保留代码，后续模板量变大时可恢复。
-  // Search,
 } from "lucide-react";
 import { allCategoriesForTemplates, categoryCountsForTemplates, type OutputType, type SlideTemplate } from "./templates";
 import { HomeComposer } from "./app/HomeComposer";
 import { BlankTemplateCard, CategoryButton, ProjectHistory, TemplateCard, TemplatePreviewModal } from "./app/SlideHomePanels";
 import { SlideEditorScreen } from "./app/SlideEditorScreen";
+import { initialPromptWithAttachmentContext, uploadHomeContextAttachments } from "./app/homeAttachmentPrompt";
+import { pushHomeRoute, pushSlideRoute, readCurrentRoute, routePath, type AppRoute } from "./app/slideRoutes";
 import { useAgentConversation } from "./app/useAgentConversation";
 import { useHomeAttachments, type HomeAttachment } from "./app/useHomeAttachments";
-import { cancelRun, clearProjectHistory, createProject, deleteProject, fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, getProject, importProjectFile, installOfficeCli, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml, uploadProjectAsset } from "./api/projects";
+import { cancelRun, clearProjectHistory, createProject, deleteProject, fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, getProject, importProjectFile, installOfficeCli, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
 import { DeckArtifactRuntimeAdapter, type DeckAgentRuntimeProvider } from "./artifact/deckArtifactAdapter";
 import { PptxArtifactRuntimeAdapter } from "./artifact/pptxArtifactAdapter";
 import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
 import { useI18n } from "./i18n";
 import { appShell, HomePanelToggle, HomePageShell, HomeTopAction, homeTitleClass } from "@ai-app/ui/app-shell";
 import type { ArtifactSaveState } from "@ai-app/ui/editor-frame";
-import { editableArtifactInteraction, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
+import { artifactInteractionForAgentBusy, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
 import type { LocalAgentProviderStatus, OfficeCliStatus, ProjectDetailResponse, RuntimeProfile, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -28,39 +29,11 @@ function cn(...classes: Array<string | false | null | undefined>) {
 
 const scrollbarHidden = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
-type AppRoute = { name: "home" } | { name: "slide"; projectId: string };
-
-function readCurrentRoute(): AppRoute {
-  const match = window.location.pathname.match(/^\/slide\/([^/]+)\/?$/);
-  if (match?.[1]) return { name: "slide", projectId: decodeURIComponent(match[1]) };
-  return { name: "home" };
-}
-
-function slidePath(projectId: string) {
-  return `/slide/${encodeURIComponent(projectId)}`;
-}
-
-function pushSlideRoute(projectId: string) {
-  window.history.pushState({}, "", slidePath(projectId));
-  return readCurrentRoute();
-}
-
-function pushHomeRoute() {
-  window.history.pushState({}, "", "/");
-  return readCurrentRoute();
-}
-
-function routePath(route: AppRoute) {
-  return route.name === "slide" ? slidePath(route.projectId) : "/";
-}
-
 export function App() {
   const { t } = useI18n();
   const [prompt, setPrompt] = useState("");
   const [outputType, setOutputType] = useState<OutputType>("html");
   const [selectedCategory, setSelectedCategory] = useState("All");
-  // 模版量较少，所以不需要搜索；保留代码，后续模板量变大时可恢复。
-  // const [query, setQuery] = useState("");
   const [selectedAgent, setSelectedAgent] = useState("");
   const [activePanel, setActivePanel] = useState<"templates" | "history">("templates");
   const [creating, setCreating] = useState(false);
@@ -113,22 +86,6 @@ export function App() {
     deckAgentRuntimeProviderRef.current = provider;
   }, []);
 
-  // 模版量较少，所以不需要搜索；保留代码，后续模板量变大时可恢复。
-  // const visibleTemplates = useMemo(() => {
-  //   const normalizedQuery = query.trim().toLowerCase();
-  //   return slideTemplates.filter((template) => {
-  //     const categoryMatch = selectedCategory === "All" || template.category === selectedCategory;
-  //     if (!categoryMatch) return false;
-  //     if (!normalizedQuery) return true;
-  //     return [
-  //       template.name,
-  //       template.category,
-  //       template.shortDescription,
-  //       template.description,
-  //       ...template.tags,
-  //     ].some((value) => value.toLowerCase().includes(normalizedQuery));
-  //   });
-  // }, [query, selectedCategory, slideTemplates]);
   const visibleTemplates = useMemo(
     () => slideTemplates.filter((template) => selectedCategory === "All" || template.category === selectedCategory),
     [selectedCategory, slideTemplates],
@@ -300,6 +257,9 @@ export function App() {
         });
       }
       if (input.attachments?.length) homeAttachments.clearAttachments();
+      setPrompt("");
+      setSelectedTemplate(null);
+      setSelectedSlideIndex(0);
       setRoute(pushSlideRoute(response.project.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -360,8 +320,6 @@ export function App() {
   };
 
   const createFromTemplate = (template: SlideTemplate) => {
-    setSelectedTemplate(null);
-    setSelectedSlideIndex(0);
     void createAndOpenProject({ title: template.name, template, artifactType: "deck" });
   };
 
@@ -457,9 +415,9 @@ export function App() {
     }
   };
 
-  const agentBusy = agentSending || agentConversation.items.some((item) => item.run.status === "accepted" || item.run.status === "running");
+  const agentBusy = agentSending || hasActiveAgentRun(agentConversation.items);
   const artifactInteraction: ArtifactInteractionPolicy = useMemo(
-    () => (agentBusy ? { mode: "read-only", readOnlyReason: "agent-running" } : editableArtifactInteraction),
+    () => artifactInteractionForAgentBusy(agentBusy),
     [agentBusy],
   );
 
@@ -521,6 +479,7 @@ export function App() {
         <HomeComposer
           attachments={homeAttachments.attachments}
           creating={creating}
+          error={error}
           officeCliInstalling={officeCliInstalling}
           officeCliStatus={officeCliStatus}
           outputType={outputType}
@@ -536,7 +495,6 @@ export function App() {
           onRemoveAttachment={homeAttachments.removeAttachment}
           onSelectedAgentChange={setSelectedAgent}
         />
-        {error ? <div className={appShell.error}>{error}</div> : null}
       </section>
 
       <section className="mx-auto mt-6 w-full max-w-[1180px]">
@@ -554,11 +512,6 @@ export function App() {
                 : t("home.projectCount", { count: historyProjects.length })}
             </div>
           </div>
-          {/* 模版量较少，所以不需要搜索；保留代码，后续模板量变大时可恢复。 */}
-          {/* <label className={appShell.searchShell}>
-            <Search size={15} />
-            <input className={appShell.searchInput} value={query} placeholder={t("home.searchTemplates")} onChange={(event) => setQuery(event.currentTarget.value)} />
-          </label> */}
         </div>
 
         {activePanel === "templates" ? (
@@ -602,60 +555,15 @@ export function App() {
           creating={creating}
           selectedIndex={selectedSlideIndex}
           template={selectedTemplate}
-          onClose={() => setSelectedTemplate(null)}
+          onClose={() => {
+            if (!creating) setSelectedTemplate(null);
+          }}
           onSelectIndex={setSelectedSlideIndex}
           onUseTemplate={createFromTemplate}
         />
       ) : null}
     </HomePageShell>
   );
-}
-
-type UploadedHomeContextAttachment = {
-  originalName: string;
-  fileName: string;
-  path: string;
-  mimeType: string;
-  sizeBytes: number;
-};
-
-async function uploadHomeContextAttachments(projectId: string, attachments: HomeAttachment[]): Promise<UploadedHomeContextAttachment[]> {
-  const uploaded: UploadedHomeContextAttachment[] = [];
-  for (const attachment of attachments) {
-    const asset = await uploadProjectAsset(projectId, attachment.file);
-    uploaded.push({
-      originalName: attachment.name,
-      fileName: asset.fileName,
-      path: asset.path,
-      mimeType: asset.mimeType,
-      sizeBytes: asset.sizeBytes,
-    });
-  }
-  return uploaded;
-}
-
-function initialPromptWithAttachmentContext(userPrompt: string, attachments: UploadedHomeContextAttachment[]) {
-  if (attachments.length === 0) return userPrompt;
-  const instruction = userPrompt.trim() || "Create a presentation from the attached context files.";
-  return [
-    instruction,
-    "",
-    "Context attachments uploaded with this project:",
-    ...attachments.map((attachment, index) => {
-      const displayName = attachment.originalName === attachment.fileName ? attachment.fileName : `${attachment.originalName} saved as ${attachment.fileName}`;
-      return `${index + 1}. ${displayName} (${attachment.mimeType}, ${formatBytes(attachment.sizeBytes)}): ${attachment.path}`;
-    }),
-    "",
-    "Use these files as source context. Read them from the project workspace before drafting or editing the presentation.",
-  ].join("\n");
-}
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  const kib = bytes / 1024;
-  if (kib < 1024) return `${kib.toFixed(kib >= 10 ? 0 : 1)} KB`;
-  const mib = kib / 1024;
-  return `${mib.toFixed(mib >= 10 ? 0 : 1)} MB`;
 }
 
 function isNewerProjectDetail(next: ProjectDetailResponse, current: ProjectDetailResponse | null) {

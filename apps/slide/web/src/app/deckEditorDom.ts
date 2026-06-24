@@ -1,59 +1,7 @@
-import type { CSSProperties } from "react";
 import { selectedElementFromRange, type RichTextSelectionState } from "@ai-app/ui/rich-text";
-import {
-  assetPathFromRelativeUrl,
-  encodeAssetPath,
-  rewriteAssetReferencesInElement,
-} from "@ai-app/shared/artifact-assets";
+import { renderDeckSlideAssetReferences, restoreDeckSlideAssetReferences } from "./deckAssetUrls";
+import { defaultDeckToolbarState, selectedDeckObjectToolbarState, type ActiveDeckSelectionBox, type DeckToolbarState } from "./deckEditorTypes";
 import { readDeckObjectGeometry, readDeckObjectRect, type DeckObjectElement } from "../artifact/deckInteractionLayer";
-
-type ActiveDeckSelectionBox = {
-  slideId: string;
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-  rotation: number;
-};
-
-type DeckToolbarState = {
-  block: "normal" | "heading" | "shape" | "image";
-  fontFamily: string;
-  fontSize: string;
-  bold: boolean;
-  italic: boolean;
-  underline: boolean;
-  strikethrough: boolean;
-  textColor: string;
-  fillColor: string;
-  align: "left" | "center" | "right" | "";
-};
-
-const defaultDeckToolbarState: DeckToolbarState = {
-  block: "normal",
-  fontFamily: "'PingFang SC', sans-serif",
-  fontSize: "16",
-  bold: false,
-  italic: false,
-  underline: false,
-  strikethrough: false,
-  textColor: "#1f2937",
-  fillColor: "#ffffff",
-  align: "",
-};
-
-const selectedDeckObjectToolbarState: DeckToolbarState = {
-  block: "normal",
-  fontFamily: "Inter, sans-serif",
-  fontSize: "16",
-  bold: false,
-  italic: false,
-  underline: false,
-  strikethrough: false,
-  textColor: "#000000",
-  fillColor: "#ffffff",
-  align: "",
-};
 
 const textBlockTags = new Set(["DIV", "H1", "H2", "H3", "H4", "H5", "H6", "P", "LI", "TD", "TH", "BLOCKQUOTE", "FIGCAPTION"]);
 const inlineTextTags = new Set(["SPAN", "STRONG", "EM", "B", "I", "SMALL", "A", "CODE", "MARK"]);
@@ -288,23 +236,6 @@ export function applyTextColorToObject(object: DeckObjectElement, color: string)
   object.querySelectorAll<HTMLElement>("div, h1, h2, h3, h4, h5, h6, p, li, td, th, blockquote, figcaption, span, strong, em, b, i, small, a").forEach((element) => {
     if (hasEditableText(element)) element.style.color = color;
   });
-}
-
-export function editingShieldRects(box: ActiveDeckSelectionBox, frameWidth: number, frameHeight: number): CSSProperties[] {
-  const left = clampRectValue(box.left, frameWidth);
-  const top = clampRectValue(box.top, frameHeight);
-  const right = clampRectValue(box.left + box.width, frameWidth);
-  const bottom = clampRectValue(box.top + box.height, frameHeight);
-  return [
-    { left: 0, top: 0, width: frameWidth, height: top },
-    { left: 0, top, width: left, height: Math.max(0, bottom - top) },
-    { left: right, top, width: Math.max(0, frameWidth - right), height: Math.max(0, bottom - top) },
-    { left: 0, top: bottom, width: frameWidth, height: Math.max(0, frameHeight - bottom) },
-  ].filter((rect) => rect.width > 0 && rect.height > 0);
-}
-
-export function clampRectValue(value: number, max: number) {
-  return Math.max(0, Math.min(max, value));
 }
 
 export function readDeckToolbarState(object: DeckObjectElement): DeckToolbarState {
@@ -603,32 +534,4 @@ export function rgbToHex(value: string | undefined) {
     .map((part) => Number(part).toString(16).padStart(2, "0"))
     .join("")
     .replace(/^/, "#");
-}
-
-export function projectAssetUrl(projectId: string, fileRef: string, filePath: string, revision?: number) {
-  const path = `/local-assets/projects/${encodeURIComponent(projectId)}/${[fileRef, ...filePath.split("/")].map(encodeURIComponent).join("/")}`;
-  return revision ? `${path}?v=${encodeURIComponent(String(revision))}` : path;
-}
-
-function renderDeckSlideAssetReferences(root: ParentNode, options: { fileRef: string; projectId: string }) {
-  rewriteAssetReferencesInElement(root, (url) => {
-    const assetPath = assetPathFromRelativeUrl(url, ["../assets/", "./assets/", "assets/"]);
-    return assetPath ? projectAssetUrl(options.projectId, options.fileRef, `assets/${assetPath}`) : null;
-  });
-}
-
-function restoreDeckSlideAssetReferences(root: ParentNode) {
-  rewriteAssetReferencesInElement(root, (url) => {
-    const path = localAssetRoutePath(url);
-    const match = path.match(/^\/local-assets\/projects\/[^/]+\/[^/]+\/assets\/(.+)$/);
-    return match?.[1] ? `../assets/${encodeAssetPath(decodeURIComponent(match[1]))}` : null;
-  });
-}
-
-function localAssetRoutePath(value: string) {
-  try {
-    return new URL(value, window.location.href).pathname;
-  } catch {
-    return value.split(/[?#]/, 1)[0] ?? "";
-  }
 }

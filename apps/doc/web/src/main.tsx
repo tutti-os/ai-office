@@ -1,16 +1,17 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { ErrorBoundary } from "./app/AppErrorBoundary";
+import { ArtifactAppRoot } from "@ai-app/ui/error-boundary";
 import { RuntimeWorkbench } from "./app/RuntimeWorkbench";
 import { I18nProvider } from "./i18n";
+import "@ai-app/ui/app-reset.css";
 import "./styles/index.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ErrorBoundary>
+    <ArtifactAppRoot appName="AI Doc">
       <I18nProvider>
         <RuntimeWorkbench />
       </I18nProvider>
-    </ErrorBoundary>
+    </ArtifactAppRoot>
   </StrictMode>,
 );

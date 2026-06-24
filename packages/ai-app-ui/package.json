@@ -4,8 +4,11 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./app-reset.css": "./src/app-reset.css",
     "./app-shell": "./src/app-shell/index.tsx",
     "./editor-frame": "./src/editor-frame/index.tsx",
+    "./error-boundary": "./src/error-boundary/index.tsx",
+    "./home-composer": "./src/home-composer/index.tsx",
     "./office-preview-runtime": "./src/office-preview-runtime/index.ts",
     "./persistent-selection-highlight": "./src/persistent-selection-highlight/index.ts",
     "./prompt-composer": "./src/prompt-composer/index.tsx",

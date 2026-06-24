@@ -1,5 +1,56 @@
 export type AssetUrlMapper = (url: string) => string | null;
 
+export const projectAssetFileExtensions = [
+  ".csv",
+  ".doc",
+  ".docx",
+  ".gif",
+  ".htm",
+  ".html",
+  ".jpeg",
+  ".jpg",
+  ".json",
+  ".md",
+  ".markdown",
+  ".odt",
+  ".pdf",
+  ".png",
+  ".ppt",
+  ".pptx",
+  ".rtf",
+  ".svg",
+  ".txt",
+  ".webp",
+  ".xls",
+  ".xlsx",
+] as const;
+
+export const projectAssetMimeTypes = [
+  "application/json",
+  "application/msword",
+  "application/pdf",
+  "application/rtf",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/svg+xml",
+  "image/webp",
+  "text/csv",
+  "text/html",
+  "text/markdown",
+  "text/plain",
+] as const;
+
+export const projectAssetFileAccept = [
+  ...projectAssetFileExtensions,
+  ...projectAssetMimeTypes,
+].join(",");
+
 const urlAttributeSelectors: Array<{ selector: string; attribute: string }> = [
   { selector: "img[src]", attribute: "src" },
   { selector: "source[src]", attribute: "src" },

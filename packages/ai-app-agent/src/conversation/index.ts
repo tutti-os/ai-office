@@ -73,6 +73,16 @@ export function timelineToMessages<TRun extends BaseRun, TEvent extends BaseRunE
   ]);
 }
 
+export function isAgentRunActive(run: BaseRun) {
+  return run.status === "accepted" || run.status === "running";
+}
+
+export function hasActiveAgentRun<TRun extends BaseRun, TEvent extends BaseRunEvent>(
+  items: Array<BaseRunTimelineItem<TRun, TEvent>>,
+) {
+  return items.some((item) => isAgentRunActive(item.run));
+}
+
 export function mergeStreamEvent<TProject, TRun extends BaseRun, TEvent extends BaseRunEvent>(
   items: Array<BaseRunTimelineItem<TRun, TEvent>>,
   event: StreamEvent,

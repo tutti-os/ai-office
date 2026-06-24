@@ -8,6 +8,7 @@ import type {
   UpdateProjectRequest,
 } from "@ai-doc/shared";
 import { requestArrayBuffer, requestJson } from "@ai-app/shared/api-client";
+import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
 
 type ProjectResponse = {
   project: DocumentProject;
@@ -66,6 +67,22 @@ export async function uploadProjectAsset(projectId: string, file: File) {
   const data = (await response.json().catch(() => null)) as ProjectAssetUploadResponse | { error?: string } | null;
   if (!response.ok) throw new Error(data && "error" in data && data.error ? data.error : `Asset upload failed: ${response.status}`);
   if (!data || !("path" in data)) throw new Error("Asset upload response is missing asset path");
+  return data;
+}
+
+export async function uploadContextAttachment(projectId: string, file: File) {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/context-attachments`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/octet-stream",
+      "x-file-name": encodeURIComponent(file.name || "attachment"),
+      "x-file-mime-type": encodeURIComponent(file.type || "application/octet-stream"),
+    },
+    body: await file.arrayBuffer(),
+  });
+  const data = (await response.json().catch(() => null)) as ContextAttachmentUploadResponse | { error?: string } | null;
+  if (!response.ok) throw new Error(data && "error" in data && data.error ? data.error : `Context attachment upload failed: ${response.status}`);
+  if (!data || !("path" in data)) throw new Error("Context attachment upload response is missing path");
   return data;
 }
 

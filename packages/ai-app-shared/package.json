@@ -12,7 +12,10 @@
     "./agent-tools": "./src/agent-tools/index.ts",
     "./agent-tools/mcp-server": "./src/agent-tools/mcp-server.ts",
     "./artifact-assets": "./src/artifact-assets/index.ts",
+    "./context-attachments": "./src/context-attachments/index.ts",
     "./artifact-runtime": "./src/artifact-runtime/index.ts",
+    "./server-errors": "./src/server-errors/index.ts",
+    "./server-files": "./src/server-files/index.ts",
     "./server-routes": "./src/server-routes/index.ts",
     "./toolchains/officecli": "./src/toolchains/officecli/index.ts",
     "./api-client": "./src/api-client/index.ts"

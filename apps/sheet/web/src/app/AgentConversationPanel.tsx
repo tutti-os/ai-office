@@ -1,6 +1,6 @@
 import { ArtifactAgentConversationPanel } from "@ai-app/agent/conversation-ui";
 import type { ArtifactEditorKind } from "@ai-app/ui/editor-frame";
-import type { RuntimeProfile, SheetRun, SheetRunEvent, SheetRunTimelineItem } from "@ai-sheet/shared";
+import type { LocalAgentProviderStatus, RuntimeProfile, SheetRun, SheetRunEvent, SheetRunTimelineItem } from "@ai-sheet/shared";
 
 type AgentConversationPanelProps = {
   activeSelectionLabel?: string;
@@ -10,38 +10,22 @@ type AgentConversationPanelProps = {
   dirty: boolean;
   error: string;
   items: SheetRunTimelineItem[];
+  localAgentProviders: LocalAgentProviderStatus[];
   loading: boolean;
+  runtimeProfiles: RuntimeProfile[];
+  selectedRuntimeProfileId: string;
   sending: boolean;
   onBackHome: () => void;
+  onRuntimeProfileChange: (profileId: string) => void;
+  onCancel: (runId: string) => Promise<void>;
   onSend: (prompt: string) => Promise<void>;
 };
-
-const sheetRuntimeProfiles: RuntimeProfile[] = [
-  {
-    id: "codex",
-    kind: "local-agent",
-    provider: "codex",
-    model: "codex",
-    displayName: "Codex",
-    enabled: true,
-    capabilities: {
-      streaming: true,
-      toolUse: true,
-      reasoning: true,
-      resume: true,
-    },
-    createdAt: "",
-    updatedAt: "",
-  },
-];
 
 export function AgentConversationPanel(props: AgentConversationPanelProps) {
   return (
     <ArtifactAgentConversationPanel<SheetRun, SheetRunEvent>
       {...props}
       quickPromptsVisible={false}
-      runtimeProfiles={sheetRuntimeProfiles}
-      selectedRuntimeProfileId="codex"
       copy={{
         homeLabel: "AI Sheet",
         introTitle: "AI Sheet Agent",
@@ -49,6 +33,9 @@ export function AgentConversationPanel(props: AgentConversationPanelProps) {
         placeholder: "Ask AI to edit this sheet...",
         quickPrompts: [],
       }}
+      formatUnavailableRuntimeProfileLabel={(profile, provider) => `${profile.displayName} (${provider?.authState ?? "unknown"})`}
+      selectedRuntimeProfileId={props.selectedRuntimeProfileId}
+      onRuntimeProfileChange={props.onRuntimeProfileChange}
     />
   );
 }

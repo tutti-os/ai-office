@@ -61,6 +61,11 @@ for (const path of ["apps/doc/web/src/api/projects.ts", "apps/slide/web/src/api/
 for (const path of ["apps/doc/web/src/styles/index.css", "apps/slide/web/src/styles/index.css", "apps/sheet/web/src/styles/index.css"]) {
   expectIncludes(path, '@source "../../../../../packages/ai-app-ui/src"', "Tailwind source for shared UI package");
   expectNotIncludes(path, "@ai-app/ui/app-shell/styles.css", "shared app-shell CSS import");
+  expectNotIncludes(path, "font: inherit", "app-local form control reset; use @ai-app/ui/app-reset.css");
+}
+
+for (const path of ["apps/doc/web/src/main.tsx", "apps/slide/web/src/main.tsx", "apps/sheet/web/src/main.tsx"]) {
+  expectIncludes(path, 'import "@ai-app/ui/app-reset.css";', "shared app reset import");
 }
 
 for (const path of ["apps/doc/package.json", "apps/doc/server/package.json", "apps/doc/web/package.json", "apps/slide/package.json", "apps/slide/server/package.json", "apps/slide/web/package.json", "apps/sheet/package.json", "apps/sheet/server/package.json", "apps/sheet/web/package.json"]) {
@@ -106,4 +111,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Doc/slide/sheet parity check passed.");
+console.log("Artifact app parity check passed.");

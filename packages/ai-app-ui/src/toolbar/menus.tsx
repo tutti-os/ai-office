@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { MoreHorizontal, Rows3, SlidersHorizontal } from "lucide-react";
 
 import type { ParagraphSpacingValue, ToolbarMoreOption } from "./index.js";
@@ -13,6 +13,7 @@ import {
   toolbarTip,
   toolbarTooltip,
   useDismissableFloatingLayer,
+  useToolbarFloatingMenuPosition,
 } from "./menuPrimitives.js";
 
 export { ToolbarLayoutMenu } from "./layoutMenu.js";
@@ -25,16 +26,7 @@ export function ToolbarMoreMenu(props: {
 }) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const [position, setPosition] = useState({ left: 0, top: 0 });
-
-  const updatePosition = () => {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setPosition({
-      left: Math.max(12, Math.min(window.innerWidth - 236, rect.right - 224)),
-      top: rect.bottom + 8,
-    });
-  };
+  const position = useToolbarFloatingMenuPosition(props.open, buttonRef, menuRef);
 
   useDismissableFloatingLayer(props.open, props.onOpenChange, menuRef);
 
@@ -51,7 +43,6 @@ export function ToolbarMoreMenu(props: {
         aria-expanded={props.open}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => {
-          updatePosition();
           props.onOpenChange(!props.open);
         }}
       >
@@ -138,18 +129,9 @@ export function ToolbarSpacingMenu(props: {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const width = 300;
-  const [position, setPosition] = useState({ left: 0, top: 0 });
+  const position = useToolbarFloatingMenuPosition(props.open, buttonRef, menuRef, { width });
   const lineHeightValue = cssNumber(props.lineHeight, 1.5);
   const letterSpacingValue = cssNumber(props.letterSpacing, 0);
-
-  const updatePosition = () => {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setPosition({
-      left: Math.max(12, Math.min(window.innerWidth - width - 12, rect.right - width)),
-      top: rect.bottom + 8,
-    });
-  };
 
   useDismissableFloatingLayer(props.open, props.onOpenChange, menuRef);
 
@@ -168,7 +150,6 @@ export function ToolbarSpacingMenu(props: {
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => {
           if (props.disabled) return;
-          updatePosition();
           props.onOpenChange(!props.open);
         }}
       >
@@ -300,16 +281,7 @@ function ToolbarObjectMenu<T extends { label: string }>(props: {
 }) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const [position, setPosition] = useState({ left: 0, top: 0 });
-
-  const updatePosition = () => {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setPosition({
-      left: Math.max(12, Math.min(window.innerWidth - props.width - 12, rect.right - props.width)),
-      top: rect.bottom + 8,
-    });
-  };
+  const position = useToolbarFloatingMenuPosition(props.open, buttonRef, menuRef, { width: props.width });
 
   useDismissableFloatingLayer(props.open, props.onOpenChange, menuRef);
 
@@ -326,7 +298,6 @@ function ToolbarObjectMenu<T extends { label: string }>(props: {
         aria-expanded={props.open}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => {
-          updatePosition();
           props.onOpenChange(!props.open);
         }}
       >

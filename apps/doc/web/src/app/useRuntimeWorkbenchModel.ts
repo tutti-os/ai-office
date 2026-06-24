@@ -1,52 +1,18 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { HomePage } from "./HomePage";
 import { DocxDocumentScreen, MarkdownDocumentScreen } from "./DocumentFormatScreens";
 import { HtmlEditorController } from "./HtmlEditorController";
 import { DocumentLoadingScreen, HtmlEditorScreen } from "./HtmlEditorScreen";
-import { saveDocxArtifactPdfExport } from "./docxExport";
-import { saveHtmlArtifactDocxExport, saveHtmlArtifactExport, saveHtmlArtifactPdfExport } from "./htmlExport";
-import { saveMarkdownArtifactDocxExport, saveMarkdownArtifactExport, saveMarkdownArtifactPdfExport } from "./markdownExport";
 import { isTuttiPdfExportAvailable } from "./tuttiPdfBridge";
-import {
-  createInitialPromptAiEditRequest,
-  initialContentForType,
-  markdownParagraphCount,
-  markdownWordCount,
-} from "./documentWorkbenchContent";
+import { resolveDocumentActiveState } from "./documentActiveState";
+import { createDocumentRuntimeLoaders } from "./documentRuntimeLoaders";
+import { createDocumentExportActions } from "./useDocumentExportActions";
+import { useDocumentAgentRuntime } from "./useDocumentAgentRuntime";
+import { useDocumentRouteLifecycle } from "./useDocumentRouteLifecycle";
 import { pushDocumentRoute, pushHomeRoute, readCurrentRoute, routePath, type AppRoute } from "./documentWorkbenchRoutes";
-import {
-  currentSelectionElement,
-  frameEventTarget,
-  imageAltFromFileName,
-  imageFromNode,
-  isContentBoundOperation,
-  isFallbackOnlySelection,
-  isOperationPanelMode,
-  isPositionBoundOperation,
-  isTableEditAction,
-  parseCustomAttributes,
-  positionImageSelectionOverlay,
-  readCurrentAttributes,
-  readCurrentImageAttributes,
-  readCurrentLinkHref,
-  readCurrentLinkText,
-  readCurrentStyles,
-  readToolbarState,
-  removeImageSelectionOverlay,
-  removeSelectedImageObject,
-  resolveEditorTarget,
-  resizedImageSizeForHandle,
-  selectElementInDocument,
-  tableActionTitle,
-  upsertSelectedImageObject,
-} from "./htmlRuntimeDom";
 import { renderImageSelectionOverlay } from "./htmlImageSelectionOverlay";
-import { useAgentConversation } from "./useAgentConversation";
-import { cancelRun, clearProjectHistory, createProject, deleteProject, getProject, importProjectFile, listProjects, openProjectExportsDir, startAiEdit, updateProject, uploadProjectAsset } from "../api/projects";
-import { fetchTuttiStudyPlanFixture } from "../api/fixtures";
-import { fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, fetchTemplates, installOfficeCli } from "../api/runtime";
+import { uploadProjectAsset } from "../api/projects";
 import type { DocumentProject, DocumentType, LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
-import { editableArtifactInteraction, isArtifactReadOnly, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
 import { DocxArtifactRuntimeAdapter } from "../artifact/docxArtifactAdapter";
 import { HtmlArtifactRuntimeAdapter } from "../artifact/htmlArtifactAdapter";
 import { MarkdownArtifactRuntimeAdapter } from "../artifact/markdownArtifactAdapter";
@@ -55,64 +21,11 @@ import { useHtmlArtifactRuntime } from "../artifact/useHtmlArtifactRuntime";
 import { useMarkdownArtifactRuntime } from "../artifact/useMarkdownArtifactRuntime";
 import { RuntimeApplier } from "../artifact/runtime/applier";
 import { runtimeDocumentFromFrame } from "../artifact/runtime/document";
-import { enableEditableFrame, setEditableFrameInteraction } from "../artifact/runtime/frame";
-import { htmlProjectAssetRuntimeUrl, renderHtmlProjectAssetReferences } from "../artifact/runtime/projectAssets";
+import { htmlProjectAssetRuntimeUrl } from "../artifact/runtime/projectAssets";
 import {
-  applyInlineFormat,
-  appendToElement,
-  canEditElementContent,
-  canMutateElement,
-  canSetElementAttributes,
-  clearTableCellSelection,
-  cleanupAbandonedTypingStyleMarkers,
-  cleanupTypingStyleMarkers,
-  createLink,
-  deleteSelectedElement,
-  duplicateElement,
-  editTable,
-  getCurrentLinkHref,
-  getCurrentLinkText,
-  getCurrentImageAttributes,
-  getEditorStats,
-  getSelectedTableCells,
-  getSelectedTableCellTarget,
-  getTableActionAvailability,
-  getTableHeaderState,
-  indentBlock,
-  insertAtPosition,
-  insertHtml,
-  insertTable,
-  insertText,
-  moveCursorToEnd,
-  moveCursorToStart,
-  moveSelectionCursorToEnd,
-  moveSelectionCursorToStart,
-  normalizeLinkUrl,
-  outdentBlock,
-  replaceSelection,
-  removeImage,
-  removeLink,
-  selectionContainsLink,
-  setAlignment,
-  setBackColor,
-  setElementAttributes,
-  setElementStyle,
-  setForeColor,
-  setFontFamily,
-  setFontSize,
-  setHeading,
-  tableEditActions,
-  toggleChecklist,
-  toggleList,
-  upsertImage,
-  wrapSelection,
   type AdjacentInsertPosition,
-  type Alignment,
   type ElementStyleAttributes,
-  type HeadingTag,
   type ImageAttributes,
-  type InlineFormatTag,
-  type ListKind,
 } from "../artifact/runtime/operations";
 import { captureSelectionState } from "../artifact/runtime/selection";
 import type { RuntimeState, SelectionState } from "../artifact/runtime/types";
@@ -125,7 +38,10 @@ import {
   type TuttiTemplate,
 } from "../templates/tuttiTemplates";
 import { useHomeAttachments } from "./useHomeAttachments";
-import type { HomeAttachment } from "./useHomeAttachments";
+import { createHomeDocumentActions } from "./useHomeDocumentActions";
+import { createHtmlEditorActions } from "./useHtmlEditorActions";
+import { useHtmlFrameLifecycle } from "./useHtmlFrameLifecycle";
+import { useDocumentWorkbenchBootstrap } from "./useDocumentWorkbenchBootstrap";
 import {
   defaultToolbarState,
   operationPanelTitle,
@@ -138,22 +54,6 @@ import {
   type ResizeHandle,
   type ToolbarState,
 } from "./runtimeWorkbenchTypes";
-
-function htmlHistoryShortcutOffset(event: KeyboardEvent): -1 | 1 | null {
-  if (isNativeTextControlTarget(event.target)) return null;
-  if (!(event.metaKey || event.ctrlKey) || event.altKey) return null;
-  const key = event.key.toLowerCase();
-  if (key === "y") return 1;
-  if (key === "z") return event.shiftKey ? 1 : -1;
-  return null;
-}
-
-function isNativeTextControlTarget(target: EventTarget | null) {
-  if (!target || typeof target !== "object" || !("closest" in target)) return false;
-  const closest = (target as { closest?: unknown }).closest;
-  if (typeof closest !== "function") return false;
-  return Boolean((closest as (selector: string) => unknown).call(target, "input, textarea, select"));
-}
 
 export function useRuntimeWorkbenchModel() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -222,14 +122,13 @@ export function useRuntimeWorkbenchModel() {
   const [currentProject, setCurrentProject] = useState<DocumentProject | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [agentSending, setAgentSending] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [outputType, setOutputType] = useState<DocumentType>("html");
   const [runtimeProfiles, setRuntimeProfiles] = useState<RuntimeProfile[]>([]);
   const [localAgentProviders, setLocalAgentProviders] = useState<LocalAgentProviderStatus[]>([]);
   const [officeCliStatus, setOfficeCliStatus] = useState<OfficeCliStatus | null>(null);
   const [officeCliInstalling, setOfficeCliInstalling] = useState(false);
-  const [htmlDocxExporting, setHtmlDocxExporting] = useState(false);
+  const [sourceExporting, setSourceExporting] = useState(false);
   const [pdfExporting, setPdfExporting] = useState(false);
   const [exportNotice, setExportNotice] = useState("");
   const [selectedRuntimeProfileId, setSelectedRuntimeProfileId] = useState("");
@@ -293,33 +192,16 @@ export function useRuntimeWorkbenchModel() {
   const currentProjectId = route.name === "document" ? route.projectId : null;
   const loadedCurrentProject = currentProjectId && currentProject?.id === currentProjectId ? currentProject : null;
   const currentDocumentType: DocumentType | null = loadedCurrentProject?.type ?? null;
-  const htmlHasUnsavedChanges = Boolean(runtime?.dirty) || saveState === "saving" || saveState === "error";
-  const markdownHasUnsavedChanges = markdownTableCellEditPending || Boolean(markdownRuntime?.dirty) || markdownSaveState === "saving" || markdownSaveState === "error";
-  const docxHasUnsavedChanges = docxSaveState === "saving" || docxSaveState === "error";
-  const activeHasUnsavedChanges =
-    currentDocumentType === "markdown"
-      ? markdownHasUnsavedChanges
-      : currentDocumentType === "docx"
-        ? docxHasUnsavedChanges
-        : currentDocumentType === "html"
-          ? htmlHasUnsavedChanges
-          : false;
-  const activeDirty =
-    currentDocumentType === "markdown"
-      ? markdownHasUnsavedChanges
-      : currentDocumentType === "docx"
-        ? docxHasUnsavedChanges
-        : currentDocumentType === "html"
-          ? htmlHasUnsavedChanges
-          : false;
-  const activeSelectionText =
-    currentDocumentType === "markdown"
-      ? markdownRuntime?.selection.selectedText ?? ""
-      : currentDocumentType === "docx"
-        ? docxRuntime?.selection.selectedText ?? ""
-        : currentDocumentType === "html"
-          ? runtime?.activeSelection?.selectedText ?? ""
-          : "";
+  const { activeDirty, activeHasUnsavedChanges, activeSelectionText, markdownHasUnsavedChanges } = resolveDocumentActiveState({
+    currentDocumentType,
+    docxRuntime,
+    docxSaveState,
+    markdownRuntime,
+    markdownSaveState,
+    markdownTableCellEditPending,
+    runtime,
+    saveState,
+  });
 
   const templateCategories = useMemo(() => templateCategoriesFor(templates), [templates]);
   const templateCounts = useMemo(() => templateCountsFor(templates), [templates]);
@@ -328,947 +210,204 @@ export function useRuntimeWorkbenchModel() {
     [selectedTemplateCategory, templates],
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    const officeCliFallback: OfficeCliStatus = {
-      available: false,
-      source: "missing",
-      canInstall: true,
-      installing: false,
-      reason: "Unable to check OfficeCLI status.",
-    };
-    void Promise.all([
-      fetchBootstrapSnapshot(),
-      fetchLocalAgentProviders(),
-      fetchTemplates(),
-      fetchOfficeCliStatus().catch((error) => ({
-        officecli: {
-          ...officeCliFallback,
-          reason: error instanceof Error ? error.message : String(error),
-        },
-      })),
-    ])
-      .then(([snapshot, providerStatus, libraryTemplates, officeCli]) => {
-        if (cancelled) return;
-        const enabledProfiles = snapshot.runtimeProfiles.filter((profile) => profile.enabled && profile.kind === "local-agent");
-        setRuntimeProfiles(enabledProfiles);
-        setLocalAgentProviders(providerStatus.providers);
-        setTemplates(normalizeTemplates(libraryTemplates));
-        setOfficeCliStatus(officeCli.officecli);
-        setSelectedRuntimeProfileId((current) => {
-          if (enabledProfiles.some((profile) => profile.id === current)) return current;
-          return enabledProfiles.find((profile) => profile.kind === "local-agent")?.id ?? enabledProfiles[0]?.id ?? "";
-        });
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const downloadOfficeCli = async () => {
-    setError("");
-    setOfficeCliInstalling(true);
-    try {
-      const response = await installOfficeCli();
-      setOfficeCliStatus(response.officecli);
-      if (!response.officecli.available) setError(response.officecli.reason ?? "Unable to install OfficeCLI");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      try {
-        const response = await fetchOfficeCliStatus();
-        setOfficeCliStatus(response.officecli);
-      } catch {
-        // Keep the original install error visible.
-      }
-    } finally {
-      setOfficeCliInstalling(false);
-    }
-  };
-
-  const loadHtmlDocument = (html: string, input: { projectId?: string | null; title: string; source?: RuntimeState["source"] }) => {
-    loadArtifact({ content: html, projectId: input.projectId, title: input.title, source: input.source });
-    clearMarkdownArtifact();
-    clearDocxArtifact();
-    setMarkdownTableCellEditPending(false);
-    markdownTableCellCommitterRef.current = null;
-    setQueuedHomeNavigation(false);
-    setToolbarState(defaultToolbarState);
-    setHtmlToolbarActive(false);
-    lastEditorTargetRef.current = null;
-    lastResolvedTargetRef.current = null;
-    lastSelectionRef.current = null;
-    activeImageRef.current = null;
-    setEditorStats({ characterCount: 0, wordCount: 0, paragraphCount: 0, elementCount: 0 });
-  };
-
-  const loadMarkdownDocument = (content: string, input: { title: string; source?: RuntimeState["source"] }) => {
-    loadMarkdownArtifact({ content, title: input.title, source: input.source });
-    clearArtifact();
-    clearDocxArtifact();
-    setMarkdownTableCellEditPending(false);
-    setQueuedHomeNavigation(false);
-    setToolbarState(defaultToolbarState);
-    setHtmlToolbarActive(false);
-    lastEditorTargetRef.current = null;
-    lastResolvedTargetRef.current = null;
-    lastSelectionRef.current = null;
-    activeImageRef.current = null;
-    setEditorStats({ characterCount: content.length, wordCount: markdownWordCount(content), paragraphCount: 0, elementCount: 0 });
-  };
-
-  const loadDocxDocument = async (project: DocumentProject) => {
-    clearArtifact();
-    clearMarkdownArtifact();
-    setMarkdownTableCellEditPending(false);
-    markdownTableCellCommitterRef.current = null;
-    setQueuedHomeNavigation(false);
-    setToolbarState(defaultToolbarState);
-    setHtmlToolbarActive(false);
-    lastEditorTargetRef.current = null;
-    lastResolvedTargetRef.current = null;
-    lastSelectionRef.current = null;
-    activeImageRef.current = null;
-    setEditorStats({ characterCount: 0, wordCount: 0, paragraphCount: 0, elementCount: 0 });
-    await loadDocxArtifact(project.id, { content: project.content, title: project.title, source: "imported-html" });
-  };
-
-  const openProject = (project: { id: string }) => {
-    setRoute(pushDocumentRoute(project.id));
-  };
-
-  const refreshProjectHistory = async () => {
-    const projects = await listProjects();
-    setHistoryProjects(projects);
-    return projects;
-  };
-
-  const loadBlankDocument = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      const project = await createProject({
-        title: "Untitled Doc",
-        content: outputType === "markdown" ? undefined : initialContentForType(outputType),
-        type: outputType,
-      });
-      setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
-      openProject(project);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadPromptDocument = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      const userPrompt = prompt.trim();
-      const attachments = homeAttachments.attachments;
-      const attachmentTitle = attachments[0]?.name ? `Doc from ${attachments[0].name}` : "Untitled Doc";
-      const project = await createProject({
-        title: attachmentTitle.length > 80 ? `${attachmentTitle.slice(0, 80).trim()}...` : attachmentTitle,
-        content: initialContentForType(outputType),
-        type: outputType,
-      });
-      const uploadedAttachments = await uploadHomeContextAttachments(project.id, attachments);
-      homeAttachments.clearAttachments();
-      setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
-      openProject(project);
-      setPrompt("");
-      const initialUserPrompt = initialPromptWithAttachmentContext(userPrompt, uploadedAttachments);
-      if (initialUserPrompt) {
-        await startAiEdit(project.id, createInitialPromptAiEditRequest({
-          content: project.content,
-          runtimeProfileId: selectedRuntimeProfileId || null,
-          type: project.type,
-          userPrompt: initialUserPrompt,
-        }));
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadTemplate = async (template: TuttiTemplate) => {
-    setError("");
-    setLoading(true);
-    try {
-      const project = await createProject({
-        title: template.name,
-        type: "html",
-        templateId: template.id,
-        templateName: template.name,
-      });
-      setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
-      openProject(project);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const importDocumentFile = async (file: File) => {
-    setError("");
-    setLoading(true);
-    try {
-      const project = await importProjectFile(file);
-      setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
-      openProject(project);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const openHistoryProject = (project: DocumentProject) => {
-    setRoute(pushDocumentRoute(project.id));
-  };
-
-  const clearHistory = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      const projects = await clearProjectHistory();
-      setHistoryProjects(projects);
-      setHomePanel("history");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const deleteHistoryProject = async (projectId: string) => {
-    setError("");
-    setLoading(true);
-    try {
-      const projects = await deleteProject(projectId);
-      setHistoryProjects(projects);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadFixture = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const fixture = await fetchTuttiStudyPlanFixture();
-      loadHtmlDocument(fixture.html, { source: "fixture", title: fixture.title });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    routeRef.current = route;
-  }, [route]);
-
-  useEffect(() => {
-    hasUnsavedChangesRef.current = activeHasUnsavedChanges;
-  }, [activeHasUnsavedChanges]);
-
-  useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!hasUnsavedChangesRef.current) return;
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, []);
-
-  const requestHomeRoute = () => {
-    if (currentDocumentType === "markdown") {
-      if (markdownTableCellEditPending) {
-        const committed = markdownTableCellCommitterRef.current?.() ?? false;
-        if (committed) {
-          setQueuedHomeNavigation(true);
-          setMarkdownSaveState("saving");
-          return;
-        }
-      }
-      if (markdownSaveState === "error") {
-        if (!window.confirm("You have unsaved changes. Leave without saving?")) return;
-      } else if (markdownHasUnsavedChanges) {
-        setQueuedHomeNavigation(true);
-        return;
-      }
-      setQueuedHomeNavigation(false);
-      setRoute(pushHomeRoute());
-      return;
-    }
-    if (activeHasUnsavedChanges && !window.confirm("You have unsaved changes. Leave without saving?")) return;
-    setQueuedHomeNavigation(false);
-    setRoute(pushHomeRoute());
-  };
-
-  useEffect(() => {
-    if (!queuedHomeNavigation || activeHasUnsavedChanges || loading) return;
-    setQueuedHomeNavigation(false);
-    setRoute(pushHomeRoute());
-  }, [activeHasUnsavedChanges, loading, queuedHomeNavigation]);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      if (hasUnsavedChangesRef.current && !window.confirm("You have unsaved changes. Leave without saving?")) {
-        window.history.pushState({}, "", routePath(routeRef.current));
-        return;
-      }
-      setRoute(readCurrentRoute());
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
-
-  useEffect(() => {
-      if (route.name === "home") {
-      setCurrentProject(null);
-      clearArtifact();
-      clearMarkdownArtifact();
-      clearDocxArtifact();
-      setToolbarState(defaultToolbarState);
-      setHtmlToolbarActive(false);
-      void refreshProjectHistory().catch((err) => setError(err instanceof Error ? err.message : String(err)));
-      return;
-    }
-
-    let cancelled = false;
-    setLoading(true);
-    setError("");
-    void getProject(route.projectId)
-      .then(async (project) => {
-        if (cancelled) return;
-        setCurrentProject(project);
-        if (project.type === "markdown") {
-          loadMarkdownDocument(project.content, { title: project.title, source: "imported-html" });
-        } else if (project.type === "docx") {
-          await loadDocxDocument(project);
-        } else {
-          loadHtmlDocument(project.content, { projectId: project.id, title: project.title, source: "imported-html" });
-        }
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [route]);
-
-  useEffect(() => {
-    if (currentDocumentType !== "html" || !currentProjectId || !runtime?.dirty) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    const saveGeneration = htmlSaveGenerationRef.current + 1;
-    htmlSaveGenerationRef.current = saveGeneration;
-    const saveRevision = runtime.revision;
-    setSaveState("saving");
-    saveTimerRef.current = setTimeout(() => {
-      void updateProject(currentProjectId, {
-        title: runtime.title,
-        content: serializeHtmlRuntime(runtime),
-        type: "html",
-        updatedBy: "human",
-      })
-        .then(() => {
-          if (htmlSaveGenerationRef.current !== saveGeneration) return;
-          setRuntime((current) => (current && current.revision === saveRevision ? { ...current, dirty: false } : current));
-          setSaveState("saved");
-        })
-        .catch((err) => {
-          if (htmlSaveGenerationRef.current !== saveGeneration) return;
-          setSaveState("error");
-          setError(err instanceof Error ? err.message : String(err));
-        });
-    }, 700);
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, [currentDocumentType, currentProjectId, runtime?.dirty, runtime?.revision, runtime?.title, serializeHtmlRuntime, setRuntime]);
-
-  useEffect(() => {
-    if (currentDocumentType !== "markdown" || !currentProjectId || !markdownRuntime?.dirty) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    const saveGeneration = markdownSaveGenerationRef.current + 1;
-    markdownSaveGenerationRef.current = saveGeneration;
-    const saveRevision = markdownRuntime.revision;
-    setMarkdownSaveState("saving");
-    saveTimerRef.current = setTimeout(() => {
-      void updateProject(currentProjectId, {
-        title: markdownRuntime.title,
-        content: serializeMarkdownRuntime(markdownRuntime),
-        type: "markdown",
-        updatedBy: "human",
-      })
-        .then((project) => {
-          if (markdownSaveGenerationRef.current !== saveGeneration) return;
-          setCurrentProject(project);
-          setMarkdownRuntime((current) => (current && current.revision === saveRevision ? { ...current, dirty: false } : current));
-          setMarkdownSaveState("saved");
-        })
-        .catch((err) => {
-          if (markdownSaveGenerationRef.current !== saveGeneration) return;
-          setMarkdownSaveState("error");
-          setError(err instanceof Error ? err.message : String(err));
-        });
-    }, 700);
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, [currentDocumentType, currentProjectId, markdownRuntime?.dirty, markdownRuntime?.revision, markdownRuntime?.title, serializeMarkdownRuntime, setMarkdownRuntime]);
-
-  const agentConversation = useAgentConversation({
-    projectId: currentProjectId,
-    onProjectUpdated: (project) => {
-      if (project.id !== currentProjectId || project.updatedBy !== "ai") return;
-      if (!isNewerDocumentProject(project, currentProject)) return;
-      setCurrentProject(project);
-      if (project.type === "markdown") {
-        loadMarkdownDocument(project.content, { title: project.title, source: "imported-html" });
-      } else if (project.type === "docx") {
-        void loadDocxDocument(project).catch((err) => setError(err instanceof Error ? err.message : String(err)));
-      } else {
-        loadHtmlDocument(project.content, { projectId: project.id, title: project.title, source: "imported-html" });
-      }
-      setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
-    },
+  useDocumentWorkbenchBootstrap({
+    setError,
+    setLocalAgentProviders,
+    setOfficeCliStatus,
+    setRuntimeProfiles,
+    setSelectedRuntimeProfileId,
+    setTemplates,
   });
-  const agentBusy = agentSending || agentConversation.items.some((item) => item.run.status === "accepted" || item.run.status === "running");
-  const artifactInteraction: ArtifactInteractionPolicy = useMemo(
-    () => (agentBusy ? { mode: "read-only", readOnlyReason: "agent-running" } : editableArtifactInteraction),
-    [agentBusy],
-  );
-  const artifactReadOnly = isArtifactReadOnly(artifactInteraction);
-  artifactReadOnlyRef.current = artifactReadOnly;
 
-  useEffect(() => {
-    const doc = iframeRef.current?.contentDocument;
-    if (doc?.body) setEditableFrameInteraction(doc, artifactInteraction);
-    if (artifactReadOnly) {
-      setLinkEditorOpen(false);
-      setOperationPanelMode(null);
-      pendingImageTargetRef.current = null;
-      if (doc) removeImageSelectionOverlay(doc);
-    }
-  }, [artifactInteraction, artifactReadOnly]);
+  const { loadDocxDocument, loadHtmlDocument, loadMarkdownDocument } = createDocumentRuntimeLoaders({
+    activeImageRef,
+    clearArtifact,
+    clearDocxArtifact,
+    clearMarkdownArtifact,
+    lastEditorTargetRef,
+    lastResolvedTargetRef,
+    lastSelectionRef,
+    loadArtifact,
+    loadDocxArtifact,
+    loadMarkdownArtifact,
+    markdownTableCellCommitterRef,
+    setEditorStats,
+    setHtmlToolbarActive,
+    setMarkdownTableCellEditPending,
+    setQueuedHomeNavigation,
+    setToolbarState,
+  });
 
-  const sendAgentPrompt = async (userPrompt: string) => {
-    if (!currentProjectId) throw new Error("Project is not open");
-    setAgentSending(true);
-    setError("");
-    try {
-      if (currentDocumentType === "markdown") {
-        if (!markdownRuntime) throw new Error("Markdown runtime is not ready");
-        await startAiEdit(currentProjectId, createMarkdownAiEditRequest({
-          projectId: currentProjectId,
-          runtime: markdownRuntime,
-          userPrompt,
-          runtimeProfileId: selectedRuntimeProfileId || null,
-        }));
-      } else if (currentDocumentType === "docx") {
-        if (!docxRuntime) throw new Error("DOCX runtime is not ready");
-        await startAiEdit(currentProjectId, createDocxAiEditRequest({
-          projectId: currentProjectId,
-          runtime: docxRuntime,
-          userPrompt,
-          runtimeProfileId: selectedRuntimeProfileId || null,
-        }));
-      } else {
-        if (!runtime) throw new Error("Doc runtime is not ready");
-        await startAiEdit(currentProjectId, createAiEditRequest({
-          projectId: currentProjectId,
-          runtime,
-          userPrompt,
-          runtimeProfileId: selectedRuntimeProfileId || null,
-        }));
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(message);
-      throw err;
-    } finally {
-      setAgentSending(false);
-    }
-  };
+  const {
+    clearHistory,
+    deleteHistoryProject,
+    downloadOfficeCli,
+    importDocumentFile,
+    loadBlankDocument,
+    loadFixture,
+    loadPromptDocument,
+    loadTemplate,
+    openHistoryProject,
+    refreshProjectHistory,
+  } = createHomeDocumentActions({
+    homeAttachments,
+    loadHtmlDocument,
+    outputType,
+    prompt,
+    selectedRuntimeProfileId,
+    setError,
+    setHistoryProjects,
+    setHomePanel,
+    setLoading,
+    setOfficeCliInstalling,
+    setOfficeCliStatus,
+    setPrompt,
+    setRoute,
+  });
 
-  const cancelAgentRun = async (runId: string) => {
-    setError("");
-    try {
-      await cancelRun(runId);
-      await agentConversation.reload();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      throw err;
-    }
-  };
+  const { requestHomeRoute } = useDocumentRouteLifecycle({
+    activeHasUnsavedChanges,
+    clearArtifact,
+    clearDocxArtifact,
+    clearMarkdownArtifact,
+    currentDocumentType,
+    currentProjectId,
+    hasUnsavedChangesRef,
+    htmlSaveGenerationRef,
+    loadDocxDocument,
+    loadHtmlDocument,
+    loadMarkdownDocument,
+    loading,
+    markdownHasUnsavedChanges,
+    markdownRuntime,
+    markdownSaveGenerationRef,
+    markdownSaveState,
+    markdownTableCellCommitterRef,
+    markdownTableCellEditPending,
+    queuedHomeNavigation,
+    refreshProjectHistory,
+    route,
+    routeRef,
+    runtime,
+    saveTimerRef,
+    serializeHtmlRuntime,
+    serializeMarkdownRuntime,
+    setCurrentProject,
+    setError,
+    setHtmlToolbarActive,
+    setLoading,
+    setMarkdownRuntime,
+    setMarkdownSaveState,
+    setQueuedHomeNavigation,
+    setRoute,
+    setRuntime,
+    setSaveState,
+    setToolbarState,
+  });
 
-  const handleFrameLoad = () => {
-    const doc = iframeRef.current?.contentDocument;
-    if (!doc) return;
-    if (initializedFrameDocsRef.current.has(doc)) return;
-    initializedFrameDocsRef.current.add(doc);
-    enableEditableFrame(doc, artifactInteraction);
-    setEditorStats(getEditorStats(doc));
-    const queueSelectionSync = (fallbackNode?: Node | null) => {
-      htmlEditorController.syncSelection(fallbackNode);
-      const run = () => htmlEditorController.syncSelection(fallbackNode);
-      if (doc.defaultView?.requestAnimationFrame) {
-        doc.defaultView.requestAnimationFrame(run);
-      } else {
-        doc.defaultView?.setTimeout(run, 0);
-      }
-    };
-    const activateToolbarFromFrame = () => setHtmlToolbarActive(true);
-    doc.addEventListener("selectionchange", () => {
-      if (doc.hasFocus() && doc.getSelection()?.rangeCount) activateToolbarFromFrame();
-      queueSelectionSync(lastEditorTargetRef.current);
-    });
-    const syncFromFrameEvent = (event: Event) => {
-      activateToolbarFromFrame();
-      lastEditorTargetRef.current = frameEventTarget(doc, event);
-      queueSelectionSync(lastEditorTargetRef.current);
-    };
-    const syncClickFromFrameEvent = (event: Event) => {
-      activateToolbarFromFrame();
-      const target = frameEventTarget(doc, event);
-      const image = imageFromNode(target, doc);
-      if (image) {
-        event.preventDefault();
-        event.stopPropagation();
-        selectImageObject(doc, image);
-        return;
-      }
-      clearImageObjectSelection(doc);
-      lastEditorTargetRef.current = target;
-      queueSelectionSync(target);
-    };
-    const handleFrameHistoryShortcut = (event: KeyboardEvent) => {
-      const historyOffset = htmlHistoryShortcutOffset(event);
-      if (!historyOffset) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (artifactReadOnlyRef.current) return;
-      htmlEditorController.applyHistoryOffset(runtimeRef.current, historyOffset);
-    };
-    clearTableCellSelection(doc);
-    removeImageSelectionOverlay(doc);
-    doc.addEventListener("focusin", activateToolbarFromFrame, true);
-    doc.addEventListener("pointerdown", activateToolbarFromFrame, true);
-    doc.addEventListener("keydown", handleFrameHistoryShortcut, true);
-    doc.addEventListener("keyup", syncFromFrameEvent, true);
-    doc.addEventListener("click", syncClickFromFrameEvent, true);
-    doc.addEventListener("input", () => {
-      activateToolbarFromFrame();
-      htmlEditorController.syncMutation("input", "User edited doc body");
-    });
-    setRuntime((current) => {
-      if (!current) return current;
-      const loaded = applier.apply(current, {
-        type: "frame-loaded",
-        document: runtimeDocumentFromFrame(doc),
-      });
-      return loaded.history.snapshots.length > 0
-        ? loaded
-        : applier.recordSnapshot(loaded, doc, {
-            operationType: "initial",
-            description: "Initial doc load",
-          });
-    });
-  };
+  const {
+    agentBusy,
+    agentConversation,
+    artifactInteraction,
+    artifactReadOnly,
+    cancelAgentRun,
+    sendAgentPrompt,
+  } = useDocumentAgentRuntime({
+    artifactReadOnlyRef,
+    createAiEditRequest,
+    createDocxAiEditRequest,
+    createMarkdownAiEditRequest,
+    currentDocumentType,
+    currentProject,
+    currentProjectId,
+    docxRuntime,
+    iframeRef,
+    loadDocxDocument,
+    loadHtmlDocument,
+    loadMarkdownDocument,
+    markdownRuntime,
+    pendingImageTargetRef,
+    runtime,
+    selectedRuntimeProfileId,
+    setCurrentProject,
+    setError,
+    setHistoryProjects,
+    setLinkEditorOpen,
+    setOperationPanelMode,
+  });
 
-  useEffect(() => {
-    if (!editorOpen || currentDocumentType !== "html" || !frameSrcDoc) return;
-    const frame = iframeRef.current;
-    const doc = frame?.contentDocument;
-    if (!doc?.body) return;
-    const frameWindow = doc.defaultView;
-    const run = () => handleFrameLoad();
-    if (frameWindow?.requestAnimationFrame) {
-      const id = frameWindow.requestAnimationFrame(run);
-      return () => frameWindow.cancelAnimationFrame(id);
-    }
-    const id = window.setTimeout(run, 0);
-    return () => window.clearTimeout(id);
-  }, [currentDocumentType, editorOpen, frameRevision, frameSrcDoc]);
+  const {
+    applyAlignment,
+    applyBackColor,
+    applyFontFamily,
+    applyFontSize,
+    applyForeColor,
+    applyFormat,
+    applyHeading,
+    applyLink,
+    applyList,
+    applyOperationPanel,
+    applyRemoveLink,
+    applyToolbarMoreAction,
+    clearImageObjectSelection,
+    handleImageFileInputChange,
+    openLinkEditor,
+    requestImageFileSelection,
+    selectImageObject,
+  } = createHtmlEditorActions({
+    activeImageRef,
+    artifactReadOnlyRef,
+    attributeDraft,
+    currentProjectId,
+    htmlEditorController,
+    iframeRef,
+    imageDraft,
+    imageFileInputRef,
+    lastEditorTargetRef,
+    lastResolvedTargetRef,
+    lastSelectionRef,
+    operationDraft,
+    operationIsHtml,
+    operationPanelMode,
+    operationPosition,
+    operationWrapperTag,
+    pendingImageTargetRef,
+    runtime,
+    setAttributeDraft,
+    setError,
+    setImageDraft,
+    setLinkDraft,
+    setLinkEditorOpen,
+    setOperationDraft,
+    setOperationIsHtml,
+    setOperationPanelMode,
+    setOperationPosition,
+    setStyleDraft,
+    setTableDraft,
+    styleDraft,
+    tableDraft,
+    toolbarState,
+  });
 
-  const applyFormat = (tagName: InlineFormatTag) => {
-    htmlEditorController.executeOperation(runtime, {
-      operationType: `set_${tagName}`,
-      description: `Apply ${tagName} formatting`,
-      mutate: (doc, target) => applyInlineFormat(doc, tagName, target),
-    });
-  };
-
-  const applyHeading = (tagName: HeadingTag) => {
-    htmlEditorController.executeOperation(runtime, {
-      operationType: "setHeading",
-      description: `Set block to ${tagName}`,
-      mutate: (doc, target) => setHeading(doc, tagName, target),
-    });
-  };
-
-  const openLinkEditor = () => {
-    const doc = iframeRef.current?.contentDocument ?? null;
-    const liveTarget = doc ? currentSelectionElement(doc) ?? lastResolvedTargetRef.current : null;
-    const liveSelection = doc ? captureSelectionState(doc, liveTarget ?? lastEditorTargetRef.current) : null;
-    const currentHref = readCurrentLinkHref(doc, liveTarget ?? lastEditorTargetRef.current);
-    const currentText = readCurrentLinkText(doc, liveTarget ?? lastEditorTargetRef.current);
-    const selectedText = liveSelection?.selectedText || runtime?.activeSelection?.selectedText || "";
-    const hasLinkableSelection = Boolean(liveSelection && liveSelection.selectionType !== "write");
-    const hasStoredLinkableSelection = Boolean(runtime?.activeSelection && runtime.activeSelection.selectionType !== "write");
-    const hasInsertionTarget = Boolean(liveTarget ?? lastEditorTargetRef.current);
-    if (!currentHref && !hasLinkableSelection && !hasStoredLinkableSelection && !toolbarState.table && !hasInsertionTarget) return;
-    setLinkDraft({
-      text: currentHref ? currentText : selectedText,
-      href: currentHref || "https://",
-    });
-    setOperationPanelMode(null);
-    setLinkEditorOpen((current) => !current);
-  };
-
-  const applyLink = (draft: LinkDraft) => {
-    if (!draft.href.trim() || draft.href.trim() === "https://") return;
-    const applied = htmlEditorController.executeOperation(runtime, {
-      operationType: "createLink",
-      description: "Create link",
-      mutate: (doc, target) => createLink(doc, draft.href, target, draft.text),
-    });
-    if (!applied) return;
-    setLinkEditorOpen(false);
-    htmlEditorController.refocusFrame();
-  };
-
-  const applyRemoveLink = () => {
-    if (!toolbarState.link) return;
-    const applied = htmlEditorController.executeOperation(runtime, {
-      operationType: "removeLink",
-      description: "Remove link",
-      mutate: (doc, target) => removeLink(doc, target),
-    });
-    if (!applied) return;
-    setLinkEditorOpen(false);
-    htmlEditorController.refocusFrame();
-  };
-
-  const applyFontFamily = (fontFamily: string) => {
-    htmlEditorController.executeOperation(runtime, {
-      operationType: "setFontFamily",
-      description: `Set font family ${fontFamily}`,
-      preferTypingSelection: true,
-      mutate: (doc, target) => setFontFamily(doc, fontFamily, target),
-    });
-  };
-
-  const applyFontSize = (fontSize: string) => {
-    htmlEditorController.executeOperation(runtime, {
-      operationType: "setFontSize",
-      description: `Set font size ${fontSize}`,
-      preferTypingSelection: true,
-      mutate: (doc, target) => setFontSize(doc, fontSize, target),
-    });
-  };
-
-  const applyForeColor = (color: string) => {
-    htmlEditorController.executeOperation(runtime, {
-      operationType: "setForeColor",
-      description: `Set text color ${color}`,
-      preferTypingSelection: true,
-      mutate: (doc, target) => setForeColor(doc, color, target),
-    });
-  };
-
-  const applyBackColor = (color: string) => {
-    htmlEditorController.executeOperation(runtime, {
-      operationType: "setBackColor",
-      description: `Set fill color ${color}`,
-      preferTypingSelection: true,
-      mutate: (doc, target) => setBackColor(doc, color, target),
-    });
-  };
-
-  const applyAlignment = (alignment: Alignment) => {
-    htmlEditorController.executeOperation(runtime, {
-      operationType: "setAlignment",
-      description: `Set alignment ${alignment}`,
-      mutate: (doc, target) => setAlignment(doc, alignment, target),
-    });
-  };
-
-  const selectImageObject = (doc: Document, image: ImageObjectElement) => {
-    if (!doc.body.contains(image)) return;
-    activeImageRef.current = image;
-    lastEditorTargetRef.current = image;
-    lastResolvedTargetRef.current = image;
-    selectElementInDocument(doc, image);
-    htmlEditorController.syncSelection(image);
-    renderImageSelectionOverlay({
-      doc,
-      image,
-      onReplace: requestImageFileSelection,
-      onResizeStart: beginResizeImage,
-    });
-  };
-
-  const clearImageObjectSelection = (doc: Document) => {
-    activeImageRef.current = null;
-    removeImageSelectionOverlay(doc);
-  };
-
-  const beginResizeImage = (handle: ResizeHandle, image: ImageObjectElement, overlay: HTMLElement, event: globalThis.PointerEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (artifactReadOnlyRef.current) return;
-    if (!image.ownerDocument.body.contains(image)) return;
-    const initial = image.getBoundingClientRect();
-    const startClientX = event.clientX;
-    const startClientY = event.clientY;
-    const target = event.currentTarget;
-    if (target instanceof Element && "setPointerCapture" in target) target.setPointerCapture(event.pointerId);
-    const ownerWindow = image.ownerDocument.defaultView ?? window;
-
-    const onPointerMove = (moveEvent: globalThis.PointerEvent) => {
-      moveEvent.preventDefault();
-      const deltaX = moveEvent.clientX - startClientX;
-      const deltaY = moveEvent.clientY - startClientY;
-      const next = resizedImageSizeForHandle(handle, initial.width, initial.height, deltaX, deltaY);
-      image.style.width = `${Math.round(next.width)}px`;
-      if (next.height !== null) image.style.height = `${Math.round(next.height)}px`;
-      positionImageSelectionOverlay(image, overlay);
-    };
-
-    const onPointerEnd = (endEvent: globalThis.PointerEvent) => {
-      endEvent.preventDefault();
-      ownerWindow.removeEventListener("pointermove", onPointerMove);
-      ownerWindow.removeEventListener("pointerup", onPointerEnd);
-      ownerWindow.removeEventListener("pointercancel", onPointerEnd);
-      activeImageRef.current = image;
-      lastEditorTargetRef.current = image;
-      lastResolvedTargetRef.current = image;
-      selectElementInDocument(image.ownerDocument, image);
-      positionImageSelectionOverlay(image, overlay);
-      htmlEditorController.syncMutation("resizeImage", "Resize image");
-    };
-
-    ownerWindow.addEventListener("pointermove", onPointerMove);
-    ownerWindow.addEventListener("pointerup", onPointerEnd);
-    ownerWindow.addEventListener("pointercancel", onPointerEnd);
-  };
-
-  const applyList = (kind: ListKind) => {
-    htmlEditorController.executeOperation(runtime, {
-      operationType: `toggle_${kind}_list`,
-      description: `Toggle ${kind} list`,
-      mutate: (doc, target) => toggleList(doc, kind, target),
-    });
-  };
-
-  const requestImageFileSelection = (image?: ImageObjectElement | null) => {
-    if (artifactReadOnlyRef.current) return;
-    const doc = iframeRef.current?.contentDocument ?? null;
-    const currentImage =
-      image ??
-      (doc
-        ? imageFromNode(lastEditorTargetRef.current, doc) ??
-          imageFromNode(currentSelectionElement(doc), doc) ??
-          imageFromNode(lastResolvedTargetRef.current, doc)
-        : null);
-    pendingImageTargetRef.current = currentImage && currentImage.ownerDocument === doc && doc.body.contains(currentImage) ? currentImage : null;
-    setLinkEditorOpen(false);
-    setOperationPanelMode(null);
-    const input = imageFileInputRef.current;
-    if (!input) return;
-    input.value = "";
-    input.click();
-  };
-
-  const handleImageFileInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const input = event.currentTarget;
-    const file = input.files?.[0] ?? null;
-    input.value = "";
-    if (artifactReadOnlyRef.current) return;
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setError("Please choose an image file.");
-      return;
-    }
-    let src = "";
-    try {
-      if (!currentProjectId) throw new Error("Project is not open.");
-      const asset = await uploadProjectAsset(currentProjectId, file);
-      src = htmlProjectAssetRuntimeUrl(currentProjectId, asset.fileName);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      pendingImageTargetRef.current = null;
-      return;
-    }
-    const pendingImage = pendingImageTargetRef.current;
-    pendingImageTargetRef.current = null;
-    const doc = iframeRef.current?.contentDocument ?? null;
-    const existingAttributes =
-      pendingImage && doc && pendingImage.ownerDocument === doc && doc.body.contains(pendingImage)
-        ? readCurrentImageAttributes(doc, pendingImage)
-        : { src: "", alt: "", width: "", height: "" };
-    const attributes: ImageAttributes = {
-      ...existingAttributes,
-      src,
-      alt: existingAttributes.alt?.trim() || imageAltFromFileName(file.name),
-    };
-    htmlEditorController.executeOperation(runtime, {
-      operationType: pendingImage ? "replaceImage" : "insertImage",
-      description: pendingImage ? "Replace image" : "Insert image",
-      mutate: (operationDoc, target) => {
-        const activeImage =
-          pendingImage && pendingImage.ownerDocument === operationDoc && operationDoc.body.contains(pendingImage)
-            ? pendingImage
-            : null;
-        return upsertSelectedImageObject(operationDoc, attributes, target, activeImage);
-      },
-    });
-  };
-
-  const applyToolbarMoreAction = (action: string) => {
-    if (!action) return;
-    if (action === "image") {
-      requestImageFileSelection();
-      return;
-    }
-    if (isOperationPanelMode(action)) {
-      if (action === "setAttributes" && !toolbarState.attributeElement) return;
-      if (isContentBoundOperation(action) && !toolbarState.contentElement) return;
-      if (isPositionBoundOperation(action) && !toolbarState.mutableElement) return;
-      setLinkEditorOpen(false);
-      setOperationPanelMode(action);
-      setOperationDraft(action === "insertHtml" || action === "appendHtml" || action === "insertAtPosition" ? "<p></p>" : "");
-      setOperationIsHtml(action === "insertHtml" || action === "appendHtml" || action === "insertAtPosition");
-      if (action === "image") {
-        setImageDraft(readCurrentImageAttributes(iframeRef.current?.contentDocument ?? null, lastEditorTargetRef.current));
-      }
-      if (action === "style") {
-        setStyleDraft(readCurrentStyles(iframeRef.current?.contentDocument ?? null, lastEditorTargetRef.current));
-      }
-      if (action === "setAttributes") {
-        setAttributeDraft(readCurrentAttributes(iframeRef.current?.contentDocument ?? null, lastEditorTargetRef.current));
-      }
-      if (action === "wrapSelection") {
-        setAttributeDraft({ id: "", className: "", title: "", custom: "" });
-      }
-      if (action === "table") {
-        setTableDraft({ rows: "3", columns: "3" });
-      }
-      if (action === "insertAtPosition") setOperationPosition("afterend");
-    } else if (action === "insertTable") {
-      setLinkEditorOpen(false);
-      setOperationPanelMode("table");
-      setTableDraft({ rows: "3", columns: "3" });
-    } else if (isTableEditAction(action)) {
-      if (!toolbarState.tableActions[action]) return;
-      htmlEditorController.executeOperation(runtime, {
-        operationType: action,
-        description: tableActionTitle(action, toolbarState.tableHeaderState),
-        mutate: (doc, target) => {
-          const latestTarget = resolveEditorTarget(
-            doc,
-            lastEditorTargetRef.current,
-            lastSelectionRef.current?.commonAncestorPath ?? runtime?.activeSelection?.commonAncestorPath ?? "",
-          );
-          const applied = editTable(doc, action, latestTarget ?? target);
-          return applied ? currentSelectionElement(doc) ?? latestTarget ?? target ?? true : false;
-        },
-      });
-    } else if (action === "removeImage") {
-      if (!toolbarState.image) return;
-      htmlEditorController.executeOperation(runtime, {
-        operationType: "removeImage",
-        description: "Remove image",
-        mutate: (doc, target) => removeSelectedImageObject(doc, target, activeImageRef.current),
-      });
-    } else if (action === "duplicateElement") {
-      if (!toolbarState.mutableElement) return;
-      htmlEditorController.executeOperation(runtime, {
-        operationType: "duplicateElement",
-        description: "Duplicate selected element",
-        mutate: (doc, target) => duplicateElement(doc, target),
-      });
-    } else if (action === "deleteElement") {
-      if (!toolbarState.mutableElement) return;
-      htmlEditorController.executeOperation(runtime, {
-        operationType: "deleteElement",
-        description: "Delete selected element",
-        mutate: (doc, target) => deleteSelectedElement(doc, target),
-      });
-    } else if (action === "cursorStart") {
-      if (!toolbarState.contentElement && !toolbarState.rangeSelection) return;
-      htmlEditorController.executeOperation(runtime, {
-        operationType: "moveCursorToStart",
-        description: "Move cursor to start",
-        mutate: (doc, target) => (toolbarState.rangeSelection ? moveSelectionCursorToStart(doc) : target ? moveCursorToStart(doc, target) : false),
-      });
-    } else if (action === "cursorEnd") {
-      if (!toolbarState.contentElement && !toolbarState.rangeSelection) return;
-      htmlEditorController.executeOperation(runtime, {
-        operationType: "moveCursorToEnd",
-        description: "Move cursor to end",
-        mutate: (doc, target) => (toolbarState.rangeSelection ? moveSelectionCursorToEnd(doc) : target ? moveCursorToEnd(doc, target) : false),
-      });
-    }
-  };
-
-  const applyOperationPanel = () => {
-    if (!operationPanelMode) return;
-    const content = operationDraft;
-    const hasContent = content.length > 0;
-    const attributes = {
-      id: attributeDraft.id.trim() || null,
-      class: attributeDraft.className.trim() || null,
-      title: attributeDraft.title.trim() || null,
-      ...parseCustomAttributes(attributeDraft.custom),
-    };
-    const applied = htmlEditorController.executeOperation(runtime, {
-      operationType: operationPanelMode,
-      description: operationPanelTitle[operationPanelMode],
-      requiresSelection: operationPanelMode === "wrapSelection" || operationPanelMode === "replaceSelection",
-      mutate: (doc, target) => {
-        if (operationPanelMode === "insertText") return hasContent ? insertText(doc, content, target) : false;
-        if (operationPanelMode === "insertHtml") return hasContent ? insertHtml(doc, content, target) : false;
-        if (operationPanelMode === "replaceSelection") return replaceSelection(doc, content, operationIsHtml, target);
-        if (operationPanelMode === "appendText") return Boolean(target && hasContent && appendToElement(doc, target, content, false));
-        if (operationPanelMode === "appendHtml") return Boolean(target && hasContent && appendToElement(doc, target, content, true));
-        if (operationPanelMode === "insertAtPosition") return Boolean(target && hasContent && insertAtPosition(doc, target, content, operationPosition, operationIsHtml));
-        if (operationPanelMode === "setAttributes") return setElementAttributes(doc, target, attributes);
-        if (operationPanelMode === "wrapSelection") return wrapSelection(doc, operationWrapperTag, attributes, target);
-        if (operationPanelMode === "image") return upsertSelectedImageObject(doc, imageDraft, target, activeImageRef.current);
-        if (operationPanelMode === "style") return setElementStyle(doc, target, styleDraft);
-        if (operationPanelMode === "table") {
-          const rows = Number.parseInt(tableDraft.rows, 10);
-          const columns = Number.parseInt(tableDraft.columns, 10);
-          return insertTable(doc, target, Number.isFinite(rows) ? rows : 3, Number.isFinite(columns) ? columns : 3);
-        }
-        return false;
-      },
-    });
-    if (!applied) return;
-    setOperationPanelMode(null);
-    setOperationDraft("");
-    htmlEditorController.refocusFrame();
-  };
+  const { handleFrameLoad } = useHtmlFrameLifecycle({
+    applier,
+    artifactInteraction,
+    artifactReadOnlyRef,
+    clearImageObjectSelection,
+    currentDocumentType,
+    editorOpen,
+    frameRevision,
+    frameSrcDoc,
+    htmlEditorController,
+    iframeRef,
+    initializedFrameDocsRef,
+    lastEditorTargetRef,
+    runtimeRef,
+    selectImageObject,
+    setEditorStats,
+    setHtmlToolbarActive,
+    setRuntime,
+  });
 
   const resetFrameFromRuntime = () => {
     if (!runtime) return;
@@ -1276,149 +415,28 @@ export function useRuntimeWorkbenchModel() {
     resetHtmlFrameFromRuntime();
   };
 
-  const exportCurrentHtml = async () => {
-    if (!runtime || !currentProjectId) return;
-    setError("");
-    setExportNotice("");
-    try {
-      const exported = await saveHtmlArtifactExport({
-        projectId: currentProjectId,
-        title: runtime.title || currentProject?.title || "doc",
-        html: serializeHtmlRuntime(runtime),
-      });
-      console.info(`[ai-doc] Exported HTML to ${exported.path}`);
-      setExportNotice(`Exported HTML to ${exported.path}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  };
+  const exportInProgress = sourceExporting || pdfExporting;
 
-  const exportCurrentHtmlDocx = async () => {
-    if (!runtime || !currentProjectId || !iframeRef.current) return;
-    setError("");
-    setExportNotice("");
-    setHtmlDocxExporting(true);
-    try {
-      const exported = await saveHtmlArtifactDocxExport({
-        iframe: iframeRef.current,
-        projectId: currentProjectId,
-        title: runtime.title || currentProject?.title || "doc",
-      });
-      console.info(`[ai-doc] Exported DOCX to ${exported.path}`);
-      setExportNotice(`Exported DOCX to ${exported.path}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setHtmlDocxExporting(false);
-    }
-  };
-
-  const exportCurrentHtmlPdf = async () => {
-    if (!runtime || !currentProjectId) return;
-    setError("");
-    setExportNotice("");
-    setPdfExporting(true);
-    try {
-      const exported = await saveHtmlArtifactPdfExport({
-        projectId: currentProjectId,
-        title: runtime.title || currentProject?.title || "doc",
-        html: renderHtmlProjectAssetReferences(serializeHtmlRuntime(runtime), currentProjectId),
-      });
-      console.info(`[ai-doc] Exported PDF to ${exported.path}`);
-      setExportNotice(`Exported PDF to ${exported.path}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setPdfExporting(false);
-    }
-  };
-
-  const exportCurrentMarkdown = async (markdown: string) => {
-    if (!markdownRuntime || !currentProjectId) return;
-    setError("");
-    setExportNotice("");
-    try {
-      const exported = await saveMarkdownArtifactExport({
-        projectId: currentProjectId,
-        title: markdownRuntime.title || currentProject?.title || "doc",
-        markdown,
-      });
-      console.info(`[ai-doc] Exported Markdown to ${exported.path}`);
-      setExportNotice(`Exported Markdown to ${exported.path}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  const exportCurrentMarkdownDocx = async (markdown: string) => {
-    if (!markdownRuntime || !currentProjectId) return;
-    setError("");
-    setExportNotice("");
-    setHtmlDocxExporting(true);
-    try {
-      const exported = await saveMarkdownArtifactDocxExport({
-        projectId: currentProjectId,
-        title: markdownRuntime.title || currentProject?.title || "doc",
-        markdown,
-      });
-      console.info(`[ai-doc] Exported Markdown DOCX to ${exported.path}`);
-      setExportNotice(`Exported DOCX to ${exported.path}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setHtmlDocxExporting(false);
-    }
-  };
-
-  const exportCurrentMarkdownPdf = async (markdown: string) => {
-    if (!markdownRuntime || !currentProjectId) return;
-    setError("");
-    setExportNotice("");
-    setPdfExporting(true);
-    try {
-      const exported = await saveMarkdownArtifactPdfExport({
-        projectId: currentProjectId,
-        title: markdownRuntime.title || currentProject?.title || "doc",
-        markdown,
-      });
-      console.info(`[ai-doc] Exported Markdown PDF to ${exported.path}`);
-      setExportNotice(`Exported PDF to ${exported.path}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setPdfExporting(false);
-    }
-  };
-
-  const exportCurrentDocxPdf = async (previewElement: HTMLElement | null) => {
-    if (!docxRuntime || !currentProjectId || !previewElement) return;
-    setError("");
-    setExportNotice("");
-    setPdfExporting(true);
-    try {
-      const exported = await saveDocxArtifactPdfExport({
-        previewElement,
-        projectId: currentProjectId,
-        title: docxRuntime.title || currentProject?.title || "doc",
-      });
-      console.info(`[ai-doc] Exported DOCX PDF to ${exported.path}`);
-      setExportNotice(`Exported PDF to ${exported.path}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setPdfExporting(false);
-    }
-  };
-
-  const openCurrentProjectExportsDir = async () => {
-    if (!currentProjectId) return;
-    setError("");
-    try {
-      await openProjectExportsDir(currentProjectId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  };
+  const {
+    exportCurrentDocxPdf,
+    exportCurrentHtml,
+    exportCurrentHtmlPdf,
+    exportCurrentMarkdown,
+    exportCurrentMarkdownPdf,
+    openCurrentProjectExportsDir,
+  } = createDocumentExportActions({
+    currentProject,
+    currentProjectId,
+    docxRuntime,
+    exportInProgress,
+    markdownRuntime,
+    runtime,
+    serializeHtmlRuntime,
+    setError,
+    setExportNotice,
+    setPdfExporting,
+    setSourceExporting,
+  });
 
   return {
     activeDirty,
@@ -1463,7 +481,6 @@ export function useRuntimeWorkbenchModel() {
     historyProjects,
     homeAttachments,
     homePanel,
-    htmlDocxExporting,
     htmlEditorController,
     htmlToolbarActive,
     iframeRef,
@@ -1503,12 +520,11 @@ export function useRuntimeWorkbenchModel() {
     selectedRuntimeProfileId,
     selectedTemplateCategory,
     sendAgentPrompt,
+    sourceExporting,
     exportCurrentDocxPdf,
     exportCurrentHtml,
-    exportCurrentHtmlDocx,
     exportCurrentHtmlPdf,
     exportCurrentMarkdown,
-    exportCurrentMarkdownDocx,
     exportCurrentMarkdownPdf,
     setAttributeDraft,
     setEditorStats,
@@ -1542,61 +558,4 @@ export function useRuntimeWorkbenchModel() {
       markdownTableCellCommitterRef.current = committer;
     },
   };
-}
-
-type UploadedHomeContextAttachment = {
-  originalName: string;
-  fileName: string;
-  path: string;
-  mimeType: string;
-  sizeBytes: number;
-};
-
-async function uploadHomeContextAttachments(projectId: string, attachments: HomeAttachment[]): Promise<UploadedHomeContextAttachment[]> {
-  const uploaded: UploadedHomeContextAttachment[] = [];
-  for (const attachment of attachments) {
-    const asset = await uploadProjectAsset(projectId, attachment.file);
-    uploaded.push({
-      originalName: attachment.name,
-      fileName: asset.fileName,
-      path: asset.path,
-      mimeType: asset.mimeType,
-      sizeBytes: asset.sizeBytes,
-    });
-  }
-  return uploaded;
-}
-
-function initialPromptWithAttachmentContext(userPrompt: string, attachments: UploadedHomeContextAttachment[]) {
-  if (attachments.length === 0) return userPrompt;
-  const instruction = userPrompt.trim() || "Create a document from the attached context files.";
-  return [
-    instruction,
-    "",
-    "Context attachments uploaded with this project:",
-    ...attachments.map((attachment, index) => {
-      const displayName = attachment.originalName === attachment.fileName ? attachment.fileName : `${attachment.originalName} saved as ${attachment.fileName}`;
-      return `${index + 1}. ${displayName} (${attachment.mimeType}, ${formatBytes(attachment.sizeBytes)}): ${attachment.path}`;
-    }),
-    "",
-    "Use these files as source context. Read them from the project workspace before drafting or editing the document.",
-  ].join("\n");
-}
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  const kib = bytes / 1024;
-  if (kib < 1024) return `${kib.toFixed(kib >= 10 ? 0 : 1)} KB`;
-  const mib = kib / 1024;
-  return `${mib.toFixed(mib >= 10 ? 0 : 1)} MB`;
-}
-
-function isNewerDocumentProject(next: DocumentProject, current: DocumentProject | null) {
-  if (!current || current.id !== next.id) return true;
-  return timestampMs(next.updatedAt) > timestampMs(current.updatedAt);
-}
-
-function timestampMs(value: string | null | undefined) {
-  const time = value ? Date.parse(value) : Number.NaN;
-  return Number.isFinite(time) ? time : 0;
 }

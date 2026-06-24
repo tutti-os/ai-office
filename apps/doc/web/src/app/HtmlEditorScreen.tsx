@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
 import { scrollbarClass } from "@ai-app/ui/app-shell";
-import { ArtifactAgentProcessingOverlay, ArtifactEditorFrame, ArtifactExportToast, ArtifactWorkspaceHeader, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
+import { ArtifactEditorWorkspace, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
 import { type ToolbarLayoutValue } from "@ai-app/ui/toolbar";
 import type { DocumentRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
 import type { AdjacentInsertPosition, Alignment, ElementStyleAttributes, HeadingTag, ImageAttributes, InlineFormatTag, ListKind } from "../artifact/runtime/operations";
@@ -46,7 +46,6 @@ export function DocumentLoadingScreen(props: { error: string; loading: boolean }
 export type HtmlEditorScreenProps = {
   activeSelectionText: string;
   dirty: boolean;
-  docxExporting: boolean;
   pdfExportAvailable: boolean;
   pdfExporting: boolean;
   error: string;
@@ -85,7 +84,6 @@ export type HtmlEditorScreenProps = {
   onApplyOperation: () => void;
   onAttributeDraftChange: (value: AttributeDraft) => void;
   onBackHome: () => void;
-  onExportDocx: () => Promise<void>;
   onExportHtml: () => Promise<void>;
   onExportPdf: () => Promise<void>;
   onDismissExportNotice: () => void;
@@ -336,96 +334,91 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
 
   return (
     <>
-    <ArtifactEditorFrame
-      className="bg-[#E6DDCD] text-[#2A2620]"
-      sidebar={
-        <AgentConversationPanel
-          activeSelectionText={props.activeSelectionText}
-          artifactLabel="html"
-          dirty={props.dirty}
-          error={props.error || props.agentConversationError}
-          items={props.agentConversationItems}
-          localAgentProviders={props.localAgentProviders}
-          loading={props.agentConversationLoading}
-          runtimeProfiles={props.runtimeProfiles}
-          selectedRuntimeProfileId={props.selectedRuntimeProfileId}
-          sending={props.agentSending}
-          onBackHome={props.onBackHome}
-          onRuntimeProfileChange={props.onRuntimeProfileChange}
-          onCancel={props.onCancelAgentRun}
-          onSend={props.onSendAgentPrompt}
-        />
-      }
-    >
-      <section className="relative flex h-full min-h-0 flex-col bg-[#E6DDCD]">
-        <ArtifactWorkspaceHeader
-          tone="lumen"
-          title={props.runtime?.title ?? "Untitled Doc"}
-          saveState={props.saveState}
-          agentWorking={props.agentProcessing}
-          onBackHome={props.onBackHome}
-          exportItems={[
-            {
-              label: "DOCX (coming soon)",
-              disabled: true,
-              onSelect: () => undefined,
-            },
-            {
-              label: props.pdfExporting ? "PDF exporting..." : "PDF",
-              disabled: props.pdfExporting || !props.pdfExportAvailable,
-              onSelect: () => void props.onExportPdf(),
-            },
-          ]}
-        />
-        <ArtifactExportToast message={props.exportNotice} onClose={props.onDismissExportNotice} onOpenLocation={props.onOpenExportLocation} />
+      <ArtifactEditorWorkspace
+        title={props.runtime?.title ?? "Untitled Doc"}
+        saveState={props.saveState}
+        agentWorking={props.agentProcessing}
+        exportNotice={props.exportNotice}
+        bodyClassName="flex flex-col"
+        tone="lumen"
+        onBackHome={props.onBackHome}
+        onDismissExportNotice={props.onDismissExportNotice}
+        onOpenExportLocation={props.onOpenExportLocation}
+        exportItems={[
+          {
+            label: "DOCX (coming soon)",
+            disabled: true,
+            onSelect: () => undefined,
+          },
+          {
+            label: props.pdfExporting ? "PDF exporting..." : "PDF",
+            disabled: props.pdfExporting || !props.pdfExportAvailable,
+            loading: props.pdfExporting,
+            onSelect: () => props.onExportPdf(),
+          },
+        ]}
+        sidebar={
+          <AgentConversationPanel
+            activeSelectionText={props.activeSelectionText}
+            artifactLabel="html"
+            dirty={props.dirty}
+            error={props.error || props.agentConversationError}
+            items={props.agentConversationItems}
+            localAgentProviders={props.localAgentProviders}
+            loading={props.agentConversationLoading}
+            runtimeProfiles={props.runtimeProfiles}
+            selectedRuntimeProfileId={props.selectedRuntimeProfileId}
+            sending={props.agentSending}
+            onBackHome={props.onBackHome}
+            onRuntimeProfileChange={props.onRuntimeProfileChange}
+            onCancel={props.onCancelAgentRun}
+            onSend={props.onSendAgentPrompt}
+          />
+        }
+      >
+        <div ref={frameScrollContainerRef} className={`h-full overflow-x-hidden overflow-y-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-3 py-5 md:px-6 md:py-7 ${scrollbarClass}`}>
+          <HtmlEditorToolbar
+            canCreateLink={canCreateLink}
+            canRedo={canRedo}
+            canUndo={canUndo}
+            layoutMenuOpen={layoutMenuOpen}
+            linkEditorRef={linkEditorRef}
+            props={props}
+            spacingMenuOpen={spacingMenuOpen}
+            toolbarDisabled={toolbarDisabled}
+            onLayoutMenuOpenChange={setLayoutMenuOpen}
+            onSpacingMenuOpenChange={setSpacingMenuOpen}
+          />
 
-        <div className="relative min-h-0 flex-1">
-          <div ref={frameScrollContainerRef} className={`h-full overflow-x-hidden overflow-y-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-3 py-5 md:px-6 md:py-7 ${scrollbarClass}`}>
-            <HtmlEditorToolbar
-              canCreateLink={canCreateLink}
-              canRedo={canRedo}
-              canUndo={canUndo}
-              layoutMenuOpen={layoutMenuOpen}
-              linkEditorRef={linkEditorRef}
-              props={props}
-              spacingMenuOpen={spacingMenuOpen}
-              toolbarDisabled={toolbarDisabled}
-              onLayoutMenuOpenChange={setLayoutMenuOpen}
-              onSpacingMenuOpenChange={setSpacingMenuOpen}
+          {props.frameSrcDoc ? (
+            <iframe
+              key={props.frameRevision}
+              ref={props.iframeRef}
+              className="mx-auto block min-h-[860px] w-full max-w-[980px] overflow-clip rounded-[2px] border border-[#B8A07C]/55 bg-white shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)]"
+              style={{ height: frameHeight }}
+              title={props.runtime?.title ?? "Runtime doc"}
+              sandbox="allow-scripts allow-same-origin"
+              scrolling="no"
+              srcDoc={props.frameSrcDoc}
+              onLoad={() => {
+                props.onFrameLoad();
+                scheduleHtmlFrameResize();
+              }}
+              onInput={() => {
+                props.onMutation("input", "User edited doc body");
+                scheduleHtmlFrameResize();
+              }}
+              onKeyUp={props.onSelection}
+              onMouseUp={props.onSelection}
             />
-
-            {props.frameSrcDoc ? (
-              <iframe
-                key={props.frameRevision}
-                ref={props.iframeRef}
-                className="mx-auto block min-h-[860px] w-full max-w-[980px] overflow-clip rounded-[2px] border border-[#B8A07C]/55 bg-white shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)]"
-                style={{ height: frameHeight }}
-                title={props.runtime?.title ?? "Runtime doc"}
-                sandbox="allow-scripts allow-same-origin"
-                scrolling="no"
-                srcDoc={props.frameSrcDoc}
-                onLoad={() => {
-                  props.onFrameLoad();
-                  scheduleHtmlFrameResize();
-                }}
-                onInput={() => {
-                  props.onMutation("input", "User edited doc body");
-                  scheduleHtmlFrameResize();
-                }}
-                onKeyUp={props.onSelection}
-                onMouseUp={props.onSelection}
-              />
-            ) : (
-              <div className="mx-auto grid min-h-[620px] max-w-[860px] place-items-center rounded-[20px] border border-[#B8A07C]/55 bg-[#F4EFE6]/55 text-center text-[#8B8275]">
-                Loading doc...
-              </div>
-            )}
-          </div>
-          <ArtifactAgentProcessingOverlay active={props.agentProcessing} />
+          ) : (
+            <div className="mx-auto grid min-h-[620px] max-w-[860px] place-items-center rounded-[20px] border border-[#B8A07C]/55 bg-[#F4EFE6]/55 text-center text-[#8B8275]">
+              Loading doc...
+            </div>
+          )}
         </div>
-      </section>
-    </ArtifactEditorFrame>
-    {linkEditorPortal}
+      </ArtifactEditorWorkspace>
+      {linkEditorPortal}
     </>
   );
 }

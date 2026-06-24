@@ -10,6 +10,7 @@ import {
   type UpdateProjectRequest,
 } from "@ai-doc/shared";
 import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
+import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
 import { getDb } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
 
@@ -157,6 +158,12 @@ export class DocumentRepository {
       mimeType: input.mimeType,
       sizeBytes: input.bytes.byteLength,
     };
+  }
+
+  async writeContextAttachment(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    return writeContextAttachmentFile(ensureProjectDirs(projectId), input);
   }
 
   async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {

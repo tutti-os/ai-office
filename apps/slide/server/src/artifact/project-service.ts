@@ -3,6 +3,8 @@ import { readdir, readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { deckSlideDisplayName, pptxMimeType, type AiEditRequest, type CreateProjectRequest, type DeckAssetUploadResponse, type RuntimeProfile, type SlideRun, type SlideRunEvent, type UpdateDeckSlideHtmlRequest, type UpdateProjectRequest } from "@ai-slide/shared";
 import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
+import { projectAssetFileExtensions, projectAssetMimeTypes } from "@ai-app/shared/artifact-assets";
+import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
 import { openPathInFileManager } from "@ai-app/shared/local-open";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
@@ -160,6 +162,13 @@ export class ProjectService {
     if (input.bytes.byteLength === 0) throw new Error("Asset file is empty");
     if (input.bytes.byteLength > maxProjectAssetBytes) throw new Error("Asset file is too large");
     return this.repo.writeProjectAsset(projectId, input);
+  }
+
+  async uploadContextAttachment(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }): Promise<ContextAttachmentUploadResponse> {
+    if (!this.repo.getProject(projectId)) throw new Error("Project not found");
+    if (input.bytes.byteLength === 0) throw new Error("Context attachment is empty");
+    if (input.bytes.byteLength > maxContextAttachmentBytes) throw new Error("Context attachment is too large");
+    return this.repo.writeContextAttachment(projectId, input);
   }
 
   async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
@@ -406,54 +415,13 @@ export class ProjectService {
 }
 
 const maxDeckAssetBytes = 20 * 1024 * 1024;
+const maxContextAttachmentBytes = 30 * 1024 * 1024;
 const maxProjectAssetBytes = 30 * 1024 * 1024;
 const maxDeckExportBytes = 50 * 1024 * 1024;
 const maxPptxImportBytes = 50 * 1024 * 1024;
 const pdfMimeType = "application/pdf";
-const supportedProjectAssetMimeTypes = new Set([
-  "application/json",
-  "application/msword",
-  "application/pdf",
-  "application/rtf",
-  "application/vnd.ms-excel",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "image/gif",
-  "image/jpeg",
-  "image/png",
-  "image/svg+xml",
-  "image/webp",
-  "text/csv",
-  "text/html",
-  "text/markdown",
-  "text/plain",
-]);
-const supportedProjectAssetExtensions = new Set([
-  ".csv",
-  ".doc",
-  ".docx",
-  ".gif",
-  ".htm",
-  ".html",
-  ".jpeg",
-  ".jpg",
-  ".json",
-  ".md",
-  ".markdown",
-  ".odt",
-  ".pdf",
-  ".png",
-  ".ppt",
-  ".pptx",
-  ".rtf",
-  ".svg",
-  ".txt",
-  ".webp",
-  ".xls",
-  ".xlsx",
-]);
+const supportedProjectAssetMimeTypes = new Set<string>(projectAssetMimeTypes);
+const supportedProjectAssetExtensions = new Set<string>(projectAssetFileExtensions);
 
 function isSupportedExportMimeType(mimeType: string) {
   return mimeType === pptxMimeType || mimeType === pdfMimeType;

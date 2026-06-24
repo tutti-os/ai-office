@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, ChevronDown, Download, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, Download, Loader2, X } from "lucide-react";
 
 export type ArtifactEditorKind = "html" | "markdown" | "docx" | "deck" | "pptx" | "xlsx";
 
@@ -19,6 +19,56 @@ export function ArtifactEditorFrame(props: {
         {props.children}
       </section>
     </section>
+  );
+}
+
+export function ArtifactEditorWorkspace(props: {
+  sidebar: ReactNode;
+  children: ReactNode;
+  title: string;
+  saveState: ArtifactSaveState;
+  exportItems: ArtifactExportItem[];
+  agentWorking?: boolean;
+  bodyClassName?: string;
+  className?: string;
+  contentClassName?: string;
+  exportNotice?: string;
+  onBackHome?: () => void;
+  onDismissExportNotice?: () => void;
+  onOpenExportLocation?: () => void;
+  stats?: string[];
+  tone?: "dark" | "lumen";
+  workspaceClassName?: string;
+}) {
+  const tone = props.tone ?? "lumen";
+  const exportNotice = props.exportNotice ?? "";
+  return (
+    <ArtifactEditorFrame
+      className={cx(tone === "lumen" ? "bg-[#E6DDCD] text-[#2A2620]" : undefined, props.className)}
+      contentClassName={props.contentClassName}
+      sidebar={props.sidebar}
+    >
+      <section className={cx("relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden", tone === "lumen" ? "bg-[#E6DDCD] text-[#2A2620]" : undefined, props.workspaceClassName)}>
+        <ArtifactWorkspaceHeader
+          title={props.title}
+          saveState={props.saveState}
+          agentWorking={props.agentWorking}
+          stats={props.stats}
+          exportItems={props.exportItems}
+          tone={tone}
+          onBackHome={props.onBackHome}
+        />
+        <ArtifactExportToast
+          message={exportNotice}
+          onClose={props.onDismissExportNotice ?? noop}
+          onOpenLocation={props.onOpenExportLocation ?? noop}
+        />
+        <div className={cx("relative min-h-0 flex-1 overflow-hidden", props.bodyClassName)}>
+          {props.children}
+          <ArtifactAgentProcessingOverlay active={Boolean(props.agentWorking)} />
+        </div>
+      </section>
+    </ArtifactEditorFrame>
   );
 }
 
@@ -87,7 +137,8 @@ export type ArtifactSaveState = "saved" | "saving" | "error" | "loading";
 export type ArtifactExportItem = {
   label: string;
   disabled?: boolean;
-  onSelect: () => void;
+  loading?: boolean;
+  onSelect: () => void | Promise<void>;
 };
 
 export function ArtifactWorkspaceHeader(props: {
@@ -100,8 +151,15 @@ export function ArtifactWorkspaceHeader(props: {
   tone?: "dark" | "lumen";
 }) {
   const [open, setOpen] = useState(false);
+  const [pendingExportLabel, setPendingExportLabel] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const lumen = props.tone === "lumen";
+  const exportingItem = props.exportItems.find((item) => item.loading || item.label === pendingExportLabel);
+  const exporting = Boolean(exportingItem);
+
+  useEffect(() => {
+    if (exporting) setOpen(false);
+  }, [exporting]);
 
   useEffect(() => {
     if (!open) return;
@@ -156,16 +214,18 @@ export function ArtifactWorkspaceHeader(props: {
           className={cx(
             "inline-flex h-8 items-center gap-2 rounded-[16px] border px-3 text-[12px] font-semibold transition",
             lumen
-              ? "border-[#B8A07C]/55 bg-[#F4EFE6]/70 text-[#2A2620]/72 hover:border-[#5C6B50]/50 hover:text-[#5C6B50]"
-              : "border-white/10 bg-white/8 text-white/72 hover:bg-white/14 hover:text-white",
+              ? "border-[#B8A07C]/55 bg-[#F4EFE6]/70 text-[#2A2620]/72 hover:border-[#5C6B50]/50 hover:text-[#5C6B50] disabled:cursor-wait disabled:border-[#B8A07C]/35 disabled:text-[#8B8275]/65"
+              : "border-white/10 bg-white/8 text-white/72 hover:bg-white/14 hover:text-white disabled:cursor-wait disabled:text-white/38",
           )}
           type="button"
           aria-haspopup="menu"
           aria-expanded={open}
+          aria-busy={exporting}
+          disabled={exporting}
           onClick={() => setOpen((current) => !current)}
         >
-          <Download size={14} />
-          Export
+          {exporting ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
+          {exporting ? "Exporting..." : "Export"}
           <ChevronDown size={13} />
         </button>
         {open ? (
@@ -176,26 +236,36 @@ export function ArtifactWorkspaceHeader(props: {
             )}
             role="menu"
           >
-            {props.exportItems.map((item) => (
+            {props.exportItems.map((item) => {
+              const itemLoading = item.loading || item.label === pendingExportLabel;
+              return (
               <button
                 className={cx(
-                  "block h-8 w-full border-0 bg-transparent px-3 text-left text-[12px] font-semibold",
+                  "flex h-8 w-full items-center gap-2 border-0 bg-transparent px-3 text-left text-[12px] font-semibold",
                   lumen
                     ? "text-[#2A2620]/72 hover:bg-[#E6DDCD]/55 hover:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275]/45"
                     : "text-white/68 hover:bg-white/8 hover:text-white disabled:cursor-default disabled:text-white/24",
                 )}
-                disabled={item.disabled}
+                disabled={item.disabled || exporting}
                 key={item.label}
                 role="menuitem"
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   setOpen(false);
-                  item.onSelect();
+                  if (item.disabled || exporting) return;
+                  setPendingExportLabel(item.label);
+                  try {
+                    await item.onSelect();
+                  } finally {
+                    setPendingExportLabel(null);
+                  }
                 }}
               >
-                {item.label}
+                {itemLoading ? <Loader2 className="shrink-0 animate-spin" size={13} /> : null}
+                <span className="min-w-0 truncate">{item.label}</span>
               </button>
-            ))}
+              );
+            })}
           </div>
         ) : null}
       </div>
@@ -231,3 +301,5 @@ function SaveStateBadge(props: { state: ArtifactSaveState; agentWorking?: boolea
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
+
+function noop() {}

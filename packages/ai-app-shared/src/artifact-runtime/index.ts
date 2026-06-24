@@ -47,6 +47,10 @@ export type ArtifactInteractionPolicy = {
 
 export const editableArtifactInteraction: ArtifactInteractionPolicy = { mode: "editable" };
 
+export function artifactInteractionForAgentBusy(agentBusy: boolean): ArtifactInteractionPolicy {
+  return agentBusy ? { mode: "read-only", readOnlyReason: "agent-running" } : editableArtifactInteraction;
+}
+
 export function isArtifactReadOnly(policy: ArtifactInteractionPolicy) {
   return policy.mode === "read-only";
 }

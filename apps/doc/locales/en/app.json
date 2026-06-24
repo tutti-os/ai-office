@@ -24,5 +24,8 @@
   "composer.installingOfficeCli": "Installing OfficeCLI",
   "composer.placeholder": "Ask anything, create anything...",
   "composer.addContext": "Add to context",
-  "composer.createFromPrompt": "Create from prompt"
+  "composer.createFromPrompt": "Create from prompt",
+  "composer.create": "Create",
+  "composer.selectAgent": "Select ACP agent",
+  "composer.agentUnavailable": "unavailable"
 }

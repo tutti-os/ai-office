@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { ArtifactEditorFrame, ArtifactExportToast, ArtifactWorkspaceHeader, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
-import type { ProjectDetailResponse, SheetRunTimelineItem } from "@ai-sheet/shared";
+import { ArtifactEditorWorkspace, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
+import type { LocalAgentProviderStatus, ProjectDetailResponse, RuntimeProfile, SheetRunTimelineItem } from "@ai-sheet/shared";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { XlsxPreview } from "./XlsxPreview";
 import type { XlsxRuntimeState } from "../artifact/xlsxArtifactAdapter";
@@ -12,13 +12,19 @@ export function SheetViewerScreen(props: {
   error: string;
   saveState: ArtifactSaveState;
   exportMessage: string;
+  exporting: boolean;
   conversationError: string;
   conversationItems: SheetRunTimelineItem[];
   conversationLoading: boolean;
+  localAgentProviders: LocalAgentProviderStatus[];
+  runtimeProfiles: RuntimeProfile[];
+  selectedRuntimeProfileId: string;
   sending: boolean;
   onBackHome: () => void;
-  onExportXlsx: () => void;
+  onCancelAgentRun: (runId: string) => Promise<void>;
+  onExportXlsx: () => void | Promise<void>;
   onOpenExportLocation: () => void;
+  onRuntimeProfileChange: (profileId: string) => void;
   onDismissExport: () => void;
   onSendPrompt: (prompt: string) => Promise<void>;
 }) {
@@ -36,8 +42,24 @@ export function SheetViewerScreen(props: {
   ];
 
   return (
-    <ArtifactEditorFrame
-      className="bg-[#E6DDCD] text-[#2A2620]"
+    <ArtifactEditorWorkspace
+      title={props.detail.project.title}
+      saveState={props.saveState}
+      stats={stats}
+      exportItems={[
+        {
+          label: props.exporting ? "XLSX exporting..." : "XLSX copy",
+          disabled: !manifest?.exists || props.exporting,
+          loading: props.exporting,
+          onSelect: props.onExportXlsx,
+        },
+      ]}
+      exportNotice={props.exportMessage}
+      bodyClassName="bg-white"
+      tone="lumen"
+      onBackHome={props.onBackHome}
+      onDismissExportNotice={props.onDismissExport}
+      onOpenExportLocation={props.onOpenExportLocation}
       sidebar={
         <AgentConversationPanel
           activeSelectionLabel="Active cell"
@@ -47,28 +69,20 @@ export function SheetViewerScreen(props: {
           dirty={false}
           error={props.conversationError || props.error}
           items={props.conversationItems}
+          localAgentProviders={props.localAgentProviders}
           loading={props.loading || props.conversationLoading}
+          runtimeProfiles={props.runtimeProfiles}
+          selectedRuntimeProfileId={props.selectedRuntimeProfileId}
           sending={props.sending}
           onBackHome={props.onBackHome}
+          onCancel={props.onCancelAgentRun}
+          onRuntimeProfileChange={props.onRuntimeProfileChange}
           onSend={props.onSendPrompt}
         />
       }
     >
-      <section className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#E6DDCD] text-[#2A2620]">
-        <ArtifactWorkspaceHeader
-          title={props.detail.project.title}
-          saveState={props.saveState}
-          stats={stats}
-          exportItems={[{ label: "XLSX copy", disabled: !manifest?.exists, onSelect: props.onExportXlsx }]}
-          onBackHome={props.onBackHome}
-          tone="lumen"
-        />
-        <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
-          <ArtifactExportToast message={props.exportMessage} onClose={props.onDismissExport} onOpenLocation={props.onOpenExportLocation} />
-          <XlsxPreview workbook={props.runtime?.renderWorkbook ?? null} loading={props.loading} error={props.error} />
-        </div>
-      </section>
-    </ArtifactEditorFrame>
+      <XlsxPreview workbook={props.runtime?.renderWorkbook ?? null} loading={props.loading} error={props.error} />
+    </ArtifactEditorWorkspace>
   );
 }
 

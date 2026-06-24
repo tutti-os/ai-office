@@ -39,10 +39,9 @@ export type OfficeCliToolchainOptions = {
 
 export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): OfficeCliToolchain {
   const officeCliVersion = options.version ?? process.env[`${options.envPrefix}_OFFICECLI_VERSION`] ?? options.defaultVersion ?? "1.0.103";
-  const installRoot = resolveOfficeCliInstallRoot(options);
-  const installedBinaryPath = join(installRoot, process.platform === "win32" ? "officecli.exe" : "officecli");
-  const legacyInstallRoot = join(options.appRoot, "toolchains", "officecli");
-  const legacyBinaryPath = join(legacyInstallRoot, process.platform === "win32" ? "officecli.exe" : "officecli");
+  const installRoot = resolveOfficeCliInstallRoot(options, officeCliVersion);
+  const installedBinaryPath = join(installRoot, officeCliBinaryName());
+  const legacyBinaryPaths = resolveLegacyOfficeCliBinaryPaths(options, officeCliVersion, installedBinaryPath);
   const releaseMirrors = [
     `https://d.officecli.ai/releases/download/v${officeCliVersion}`,
     `https://github.com/iOfficeAI/OfficeCLI/releases/download/v${officeCliVersion}`,
@@ -69,10 +68,11 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
       if (status.available) return { ...status, canInstall: canInstallOfficeCli(), installing: Boolean(installPromise) };
     }
 
-    if (legacyBinaryPath !== installedBinaryPath && existsSync(legacyBinaryPath)) {
+    for (const legacyBinaryPath of legacyBinaryPaths) {
+      if (!existsSync(legacyBinaryPath)) continue;
       const status = await probeOfficeCli(legacyBinaryPath, "bundled");
       if (status.available) {
-        await promoteLegacyOfficeCli().catch(() => undefined);
+        await promoteLegacyOfficeCli(legacyBinaryPath).catch(() => undefined);
         return { ...status, canInstall: canInstallOfficeCli(), installing: Boolean(installPromise) };
       }
     }
@@ -116,7 +116,7 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
     const envPath = process.env[`${options.envPrefix}_OFFICECLI_PATH`]?.trim();
     const tuttiPath = process.env.TUTTI_APP_OFFICECLI_PATH?.trim();
     const managedPath = existsSync(installedBinaryPath) ? installedBinaryPath : "";
-    const legacyPath = legacyBinaryPath !== installedBinaryPath && existsSync(legacyBinaryPath) ? legacyBinaryPath : "";
+    const legacyPath = legacyBinaryPaths.find((candidate) => existsSync(candidate)) ?? "";
     const executablePath = envPath || tuttiPath || managedPath || legacyPath;
     return executablePath ? officeCliEnvForPath(executablePath) : {};
   }
@@ -182,12 +182,12 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
     }
   }
 
-  async function promoteLegacyOfficeCli() {
+  async function promoteLegacyOfficeCli(legacyBinaryPath: string) {
     if (existsSync(installedBinaryPath) || !existsSync(legacyBinaryPath)) return;
     mkdirSync(installRoot, { recursive: true });
     await copyFile(legacyBinaryPath, installedBinaryPath);
     await chmod(installedBinaryPath, 0o755);
-    const legacyVersionPath = join(legacyInstallRoot, "VERSION");
+    const legacyVersionPath = join(dirname(legacyBinaryPath), "VERSION");
     if (existsSync(legacyVersionPath)) {
       await copyFile(legacyVersionPath, join(installRoot, "VERSION")).catch(() => undefined);
     }
@@ -244,7 +244,7 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
   };
 }
 
-function resolveOfficeCliInstallRoot(options: OfficeCliToolchainOptions) {
+function resolveOfficeCliInstallRoot(options: OfficeCliToolchainOptions, officeCliVersion: string) {
   const directRoot =
     process.env[`${options.envPrefix}_OFFICECLI_INSTALL_ROOT`]?.trim() ||
     process.env.AI_OFFICE_OFFICECLI_INSTALL_ROOT?.trim() ||
@@ -254,12 +254,53 @@ function resolveOfficeCliInstallRoot(options: OfficeCliToolchainOptions) {
   const toolchainRoot =
     process.env.AI_OFFICE_TOOLCHAIN_ROOT?.trim() ||
     process.env.TUTTI_APP_TOOLCHAIN_ROOT?.trim();
-  if (toolchainRoot) return resolve(toolchainRoot, "officecli");
+  if (toolchainRoot) return resolve(toolchainRoot, "officecli", officeCliVersion, officeCliPlatformArch());
 
-  const workspaceRoot = process.env.TUTTI_WORKSPACE_ROOT?.trim();
-  if (workspaceRoot) return resolve(workspaceRoot, ".ai-office", "toolchains", "officecli");
+  return resolve(options.appRoot, "toolchains", "officecli");
+}
 
-  return join(homedir(), ".ai-office", "toolchains", "officecli");
+function resolveLegacyOfficeCliBinaryPaths(options: OfficeCliToolchainOptions, officeCliVersion: string, installedBinaryPath: string) {
+  const unversionedRoots = [
+    resolve(options.appRoot, "toolchains", "officecli"),
+    legacyToolchainRoot(process.env.AI_OFFICE_TOOLCHAIN_ROOT?.trim()),
+    legacyToolchainRoot(process.env.TUTTI_APP_TOOLCHAIN_ROOT?.trim()),
+    legacyWorkspaceRoot(process.env.TUTTI_WORKSPACE_ROOT?.trim()),
+    join(homedir(), ".ai-office", "toolchains", "officecli"),
+  ].filter((root): root is string => Boolean(root));
+  const versionedRoots = [
+    versionedToolchainRoot(process.env.AI_OFFICE_TOOLCHAIN_ROOT?.trim(), officeCliVersion),
+    versionedToolchainRoot(process.env.TUTTI_APP_TOOLCHAIN_ROOT?.trim(), officeCliVersion),
+  ].filter((root): root is string => Boolean(root));
+
+  return uniqueStrings(
+    [...unversionedRoots, ...versionedRoots]
+      .map((root) => join(root, officeCliBinaryName()))
+      .filter((candidate) => candidate !== installedBinaryPath),
+  );
+}
+
+function legacyToolchainRoot(toolchainRoot?: string) {
+  return toolchainRoot ? resolve(toolchainRoot, "officecli") : "";
+}
+
+function versionedToolchainRoot(toolchainRoot: string | undefined, officeCliVersion: string) {
+  return toolchainRoot ? resolve(toolchainRoot, "officecli", officeCliVersion, officeCliPlatformArch()) : "";
+}
+
+function legacyWorkspaceRoot(workspaceRoot?: string) {
+  return workspaceRoot ? resolve(workspaceRoot, ".ai-office", "toolchains", "officecli") : "";
+}
+
+function uniqueStrings(values: string[]) {
+  return [...new Set(values)];
+}
+
+function officeCliBinaryName() {
+  return process.platform === "win32" ? "officecli.exe" : "officecli";
+}
+
+function officeCliPlatformArch() {
+  return `${platform()}-${arch()}`;
 }
 
 function officeCliEnvForPath(executablePath: string) {

@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { FileText } from "lucide-react";
 import { scrollbarClass } from "@ai-app/ui/app-shell";
-import { ArtifactAgentProcessingOverlay, ArtifactExportToast, ArtifactWorkspaceHeader } from "@ai-app/ui/editor-frame";
 import {
   clearPersistentSelectionHighlight,
   persistentSelectionRectsForRange,
@@ -15,22 +14,12 @@ import type { DocxRuntimeState, DocxSelection } from "../artifact/docxArtifactAd
 type DocxPreviewProps = {
   runtime: DocxRuntimeState;
   projectId: string | null;
-  dirty: boolean;
+  previewRef: RefObject<HTMLDivElement | null>;
   error: string;
-  exportNotice: string;
-  agentProcessing: boolean;
-  loading: boolean;
-  pdfExportAvailable: boolean;
-  pdfExporting: boolean;
-  onDismissExportNotice: () => void;
-  onExportPdf: (previewElement: HTMLElement | null) => Promise<void>;
-  onOpenExportLocation: () => void;
-  onBackHome: () => void;
   onSelectionChange: (selection: DocxSelection) => void;
 };
 
 export function DocxPreview(props: DocxPreviewProps) {
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const activeSelectionRangeRef = useRef<Range | null>(null);
   const activeSelectionRectsRef = useRef<PersistentSelectionRect[]>([]);
   const [persistentSelectionRects, setPersistentSelectionRects] = useState<PersistentSelectionRect[]>([]);
@@ -52,7 +41,7 @@ export function DocxPreview(props: DocxPreviewProps) {
   }, []);
 
   const syncSelection = useCallback(() => {
-    const root = rootRef.current;
+    const root = props.previewRef.current;
     const selection = window.getSelection();
     if (!root || !selection || selection.rangeCount === 0) {
       preserveSelectionHighlight();
@@ -74,7 +63,7 @@ export function DocxPreview(props: DocxPreviewProps) {
       activeSelectionRectsRef.current = [];
     }
     onSelectionChange({ selectedText });
-  }, [clearPersistentSelection, onSelectionChange, preserveSelectionHighlight]);
+  }, [clearPersistentSelection, onSelectionChange, preserveSelectionHighlight, props.previewRef]);
 
   useEffect(() => {
     document.addEventListener("selectionchange", syncSelection);
@@ -93,27 +82,10 @@ export function DocxPreview(props: DocxPreviewProps) {
 
   return (
     <section className="relative flex h-full min-h-0 flex-col bg-[#E6DDCD]">
-      <ArtifactWorkspaceHeader
-        tone="lumen"
-        title={props.runtime.title || "Untitled Word Doc"}
-        saveState={props.loading ? "loading" : props.dirty ? "saving" : "saved"}
-        agentWorking={props.agentProcessing}
-        onBackHome={props.onBackHome}
-        exportItems={[
-          {
-            label: props.pdfExporting ? "PDF exporting..." : "PDF",
-            disabled: props.pdfExporting || !props.pdfExportAvailable,
-            onSelect: () => void props.onExportPdf(rootRef.current),
-          },
-        ]}
-      />
-      <ArtifactExportToast message={props.exportNotice} onClose={props.onDismissExportNotice} onOpenLocation={props.onOpenExportLocation} />
-
-      <div className="relative min-h-0 flex-1">
         <div className={`h-full overflow-x-hidden overflow-y-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-3 py-4 md:px-6 md:py-6 ${scrollbarClass}`}>
           {props.error ? <div className="mx-auto mb-4 max-w-[980px] rounded-[16px] border border-[#B8A07C]/50 bg-[#F4EFE6]/80 p-3 text-[12px] leading-5 text-[#7b2e24]">{props.error}</div> : null}
           <div
-            ref={rootRef}
+            ref={props.previewRef}
             className="ai-docx-preview relative mx-auto min-h-[760px] w-full max-w-[980px] text-[#202124]"
             onKeyUp={syncSelection}
             onMouseDownCapture={clearPersistentSelection}
@@ -137,8 +109,6 @@ export function DocxPreview(props: DocxPreviewProps) {
             )}
           </div>
         </div>
-        <ArtifactAgentProcessingOverlay active={props.agentProcessing} />
-      </div>
     </section>
   );
 }

@@ -15,6 +15,7 @@ import type {
   UpdateProjectRequest,
 } from "@ai-sheet/shared";
 import { requestArrayBuffer, requestJson } from "@ai-app/shared/api-client";
+import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
 
 export async function fetchBootstrapSnapshot() {
   return requestJson<AppSnapshot>("/api/bootstrap");
@@ -36,6 +37,22 @@ export async function importProjectFile(file: File) {
     },
     body: await file.arrayBuffer(),
   });
+}
+
+export async function uploadContextAttachment(projectId: string, file: File) {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/context-attachments`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/octet-stream",
+      "x-file-name": encodeURIComponent(file.name || "attachment"),
+      "x-file-mime-type": encodeURIComponent(file.type || "application/octet-stream"),
+    },
+    body: await file.arrayBuffer(),
+  });
+  const data = (await response.json().catch(() => null)) as ContextAttachmentUploadResponse | { error?: string } | null;
+  if (!response.ok) throw new Error(data && "error" in data && data.error ? data.error : `Context attachment upload failed: ${response.status}`);
+  if (!data || !("path" in data)) throw new Error("Context attachment upload response is missing path");
+  return data;
 }
 
 export async function getProject(projectId: string) {
@@ -68,6 +85,13 @@ export async function startAiEdit(projectId: string, input: AiEditRequest) {
   const response = await requestJson<AiEditResponse>(`/api/projects/${encodeURIComponent(projectId)}/ai-edit`, {
     method: "POST",
     body: JSON.stringify(input),
+  });
+  return response.run;
+}
+
+export async function cancelRun(runId: string) {
+  const response = await requestJson<AiEditResponse>(`/api/runs/${encodeURIComponent(runId)}/cancel`, {
+    method: "POST",
   });
   return response.run;
 }

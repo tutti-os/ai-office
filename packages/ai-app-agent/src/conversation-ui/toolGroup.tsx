@@ -1,6 +1,6 @@
 import { ChevronDown, TerminalSquare } from "lucide-react";
 import type { AgentConversationBlock } from "@ai-app/agent/conversation";
-import type { ConversationClassNames } from "./index.js";
+import type { ConversationClassNames } from "./styles.js";
 
 export function ToolGroupBlock(props: { cx: ConversationClassNames; block: Extract<AgentConversationBlock, { type: "tool_group" }> }) {
   const { block, cx } = props;

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { hasActiveAgentRun } from "@ai-app/agent/conversation";
 import type { LocalAgentProviderStatus, OfficeCliStatus, ProjectDetailResponse, RuntimeProfile, SheetProject } from "@ai-sheet/shared";
 import {
+  cancelRun,
   clearProjectHistory,
   createProject,
   deleteProject,
@@ -16,8 +18,10 @@ import {
   startAiEdit,
 } from "./api/projects";
 import { SheetHome } from "./app/SheetHome";
+import { initialPromptWithAttachmentContext, uploadHomeContextAttachments } from "./app/homeAttachmentPrompt";
 import { SheetViewerScreen } from "./app/SheetViewerScreen";
 import { useAgentConversation } from "./app/useAgentConversation";
+import { useHomeAttachments } from "./app/useHomeAttachments";
 import { XlsxArtifactRuntimeAdapter } from "./artifact/xlsxArtifactAdapter";
 import { useXlsxArtifactRuntime } from "./artifact/useXlsxArtifactRuntime";
 
@@ -57,7 +61,9 @@ export function App() {
   const [agentSending, setAgentSending] = useState(false);
   const [error, setError] = useState("");
   const [exportMessage, setExportMessage] = useState("");
+  const [xlsxExporting, setXlsxExporting] = useState(false);
   const routeRef = useRef(route);
+  const homeAttachments = useHomeAttachments();
   const xlsxArtifactAdapter = useMemo(() => new XlsxArtifactRuntimeAdapter(), []);
   const {
     runtime: xlsxRuntime,
@@ -119,9 +125,18 @@ export function App() {
 
   useEffect(() => {
     void fetchLocalAgentProviders()
-      .then((response) => setLocalAgentProviders(response.providers))
+      .then((response) => {
+        setLocalAgentProviders(response.providers);
+        setSelectedAgent((current) => {
+          const currentProfile = runtimeProfiles.find((profile) => profile.id === current);
+          const currentStatus = currentProfile ? response.providers.find((provider) => provider.provider === currentProfile.provider) : null;
+          if (currentStatus?.available) return current;
+          const firstAvailable = runtimeProfiles.find((profile) => response.providers.find((provider) => provider.provider === profile.provider)?.available);
+          return firstAvailable?.id ?? current;
+        });
+      })
       .catch(() => setLocalAgentProviders([]));
-  }, []);
+  }, [runtimeProfiles]);
 
   useEffect(() => {
     if (route.name !== "home") return;
@@ -177,11 +192,13 @@ export function App() {
       const initialPrompt = prompt.trim();
       const title = initialPrompt ? initialPrompt.slice(0, 80) : "Untitled Workbook";
       const detail = await createProject({ title });
-      setPrompt("");
+      const attachments = homeAttachments.attachments;
+      const uploadedAttachments = attachments.length ? await uploadHomeContextAttachments(detail.project.id, attachments) : [];
+      const initialUserPrompt = initialPromptWithAttachmentContext(initialPrompt, uploadedAttachments).trim();
       setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
-      if (initialPrompt) {
+      if (initialUserPrompt) {
         await startAiEdit(detail.project.id, {
-          userPrompt: initialPrompt,
+          userPrompt: initialUserPrompt,
           mode: "write",
           runtimeProfileId: selectedAgent || null,
           selectionType: "write",
@@ -190,28 +207,31 @@ export function App() {
           selectedHtml: "",
         });
       }
+      setPrompt("");
+      if (attachments.length) homeAttachments.clearAttachments();
       setRoute(pushSheetRoute(detail.project.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
-  }, [officeCliStatus, prompt, selectedAgent]);
+  }, [homeAttachments, officeCliStatus, prompt, selectedAgent]);
 
   const sendAgentPrompt = useCallback(async (userPrompt: string) => {
     if (!currentProjectId) throw new Error("Project is not open");
+    if (!xlsxRuntime) throw new Error("Workbook runtime is not ready");
     setAgentSending(true);
     setError("");
     try {
-      await startAiEdit(currentProjectId, {
-        userPrompt,
-        mode: "write",
-        runtimeProfileId: selectedAgent || null,
-        selectionType: xlsxRuntime?.selection.address ? "cell" : "write",
-        selectionPath: xlsxRuntime?.selection.address ? `${xlsxRuntime.selection.sheetName || xlsxRuntime.selection.sheetId}!${xlsxRuntime.selection.address}` : "",
-        selectedText: xlsxRuntime?.selection.address ? `${xlsxRuntime.selection.sheetName || "Sheet"}!${xlsxRuntime.selection.address}` : "",
-        selectedHtml: "",
-      });
+      await startAiEdit(
+        currentProjectId,
+        xlsxArtifactAdapter.createAiEditRequest({
+          projectId: currentProjectId,
+          runtime: xlsxRuntime,
+          userPrompt,
+          runtimeProfileId: selectedAgent || null,
+        }),
+      );
       await agentConversation.reload();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -220,7 +240,18 @@ export function App() {
     } finally {
       setAgentSending(false);
     }
-  }, [agentConversation, currentProjectId, selectedAgent, xlsxRuntime?.selection]);
+  }, [agentConversation, currentProjectId, selectedAgent, xlsxArtifactAdapter, xlsxRuntime]);
+
+  const cancelAgentRun = useCallback(async (runId: string) => {
+    setError("");
+    try {
+      await cancelRun(runId);
+      await agentConversation.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      throw err;
+    }
+  }, [agentConversation]);
 
   const downloadOfficeCli = useCallback(async () => {
     setError("");
@@ -272,15 +303,18 @@ export function App() {
   }, []);
 
   const exportXlsx = useCallback(async () => {
-    if (!projectDetail) return;
+    if (!projectDetail || xlsxExporting) return;
     setError("");
+    setXlsxExporting(true);
     try {
       const exported = await exportProjectXlsxFile(projectDetail.project.id);
       setExportMessage(`Exported ${exported.fileName}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setXlsxExporting(false);
     }
-  }, [projectDetail]);
+  }, [projectDetail, xlsxExporting]);
 
   const openExports = useCallback(async () => {
     if (!projectDetail) return;
@@ -292,6 +326,7 @@ export function App() {
   }, [projectDetail]);
 
   if (route.name === "sheet" && projectDetail) {
+    const agentBusy = agentSending || hasActiveAgentRun(agentConversation.items);
     return (
       <SheetViewerScreen
         detail={projectDetail}
@@ -300,14 +335,20 @@ export function App() {
         error={xlsxError || error}
         saveState={xlsxSaveState}
         exportMessage={exportMessage}
+        exporting={xlsxExporting}
         conversationError={agentConversation.error}
         conversationItems={agentConversation.items}
         conversationLoading={agentConversation.loading}
-        sending={agentSending}
+        localAgentProviders={localAgentProviders}
+        runtimeProfiles={runtimeProfiles}
+        selectedRuntimeProfileId={selectedAgent}
+        sending={agentBusy}
         onBackHome={() => setRoute(pushHomeRoute())}
+        onCancelAgentRun={cancelAgentRun}
         onDismissExport={() => setExportMessage("")}
         onExportXlsx={exportXlsx}
         onOpenExportLocation={openExports}
+        onRuntimeProfileChange={setSelectedAgent}
         onSendPrompt={sendAgentPrompt}
       />
     );
@@ -315,12 +356,17 @@ export function App() {
 
   return (
     <SheetHome
+      attachments={homeAttachments.attachments}
       projects={historyProjects}
       loading={loading}
       error={error}
+      localAgentProviders={localAgentProviders}
       officeCliInstalling={officeCliInstalling}
       officeCliStatus={officeCliStatus}
       prompt={prompt}
+      runtimeProfiles={runtimeProfiles}
+      selectedRuntimeProfileId={selectedAgent}
+      onAddFiles={homeAttachments.addFiles}
       onClearHistory={clearHistory}
       onCreateWorkbook={createWorkbook}
       onDeleteProject={deleteHistoryProject}
@@ -328,6 +374,8 @@ export function App() {
       onInstallOfficeCli={downloadOfficeCli}
       onOpenProject={openProject}
       onPromptChange={setPrompt}
+      onRemoveAttachment={homeAttachments.removeAttachment}
+      onRuntimeProfileChange={setSelectedAgent}
     />
   );
 }

@@ -1,7 +1,7 @@
 import { copyFile, readFile, stat, writeFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { basename, extname, join, resolve } from "node:path";
-import { rmSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import {
   createEmptyXlsxManifest,
   type CreateProjectRequest,
@@ -15,6 +15,7 @@ import {
   xlsxMimeType,
 } from "@ai-sheet/shared";
 import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
+import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
 import { getDb, rowOrNull, rows } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
 
@@ -247,7 +248,7 @@ export class SheetRepository {
     if (input.bytes.byteLength === 0) throw new Error("Export file is empty");
     if (input.bytes.byteLength > maxXlsxImportBytes) throw new Error("Export file is too large");
     const exportsDir = join(ensureProjectDirs(projectId), "exports");
-    const fileName = safeXlsxFileName(input.fileName || `${project.title}.xlsx`);
+    const fileName = uniqueXlsxFileName(exportsDir, input.fileName || `${project.title}.xlsx`);
     const absolutePath = join(exportsDir, fileName);
     await writeFile(absolutePath, input.bytes);
     return {
@@ -258,6 +259,12 @@ export class SheetRepository {
       mimeType: input.mimeType,
       sizeBytes: input.bytes.byteLength,
     };
+  }
+
+  async writeContextAttachment(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    return writeContextAttachmentFile(ensureProjectDirs(projectId), input);
   }
 
   projectExportsDir(projectId: string) {
@@ -385,13 +392,45 @@ function xlsxFilePath(projectId: string) {
 }
 
 function importedProjectTitle(fileName: string) {
-  const baseName = basename(fileName || "workbook", extname(fileName || "workbook"));
+  const clean = safeBaseName(fileName || "workbook");
+  const baseName = basename(clean, extname(clean));
   return baseName.trim() || "Imported Workbook";
 }
 
+function uniqueXlsxFileName(exportsDir: string, requestedName: string) {
+  const safeName = safeXlsxFileName(requestedName);
+  const extension = extname(safeName);
+  const stem = basename(safeName, extension) || "workbook";
+  let candidate = safeName;
+  let index = 2;
+  while (existsSync(join(exportsDir, candidate))) {
+    candidate = `${stem}-${index}${extension}`;
+    index += 1;
+  }
+  return candidate;
+}
+
 function safeXlsxFileName(fileName: string) {
-  const base = basename(fileName, extname(fileName)).replace(/[^\w.-]/g, "_") || "workbook";
+  const clean = safeBaseName(fileName || "workbook");
+  const base = basename(clean, extname(clean))
+    .trim()
+    .replace(/[^\p{L}\p{N}._-]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/\.+$/g, "")
+    .slice(0, 80) || "workbook";
   return `${base}.xlsx`;
+}
+
+function safeBaseName(value: string) {
+  return basename(safeDecodeURIComponent(value)).split(/[\\/]/).filter(Boolean).pop() || value;
+}
+
+function safeDecodeURIComponent(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 const maxXlsxImportBytes = 80 * 1024 * 1024;

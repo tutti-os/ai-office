@@ -1,11 +1,12 @@
-import { ArtifactEditorFrame } from "@ai-app/ui/editor-frame";
+import { useRef } from "react";
+import { ArtifactEditorWorkspace, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
 import type { DocumentRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
 import type { DocxRuntimeState, DocxSelection } from "../artifact/docxArtifactAdapter";
 import type { MarkdownRuntimeState, MarkdownSelection } from "../artifact/markdownArtifactAdapter";
-import type { ArtifactSaveState } from "../artifact/useHtmlArtifactRuntime";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { DocxPreview } from "./DocxPreview";
 import { MarkdownEditor } from "./MarkdownEditor";
+import { markdownParagraphCount, markdownWordCount } from "./documentWorkbenchContent";
 
 type SharedShellProps = {
   activeSelectionText: string;
@@ -33,11 +34,10 @@ export function MarkdownDocumentScreen(props: SharedShellProps & {
   projectId: string | null;
   readOnly: boolean;
   runtime: MarkdownRuntimeState;
-  saveState: ArtifactSaveState;
+  saveState: WorkspaceSaveState;
   pdfExportAvailable: boolean;
   pdfExporting: boolean;
   onChange: (content: string, selection: MarkdownSelection) => void;
-  onExportDocx: (markdown: string) => Promise<void>;
   onExportMarkdown: (markdown: string) => Promise<void>;
   onExportPdf: (markdown: string) => Promise<void>;
   onPendingTableCellEditChange: (pending: boolean) => void;
@@ -47,32 +47,47 @@ export function MarkdownDocumentScreen(props: SharedShellProps & {
   onUndo: () => void;
 }) {
   return (
-    <ArtifactEditorFrame className="bg-[#E6DDCD] text-[#2A2620]" sidebar={<DocumentAgentSidebar artifactLabel="markdown" {...props} />}>
+    <ArtifactEditorWorkspace
+      title={props.runtime.title || "Untitled Markdown"}
+      saveState={props.saveState}
+      agentWorking={props.agentProcessing}
+      stats={[
+        `${markdownWordCount(props.runtime.content)} words`,
+        `${markdownParagraphCount(props.runtime.content)} blocks`,
+      ]}
+      exportItems={[
+        {
+          label: "DOCX (coming soon)",
+          disabled: true,
+          onSelect: () => undefined,
+        },
+        {
+          label: props.pdfExporting ? "PDF exporting..." : "PDF",
+          disabled: props.pdfExporting || !props.pdfExportAvailable,
+          loading: props.pdfExporting,
+          onSelect: () => props.onExportPdf(props.runtime.content),
+        },
+      ]}
+      exportNotice={props.exportNotice}
+      bodyClassName="flex flex-col"
+      tone="lumen"
+      onBackHome={props.onBackHome}
+      onDismissExportNotice={props.onDismissExportNotice}
+      onOpenExportLocation={props.onOpenExportLocation}
+      sidebar={<DocumentAgentSidebar artifactLabel="markdown" {...props} />}
+    >
       <MarkdownEditor
         runtime={props.runtime}
         projectId={props.projectId}
-        dirty={props.dirty}
-        exportNotice={props.exportNotice}
-        saveState={props.saveState}
-        loading={props.loading}
-        agentProcessing={props.agentProcessing}
         readOnly={props.readOnly}
         onUndo={props.onUndo}
         onRedo={props.onRedo}
         onChange={props.onChange}
-        onExportDocx={props.onExportDocx}
-        onExportMarkdown={props.onExportMarkdown}
-        onExportPdf={props.onExportPdf}
-        onDismissExportNotice={props.onDismissExportNotice}
-        onOpenExportLocation={props.onOpenExportLocation}
-        onBackHome={props.onBackHome}
-        pdfExportAvailable={props.pdfExportAvailable}
-        pdfExporting={props.pdfExporting}
         onPendingTableCellEditChange={props.onPendingTableCellEditChange}
         onSelectionChange={props.onSelectionChange}
         onTableCellCommitterChange={props.onTableCellCommitterChange}
       />
-    </ArtifactEditorFrame>
+    </ArtifactEditorWorkspace>
   );
 }
 
@@ -86,25 +101,36 @@ export function DocxDocumentScreen(props: SharedShellProps & {
   onExportPdf: (previewElement: HTMLElement | null) => Promise<void>;
   onSelectionChange: (selection: DocxSelection) => void;
 }) {
+  const previewRef = useRef<HTMLDivElement | null>(null);
   return (
-    <ArtifactEditorFrame className="bg-[#E6DDCD] text-[#2A2620]" sidebar={<DocumentAgentSidebar artifactLabel="docx" {...props} />}>
+    <ArtifactEditorWorkspace
+      title={props.runtime.title || "Untitled Word Doc"}
+      saveState={props.loading ? "loading" : props.dirty ? "saving" : "saved"}
+      agentWorking={props.agentProcessing}
+      exportItems={[
+        {
+          label: props.pdfExporting ? "PDF exporting..." : "PDF",
+          disabled: props.pdfExporting || !props.pdfExportAvailable,
+          loading: props.pdfExporting,
+          onSelect: () => props.onExportPdf(previewRef.current),
+        },
+      ]}
+      exportNotice={props.exportNotice}
+      bodyClassName="flex flex-col"
+      tone="lumen"
+      onBackHome={props.onBackHome}
+      onDismissExportNotice={props.onDismissExportNotice}
+      onOpenExportLocation={props.onOpenExportLocation}
+      sidebar={<DocumentAgentSidebar artifactLabel="docx" {...props} />}
+    >
       <DocxPreview
         runtime={props.runtime}
         projectId={props.projectId}
-        dirty={props.dirty}
+        previewRef={previewRef}
         error={props.error}
-        exportNotice={props.exportNotice}
-        agentProcessing={props.agentProcessing}
-        loading={props.loading}
-        pdfExportAvailable={props.pdfExportAvailable}
-        pdfExporting={props.pdfExporting}
-        onDismissExportNotice={props.onDismissExportNotice}
-        onExportPdf={props.onExportPdf}
-        onOpenExportLocation={props.onOpenExportLocation}
-        onBackHome={props.onBackHome}
         onSelectionChange={props.onSelectionChange}
       />
-    </ArtifactEditorFrame>
+    </ArtifactEditorWorkspace>
   );
 }
 

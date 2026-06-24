@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { isArtifactAgentRunning } from "@ai-app/shared/artifact-runtime";
-import { ArtifactAgentProcessingOverlay, ArtifactEditorFrame, ArtifactExportToast, ArtifactWorkspaceHeader, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
+import { ArtifactEditorWorkspace, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { DeckEditor } from "./DeckEditor";
 import { saveDeckPdfExport } from "./deckExport";
-import { exportProjectHtmlDeck, exportProjectPptxFile, openProjectExportsDir } from "../api/projects";
+import { exportProjectHtmlDeck, openProjectExportsDir } from "../api/projects";
 import { EditorInfoPanel } from "./EditorInfoPanel";
 import { PptxPreview } from "./PptxPreview";
+import { savePptxPdfExport } from "./pptxExport";
 import { isTuttiPdfExportAvailable } from "./tuttiPdfBridge";
 import { usePptxArtifactRuntime } from "../artifact/usePptxArtifactRuntime";
 import type { DeckAgentRuntimeProvider } from "../artifact/deckArtifactAdapter";
@@ -49,9 +50,10 @@ export function SlideEditorScreen(props: {
   const pdfExportAvailable = isTuttiPdfExportAvailable();
   const headerSaveState: ArtifactSaveState = props.loading ? "loading" : props.pptxError ? "error" : artifactType === "deck" ? deckSaveState : "saved";
   const agentProcessing = isArtifactAgentRunning(props.artifactInteraction);
+  const exportInProgress = htmlExporting || pdfExporting || pptxExporting;
 
   const exportDeckHtml = async () => {
-    if (props.detail?.artifact.type !== "deck") return;
+    if (props.detail?.artifact.type !== "deck" || exportInProgress) return;
     setHtmlExporting(true);
     setExportNotice("");
     try {
@@ -67,7 +69,7 @@ export function SlideEditorScreen(props: {
   };
 
   const exportDeckPdf = async () => {
-    if (!props.detail?.deckManifest || props.detail.artifact.type !== "deck") return;
+    if (!props.detail?.deckManifest || props.detail.artifact.type !== "deck" || exportInProgress) return;
     setPdfExporting(true);
     setExportNotice("");
     try {
@@ -87,16 +89,22 @@ export function SlideEditorScreen(props: {
     }
   };
 
-  const exportPptxArtifact = async () => {
-    if (props.detail?.artifact.type !== "pptx") return;
+  const exportPptxPdf = async () => {
+    const presentation = props.pptxRuntime?.preview?.renderPresentation ?? null;
+    if (props.detail?.artifact.type !== "pptx" || !presentation || exportInProgress) return;
     setPptxExporting(true);
     setExportNotice("");
     try {
-      const exported = await exportProjectPptxFile(props.projectId);
-      console.info(`[ai-slide] Exported PPTX to ${exported.path}`);
-      setExportNotice(`Exported PPTX to ${exported.path}`);
+      const exported = await savePptxPdfExport({
+        presentation,
+        projectId: props.projectId,
+        title: props.detail.project.title,
+      });
+      console.info(`[ai-slide] Exported PPTX PDF to ${exported.path}`);
+      setExportNotice(`Exported PDF to ${exported.path}`);
     } catch (error) {
       console.error(error);
+      setExportNotice(error instanceof Error ? error.message : "PDF export failed.");
     } finally {
       setPptxExporting(false);
     }
@@ -115,8 +123,27 @@ export function SlideEditorScreen(props: {
   }, [artifactType, deckSaveState, props.onArtifactSaveStateChange]);
 
   return (
-    <ArtifactEditorFrame
-      className="bg-[#E6DDCD] text-[#2A2620]"
+    <ArtifactEditorWorkspace
+      title={props.detail?.project.title ?? "Untitled Presentation"}
+      saveState={headerSaveState}
+      agentWorking={agentProcessing}
+      exportItems={slideExportItems({
+        artifactType,
+        htmlExporting,
+        onExportDeckHtml: exportDeckHtml,
+        onExportDeckPdf: exportDeckPdf,
+        onExportPptxPdf: exportPptxPdf,
+        pdfExportAvailable,
+        pdfExporting,
+        pptxPdfReady: Boolean(props.pptxRuntime?.preview?.renderPresentation),
+        pptxExporting,
+      })}
+      exportNotice={exportNotice}
+      bodyClassName="flex flex-col"
+      tone="lumen"
+      onBackHome={props.onBackHome}
+      onDismissExportNotice={() => setExportNotice("")}
+      onOpenExportLocation={() => void openExportLocation()}
       sidebar={
         <AgentConversationPanel
           activeSelectionLabel={props.activeSelectionLabel}
@@ -138,55 +165,32 @@ export function SlideEditorScreen(props: {
         />
       }
     >
-      <section className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#E6DDCD] text-[#2A2620]">
-        <ArtifactWorkspaceHeader
-          title={props.detail?.project.title ?? "Untitled Presentation"}
-          saveState={headerSaveState}
-          agentWorking={agentProcessing}
-          exportItems={slideExportItems({
-            artifactType,
-            htmlExporting,
-            onExportDeckHtml: exportDeckHtml,
-            onExportDeckPdf: exportDeckPdf,
-            onExportPptxArtifact: exportPptxArtifact,
-            pdfExportAvailable,
-            pdfExporting,
-            pptxExporting,
-          })}
-          tone="lumen"
-          onBackHome={props.onBackHome}
+      {props.loading ? (
+        <EditorInfoPanel title="Loading presentation..." />
+      ) : props.error ? (
+        <EditorInfoPanel detail={props.error} title="Presentation not found" />
+      ) : props.detail?.artifact.type === "deck" ? (
+        <DeckEditor
+          detail={props.detail}
+          interaction={props.artifactInteraction}
+          projectId={props.projectId}
+          onAgentRuntimeProviderChange={props.onDeckAgentRuntimeProviderChange}
+          onAgentSelectionPreviewChange={props.onDeckSelectionPreviewChange}
+          onSaveStateChange={setDeckSaveState}
         />
-        <ArtifactExportToast message={exportNotice} onClose={() => setExportNotice("")} onOpenLocation={() => void openExportLocation()} />
-        <div className="relative flex min-h-0 flex-1 flex-col">
-          {props.loading ? (
-            <EditorInfoPanel title="Loading presentation..." />
-          ) : props.error ? (
-            <EditorInfoPanel detail={props.error} title="Presentation not found" />
-          ) : props.detail?.artifact.type === "deck" ? (
-            <DeckEditor
-              detail={props.detail}
-              interaction={props.artifactInteraction}
-              projectId={props.projectId}
-              onAgentRuntimeProviderChange={props.onDeckAgentRuntimeProviderChange}
-              onAgentSelectionPreviewChange={props.onDeckSelectionPreviewChange}
-              onSaveStateChange={setDeckSaveState}
-            />
-          ) : props.detail?.artifact.type === "pptx" && props.pptxRuntime ? (
-            <PptxPreview
-              runtime={props.pptxRuntime}
-              error={props.pptxError}
-              onSelectionChange={props.onPptxSelectionChange}
-            />
-          ) : props.detail ? (
-            <EditorInfoPanel
-              detail={`Waiting for ${props.detail.artifact.fileRef}`}
-              title={props.detail.project.title}
-            />
-          ) : null}
-          <ArtifactAgentProcessingOverlay active={agentProcessing} />
-        </div>
-      </section>
-    </ArtifactEditorFrame>
+      ) : props.detail?.artifact.type === "pptx" && props.pptxRuntime ? (
+        <PptxPreview
+          runtime={props.pptxRuntime}
+          error={props.pptxError}
+          onSelectionChange={props.onPptxSelectionChange}
+        />
+      ) : props.detail ? (
+        <EditorInfoPanel
+          detail={`Waiting for ${props.detail.artifact.fileRef}`}
+          title={props.detail.project.title}
+        />
+      ) : null}
+    </ArtifactEditorWorkspace>
   );
 }
 
@@ -195,17 +199,19 @@ function slideExportItems(input: {
   htmlExporting: boolean;
   onExportDeckHtml: () => Promise<void>;
   onExportDeckPdf: () => Promise<void>;
-  onExportPptxArtifact: () => Promise<void>;
+  onExportPptxPdf: () => Promise<void>;
   pdfExportAvailable: boolean;
   pdfExporting: boolean;
+  pptxPdfReady: boolean;
   pptxExporting: boolean;
 }) {
   if (input.artifactType === "pptx") {
     return [
       {
-        label: input.pptxExporting ? "PPTX exporting..." : "PPTX",
-        disabled: input.pptxExporting,
-        onSelect: () => void input.onExportPptxArtifact(),
+        label: input.pptxExporting ? "PDF exporting..." : "PDF",
+        disabled: input.pptxExporting || !input.pdfExportAvailable || !input.pptxPdfReady,
+        loading: input.pptxExporting,
+        onSelect: () => input.onExportPptxPdf(),
       },
     ];
   }
@@ -213,20 +219,23 @@ function slideExportItems(input: {
     {
       label: input.htmlExporting ? "HTML exporting..." : "HTML",
       disabled: input.htmlExporting,
-      onSelect: () => void input.onExportDeckHtml(),
+      loading: input.htmlExporting,
+      onSelect: () => input.onExportDeckHtml(),
     },
   ];
   if (input.pdfExportAvailable) {
     items.push({
       label: input.pdfExporting ? "PDF exporting..." : "PDF",
       disabled: input.pdfExporting,
-      onSelect: () => void input.onExportDeckPdf(),
+      loading: input.pdfExporting,
+      onSelect: () => input.onExportDeckPdf(),
     });
   }
   items.push({
     label: "PPTX (coming soon)",
     disabled: true,
-    onSelect: () => undefined,
+    loading: false,
+    onSelect: async () => {},
   });
   return items;
 }

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { SquareDashed } from "lucide-react";
 
 import type { ToolbarLayoutValue } from "./index.js";
@@ -12,6 +12,7 @@ import {
   toolbarTip,
   toolbarTooltip,
   useDismissableFloatingLayer,
+  useToolbarFloatingMenuPosition,
 } from "./menuPrimitives.js";
 
 export function ToolbarLayoutMenu(props: {
@@ -25,16 +26,7 @@ export function ToolbarLayoutMenu(props: {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const width = 440;
-  const [position, setPosition] = useState({ left: 0, top: 0 });
-
-  const updatePosition = () => {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setPosition({
-      left: Math.max(12, Math.min(window.innerWidth - width - 12, rect.right - width)),
-      top: rect.bottom + 8,
-    });
-  };
+  const position = useToolbarFloatingMenuPosition(props.open, buttonRef, menuRef, { width });
 
   useDismissableFloatingLayer(props.open, props.onOpenChange, menuRef);
 
@@ -53,7 +45,6 @@ export function ToolbarLayoutMenu(props: {
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => {
           if (props.disabled) return;
-          updatePosition();
           props.onOpenChange(!props.open);
         }}
       >

@@ -1,5 +1,5 @@
 import { HomePage } from "./HomePage";
-import { DocumentSurfaceErrorFallback, ErrorBoundary } from "./AppErrorBoundary";
+import { ArtifactErrorBoundary, ArtifactSurfaceErrorFallback } from "@ai-app/ui/error-boundary";
 import { DocxDocumentScreen, MarkdownDocumentScreen } from "./DocumentFormatScreens";
 import { DocumentLoadingScreen, HtmlEditorScreen } from "./HtmlEditorScreen";
 import { markdownParagraphCount, markdownWordCount } from "./documentWorkbenchContent";
@@ -50,7 +50,6 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     historyProjects,
     homeAttachments,
     homePanel,
-    htmlDocxExporting,
     htmlEditorController,
     htmlToolbarActive,
     iframeRef,
@@ -93,10 +92,8 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     sendAgentPrompt,
     exportCurrentDocxPdf,
     exportCurrentHtml,
-    exportCurrentHtmlDocx,
     exportCurrentHtmlPdf,
     exportCurrentMarkdown,
-    exportCurrentMarkdownDocx,
     exportCurrentMarkdownPdf,
     setAttributeDraft,
     setEditorStats,
@@ -172,10 +169,10 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           onSelectTemplate={loadTemplate}
         />
       ) : currentDocumentType === "markdown" && markdownRuntime ? (
-        <ErrorBoundary
+        <ArtifactErrorBoundary
           resetKeys={[currentProjectId, currentDocumentType, markdownRuntime.revision]}
           fallback={({ error, resetErrorBoundary }) => (
-            <DocumentSurfaceErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} onBackHome={requestHomeRoute} />
+            <ArtifactSurfaceErrorFallback surfaceName="Document view" error={error} resetErrorBoundary={resetErrorBoundary} onBackHome={requestHomeRoute} />
           )}
         >
           <MarkdownDocumentScreen
@@ -205,7 +202,6 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
               setEditorStats({ characterCount: content.length, wordCount: markdownWordCount(content), paragraphCount: markdownParagraphCount(content), elementCount: 0 });
             }}
             onPendingTableCellEditChange={setMarkdownTableCellEditPending}
-            onExportDocx={exportCurrentMarkdownDocx}
             onExportMarkdown={exportCurrentMarkdown}
             onExportPdf={exportCurrentMarkdownPdf}
             pdfExportAvailable={pdfExportAvailable}
@@ -217,12 +213,12 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             onTableCellCommitterChange={setMarkdownTableCellCommitter}
             onUndo={undoMarkdown}
           />
-        </ErrorBoundary>
+        </ArtifactErrorBoundary>
       ) : currentDocumentType === "docx" && docxRuntime ? (
-        <ErrorBoundary
+        <ArtifactErrorBoundary
           resetKeys={[currentProjectId, currentDocumentType, docxRuntime.revision]}
           fallback={({ error, resetErrorBoundary }) => (
-            <DocumentSurfaceErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} onBackHome={requestHomeRoute} />
+            <ArtifactSurfaceErrorFallback surfaceName="Document view" error={error} resetErrorBoundary={resetErrorBoundary} onBackHome={requestHomeRoute} />
           )}
         >
           <DocxDocumentScreen
@@ -252,14 +248,14 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             onSelectionChange={updateDocxSelection}
             onSendAgentPrompt={sendAgentPrompt}
           />
-        </ErrorBoundary>
+        </ArtifactErrorBoundary>
       ) : !currentDocumentType ? (
         <DocumentLoadingScreen error={error} loading={loading} />
       ) : currentDocumentType === "html" && runtime ? (
-        <ErrorBoundary
+        <ArtifactErrorBoundary
           resetKeys={[currentProjectId, currentDocumentType, runtime.revision, frameRevision]}
           fallback={({ error, resetErrorBoundary }) => (
-            <DocumentSurfaceErrorFallback error={error} resetErrorBoundary={resetErrorBoundary} onBackHome={requestHomeRoute} />
+            <ArtifactSurfaceErrorFallback surfaceName="Document view" error={error} resetErrorBoundary={resetErrorBoundary} onBackHome={requestHomeRoute} />
           )}
         >
           <HtmlEditorScreen
@@ -281,7 +277,6 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             editorStats={editorStats}
             runtime={runtime}
             saveState={saveState}
-            docxExporting={htmlDocxExporting}
             pdfExportAvailable={pdfExportAvailable}
             pdfExporting={pdfExporting}
             agentProcessing={artifactAgentProcessing}
@@ -302,7 +297,6 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             onBackHome={requestHomeRoute}
             onDismissExportNotice={dismissExportNotice}
             onOpenExportLocation={openCurrentProjectExportsDir}
-            onExportDocx={exportCurrentHtmlDocx}
             onExportHtml={exportCurrentHtml}
             onExportPdf={exportCurrentHtmlPdf}
             onApplyLink={applyLink}
@@ -372,7 +366,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             onUndo={() => htmlEditorController.applyHistoryOffset(runtime, -1)}
             onFrameLoad={handleFrameLoad}
           />
-        </ErrorBoundary>
+        </ArtifactErrorBoundary>
       ) : (
         <DocumentLoadingScreen error={error} loading={loading} />
       )}
