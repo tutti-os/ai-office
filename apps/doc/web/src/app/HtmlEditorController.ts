@@ -28,6 +28,7 @@ type StateSetter<T> = (value: T | ((current: T) => T)) => void;
 export type HtmlEditorOperation = {
   operationType: string;
   description: string;
+  refocus?: boolean;
   requiresSelection?: boolean;
   preferTypingSelection?: boolean;
   mutate: (doc: Document, target: Element | null) => boolean | Element;
@@ -182,7 +183,7 @@ export class HtmlEditorController {
     this.deps.setToolbarState(readToolbarState(doc, nextTarget, nextSelection?.commonAncestorPath ?? operationFallbackPath));
     this.deps.setEditorStats(getEditorStats(doc));
     this.deps.setRuntime(this.deps.applier.syncFromFrame(before, doc, { ...input, replaceCurrentSnapshot: shouldMergeHistory, selection: nextSelection }));
-    this.refocusFrame();
+    if (input.refocus !== false) this.refocusFrame();
     return true;
   }
 

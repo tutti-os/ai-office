@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useState, type ReactNode, type RefObject } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 
 export const toolbarIconButton =
@@ -25,6 +25,8 @@ const floatingMenuDefaultMaxHeight = 320;
 const floatingMenuMinimumMaxHeight = 96;
 const toolbarRootSelector = "[data-ai-toolbar-root='true']";
 
+export const ToolbarFloatingInteractionContext = createContext<(() => void) | null>(null);
+
 export function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -49,6 +51,7 @@ export function ToolbarFloatingMenu(props: {
   width?: number;
 }) {
   const width = props.position.width ?? props.width;
+  const onFloatingInteraction = useContext(ToolbarFloatingInteractionContext);
   return createPortal(
     <div
       ref={props.menuRef}
@@ -56,6 +59,7 @@ export function ToolbarFloatingMenu(props: {
       data-toolbar-skip-selection-preserve="true"
       role="menu"
       style={{ left: props.position.left, top: props.position.top, maxHeight: props.position.maxHeight, width }}
+      onPointerDownCapture={onFloatingInteraction ?? undefined}
     >
       {props.children}
     </div>,

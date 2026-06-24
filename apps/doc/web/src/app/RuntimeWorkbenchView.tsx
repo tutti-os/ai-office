@@ -317,16 +317,19 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             onLineHeight={(lineHeight) => htmlEditorController.executeOperation(runtime, {
               operationType: "setLineHeight",
               description: `Set line height ${lineHeight || "normal"}`,
+              refocus: false,
               mutate: (doc, target) => setElementStyle(doc, target, { lineHeight }),
             })}
             onLetterSpacing={(letterSpacing) => htmlEditorController.executeOperation(runtime, {
               operationType: "setLetterSpacing",
               description: `Set letter spacing ${letterSpacing || "normal"}`,
+              refocus: false,
               mutate: (doc, target) => setElementStyle(doc, target, { letterSpacing }),
             })}
             onLayoutChange={(attributes) => htmlEditorController.executeOperation(runtime, {
               operationType: "setLayout",
               description: "Set layout",
+              refocus: false,
               mutate: (doc, target) => setElementStyle(doc, target, attributes),
             })}
             onOperationPositionChange={setOperationPosition}

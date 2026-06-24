@@ -37,6 +37,7 @@ export function HtmlEditorToolbar(input: {
   <Toolbar
     className="relative -translate-y-1.5 overflow-visible !shadow-[0_12px_10px_rgba(0,0,0,0.08)]"
     display={{ maxWidth: 1500, width: "content" }}
+    onFloatingLayerPointerDown={props.onToolbarInteractionStart}
     onMouseDownCapture={(event) => {
       if (!shouldSkipToolbarSelectionPreserve(event.target)) props.onToolbarInteractionStart();
       if (shouldKeepEditorSelectionOnToolbarCommand(event.target)) event.preventDefault();

@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { ChevronDown, Minus, Plus } from "lucide-react";
+import { ToolbarFloatingInteractionContext } from "./menuPrimitives.js";
 
 export { ToolbarLayoutMenu, ToolbarLetterSpacingMenu, ToolbarLineHeightMenu, ToolbarMoreMenu, ToolbarParagraphSpacingMenu, ToolbarSpacingMenu } from "./menus.js";
 
@@ -170,6 +171,7 @@ export function Toolbar(props: {
   children: ReactNode;
   className?: string;
   display?: ToolbarDisplayStrategy;
+  onFloatingLayerPointerDown?: () => void;
   onMouseDownCapture?: MouseEventHandler<HTMLDivElement>;
   onPointerDownCapture?: PointerEventHandler<HTMLDivElement>;
   skipSelectionPreserve?: boolean;
@@ -181,23 +183,25 @@ export function Toolbar(props: {
     "--ai-toolbar-max-width": cssSize(display.maxWidth),
   } as CSSProperties;
   return (
-    <div
-      className={cx(
-        toolbarBase,
-        display.sticky === false ? "" : "sticky top-0 z-10",
-        display.width === "content" ? "w-fit max-w-[min(100%,var(--ai-toolbar-max-width))]" : "",
-        display.density === "comfortable" ? "px-3.5 py-2.5" : "",
-        display.tone === "dark" ? "border-white/8 bg-[#303030] text-white" : "",
-        props.className,
-      )}
-      data-ai-toolbar-root="true"
-      data-toolbar-skip-selection-preserve={props.skipSelectionPreserve ? "true" : undefined}
-      onMouseDownCapture={props.onMouseDownCapture}
-      onPointerDownCapture={props.onPointerDownCapture}
-      style={style}
-    >
-      {props.children}
-    </div>
+    <ToolbarFloatingInteractionContext.Provider value={props.onFloatingLayerPointerDown ?? null}>
+      <div
+        className={cx(
+          toolbarBase,
+          display.sticky === false ? "" : "sticky top-0 z-10",
+          display.width === "content" ? "w-fit max-w-[min(100%,var(--ai-toolbar-max-width))]" : "",
+          display.density === "comfortable" ? "px-3.5 py-2.5" : "",
+          display.tone === "dark" ? "border-white/8 bg-[#303030] text-white" : "",
+          props.className,
+        )}
+        data-ai-toolbar-root="true"
+        data-toolbar-skip-selection-preserve={props.skipSelectionPreserve ? "true" : undefined}
+        onMouseDownCapture={props.onMouseDownCapture}
+        onPointerDownCapture={props.onPointerDownCapture}
+        style={style}
+      >
+        {props.children}
+      </div>
+    </ToolbarFloatingInteractionContext.Provider>
   );
 }
 
