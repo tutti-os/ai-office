@@ -417,7 +417,7 @@ export class ProjectRepository {
     writeFileSync(join(assetsDir, fileName), input.bytes);
     this.writeProjectAgentInstructions(project, artifact);
     return {
-      path: `./assets/${fileName}`,
+      path: projectAssetRelativePath(fileName),
       fileName,
       mimeType: input.mimeType,
       sizeBytes: input.bytes.byteLength,
@@ -767,12 +767,7 @@ function uniqueExportDirectoryName(exportsDir: string, requestedName: string) {
 }
 
 function safeExportDirectoryName(value: string) {
-  return basename(decodeURIComponent(value || "slides"))
-    .trim()
-    .replace(/[^\w.-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/\.+$/g, "")
-    .slice(0, 80) || "slides";
+  return safeFileStem(value || "slides", "slides");
 }
 
 function importedProjectTitle(fileName: string) {
@@ -782,24 +777,39 @@ function importedProjectTitle(fileName: string) {
 
 function safeAssetFileName(fileName: string, mimeType: string) {
   const fallbackExt = extensionForMimeType(mimeType);
-  const clean = basename(decodeURIComponent(fileName || "image"))
-    .trim()
-    .replace(/[^\w.-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  const clean = safeBaseName(fileName || "image");
   const ext = extname(clean) || fallbackExt;
-  const stem = basename(clean || "image", ext).replace(/\.+$/g, "") || "image";
+  const stem = safeFileStem(basename(clean, ext), "image");
   return `${stem}${ext}`;
 }
 
 function safeExportFileName(fileName: string, mimeType: string) {
-  const clean = basename(decodeURIComponent(fileName || "slides"))
-    .trim()
-    .replace(/[^\w.-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  const clean = safeBaseName(fileName || "slides");
   const cleanExt = extname(clean).toLowerCase();
   const ext = cleanExt === ".pptx" || cleanExt === ".pdf" ? cleanExt : extensionForExportMimeType(mimeType);
-  const stem = basename(clean || "slides", extname(clean)).replace(/\.+$/g, "") || "slides";
+  const stem = safeFileStem(basename(clean, extname(clean)), "slides");
   return `${stem}${ext}`;
+}
+
+function safeBaseName(value: string) {
+  return basename(safeDecodeURIComponent(value));
+}
+
+function safeDecodeURIComponent(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function safeFileStem(value: string, fallback: string) {
+  return value
+    .trim()
+    .replace(/[^\p{L}\p{N}._-]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/\.+$/g, "")
+    .slice(0, 80) || fallback;
 }
 
 function extensionForMimeType(mimeType: string) {
@@ -1491,11 +1501,15 @@ function listProjectAssets(projectId: string) {
       const absolutePath = join(assetsDir, entry.name);
       return {
         fileName: entry.name,
-        path: `./assets/${entry.name}`,
+        path: projectAssetRelativePath(entry.name),
         mimeType: mimeTypeForAssetFileName(entry.name),
         sizeBytes: statSync(absolutePath).size,
       };
     });
+}
+
+function projectAssetRelativePath(fileName: string) {
+  return `./assets/${fileName}`;
 }
 
 function mimeTypeForAssetFileName(fileName: string) {

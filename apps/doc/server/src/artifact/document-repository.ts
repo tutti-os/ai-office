@@ -152,7 +152,7 @@ export class DocumentRepository {
     writeFileSync(join(assetsDir, fileName), input.bytes);
     this.writeProjectAgentInstructions(project);
     return {
-      path: `./assets/${fileName}`,
+      path: projectAssetRelativePath(fileName),
       fileName,
       mimeType: input.mimeType,
       sizeBytes: input.bytes.byteLength,
@@ -422,23 +422,38 @@ function uniqueExportFileName(exportsDir: string, requestedName: string, mimeTyp
 }
 
 function safeAssetFileName(fileName: string, mimeType: string) {
-  const rawBase = basename(fileName || "asset");
+  const rawBase = safeBaseName(fileName || "asset");
   const extension = normalizedAssetExtension(rawBase, mimeType);
-  const stem = basename(rawBase, extname(rawBase))
-    .replace(/[^\w.-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "asset";
+  const stem = safeFileStem(basename(rawBase, extname(rawBase)), "asset");
   return `${stem}${extension}`;
 }
 
 function safeExportFileName(fileName: string, mimeType: string) {
-  const rawBase = basename(fileName || "export");
+  const rawBase = safeBaseName(fileName || "export");
   const extension = normalizedExportExtension(rawBase, mimeType);
-  const stem = basename(rawBase, extname(rawBase))
-    .replace(/[^\w.-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "export";
+  const stem = safeFileStem(basename(rawBase, extname(rawBase)), "export");
   return `${stem}${extension}`;
+}
+
+function safeBaseName(value: string) {
+  return basename(safeDecodeURIComponent(value));
+}
+
+function safeDecodeURIComponent(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function safeFileStem(value: string, fallback: string) {
+  return value
+    .trim()
+    .replace(/[^\p{L}\p{N}._-]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/\.+$/g, "")
+    .slice(0, 80) || fallback;
 }
 
 function normalizedAssetExtension(fileName: string, mimeType: string) {
@@ -531,11 +546,15 @@ function listProjectAssets(projectId: string) {
       const absolutePath = join(assetsDir, entry.name);
       return {
         fileName: entry.name,
-        path: absolutePath,
+        path: projectAssetRelativePath(entry.name),
         mimeType: mimeTypeForAssetFileName(entry.name),
         sizeBytes: statSync(absolutePath).size,
       };
     });
+}
+
+function projectAssetRelativePath(fileName: string) {
+  return `./assets/${fileName}`;
 }
 
 function rows<TRow>(value: unknown): TRow[] {
