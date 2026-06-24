@@ -34,6 +34,7 @@ export interface SlideProject {
   id: Id;
   title: string;
   activeArtifactId: Id;
+  artifactType: SlideArtifactType;
   templateId: string | null;
   templateName: string | null;
   updatedBy: SlideProjectUpdatedBy;

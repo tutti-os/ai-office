@@ -57,7 +57,7 @@ export class ProjectRepository {
     this.ensureSeedData();
     const db = getDb();
     return {
-      projects: rows<ProjectRow>(db.prepare(`SELECT * FROM projects ORDER BY updated_at DESC`).all()).map(rowToProject),
+      projects: rows<ProjectRowWithArtifactType>(db.prepare(projectsWithArtifactTypeSql({ orderByUpdatedAt: true })).all()).map(rowToProject),
       artifacts: rows<ArtifactRow>(db.prepare(`SELECT * FROM artifacts ORDER BY updated_at DESC`).all()).map(rowToArtifact),
       runtimeProfiles: this.runtimeProfiles.list(),
       activeRuns: this.runs.listActiveRuns(),
@@ -67,7 +67,7 @@ export class ProjectRepository {
   }
 
   listProjects() {
-    return rows<ProjectRow>(getDb().prepare(`SELECT * FROM projects ORDER BY updated_at DESC`).all()).map(rowToProject);
+    return rows<ProjectRowWithArtifactType>(getDb().prepare(projectsWithArtifactTypeSql({ orderByUpdatedAt: true })).all()).map(rowToProject);
   }
 
   interruptActiveRuns(reason: string) {
@@ -75,7 +75,7 @@ export class ProjectRepository {
   }
 
   getProject(projectId: string) {
-    const row = rowOrNull<ProjectRow>(getDb().prepare(`SELECT * FROM projects WHERE id = ?`).get(projectId));
+    const row = rowOrNull<ProjectRowWithArtifactType>(getDb().prepare(projectsWithArtifactTypeSql({ whereProjectId: true })).get(projectId));
     return row ? rowToProject(row) : null;
   }
 
@@ -1539,11 +1539,24 @@ function escapeHtmlAttr(value: string) {
   return escapeHtml(value).replaceAll('"', "&quot;");
 }
 
-function rowToProject(row: ProjectRow): SlideProject {
+function projectsWithArtifactTypeSql(input: { orderByUpdatedAt?: boolean; whereProjectId?: boolean } = {}) {
+  const where = input.whereProjectId ? "WHERE projects.id = ?" : "";
+  const orderBy = input.orderByUpdatedAt ? "ORDER BY projects.updated_at DESC" : "";
+  return `
+    SELECT projects.*, artifacts.type AS artifact_type
+    FROM projects
+    LEFT JOIN artifacts ON artifacts.id = projects.active_artifact_id
+    ${where}
+    ${orderBy}
+  `;
+}
+
+function rowToProject(row: ProjectRowWithArtifactType): SlideProject {
   return {
     id: row.id,
     title: row.title,
     activeArtifactId: row.active_artifact_id,
+    artifactType: row.artifact_type ?? "deck",
     templateId: row.template_id,
     templateName: row.template_name,
     updatedBy: row.updated_by,
@@ -1584,6 +1597,10 @@ interface ProjectRow {
   updated_by: "human" | "ai" | "system";
   created_at: string;
   updated_at: string;
+}
+
+interface ProjectRowWithArtifactType extends ProjectRow {
+  artifact_type: "deck" | "pptx" | null;
 }
 
 interface ArtifactRow {

@@ -1,8 +1,9 @@
 import { useEffect } from "react";
-import { ChevronLeft, ChevronRight, Copy, FileCode2, FileText, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileCode2, FileText, Plus, X } from "lucide-react";
 import { appShell, ArtifactHistoryPanel, HomeCategoryPill, scrollbarClass, templateCardClass } from "@ai-app/ui/app-shell";
-import type { SlideProject } from "@ai-slide/shared";
+import type { SlideArtifactType, SlideProject } from "@ai-slide/shared";
 import type { OutputType, SlideTemplate } from "../templates";
+import { useI18n } from "../i18n";
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -101,7 +102,6 @@ export function TemplatePreviewModal(props: {
             <div className="inline-flex h-[34px] max-w-full items-center gap-2.5 overflow-hidden rounded-full border border-[#B8A07C]/50 bg-[#E6DDCD]/55 px-3 text-[13px] font-medium text-[#2A2620]/72 max-md:h-10">
               <span className="text-[#8B8275]">Name:</span>
               <code className="min-w-0 truncate font-mono">{props.template.slug}</code>
-              <Copy size={18} />
             </div>
             <blockquote className="mt-[18px] line-clamp-2 max-w-[840px] overflow-hidden border-l-[5px] border-[#5C6B50] pl-[18px] text-[16px] italic leading-[1.55] text-[#2A2620]/78 max-md:text-[17px]">{props.template.shortDescription || props.template.description}</blockquote>
           </div>
@@ -163,16 +163,17 @@ export function ProjectHistory(props: {
   onDeleteProject: (projectId: string) => void;
   onOpenProject: (project: SlideProject) => void;
 }) {
+  const { t } = useI18n();
   return (
     <ArtifactHistoryPanel
       emptyDescription="Create a presentation or open a template to see it here."
       emptyIcon={<FileText size={17} />}
       emptyTitle="No history yet"
       getId={(project) => project.id}
-      getSubtitle={(project) => project.templateName ?? "Blank deck"}
+      getSubtitle={(project) => projectTypeLabel(project.artifactType, t)}
       getTitle={(project) => project.title}
       getUpdatedAt={(project) => project.updatedAt}
-      icon={(project) => project.templateId ? <FileCode2 size={15} /> : <FileText size={15} />}
+      icon={(project) => <ProjectTypeIcon type={project.artifactType} />}
       loading={props.loading}
       projects={props.projects}
       onClearHistory={props.onClearHistory}
@@ -180,6 +181,16 @@ export function ProjectHistory(props: {
       onOpenProject={props.onOpenProject}
     />
   );
+}
+
+function ProjectTypeIcon(props: { type: SlideArtifactType }) {
+  if (props.type === "pptx") return <FileText size={15} />;
+  return <FileCode2 size={15} />;
+}
+
+function projectTypeLabel(type: SlideArtifactType, t: ReturnType<typeof useI18n>["t"]) {
+  if (type === "pptx") return t("history.typePptx");
+  return t("history.typeDeck");
 }
 
 function humanizeCategory(value: string) {
