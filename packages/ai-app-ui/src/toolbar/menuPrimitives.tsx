@@ -223,15 +223,11 @@ export function useDismissableFloatingLayer(open: boolean, onOpenChange: (open: 
     const ownerDocument = ref.current?.ownerDocument ?? document;
     const close = () => onOpenChange(false);
     const closeOnOutsidePointerDown = (event: PointerEvent) => {
-      if (event.target instanceof Node && ref.current?.contains(event.target)) return;
-      close();
-    };
-    const closeOnOutsideFocus = (event: FocusEvent) => {
-      if (event.target instanceof Node && ref.current?.contains(event.target)) return;
+      if (isInsideDismissableLayer(event, ref.current)) return;
       close();
     };
     const closeOnOutsideScroll = (event: Event) => {
-      if (event.target instanceof Node && ref.current?.contains(event.target)) return;
+      if (isInsideDismissableLayer(event, ref.current)) return;
       close();
     };
     const onKeyDown = (event: KeyboardEvent) => {
@@ -241,7 +237,6 @@ export function useDismissableFloatingLayer(open: boolean, onOpenChange: (open: 
     window.addEventListener("scroll", closeOnOutsideScroll, true);
     window.addEventListener("blur", close);
     ownerDocument.addEventListener("pointerdown", closeOnOutsidePointerDown, true);
-    ownerDocument.addEventListener("focusin", closeOnOutsideFocus, true);
     ownerDocument.addEventListener("keydown", onKeyDown);
     const cleanupFrameListeners = listenToSameOriginFrames(ownerDocument, close);
     return () => {
@@ -249,11 +244,19 @@ export function useDismissableFloatingLayer(open: boolean, onOpenChange: (open: 
       window.removeEventListener("scroll", closeOnOutsideScroll, true);
       window.removeEventListener("blur", close);
       ownerDocument.removeEventListener("pointerdown", closeOnOutsidePointerDown, true);
-      ownerDocument.removeEventListener("focusin", closeOnOutsideFocus, true);
       ownerDocument.removeEventListener("keydown", onKeyDown);
       cleanupFrameListeners();
     };
   }, [open, onOpenChange, ref]);
+}
+
+function isInsideDismissableLayer(event: Event, layer: HTMLElement | null) {
+  const target = event.target;
+  if (!(target instanceof Node)) return false;
+  const path = event.composedPath();
+  if (layer && (layer.contains(target) || path.includes(layer))) return true;
+  const element = target instanceof Element ? target : target.parentElement;
+  return Boolean(element?.closest('[data-toolbar-skip-selection-preserve="true"]'));
 }
 
 function listenToSameOriginFrames(ownerDocument: Document, close: () => void) {
@@ -268,10 +271,8 @@ function listenToSameOriginFrames(ownerDocument: Document, close: () => void) {
         if (!frameDocument || observedFrameDocuments.has(frameDocument)) return;
         observedFrameDocuments.add(frameDocument);
         frameDocument.addEventListener("pointerdown", closeFromFrame, true);
-        frameDocument.addEventListener("focusin", closeFromFrame, true);
         cleanupFns.push(() => {
           frameDocument.removeEventListener("pointerdown", closeFromFrame, true);
-          frameDocument.removeEventListener("focusin", closeFromFrame, true);
         });
       } catch {
         // Cross-origin frames still trigger the parent window blur listener when focused.
