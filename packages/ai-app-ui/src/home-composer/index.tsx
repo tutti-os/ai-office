@@ -112,7 +112,7 @@ export function ArtifactHomeComposer<T extends string>(props: {
           value={props.prompt}
           beforeTextarea={
             props.attachments.length > 0 ? (
-              <div className="mb-4 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="mb-4 flex gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {props.attachments.map((attachment) => (
                   <AttachmentPreview key={attachment.id} attachment={attachment} onRemove={props.onRemoveAttachment} />
                 ))}
@@ -265,8 +265,8 @@ function AgentMenu(props: {
 
 function AttachmentPreview(props: { attachment: ArtifactHomeAttachment; onRemove: (id: string) => void }) {
   return (
-    <div className="group relative flex h-[72px] w-[220px] shrink-0 items-center gap-3 rounded-[16px] border border-[#B8A07C]/30 bg-[#EEE8DC]/54 p-2">
-      <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-[16px] bg-[#F4EFE6] text-[#5C6B50]">
+    <div className="group relative flex w-[220px] shrink-0 items-center gap-3 rounded-[12px] border border-[#B8A07C]/30 bg-[#EEE8DC]/54 p-2">
+      <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-[8px] bg-[#F4EFE6] text-[#5C6B50]">
         {props.attachment.previewUrl ? (
           <img className="h-full w-full object-cover" src={props.attachment.previewUrl} alt="" draggable={false} />
         ) : props.attachment.mimeType.startsWith("image/") ? (
@@ -280,7 +280,7 @@ function AttachmentPreview(props: { attachment: ArtifactHomeAttachment; onRemove
         <div className="mt-1 text-[13px] font-medium text-[#8B8275]">{formatFileSize(props.attachment.size)}</div>
       </div>
       <button
-        className="absolute right-2 top-2 z-10 grid size-6 place-items-center rounded-full bg-[#2A2620] text-[#F4EFE6]  hover:text-[#EEE8DC]"
+        className="absolute right-2 top-2 z-10 grid size-6 place-items-center rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6]/70 text-[#2A2620] transition-colors hover:text-[#5C6B50]"
         type="button"
         aria-label={`Remove ${props.attachment.name}`}
         onClick={() => props.onRemove(props.attachment.id)}

@@ -29,7 +29,7 @@ export function DocumentLoadingScreen(props: { error: string; loading: boolean }
       <header className="flex h-12 shrink-0 items-center border-b border-[#B8A07C]/45 px-5">
         <div className="min-w-0 truncate text-[13px] font-semibold text-[#2A2620]">{t("editor.loadingDoc")}</div>
       </header>
-      <div className="grid min-h-0 flex-1 place-items-center bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-6 text-center">
+      <div className="grid min-h-0 flex-1 place-items-center bg-[#E6DDCD] px-6 text-center">
         <div className="max-w-[360px] text-[13px] font-semibold text-[#8B8275]">
           {props.error ? (
             props.error
@@ -349,7 +349,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
             onSpacingMenuOpenChange={setSpacingMenuOpen}
           />
         </div>
-        <div ref={editorScrollContainerRef} className={`relative h-full overflow-x-hidden overflow-y-auto bg-[#EEE9DD] bg-[linear-gradient(90deg,rgba(42,38,32,0.024)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.022)_1px,transparent_1px)] bg-[size:28px_28px] px-3 py-5 md:px-6 md:py-7 ${scrollbarClass}`}>
+        <div ref={editorScrollContainerRef} className={`relative h-full overflow-x-hidden overflow-y-auto bg-[#EEE9DD] px-3 py-5 md:px-6 md:py-7 ${scrollbarClass}`}>
           {props.runtime ? (
             <HtmlTiptapEditorSurface editor={tiptapEditor.editor} projectId={props.projectId} runtime={props.runtime} />
           ) : (

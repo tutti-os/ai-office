@@ -316,14 +316,7 @@ export function ArtifactHistoryPanel<Project>(props: {
 
   return (
     <div className="mt-5">
-      <ArtifactHistoryActions
-        clearLabel={props.clearLabel}
-        copy={copy}
-        loading={props.loading}
-        projectCount={props.projects.length}
-        onClearHistory={props.onClearHistory}
-      />
-      <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-4">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-4">
         {props.projects.map((project) => {
           const id = props.getId(project);
           const icon = typeof props.icon === "function" ? props.icon(project) : props.icon;
@@ -343,6 +336,13 @@ export function ArtifactHistoryPanel<Project>(props: {
           );
         })}
       </div>
+      <ArtifactHistoryActions
+        clearLabel={props.clearLabel}
+        copy={copy}
+        loading={props.loading}
+        projectCount={props.projects.length}
+        onClearHistory={props.onClearHistory}
+      />
     </div>
   );
 }
@@ -445,7 +445,7 @@ export function templateCardClass() {
 }
 
 export function historyCardClass() {
-  return "relative min-h-[132px] rounded-[20px] border border-[#B8A07C]/30 bg-[#F4EFE6]/58  backdrop-blur transition hover:-translate-y-0.5 ";
+  return "relative min-h-[132px] rounded-[20px] border border-[#B8A07C]/30 bg-[#F9F4EC]  backdrop-blur transition hover:-translate-y-0.5 ";
 }
 
 export const historyActionsClass = "mt-4 flex items-center justify-start";

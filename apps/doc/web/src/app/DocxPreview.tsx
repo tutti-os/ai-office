@@ -82,7 +82,7 @@ export function DocxPreview(props: DocxPreviewProps) {
 
   return (
     <section className="relative flex h-full min-h-0 flex-col bg-[#EEE8DC]">
-        <div className={`h-full overflow-x-hidden overflow-y-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-3 py-4 md:px-6 md:py-6 ${scrollbarClass}`}>
+        <div className={`h-full overflow-x-hidden overflow-y-auto bg-[#EEE8DC] px-3 py-4 md:px-6 md:py-6 ${scrollbarClass}`}>
           {props.error ? <div className="mx-auto mb-4 max-w-[980px] rounded-[16px] border border-[#B8A07C]/30 bg-[#F4EFE6]/80 p-3 text-[13px] leading-5 text-[#7b2e24]">{props.error}</div> : null}
           <div
             ref={props.previewRef}
