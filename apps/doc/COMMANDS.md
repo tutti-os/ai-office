@@ -24,7 +24,7 @@ Imports an HTML, Markdown, or DOCX file into AI Doc. Inputs:
 - `path`: absolute path, `~/...` path, or path relative to `AI_DOC_WORKSPACE_ROOT` / `TUTTI_WORKSPACE_ROOT`.
 - `title`: optional project title override.
 
-The command returns JSON with the imported project, `/doc/<projectId>` route, full URL, source path, focused workspace file path, and project `AGENTS.md` path for follow-up agent edits.
+After import, the command calls `$TUTTI_CLI --json app open --app-id "$TUTTI_APP_ID" --route /doc/<projectId>` when `TUTTI_CLI` is configured. It also returns JSON with the imported project, route, full URL, source path, focused workspace file path, project `AGENTS.md` path, and the Tutti app-open result.
 
 Example:
 

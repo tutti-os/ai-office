@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { DocumentProject, DocumentType, OpenDocumentCliResponse } from "@ai-doc/shared";
-import { getTuttiCliStatus } from "./tutti-cli.js";
+import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { DocumentService } from "../artifact/document-service.js";
 
 interface CliInvokeEnvelope {
@@ -48,7 +48,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
         path: input.path,
         title: typeof input.title === "string" ? input.title : undefined,
       });
-      return reply.send(jsonOutput(openDocumentCliOutput(documents, result)));
+      return reply.send(jsonOutput(await openDocumentCliOutput(documents, result)));
     } catch (error) {
       return sendCliError(reply, cliErrorStatus(error), "open_failed", errorMessage(error));
     }
@@ -82,10 +82,10 @@ function sendCliError(reply: FastifyReply, statusCode: number, code: string, mes
   return reply.code(statusCode).send({ error: { code, message } });
 }
 
-function openDocumentCliOutput(
+async function openDocumentCliOutput(
   documents: DocumentService,
   input: { sourcePath: string; project: DocumentProject },
-): OpenDocumentCliResponse {
+): Promise<OpenDocumentCliResponse> {
   const route = projectRoute(input.project.id);
   return {
     ok: true,
@@ -95,6 +95,7 @@ function openDocumentCliOutput(
     route,
     url: `${appBaseUrl()}${route}`,
     workspace: documents.projectWorkspaceContext(input.project),
+    tuttiAppOpen: await openTuttiAppRoute(appId(), route),
   };
 }
 
@@ -111,6 +112,10 @@ function projectSummary(project: DocumentProject) {
 
 function projectRoute(projectId: string) {
   return `/doc/${encodeURIComponent(projectId)}`;
+}
+
+function appId() {
+  return process.env.TUTTI_APP_ID?.trim() || "ai-doc";
 }
 
 function appBaseUrl() {

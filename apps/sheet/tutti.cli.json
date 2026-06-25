@@ -59,7 +59,7 @@
     {
       "path": ["open"],
       "summary": "Open a workbook file",
-      "description": "Import an XLSX file into AI Sheet and return the project route plus workspace paths for agent editing.",
+      "description": "Import an XLSX file into AI Sheet, open its app route through Tutti CLI, and return workspace paths for agent editing.",
       "inputSchema": {
         "type": "object",
         "required": ["path"],

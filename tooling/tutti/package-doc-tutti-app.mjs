@@ -25,6 +25,7 @@ package_dir="\${TUTTI_APP_PACKAGE_DIR:-$script_dir}"
 
 export HOST="\${TUTTI_APP_HOST:-127.0.0.1}"
 export PORT="\${TUTTI_APP_PORT:-8790}"
+export TUTTI_APP_ID="\${TUTTI_APP_ID:-ai-doc}"
 export AI_DOC_APP_VERSION="${version}"
 export AI_DOC_WEB_DIST="$package_dir/dist"
 export AI_DOC_HOME="\${TUTTI_APP_DATA_DIR:-$package_dir/.data}"
@@ -85,7 +86,7 @@ Runtime composition:
 
 - Use \`AI_DOC_TUTTI_CLI\` for app-to-app calls. It is populated from \`TUTTI_CLI\` by \`bootstrap.sh\`.
 - CLI integrations must be optional and fail softly so AI Doc still works in a normal browser or development shell.
-- The \`doc open\` command returns the focused workspace file path and project \`AGENTS.md\` path so local agents can continue editing after import.
+- The \`doc open\` command imports the file, calls \`$TUTTI_CLI --json app open --app-id "$TUTTI_APP_ID" --route ...\`, and returns the focused workspace file path plus project \`AGENTS.md\` path for follow-up edits.
 `;
 }
 

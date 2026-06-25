@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { OpenSheetCliResponse, SheetArtifact, SheetProject } from "@ai-sheet/shared";
-import { getTuttiCliStatus } from "./tutti-cli.js";
+import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { SheetService } from "../artifact/sheet-service.js";
 
 interface CliInvokeEnvelope {
@@ -48,7 +48,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, sheets: SheetSer
         path: input.path,
         title: typeof input.title === "string" ? input.title : undefined,
       });
-      return reply.send(jsonOutput(openSheetCliOutput(sheets, result)));
+      return reply.send(jsonOutput(await openSheetCliOutput(sheets, result)));
     } catch (error) {
       return sendCliError(reply, cliErrorStatus(error), "open_failed", errorMessage(error));
     }
@@ -82,10 +82,10 @@ function sendCliError(reply: FastifyReply, statusCode: number, code: string, mes
   return reply.code(statusCode).send({ error: { code, message } });
 }
 
-function openSheetCliOutput(
+async function openSheetCliOutput(
   sheets: SheetService,
   input: { sourcePath: string; project: SheetProject; artifact: SheetArtifact },
-): OpenSheetCliResponse {
+): Promise<OpenSheetCliResponse> {
   const route = projectRoute(input.project.id);
   return {
     ok: true,
@@ -96,6 +96,7 @@ function openSheetCliOutput(
     route,
     url: `${appBaseUrl()}${route}`,
     workspace: sheets.projectWorkspaceContext(input.project.id, input.artifact),
+    tuttiAppOpen: await openTuttiAppRoute(appId(), route),
   };
 }
 
@@ -112,6 +113,10 @@ function projectSummary(project: SheetProject) {
 
 function projectRoute(projectId: string) {
   return `/sheet/${encodeURIComponent(projectId)}`;
+}
+
+function appId() {
+  return process.env.TUTTI_APP_ID?.trim() || "ai-sheet";
 }
 
 function appBaseUrl() {

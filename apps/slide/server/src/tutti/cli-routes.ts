@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { OpenSlideCliResponse, SlideArtifact, SlideArtifactType, SlideProject } from "@ai-slide/shared";
-import { getTuttiCliStatus } from "./tutti-cli.js";
+import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { ProjectService } from "../artifact/project-service.js";
 
 interface CliInvokeEnvelope {
@@ -48,7 +48,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
         path: input.path,
         title: typeof input.title === "string" ? input.title : undefined,
       });
-      return reply.send(jsonOutput(openSlideCliOutput(projects, result)));
+      return reply.send(jsonOutput(await openSlideCliOutput(projects, result)));
     } catch (error) {
       return sendCliError(reply, cliErrorStatus(error), "open_failed", errorMessage(error));
     }
@@ -81,10 +81,10 @@ function sendCliError(reply: FastifyReply, statusCode: number, code: string, mes
   return reply.code(statusCode).send({ error: { code, message } });
 }
 
-function openSlideCliOutput(
+async function openSlideCliOutput(
   projects: ProjectService,
   input: { sourcePath: string; project: SlideProject; artifact: SlideArtifact },
-): OpenSlideCliResponse {
+): Promise<OpenSlideCliResponse> {
   const route = projectRoute(input.project.id);
   return {
     ok: true,
@@ -95,6 +95,7 @@ function openSlideCliOutput(
     route,
     url: `${appBaseUrl()}${route}`,
     workspace: projects.projectWorkspaceContext(input.project.id, input.artifact),
+    tuttiAppOpen: await openTuttiAppRoute(appId(), route),
   };
 }
 
@@ -111,6 +112,10 @@ function projectSummary(project: SlideProject) {
 
 function projectRoute(projectId: string) {
   return `/slide/${encodeURIComponent(projectId)}`;
+}
+
+function appId() {
+  return process.env.TUTTI_APP_ID?.trim() || "ai-slide";
 }
 
 function appBaseUrl() {

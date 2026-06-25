@@ -106,6 +106,15 @@ export interface BaseAiEditRequest {
   reasoningEffort?: ReasoningEffort | null;
 }
 
+export interface TuttiAppOpenResult {
+  attempted: boolean;
+  configured: boolean;
+  appId: string;
+  route: string;
+  result: unknown | null;
+  error: string | null;
+}
+
 export interface StreamEvent<TType extends string = string> {
   id: Id;
   seq: number;

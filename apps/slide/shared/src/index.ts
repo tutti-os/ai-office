@@ -8,6 +8,7 @@ import type {
   RuntimeKind,
   RuntimeProfile,
   StreamEvent as BaseStreamEvent,
+  TuttiAppOpenResult,
   WsServerMessage as BaseWsServerMessage,
 } from "@ai-app/shared/types";
 import type { AgentArtifactContextBase, ArtifactSelectionBase } from "@ai-app/shared/artifact-runtime";
@@ -20,6 +21,7 @@ export type {
   ReasoningEffort,
   RuntimeKind,
   RuntimeProfile,
+  TuttiAppOpenResult,
   WsClientMessage,
 } from "@ai-app/shared/types";
 
@@ -234,6 +236,7 @@ export interface OpenSlideCliResponse {
   route: string;
   url: string;
   workspace: SlideWorkspaceContext;
+  tuttiAppOpen: TuttiAppOpenResult;
 }
 
 export interface UpdateProjectRequest {

@@ -24,7 +24,7 @@ Imports an XLSX file into AI Sheet. Inputs:
 - `path`: absolute path, `~/...` path, or path relative to `AI_SHEET_WORKSPACE_ROOT` / `TUTTI_WORKSPACE_ROOT`.
 - `title`: optional project title override.
 
-The command returns JSON with the imported project, artifact, `/sheet/<projectId>` route, full URL, source path, focused workbook path, and project `AGENTS.md` path for follow-up agent edits.
+After import, the command calls `$TUTTI_CLI --json app open --app-id "$TUTTI_APP_ID" --route /sheet/<projectId>` when `TUTTI_CLI` is configured. It also returns JSON with the imported project, artifact, route, full URL, source path, focused workbook path, project `AGENTS.md` path, and the Tutti app-open result.
 
 Example:
 

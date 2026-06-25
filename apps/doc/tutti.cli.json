@@ -59,7 +59,7 @@
     {
       "path": ["open"],
       "summary": "Open a document file",
-      "description": "Import an HTML, Markdown, or DOCX file into AI Doc and return the project route plus workspace paths for agent editing.",
+      "description": "Import an HTML, Markdown, or DOCX file into AI Doc, open its app route through Tutti CLI, and return workspace paths for agent editing.",
       "inputSchema": {
         "type": "object",
         "required": ["path"],

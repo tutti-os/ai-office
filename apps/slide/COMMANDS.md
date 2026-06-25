@@ -24,7 +24,7 @@ Imports a PPTX file into AI Slide. Inputs:
 - `path`: absolute path, `~/...` path, or path relative to `AI_SLIDE_WORKSPACE_ROOT` / `TUTTI_WORKSPACE_ROOT`.
 - `title`: optional project title override.
 
-The command returns JSON with the imported project, artifact, `/slide/<projectId>` route, full URL, source path, focused workspace path, and project `AGENTS.md` path for follow-up agent edits.
+After import, the command calls `$TUTTI_CLI --json app open --app-id "$TUTTI_APP_ID" --route /slide/<projectId>` when `TUTTI_CLI` is configured. It also returns JSON with the imported project, artifact, route, full URL, source path, focused workspace path, project `AGENTS.md` path, and the Tutti app-open result.
 
 Example:
 

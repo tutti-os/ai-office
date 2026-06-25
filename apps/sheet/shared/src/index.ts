@@ -7,6 +7,7 @@ import type {
   RunEventType,
   RunStatus,
   StreamEvent as BaseStreamEvent,
+  TuttiAppOpenResult,
   WsServerMessage as BaseWsServerMessage,
 } from "@ai-app/shared/types";
 import type { AgentArtifactContextBase, ArtifactSelectionBase } from "@ai-app/shared/artifact-runtime";
@@ -21,6 +22,7 @@ export type {
   RunStatus,
   RuntimeKind,
   RuntimeProfile,
+  TuttiAppOpenResult,
   WsClientMessage,
 } from "@ai-app/shared/types";
 
@@ -192,6 +194,7 @@ export interface OpenSheetCliResponse {
   route: string;
   url: string;
   workspace: SheetWorkspaceContext;
+  tuttiAppOpen: TuttiAppOpenResult;
 }
 
 export interface UpdateProjectRequest {
