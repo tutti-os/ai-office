@@ -33,7 +33,7 @@ import {
   type ImageNode,
 } from "@mdxeditor/editor";
 import { $createHeadingNode, $createQuoteNode, type HeadingTagType } from "@lexical/rich-text";
-import { AlignCenter, AlignLeft, AlignRight, Bold, Code2, Image, Italic, Link2, List, ListOrdered, ListTodo, Minus, Quote, Redo2, Replace, Strikethrough, Table2, Undo2 } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, Bold, Code2, Image, Italic, Link2, List, ListOrdered, ListTodo, Minus, Quote, Replace, Strikethrough, Table2 } from "lucide-react";
 import { IconButtonLight, Toolbar, ToolbarDivider, ToolbarGroup, ToolbarRow, ToolbarSelect } from "@ai-app/ui/toolbar";
 import { uploadProjectAsset } from "../api/projects";
 import { MarkdownToolbarContext, type MarkdownEditorStateSnapshot, type MarkdownTableCellEditor } from "./markdownEditorContext";
@@ -57,7 +57,7 @@ type MarkdownSelectedImageState = {
   nodeKey: string;
 };
 
-const markdownLinkPanelWidth = 300;
+const markdownLinkPanelWidth = 260;
 const markdownLinkViewportMargin = 8;
 const markdownLinkAnchorGap = 8;
 const markdownImageCenterTitleToken = "ai-md-align-center";
@@ -130,8 +130,9 @@ function MarkdownToolbarAdapter() {
   const insertCodeBlock = usePublisher(insertCodeBlock$);
   const insertThematicBreak = usePublisher(insertThematicBreak$);
   const removeLink = usePublisher(removeLink$);
+  const setLinkDialogState = usePublisher(linkDialogState$);
   const linkDialogState = useCellValue(linkDialogState$);
-  const [linkPanelOpen, setLinkPanelOpen] = useState(false);
+  const [rawLinkPanelOpen, setLinkPanelOpen] = useState(false);
   const [linkDraft, setLinkDraft] = useState<MarkdownLinkDraft>({ text: "", href: "https://" });
   const [linkPosition, setLinkPosition] = useState<MarkdownLinkPosition | null>(null);
   const [selectedImage, setSelectedImage] = useState<MarkdownSelectedImageState | null>(null);
@@ -139,6 +140,8 @@ function MarkdownToolbarAdapter() {
   const blockType = markdownBlockTypeFromEditor(currentBlockType);
   const listType = markdownListTypeFromEditor(currentListType);
   const linkActive = linkDialogState.type !== "inactive";
+  const imageSelected = Boolean(selectedImage);
+  const linkPanelOpen = rawLinkPanelOpen && !imageSelected;
   const applyBlockChange = (kind: MarkdownBlockKind) => {
     if (toolbarContext.readOnly) return;
     toolbarContext.runProgrammaticChange(() => {
@@ -151,6 +154,9 @@ function MarkdownToolbarAdapter() {
       if (activeEditor) activeEditor.focus(apply);
       else apply();
     });
+  };
+  const toggleQuote = () => {
+    applyBlockChange(blockType === "blockquote" ? "p" : "blockquote");
   };
 
   useEffect(() => {
@@ -165,10 +171,18 @@ function MarkdownToolbarAdapter() {
       setSelectedImage((current) => {
         if (!current && !nextSelectedImage) return current;
         if (current?.alignment === nextSelectedImage?.alignment && current?.nodeKey === nextSelectedImage?.nodeKey) return current;
+        if (nextSelectedImage) {
+          setLinkPanelOpen(false);
+          setLinkDialogState({ type: "inactive" });
+        }
         return nextSelectedImage;
       });
     });
-  }, [activeEditor]);
+  }, [activeEditor, setLinkDialogState]);
+
+  useEffect(() => {
+    if (imageSelected && linkDialogState.type !== "inactive") setLinkDialogState({ type: "inactive" });
+  }, [imageSelected, linkDialogState.type, setLinkDialogState]);
 
   useLayoutEffect(() => {
     if (!linkPanelOpen) {
@@ -258,7 +272,7 @@ function MarkdownToolbarAdapter() {
       ? createPortal(
           <form
             ref={linkPanelRef}
-            className="fixed z-50 grid w-[300px] max-w-[calc(100vw-16px)] gap-1.5 rounded-[16px] border border-[#B8A07C]/55 bg-[#F4EFE6] p-2 shadow-[0_18px_46px_rgba(0,0,0,0.16)]"
+            className="ai-markdown-link-panel fixed z-50 grid w-[260px] max-w-[calc(100vw-16px)] gap-1.5 rounded-[8px] border border-[#B8A07C]/30 bg-[#EEE8DC] p-2 "
             style={linkPanelStyle}
             onSubmit={(event) => {
               event.preventDefault();
@@ -272,7 +286,7 @@ function MarkdownToolbarAdapter() {
             }}
           >
             <input
-              className="h-7 w-full rounded-[10px] border border-[#B8A07C]/50 bg-[#E6DDCD]/55 px-2 text-[11px] font-medium text-[#2A2620] outline-none placeholder:text-[#8B8275]"
+              className="h-7 w-full rounded-[8px] border border-[#B8A07C]/30 bg-[#F9F4EC] px-2 text-[11px] font-medium text-[#2A2620] outline-none placeholder:text-[#8B8275]"
               value={linkDraft.text}
               onChange={(event) => {
                 const text = event.currentTarget.value;
@@ -283,7 +297,7 @@ function MarkdownToolbarAdapter() {
             />
             <div className="flex min-w-0 items-center gap-1">
               <input
-                className="h-7 min-w-0 flex-1 rounded-[10px] border border-[#B8A07C]/50 bg-[#E6DDCD]/55 px-2 text-[11px] font-medium text-[#2A2620] outline-none placeholder:text-[#8B8275]"
+                className="h-7 min-w-0 flex-1 rounded-[8px] border border-[#B8A07C]/30 bg-[#F9F4EC] px-2 text-[11px] font-medium text-[#2A2620] outline-none placeholder:text-[#8B8275]"
                 value={linkDraft.href}
                 onChange={(event) => {
                   const href = event.currentTarget.value;
@@ -292,7 +306,7 @@ function MarkdownToolbarAdapter() {
                 placeholder="https://"
                 aria-label="Link URL"
               />
-              <button className="h-7 rounded-[10px] bg-[#2A2620] px-2.5 text-[10px] font-semibold text-[#F4EFE6]" type="submit">
+              <button className="h-7 rounded-[8px] bg-[#2A2620] px-2.5 text-[11px] font-semibold text-[#F4EFE6]" type="submit">
                 Apply
               </button>
             </div>
@@ -314,65 +328,77 @@ function MarkdownToolbarAdapter() {
     toolbarContext.runProgrammaticChange(() => insertImage({ src, altText }));
   };
 
+  const toolbar = (
+      <div className="flex items-center justify-center">
+        <Toolbar className="relative !mb-0 !rounded-none !border-t-0 !border-l-0 !bg-[#EEE8DC] overflow-visible" display={{ maxWidth: 1500 }} onPointerDownCapture={toolbarContext.onToolbarInteractionStart}>
+          <input ref={imageFileInputRef} className="hidden" type="file" accept="image/*" onChange={handleImageFileInputChange} />
+          <ToolbarRow wrap className="gap-y-1.5">
+            {!imageSelected ? (
+              <>
+                <ToolbarGroup className="[column-gap:4px]">
+                  <ToolbarSelect disabled={toolbarDisabled} title="Block style" value={blockType} onChange={(value) => applyBlockChange(value as MarkdownBlockKind)}>
+                    <option value="p">Normal Text</option>
+                    <option value="h1">Heading 1</option>
+                    <option value="h2">Heading 2</option>
+                    <option value="h3">Heading 3</option>
+                    <option value="h4">Heading 4</option>
+                    <option value="blockquote">Quote</option>
+                  </ToolbarSelect>
+                </ToolbarGroup>
+                <ToolbarDivider />
+                <ToolbarGroup>
+                  <IconButtonLight active={Boolean(currentFormat & IS_BOLD)} disabled={toolbarDisabled} title="Bold" onClick={() => applyFormat("bold")}><Bold size={19} /></IconButtonLight>
+                  <IconButtonLight active={Boolean(currentFormat & IS_ITALIC)} disabled={toolbarDisabled} title="Italic" onClick={() => applyFormat("italic")}><Italic size={19} /></IconButtonLight>
+                  <IconButtonLight active={Boolean(currentFormat & IS_STRIKETHROUGH)} disabled={toolbarDisabled} title="Strikethrough" onClick={() => applyFormat("strikethrough")}><Strikethrough size={19} /></IconButtonLight>
+                  <IconButtonLight active={Boolean(currentFormat & IS_CODE)} disabled={toolbarDisabled} title="Inline code" onClick={() => applyFormat("code")}><Code2 size={18} /></IconButtonLight>
+                </ToolbarGroup>
+                <ToolbarDivider />
+                <ToolbarGroup>
+                  <IconButtonLight active={listType === "number"} disabled={toolbarDisabled} title="Numbered list" onClick={() => applyListType(listType === "number" ? "" : "number")}><ListOrdered size={19} /></IconButtonLight>
+                  <IconButtonLight active={listType === "bullet"} disabled={toolbarDisabled} title="Bulleted list" onClick={() => applyListType(listType === "bullet" ? "" : "bullet")}><List size={19} /></IconButtonLight>
+                  <IconButtonLight active={listType === "check"} disabled={toolbarDisabled} title="Checklist" onClick={() => applyListType(listType === "check" ? "" : "check")}><ListTodo size={19} /></IconButtonLight>
+                </ToolbarGroup>
+              </>
+            ) : null}
+            {!imageSelected ? <ToolbarDivider /> : null}
+            <ToolbarGroup>
+              <IconButtonLight disabled={toolbarDisabled} title="Image" onClick={requestImageFileSelection}><Image size={18} /></IconButtonLight>
+              <IconButtonLight disabled={toolbarDisabled} title="Insert table" onClick={() => insertTable({ rows: 3, columns: 3 })}><Table2 size={18} /></IconButtonLight>
+            </ToolbarGroup>
+            <ToolbarDivider />
+            <ToolbarGroup>
+              <div ref={linkButtonRef} className="relative inline-grid">
+                <IconButtonLight active={!imageSelected && (linkActive || linkPanelOpen)} disabled={toolbarDisabled || imageSelected} title="Create link" onClick={linkActive ? removeLink : openMarkdownLinkPanel}><Link2 size={18} /></IconButtonLight>
+              </div>
+            </ToolbarGroup>
+            {selectedImage ? (
+              <>
+                <ToolbarDivider />
+                <ToolbarGroup>
+                  <IconButtonLight active={selectedImage.alignment === "left"} disabled={toolbarDisabled} title="Align image left" onClick={() => setSelectedImageAlignment("left")}><AlignLeft size={19} /></IconButtonLight>
+                  <IconButtonLight active={selectedImage.alignment === "center"} disabled={toolbarDisabled} title="Center image" onClick={() => setSelectedImageAlignment("center")}><AlignCenter size={19} /></IconButtonLight>
+                  <IconButtonLight active={selectedImage.alignment === "right"} disabled={toolbarDisabled} title="Align image right" onClick={() => setSelectedImageAlignment("right")}><AlignRight size={19} /></IconButtonLight>
+                </ToolbarGroup>
+              </>
+            ) : null}
+            {!imageSelected ? (
+              <>
+                <ToolbarDivider />
+                <ToolbarGroup>
+                  <IconButtonLight active={blockType === "blockquote"} disabled={toolbarDisabled} title="Quote" onClick={toggleQuote}><Quote size={18} /></IconButtonLight>
+                  <IconButtonLight disabled={toolbarDisabled} title="Thematic break" onClick={insertThematicBreak}><Minus size={18} /></IconButtonLight>
+                  <IconButtonLight disabled={toolbarDisabled} title="Code block" onClick={() => insertCodeBlock({})}><Code2 size={18} /></IconButtonLight>
+                </ToolbarGroup>
+              </>
+            ) : null}
+          </ToolbarRow>
+        </Toolbar>
+      </div>
+  );
+
   return (
     <>
-      <Toolbar className="relative -translate-y-1.5 overflow-visible" display={{ maxWidth: 1500, width: "content" }} onPointerDownCapture={toolbarContext.onToolbarInteractionStart}>
-        <input ref={imageFileInputRef} className="hidden" type="file" accept="image/*" onChange={handleImageFileInputChange} />
-        <ToolbarRow wrap className="gap-y-1.5">
-          <ToolbarGroup>
-            <IconButtonLight disabled={!toolbarContext.canUndo} title="Undo" onClick={toolbarContext.onUndo}><Undo2 size={18} /></IconButtonLight>
-            <IconButtonLight disabled={!toolbarContext.canRedo} title="Redo" onClick={toolbarContext.onRedo}><Redo2 size={18} /></IconButtonLight>
-          </ToolbarGroup>
-          <ToolbarDivider />
-          <ToolbarGroup className="[column-gap:4px]">
-            <ToolbarSelect disabled={toolbarDisabled} title="Block style" value={blockType} onChange={(value) => applyBlockChange(value as MarkdownBlockKind)}>
-              <option value="p">Normal Text</option>
-              <option value="h1">Heading 1</option>
-              <option value="h2">Heading 2</option>
-              <option value="h3">Heading 3</option>
-              <option value="h4">Heading 4</option>
-              <option value="blockquote">Quote</option>
-            </ToolbarSelect>
-          </ToolbarGroup>
-          <ToolbarDivider />
-          <ToolbarGroup>
-            <IconButtonLight active={Boolean(currentFormat & IS_BOLD)} disabled={toolbarDisabled} title="Bold" onClick={() => applyFormat("bold")}><Bold size={19} /></IconButtonLight>
-            <IconButtonLight active={Boolean(currentFormat & IS_ITALIC)} disabled={toolbarDisabled} title="Italic" onClick={() => applyFormat("italic")}><Italic size={19} /></IconButtonLight>
-            <IconButtonLight active={Boolean(currentFormat & IS_STRIKETHROUGH)} disabled={toolbarDisabled} title="Strikethrough" onClick={() => applyFormat("strikethrough")}><Strikethrough size={19} /></IconButtonLight>
-            <IconButtonLight active={Boolean(currentFormat & IS_CODE)} disabled={toolbarDisabled} title="Inline code" onClick={() => applyFormat("code")}><Code2 size={18} /></IconButtonLight>
-          </ToolbarGroup>
-          <ToolbarDivider />
-          <ToolbarGroup>
-            <IconButtonLight active={listType === "number"} disabled={toolbarDisabled} title="Numbered list" onClick={() => applyListType(listType === "number" ? "" : "number")}><ListOrdered size={19} /></IconButtonLight>
-            <IconButtonLight active={listType === "bullet"} disabled={toolbarDisabled} title="Bulleted list" onClick={() => applyListType(listType === "bullet" ? "" : "bullet")}><List size={19} /></IconButtonLight>
-            <IconButtonLight active={listType === "check"} disabled={toolbarDisabled} title="Checklist" onClick={() => applyListType(listType === "check" ? "" : "check")}><ListTodo size={19} /></IconButtonLight>
-          </ToolbarGroup>
-          <ToolbarDivider />
-          <ToolbarGroup>
-            <IconButtonLight disabled={toolbarDisabled} title="Image" onClick={requestImageFileSelection}><Image size={18} /></IconButtonLight>
-            <div ref={linkButtonRef} className="relative inline-grid">
-              <IconButtonLight active={linkActive || linkPanelOpen} disabled={toolbarDisabled} title="Create link" onClick={linkActive ? removeLink : openMarkdownLinkPanel}><Link2 size={18} /></IconButtonLight>
-            </div>
-            <IconButtonLight disabled={toolbarDisabled} title="Insert table" onClick={() => insertTable({ rows: 3, columns: 3 })}><Table2 size={18} /></IconButtonLight>
-          </ToolbarGroup>
-          {selectedImage ? (
-            <>
-              <ToolbarDivider />
-              <ToolbarGroup>
-                <IconButtonLight active={selectedImage.alignment === "left"} disabled={toolbarDisabled} title="Align image left" onClick={() => setSelectedImageAlignment("left")}><AlignLeft size={19} /></IconButtonLight>
-                <IconButtonLight active={selectedImage.alignment === "center"} disabled={toolbarDisabled} title="Center image" onClick={() => setSelectedImageAlignment("center")}><AlignCenter size={19} /></IconButtonLight>
-                <IconButtonLight active={selectedImage.alignment === "right"} disabled={toolbarDisabled} title="Align image right" onClick={() => setSelectedImageAlignment("right")}><AlignRight size={19} /></IconButtonLight>
-              </ToolbarGroup>
-            </>
-          ) : null}
-          <ToolbarDivider />
-          <ToolbarGroup>
-            <IconButtonLight active={blockType === "blockquote"} disabled={toolbarDisabled} title="Quote" onClick={() => applyBlockChange("blockquote")}><Quote size={18} /></IconButtonLight>
-            <IconButtonLight disabled={toolbarDisabled} title="Thematic break" onClick={insertThematicBreak}><Minus size={18} /></IconButtonLight>
-            <IconButtonLight disabled={toolbarDisabled} title="Code block" onClick={() => insertCodeBlock({})}><Code2 size={18} /></IconButtonLight>
-          </ToolbarGroup>
-        </ToolbarRow>
-      </Toolbar>
+      {toolbarContext.toolbarHost ? createPortal(toolbar, toolbarContext.toolbarHost) : toolbar}
       {linkPanel}
     </>
   );

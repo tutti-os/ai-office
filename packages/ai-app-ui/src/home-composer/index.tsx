@@ -143,7 +143,7 @@ export function ArtifactHomeComposer<T extends string>(props: {
           }
           trailingActions={
             <button
-              className={cx(appShell.submitAction, "inline-flex min-w-[108px] flex-1 items-center justify-center gap-2 border-0 px-[18px] text-[13px] font-medium md:flex-none")}
+              className={cx(appShell.submitAction, "inline-flex min-w-[108px] flex-1 items-center justify-center gap-2 border-0 px-[18px] text-[13px] font-semibold md:flex-none")}
               disabled={!props.canSubmit}
               type="button"
               title={props.submitLabel}
@@ -178,7 +178,7 @@ function FormatOption(props: {
 }) {
   return (
     <div
-      className={cx(formatOptionClass(props.active, props.disabled), "!min-h-[56px] !px-3 !py-2.5")}
+      className={cx(formatOptionClass(props.active, props.disabled && !props.showInstall), "!min-h-[56px] !px-3 !py-2.5")}
       aria-disabled={props.disabled ? true : undefined}
       role="button"
       tabIndex={props.disabled ? -1 : 0}
@@ -194,8 +194,8 @@ function FormatOption(props: {
     >
       <span className={formatOptionIconClass(props.active, props.disabled)}>{props.icon}</span>
       <span className="mr-auto grid min-w-0 flex-1 gap-1">
-        <span className="truncate text-[14px] font-bold leading-none">{props.label}</span>
-        <small className={cx("truncate text-[12px] font-medium", props.active ? "text-[#8B8275]" : props.disabled ? "text-[#8B8275]/72" : "text-[#E6DDCD]/62")}>{props.description}</small>
+        <span className="truncate text-[15px] font-bold leading-none">{props.label}</span>
+        <small className={cx("truncate text-[13px] font-medium", props.active && !props.disabled ? "text-[#8B8275]" : "text-[#EEE8DC]/62")}>{props.description}</small>
       </span>
       {props.installing ? (
         <span className="ml-auto grid size-6 shrink-0 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]">
@@ -203,7 +203,7 @@ function FormatOption(props: {
         </span>
       ) : props.showInstall ? (
         <button
-          className="ml-auto grid size-7 shrink-0 place-items-center rounded-[16px] border border-[#B8A07C]/35 bg-[#D8CDB9]/50 text-[#8B8275] hover:border-[#5C6B50]/40 hover:text-[#5C6B50]"
+          className="ml-auto grid size-8 shrink-0 cursor-pointer place-items-center rounded-full border border-[#B8A07C]/30 bg-[#5C6B50] text-[#F4EFE6] transition-colors hover:bg-[#4C5E42] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B8A07C]/45"
           type="button"
           title={props.downloadLabel}
           aria-label={props.downloadLabel}
@@ -219,7 +219,7 @@ function FormatOption(props: {
           <Check size={14} />
         </span>
       ) : props.statusLabel ? (
-        <span className="ml-auto shrink-0 rounded-full border border-[#B8A07C]/35 bg-[#D8CDB9]/50 px-2.5 py-1 text-[11px] font-medium text-[#8B8275]">
+        <span className="ml-auto shrink-0 rounded-full border border-[#B8A07C]/30 bg-[#D8CDB9]/50 px-2.5 py-1 text-[11px] font-medium text-[#8B8275]">
           {props.statusLabel}
         </span>
       ) : null}
@@ -235,14 +235,19 @@ function AgentMenu(props: {
   selectAgentLabel: string;
   onChange: (value: string) => void;
 }) {
+  const hasSelectedAgent = props.agentProfiles.some((profile) => profile.id === props.selectedAgentId);
+  const placeholderValue = "__agent-placeholder";
   return (
     <AgentSelectShell>
       <select
-        className="h-full w-full appearance-none rounded-full border border-[#B8A07C]/50 bg-[#F4EFE6]/70 px-4 pr-9 text-[13px] font-medium text-[#2A2620] outline-none hover:border-[#5C6B50]/50 hover:text-[#5C6B50]"
-        value={props.selectedAgentId}
+        className="h-full w-full appearance-none rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6]/70 px-4 pr-9 text-[13px] font-medium text-[#2A2620] outline-none hover:border-[#B8A07C]/30 hover:text-[#5C6B50]"
+        value={hasSelectedAgent ? props.selectedAgentId : placeholderValue}
         aria-label={props.selectAgentLabel}
         onChange={(event) => props.onChange(event.currentTarget.value)}
       >
+        <option disabled value={placeholderValue}>
+          {props.selectAgentLabel}
+        </option>
         {props.agentProfiles.map((profile) => {
           const status = profile.kind === "local-agent" ? props.agentProviders.find((provider) => provider.provider === profile.provider) : null;
           const available = status?.available ?? props.agentProviders.length === 0;
@@ -260,7 +265,7 @@ function AgentMenu(props: {
 
 function AttachmentPreview(props: { attachment: ArtifactHomeAttachment; onRemove: (id: string) => void }) {
   return (
-    <div className="group relative flex h-[72px] w-[220px] shrink-0 items-center gap-3 rounded-[16px] border border-[#B8A07C]/45 bg-[#E6DDCD]/54 p-2">
+    <div className="group relative flex h-[72px] w-[220px] shrink-0 items-center gap-3 rounded-[16px] border border-[#B8A07C]/30 bg-[#EEE8DC]/54 p-2">
       <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-[16px] bg-[#F4EFE6] text-[#5C6B50]">
         {props.attachment.previewUrl ? (
           <img className="h-full w-full object-cover" src={props.attachment.previewUrl} alt="" draggable={false} />
@@ -272,10 +277,10 @@ function AttachmentPreview(props: { attachment: ArtifactHomeAttachment; onRemove
       </div>
       <div className="min-w-0 pr-7">
         <div className="truncate text-[13px] font-medium text-[#2A2620]">{props.attachment.name}</div>
-        <div className="mt-1 text-[12px] font-medium text-[#8B8275]">{formatFileSize(props.attachment.size)}</div>
+        <div className="mt-1 text-[13px] font-medium text-[#8B8275]">{formatFileSize(props.attachment.size)}</div>
       </div>
       <button
-        className="absolute right-2 top-2 z-10 grid size-6 place-items-center rounded-full bg-[#2A2620] text-[#F4EFE6] shadow-lg hover:text-[#E6DDCD]"
+        className="absolute right-2 top-2 z-10 grid size-6 place-items-center rounded-full bg-[#2A2620] text-[#F4EFE6]  hover:text-[#EEE8DC]"
         type="button"
         aria-label={`Remove ${props.attachment.name}`}
         onClick={() => props.onRemove(props.attachment.id)}

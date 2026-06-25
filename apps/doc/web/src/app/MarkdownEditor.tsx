@@ -16,6 +16,7 @@ import {
 } from "@mdxeditor/editor";
 import "@mdxeditor/editor/style.css";
 import { scrollbarClass } from "@ai-app/ui/app-shell";
+import { Redo2, Undo2 } from "lucide-react";
 import type { MarkdownRuntimeState, MarkdownSelection } from "../artifact/markdownArtifactAdapter";
 import { MarkdownToolbarContext, type MarkdownTableCellEditor } from "./markdownEditorContext";
 import {
@@ -71,6 +72,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   const markdownCompositionActiveRef = useRef(false);
   const markdownCompositionDraftRef = useRef<string | null>(null);
   const [toolbarActive, setToolbarActive] = useState(false);
+  const [toolbarHost, setToolbarHost] = useState<HTMLDivElement | null>(null);
 
   const setPendingTableCellEdit = useCallback(
     (pending: boolean) => {
@@ -239,10 +241,13 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   }, []);
   const handleEditorBlur = useCallback(() => {
     window.requestAnimationFrame(() => {
+      if (!isMarkdownEditorFocusInside() && !isMarkdownToolbarFocusInside(toolbarHost)) {
+        setToolbarActive(false);
+      }
       const range = activeSelectionRangeRef.current;
       if (range && !isMarkdownEditorFocusInside()) setMarkdownPersistentSelectionHighlight(range);
     });
-  }, []);
+  }, [toolbarHost]);
 
   const handleEditorKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     activateToolbar();
@@ -342,40 +347,42 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   }, [commitNormalizedMarkdownChange]);
 
   return (
-    <section className="relative flex h-full min-h-0 flex-col bg-[#E6DDCD]">
-      <div className={`h-full overflow-x-hidden overflow-y-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-3 py-5 md:px-6 md:py-7 ${scrollbarClass}`}>
-        <div
-          className="mx-auto min-h-[760px] w-full max-w-[1120px]"
-          onBlurCapture={handleEditorBlur}
-          onAuxClickCapture={handleEditorAuxClick}
-          onClickCapture={handleEditorClick}
-          onFocusCapture={() => {
-            clearMarkdownPersistentSelectionHighlight();
-            activateToolbar();
-          }}
-          onCompositionStartCapture={handleMarkdownCompositionStart}
-          onCompositionEndCapture={handleMarkdownCompositionEnd}
-          onKeyDownCapture={handleEditorKeyDown}
-          onBeforeInputCapture={(event) => blockMarkdownReadOnlyMutation(event, props.readOnly)}
-          onPasteCapture={(event) => blockMarkdownReadOnlyMutation(event, props.readOnly)}
-          onCutCapture={(event) => blockMarkdownReadOnlyMutation(event, props.readOnly)}
-          onDropCapture={(event) => blockMarkdownReadOnlyMutation(event, props.readOnly)}
-          onKeyUpCapture={syncSelection}
-          onMouseDownCapture={handleEditorMouseDown}
-          onMouseUpCapture={syncSelection}
-        >
-          <MarkdownToolbarContext.Provider
-            value={{
-              active: toolbarActive,
-              canRedo: !props.readOnly && props.runtime.history.currentIndex < props.runtime.history.entries.length - 1,
-              canUndo: !props.readOnly && props.runtime.history.currentIndex > 0,
-              projectId: props.projectId,
-              readOnly: props.readOnly,
-              onToolbarInteractionStart: preserveMarkdownSelectionForToolbar,
-              onRedo: props.onRedo,
-              runProgrammaticChange,
-              onUndo: props.onUndo,
+    <MarkdownToolbarContext.Provider
+      value={{
+        active: toolbarActive,
+        canRedo: !props.readOnly && props.runtime.history.currentIndex < props.runtime.history.entries.length - 1,
+        canUndo: !props.readOnly && props.runtime.history.currentIndex > 0,
+        projectId: props.projectId,
+        readOnly: props.readOnly,
+        toolbarHost,
+        onToolbarInteractionStart: preserveMarkdownSelectionForToolbar,
+        onRedo: props.onRedo,
+        runProgrammaticChange,
+        onUndo: props.onUndo,
+      }}
+    >
+      <section className="relative flex h-full min-h-0 flex-col bg-[#EEE8DC]">
+        <div ref={setToolbarHost} className="relative z-20 shrink-0" />
+        <div className={`h-full overflow-x-hidden overflow-y-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-3 pb-5 pt-5 md:px-6 md:pb-7 md:pt-7 ${scrollbarClass}`}>
+          <div
+            className="mx-auto min-h-[760px] w-full max-w-[1120px]"
+            onBlurCapture={handleEditorBlur}
+            onAuxClickCapture={handleEditorAuxClick}
+            onClickCapture={handleEditorClick}
+            onFocusCapture={() => {
+              clearMarkdownPersistentSelectionHighlight();
+              activateToolbar();
             }}
+            onCompositionStartCapture={handleMarkdownCompositionStart}
+            onCompositionEndCapture={handleMarkdownCompositionEnd}
+            onKeyDownCapture={handleEditorKeyDown}
+            onBeforeInputCapture={(event) => blockMarkdownReadOnlyMutation(event, props.readOnly)}
+            onPasteCapture={(event) => blockMarkdownReadOnlyMutation(event, props.readOnly)}
+            onCutCapture={(event) => blockMarkdownReadOnlyMutation(event, props.readOnly)}
+            onDropCapture={(event) => blockMarkdownReadOnlyMutation(event, props.readOnly)}
+            onKeyUpCapture={syncSelection}
+            onMouseDownCapture={handleEditorMouseDown}
+            onMouseUpCapture={syncSelection}
           >
             <MDXEditor
               ref={editorRef}
@@ -387,9 +394,64 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
               readOnly={false}
               spellCheck
             />
-          </MarkdownToolbarContext.Provider>
+          </div>
         </div>
-      </div>
-    </section>
+        <MarkdownHistoryToolbar
+          canRedo={!props.readOnly && props.runtime.history.currentIndex < props.runtime.history.entries.length - 1}
+          canUndo={!props.readOnly && props.runtime.history.currentIndex > 0}
+          onRedo={props.onRedo}
+          onToolbarInteractionStart={preserveMarkdownSelectionForToolbar}
+          onUndo={props.onUndo}
+        />
+      </section>
+    </MarkdownToolbarContext.Provider>
+  );
+}
+
+function isMarkdownToolbarFocusInside(toolbarHost: HTMLDivElement | null) {
+  const activeElement = document.activeElement;
+  if (!(activeElement instanceof Element)) return false;
+  return Boolean(toolbarHost?.contains(activeElement) || activeElement.closest(".ai-markdown-link-panel"));
+}
+
+function MarkdownHistoryToolbar(props: {
+  canRedo: boolean;
+  canUndo: boolean;
+  onRedo: () => void;
+  onToolbarInteractionStart: () => void;
+  onUndo: () => void;
+}) {
+  return (
+    <div
+      className="absolute bottom-4 left-4 z-30 inline-flex items-center gap-1 rounded-[12px] border border-[#B8A07C]/30 bg-[#F9F4EC] p-1 text-[#2A2620] "
+      data-toolbar-skip-selection-preserve="true"
+      aria-label="History tools"
+      onMouseDownCapture={(event) => {
+        props.onToolbarInteractionStart();
+        event.preventDefault();
+      }}
+      onPointerDownCapture={props.onToolbarInteractionStart}
+    >
+      <button
+        className="grid size-7 place-items-center rounded-[8px] border-0 bg-transparent text-[#2A2620]/72 outline-none transition hover:not-disabled:bg-[#EEE8DC]/70 hover:not-disabled:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275] disabled:opacity-45"
+        type="button"
+        aria-label="Undo"
+        title="Undo"
+        disabled={!props.canUndo}
+        onClick={props.onUndo}
+      >
+        <Undo2 size={18} />
+      </button>
+      <button
+        className="grid size-7 place-items-center rounded-[8px] border-0 bg-transparent text-[#2A2620]/72 outline-none transition hover:not-disabled:bg-[#EEE8DC]/70 hover:not-disabled:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275] disabled:opacity-45"
+        type="button"
+        aria-label="Redo"
+        title="Redo"
+        disabled={!props.canRedo}
+        onClick={props.onRedo}
+      >
+        <Redo2 size={18} />
+      </button>
+    </div>
   );
 }

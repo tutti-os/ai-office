@@ -18,32 +18,32 @@ export const appShell = {
       scrollbarClass,
     ),
   topAction:
-    "flex h-9 items-center gap-2 rounded-full bg-[#F4EFE6] px-4 text-[12px] font-medium text-[#2A2620] shadow-[0_12px_10px_rgba(0,0,0,0.08)] transition hover:text-[#5C6B50]",
-  countText: "text-[12px] font-medium text-[#8B8275]",
+    "flex h-9 items-center gap-2 rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6] px-4 text-[13px] font-medium text-[#2A2620]  transition hover:text-[#5C6B50]",
+  countText: "text-[13px] font-medium text-[#8B8275]",
   searchShell:
-    "flex h-[38px] w-full items-center gap-2 rounded-full border border-[#B8A07C]/55 bg-[#F4EFE6]/55 px-3.5 text-[#8B8275] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors md:w-[min(340px,42vw)]",
+    "flex h-[38px] w-full items-center gap-2 rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6]/55 px-3.5 text-[#8B8275]  transition-colors md:w-[min(340px,42vw)]",
   searchInput:
     "min-w-0 flex-1 border-0 bg-transparent text-[13px] font-medium text-[#2A2620] outline-none placeholder:text-[#8B8275]",
   error:
-    "mt-4 w-full rounded-2xl border border-[#B8A07C]/50 bg-[#F4EFE6]/80 p-3 text-left text-[12px] leading-5 text-[#7B2E24]",
+    "mt-4 w-full rounded-2xl border border-[#B8A07C]/30 bg-[#F4EFE6]/80 p-3 text-left text-[13px] leading-5 text-[#7B2E24]",
   promptFrame:
-    "mt-8 w-full rounded-[21px] bg-gradient-to-br from-[#5C6B50] to-[#37362F] p-px shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)]",
-  promptInner: "rounded-[20px] bg-[#5C6B50]/82 p-4 backdrop-blur",
-  promptComposer: "border-[#D8CDB9]/70! bg-[#F4EFE6]/92! shadow-[0_1px_2px_rgba(0,0,0,0.05)]!",
+    "mt-8 w-full rounded-[24px] bg-gradient-to-br from-[#5C6B50] to-[#37362F] p-px ",
+  promptInner: "rounded-[24px] bg-[#5C6B50]/82 p-4 backdrop-blur",
+  promptComposer: "border-[#B8A07C]/30! bg-[#F8F4EC]! ",
   promptTextarea: "text-[#2A2620]! placeholder:text-[#8B8275]!",
   iconAction:
-    "grid size-9 shrink-0 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6] shadow-[0_12px_10px_rgba(0,0,0,0.08)] transition-colors hover:bg-[#4C5E42]",
+    "grid size-9 shrink-0 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]  transition-colors hover:bg-[#4C5E42]",
   submitAction:
-    "grid size-10 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6] shadow-[0_12px_10px_rgba(0,0,0,0.08)] transition-colors hover:bg-[#4C5E42] disabled:bg-[#D8CDB9]/70 disabled:text-[#8B8275] disabled:shadow-none",
-  cardShadow: "shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)]",
-  softShadow: "shadow-[0_1px_2px_rgba(0,0,0,0.05)]",
+    "grid size-10 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]  transition-colors hover:bg-[#4C5E42] disabled:bg-[#D8CDB9]/70 disabled:text-[#8B8275] disabled:shadow-none",
+  cardShadow: "",
+  softShadow: "",
 };
 
 export const homeTitleClass =
-  "w-[calc(100vw-56px)] max-w-[1180px] whitespace-nowrap text-center text-[20px] font-semibold leading-6 text-[#2A2620] sm:text-[34px] sm:leading-[38px] md:text-[44px] md:leading-[48px] lg:text-[54px] lg:leading-[58px] xl:text-[58px] xl:leading-[62px]";
+  "w-[calc(100vw-56px)] max-w-[1180px] whitespace-nowrap text-center text-[32px] font-semibold leading-10 text-[#2A2620]";
 export const homeContentClass = "mx-auto flex w-full max-w-[1220px] flex-col px-7 pb-16 pt-10";
 export const homeHeroSectionClass = "mx-auto flex w-full max-w-[820px] flex-col items-center";
-export const homeWorkSectionClass = "mt-6";
+export const homeWorkSectionClass = "mt-8";
 
 export type ArtifactHistoryCopy = {
   clearHistory: string;
@@ -91,7 +91,7 @@ export function HomePanelToggle(props: {
   onClick: () => void;
 }) {
   return (
-    <button className={homePanelButtonClass(props.active)} type="button" onClick={props.onClick}>
+    <button className={homePanelButtonClass(props.active)} type="button" aria-pressed={props.active} onClick={props.onClick}>
       {props.icon}
       {props.label}
     </button>
@@ -105,46 +105,55 @@ export function HomeCategoryPill(props: {
   onClick: () => void;
 }) {
   return (
-    <button className={cx(categoryPillClass(props.active), "inline-flex items-center gap-2")} type="button" onClick={props.onClick}>
+    <button className={cx(categoryPillClass(props.active), "inline-flex items-center gap-2")} type="button" aria-pressed={props.active} onClick={props.onClick}>
       <span>{props.label}</span>
-      {typeof props.count === "number" ? <small className={props.active ? "text-[#F4EFE6]/58" : "text-[#8B8275]"}>{props.count}</small> : null}
+      {typeof props.count === "number" ? (
+        <small
+          className={cx(
+            "grid min-w-5 place-items-center rounded-full px-1.5 text-[11px] font-semibold leading-5",
+            props.active ? "bg-[#F4EFE6]/20 text-[#F4EFE6]" : "bg-[#D8CDB9]/55 text-[#6E675D]",
+          )}
+        >
+          {props.count}
+        </small>
+      ) : null}
     </button>
   );
 }
 
 export function homePanelButtonClass(active: boolean) {
   return cx(
-    "flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-medium transition-colors",
+    "relative z-10 flex h-9 min-w-[108px] items-center justify-center gap-2 rounded-full px-4 text-[13px] font-semibold transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B8A07C]/30",
     active
-      ? "bg-[#5C6B50] text-[#F4EFE6] shadow-[0_12px_10px_rgba(0,0,0,0.08)]"
-      : "border border-[#B8A07C]/55 bg-[#F4EFE6]/44 text-[#2A2620]/68 hover:text-[#5C6B50]",
+      ? "text-[#F4EFE6]"
+      : "text-[#2A2620]/66 hover:text-[#2A2620]",
   );
 }
 
 export function categoryPillClass(active: boolean) {
   return cx(
-    "h-8 shrink-0 rounded-full px-4 text-[12px] font-medium transition-colors",
+    "shrink-0 rounded-full border py-1 pl-3 pr-1 text-[13px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B8A07C]/30",
     active
-      ? "bg-[#5C6B50] text-[#F4EFE6] shadow-[0_12px_10px_rgba(0,0,0,0.08)]"
-      : "border border-[#B8A07C]/55 bg-[#F4EFE6]/50 text-[#2A2620]/72 hover:text-[#5C6B50]",
+      ? "border-[#B8A07C]/30 bg-[#5C6B50] text-[#F4EFE6]"
+      : "border-[#B8A07C]/30 bg-[#F4EFE6]/44 text-[#2A2620]/70 hover:border-[#B8A07C]/30 hover:bg-[#F4EFE6]/78 hover:text-[#2A2620]",
   );
 }
 
 export function formatOptionClass(active: boolean, disabled?: boolean) {
   return cx(
     "flex min-h-16 items-center justify-between gap-3 rounded-2xl border p-3 text-left transition-colors",
-    active && "border-[#D8CDB9]/80 bg-[#F4EFE6] text-[#2A2620] shadow-[0_12px_10px_rgba(0,0,0,0.08)]",
-    disabled && "border-[#D8CDB9]/60 bg-[#E6DDCD]/58 text-[#8B8275]",
-    !active && !disabled && "border-[#E6DDCD]/20 bg-[#F4EFE6]/10 text-[#F4EFE6]/86 hover:border-[#F4EFE6]/42 hover:bg-[#F4EFE6]/16",
+    active && !disabled && "border-[#B8A07C]/30 bg-[#F8F4EC] text-[#2A2620] ",
+    (!active || disabled) && "border-[#B8A07C]/30 bg-[#F4EFE6]/10 text-[#F4EFE6]/86",
+    !active && !disabled && "hover:border-[#B8A07C]/30 hover:bg-[#F4EFE6]/16",
+    disabled && "opacity-45",
   );
 }
 
 export function formatOptionIconClass(active: boolean, disabled?: boolean) {
   return cx(
-    "grid size-9 shrink-0 place-items-center rounded-[14px]",
-    active && "bg-[#5C6B50] text-[#F4EFE6]",
-    disabled && "bg-[#D8CDB9]/64 text-[#8B8275]",
-    !active && !disabled && "bg-[#F4EFE6]/12 text-[#F4EFE6]/70",
+    "grid size-9 shrink-0 place-items-center rounded-[8px]",
+    active && !disabled && "bg-[#5C6B50] text-[#F4EFE6]",
+    (!active || disabled) && "bg-[#F4EFE6]/12 text-[#F4EFE6]/70",
   );
 }
 
@@ -161,8 +170,8 @@ export function ArtifactFormatOption(props: {
     <div className={cx(formatOptionClass(active, props.disabled), "!min-h-[56px] !px-3 !py-2.5")}>
       <span className={formatOptionIconClass(active, props.disabled)}>{props.icon}</span>
       <span className="mr-auto grid min-w-0 flex-1 gap-1">
-        <span className="truncate text-[14px] font-bold leading-none">{props.label}</span>
-        <small className={cx("truncate text-[12px] font-medium", active ? "text-[#8B8275]" : props.disabled ? "text-[#8B8275]/72" : "text-[#E6DDCD]/62")}>
+        <span className="truncate text-[15px] font-bold leading-none">{props.label}</span>
+        <small className={cx("truncate text-[13px] font-medium", active && !props.disabled ? "text-[#8B8275]" : "text-[#EEE8DC]/62")}>
           {props.description}
         </small>
       </span>
@@ -171,7 +180,7 @@ export function ArtifactFormatOption(props: {
           <Check size={14} />
         </span>
       ) : props.statusLabel ? (
-        <span className="ml-auto shrink-0 rounded-full border border-[#B8A07C]/45 bg-[#F4EFE6]/46 px-2.5 py-1 text-[11px] font-medium text-[#8B8275]">
+        <span className="ml-auto shrink-0 rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6]/46 px-2.5 py-1 text-[11px] font-medium text-[#8B8275]">
           {props.statusLabel}
         </span>
       ) : null}
@@ -227,7 +236,7 @@ export function ArtifactImportComposer(props: {
         <button
           className={cx(
             appShell.promptComposer,
-            "mt-2 flex min-h-[118px] w-full flex-col items-center justify-center gap-3 rounded-[17px] border border-dashed border-[#B8A07C]/70 bg-[#F4EFE6]/92 p-5 text-center text-[#2A2620] transition-colors hover:border-[#5C6B50]/60 disabled:opacity-60",
+            "mt-2 flex min-h-[118px] w-full flex-col items-center justify-center gap-3 rounded-[17px] border border-dashed border-[#B8A07C]/30 bg-[#F4EFE6]/92 p-5 text-center text-[#2A2620] transition-colors hover:border-[#B8A07C]/30 disabled:opacity-60",
           )}
           type="button"
           disabled={props.loading}
@@ -237,8 +246,8 @@ export function ArtifactImportComposer(props: {
             {props.loading ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
           </span>
           <span className="grid gap-1">
-            <strong className="text-[14px] font-semibold">{props.actionLabel}</strong>
-            <small className="text-[12px] font-medium text-[#8B8275]">{props.actionDescription}</small>
+            <strong className="text-[15px] font-semibold">{props.actionLabel}</strong>
+            <small className="text-[13px] font-medium text-[#8B8275]">{props.actionDescription}</small>
           </span>
         </button>
         {props.error ? <div className={appShell.error}>{props.error}</div> : null}
@@ -256,7 +265,7 @@ export function HomeSectionHeader(props: {
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div className="flex min-w-0 flex-col gap-2">
         <div className="flex items-center gap-2">
-          <div className="flex h-9 items-center gap-2 rounded-full bg-[#5C6B50] px-4 text-[13px] font-medium text-[#F4EFE6] shadow-[0_12px_10px_rgba(0,0,0,0.08)]">
+          <div className="flex h-9 items-center gap-2 rounded-full bg-[#5C6B50] px-4 text-[13px] font-medium text-[#F4EFE6] ">
             {props.icon}
             {props.label}
           </div>
@@ -289,17 +298,17 @@ export function ArtifactHistoryPanel<Project>(props: {
   if (props.projects.length === 0) {
     return (
       <div className="mt-5">
+        <ArtifactHistoryEmptyState
+          description={props.emptyDescription}
+          icon={props.emptyIcon === undefined ? <History size={17} /> : props.emptyIcon}
+          title={props.emptyTitle}
+        />
         <ArtifactHistoryActions
           clearLabel={props.clearLabel}
           copy={copy}
           loading={props.loading}
           projectCount={props.projects.length}
           onClearHistory={props.onClearHistory}
-        />
-        <ArtifactHistoryEmptyState
-          description={props.emptyDescription}
-          icon={props.emptyIcon ?? <History size={17} />}
-          title={props.emptyTitle}
         />
       </div>
     );
@@ -380,19 +389,16 @@ function ArtifactHistoryCard(props: {
         type="button"
         onClick={props.onOpen}
       >
-        <div className="pr-12">
-          <div className="truncate text-[13px] font-medium text-[#2A2620]">{props.title}</div>
+        <div>
+          <div className="truncate text-[15px] font-semibold text-[#2A2620]">{props.title}</div>
           <div className="mt-1 truncate text-[11px] text-[#8B8275]">{props.subtitle}</div>
         </div>
-        {props.preview ? <p className="mt-4 line-clamp-2 text-[12px] leading-5 text-[#2A2620]/62">{props.preview}</p> : null}
-        <div className={cx(props.preview ? "mt-4 pr-9" : "mt-5", "flex items-center gap-1.5 text-[11px] text-[#8B8275]")}>
+        {props.preview ? <p className="mt-4 line-clamp-2 text-[13px] leading-5 text-[#2A2620]/62">{props.preview}</p> : null}
+        <div className={cx(props.preview ? "mt-4" : "mt-5", "flex items-center gap-1.5 text-[11px] text-[#8B8275]")}>
           <Clock3 size={12} />
           {formatArtifactDate(props.updatedAt)}
         </div>
       </button>
-      <div className="absolute right-3 top-3 grid size-8 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]">
-        {props.icon}
-      </div>
       <button
         aria-label={props.copy.deleteProjectAria(props.title)}
         className={historyDeleteButtonClass}
@@ -414,9 +420,9 @@ function ArtifactHistoryEmptyState(props: {
   return (
     <div className={cx("mt-3", historyEmptyStateClass)}>
       <div>
-        <div className={`mx-auto mb-3 ${historyEmptyIconClass}`}>{props.icon}</div>
+        {props.icon ? <div className={`mx-auto mb-3 ${historyEmptyIconClass}`}>{props.icon}</div> : null}
         <div className="text-[13px] font-semibold text-[#2A2620]">{props.title}</div>
-        <div className="mt-1 text-[12px] font-medium text-[#8B8275]">{props.description}</div>
+        <div className="mt-1 text-[13px] font-medium text-[#8B8275]">{props.description}</div>
       </div>
     </div>
   );
@@ -425,29 +431,30 @@ function ArtifactHistoryEmptyState(props: {
 function formatArtifactDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: true,
   }).format(date);
 }
 
 export function templateCardClass() {
-  return "relative overflow-hidden rounded-[20px] bg-[#F4EFE6] text-left text-[#2A2620] shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)] ring-1 ring-[#B8A07C]/45 transition hover:-translate-y-0.5 hover:shadow-[0_12px_10px_rgba(0,0,0,0.08)]";
+  return "relative overflow-hidden rounded-[20px] bg-[#F4EFE6] text-left text-[#2A2620]  ring-1 ring-[#B8A07C]/30 transition hover:-translate-y-0.5 ";
 }
 
 export function historyCardClass() {
-  return "relative min-h-[132px] rounded-[20px] border border-[#B8A07C]/50 bg-[#F4EFE6]/58 shadow-[0_1px_2px_rgba(0,0,0,0.05)] backdrop-blur transition hover:-translate-y-0.5 hover:shadow-[0_12px_10px_rgba(0,0,0,0.08)]";
+  return "relative min-h-[132px] rounded-[20px] border border-[#B8A07C]/30 bg-[#F4EFE6]/58  backdrop-blur transition hover:-translate-y-0.5 ";
 }
 
-export const historyActionsClass = "flex items-center justify-start";
+export const historyActionsClass = "mt-4 flex items-center justify-start";
 export const historyClearButtonClass =
-  "flex h-8 items-center gap-2 rounded-full border border-[#B8A07C]/55 bg-[#F4EFE6]/55 px-3 text-[12px] font-medium text-[#8B8275] transition hover:border-[#5C6B50]/50 hover:text-[#5C6B50] disabled:cursor-not-allowed disabled:opacity-40";
+  "flex h-8 items-center gap-2 rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6]/55 px-3 text-[13px] font-medium text-[#8B8275] transition hover:border-[#B8A07C]/30 hover:text-[#5C6B50] disabled:cursor-not-allowed disabled:opacity-40";
 export const historyDeleteButtonClass =
-  "absolute bottom-3 right-3 grid size-7 place-items-center rounded-[16px] border border-[#B8A07C]/55 bg-[#F4EFE6]/70 text-[#8B8275] opacity-0 transition hover:border-[#5C6B50]/50 hover:text-[#5C6B50] focus-visible:opacity-100 group-hover:opacity-100";
+  "absolute bottom-3 right-3 grid size-7 place-items-center rounded-[16px] border border-[#B8A07C]/30 bg-[#F4EFE6]/70 text-[#8B8275] opacity-0 transition hover:border-[#B8A07C]/30 hover:text-[#5C6B50] focus-visible:opacity-100 group-hover:opacity-100";
 export const historyEmptyStateClass =
-  "grid min-h-[220px] place-items-center gap-2 rounded-[20px] border border-[#B8A07C]/55 bg-[#F4EFE6]/50 p-7 text-center shadow-[0_1px_2px_rgba(0,0,0,0.05)] backdrop-blur";
+  "grid min-h-[220px] place-items-center gap-2 rounded-[20px] border border-[#B8A07C]/30 bg-[#F4EFE6]/50 p-7 text-center  backdrop-blur";
 export const historyEmptyIconClass = "grid size-9 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]";
 
 export function AgentSelectShell(props: { children: ReactNode }) {
