@@ -345,11 +345,13 @@ export function ToolbarNumberInput(props: {
 
 export function FontSizeControl(props: { value: string; disabled?: boolean; onChange: (fontSize: string) => void }) {
   const [draft, setDraft] = useState(fontSizeNumber(props.value));
+  const [editing, setEditing] = useState(false);
   const skipBlurCommitRef = useRef(false);
 
   useEffect(() => {
+    if (editing) return;
     setDraft(fontSizeNumber(props.value));
-  }, [props.value]);
+  }, [editing, props.value]);
 
   const commit = (nextValue = draft) => {
     const next = clampFontSize(nextValue);
@@ -384,6 +386,7 @@ export function FontSizeControl(props: { value: string; disabled?: boolean; onCh
         value={draft}
         onChange={(event) => setDraft(event.currentTarget.value.replace(/[^\d]/g, "").slice(0, 3))}
         onBlur={() => {
+          setEditing(false);
           if (skipBlurCommitRef.current) {
             skipBlurCommitRef.current = false;
             return;
@@ -406,6 +409,7 @@ export function FontSizeControl(props: { value: string; disabled?: boolean; onCh
             step(-1);
           }
         }}
+        onFocus={() => setEditing(true)}
         onMouseDown={(event) => event.stopPropagation()}
       />
       <button

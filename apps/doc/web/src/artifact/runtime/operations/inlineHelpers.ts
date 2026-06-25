@@ -1,8 +1,8 @@
-import { ElementStyleAttributes, HeadingTag, InlineFormatTag, blockSelector, inlineFormatSelectorByTag, zeroWidthSpace } from './types';
+import { ElementStyleAttributes, HeadingTag, InlineFormatTag, blockSelector, inlineFormatSelectorByTag, inlineTags, zeroWidthSpace } from './types';
 import { descendantDepth, selectNodeRange } from './clearFormatHelpers';
 import { selectElement, selectTableEditingTarget } from './mediaElements';
 import { convertTableCellContentBlock, findNearestBlock, hasBlockDescendantInSet, isBlockElement, nearestElement, rangeIntersectsNode, selectedNodeElement } from './presentationHelpers';
-import { applyLinkAttributes, copyPresentation, isElementNode, isHtmlElement, normalizeBorderStyle, normalizeBoxSize, normalizeColor, normalizeCssSize, normalizeCssSizeOrNormal, normalizeEditableDocument, normalizeLineHeight, normalizeVerticalAlign, replaceElementWithText, unwrapElement } from './sanitizeHelpers';
+import { applyLinkAttributes, copyPresentation, isElementNode, isHtmlElement, kebabCase, normalizeBorderStyle, normalizeBoxSize, normalizeColor, normalizeCssSize, normalizeCssSizeOrNormal, normalizeEditableDocument, normalizeLineHeight, normalizeVerticalAlign, replaceElementWithText, unwrapElement } from './sanitizeHelpers';
 import { findTableCellFromElement, isTableCellElement, selectedTableStyleTargets } from './tableSelection';
 export function getFormattingContext(doc: Document) {
   const selection = doc.getSelection();
@@ -83,9 +83,18 @@ export function wrapSelectionOrBlockWithStyle(doc: Document, styles: Partial<CSS
 }
 
 export function styleTextSelection(doc: Document, range: Range, selection: Selection, styles: Partial<CSSStyleDeclaration>) {
-  return wrapTextSelection(doc, range, selection, "span", (span) => {
+  const changed = wrapTextSelection(doc, range, selection, "span", (span) => {
     Object.assign(span.style, styles);
   });
+  if (changed) {
+    normalizeOverriddenInlineStyles(
+      doc,
+      Object.entries(styles)
+        .filter(([, value]) => typeof value === "string" && value.trim())
+        .map(([property]) => property),
+    );
+  }
+  return changed;
 }
 
 export function wrapTextSelection<K extends keyof HTMLElementTagNameMap>(
@@ -172,6 +181,67 @@ export function wrapRange<K extends keyof HTMLElementTagNameMap>(doc: Document, 
   selection?.removeAllRanges();
   selection?.addRange(nextRange);
   return wrapper;
+}
+
+function normalizeOverriddenInlineStyles(doc: Document, properties: string[]) {
+  const styleProperties = Array.from(new Set(properties.filter((property) => property !== "textAlign")));
+  if (styleProperties.length === 0) return;
+
+  Array.from(doc.body.querySelectorAll<HTMLElement>(inlineTags.join(",")))
+    .sort((left, right) => descendantDepth(right) - descendantDepth(left))
+    .forEach((element) => {
+      if (!element.isConnected) return;
+      styleProperties.forEach((property) => {
+        const cssProperty = kebabCase(property);
+        if (hasInlineStyleValue(element, cssProperty) && isInlineStyleCoveredByDescendants(element, cssProperty)) {
+          element.style.removeProperty(cssProperty);
+        }
+      });
+      if (element.getAttribute("style") !== null && !element.style.cssText.trim()) element.removeAttribute("style");
+      if (element.tagName === "SPAN" && element.attributes.length === 0) unwrapElement(element);
+    });
+}
+
+function isInlineStyleCoveredByDescendants(element: HTMLElement, cssProperty: string) {
+  const textNodes: Text[] = [];
+  collectTextNodes(element, textNodes);
+  const meaningfulTextNodes = textNodes.filter((node) => Boolean(node.textContent?.trim()));
+  return meaningfulTextNodes.length > 0 && meaningfulTextNodes.every((node) => hasStyledDescendantAncestor(node, element, cssProperty));
+}
+
+function hasStyledDescendantAncestor(node: Node, boundary: HTMLElement, cssProperty: string) {
+  let current = node.parentElement;
+  while (current && current !== boundary) {
+    if (isHtmlElement(current) && hasCoveringInlineStyleValue(current, cssProperty)) return true;
+    current = current.parentElement;
+  }
+  return false;
+}
+
+function hasInlineStyleValue(element: HTMLElement, cssProperty: string) {
+  const value = element.style.getPropertyValue(cssProperty).trim();
+  return Boolean(value) && value !== "normal" && value !== "none" && value !== "rgba(0, 0, 0, 0)" && value !== "transparent";
+}
+
+function hasCoveringInlineStyleValue(element: HTMLElement, cssProperty: string) {
+  const value = element.style.getPropertyValue(cssProperty);
+  return hasInlineStyleValue(element, cssProperty) && isIndependentStyleValue(cssProperty, value);
+}
+
+function isIndependentStyleValue(cssProperty: string, value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (cssProperty === "font-size") return /^(0|(\d+|\d*\.\d+)px)$/i.test(normalized);
+  if (cssProperty === "letter-spacing") return /^(0|[-+]?(\d+|\d*\.\d+)px)$/i.test(normalized);
+  if (cssProperty === "line-height") return /^(0|(\d+|\d*\.\d+)px)$/i.test(normalized);
+  return !["inherit", "initial", "revert", "revert-layer", "unset", "currentcolor"].includes(normalized);
+}
+
+function collectTextNodes(node: Node, output: Text[]) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    output.push(node as Text);
+    return;
+  }
+  node.childNodes.forEach((child) => collectTextNodes(child, output));
 }
 
 export function wrapRangeAsLink(doc: Document, range: Range) {

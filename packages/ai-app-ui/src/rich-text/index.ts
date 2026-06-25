@@ -192,9 +192,7 @@ export function applyPresentationStyle(doc: Document, style: RichTextStyle | nul
   const range = selection.getRangeAt(0);
   if (!range.collapsed) {
     const inlineStyle = omitStyle(normalized, ["textAlign"]);
-    const textChanged = inlineStyle
-      ? wrapTextSelection(doc, range, selection, "span", (span) => applyStyleToElement(span, inlineStyle))
-      : false;
+    const textChanged = inlineStyle ? styleTextSelection(doc, range, selection, inlineStyle) : false;
     let blockChanged = false;
     if (normalized.textAlign) {
       const blocks = getSelectedBlockElements(doc, selection);
@@ -210,6 +208,12 @@ export function applyPresentationStyle(doc: Document, style: RichTextStyle | nul
   if (!target || target === doc.body) return false;
   applyStyleToElement(target, normalized);
   return true;
+}
+
+function styleTextSelection(doc: Document, range: Range, selection: Selection, style: RichTextStyle) {
+  const changed = wrapTextSelection(doc, range, selection, "span", (span) => applyStyleToElement(span, style));
+  if (changed) normalizeOverriddenInlineStyles(doc, Object.keys(style) as Array<keyof RichTextStyle>);
+  return changed;
 }
 
 function wrapTextSelection<K extends keyof HTMLElementTagNameMap>(
@@ -447,6 +451,66 @@ function applyStyleToElement(element: HTMLElement, style: RichTextStyle) {
   Object.entries(style).forEach(([property, value]) => {
     if (value) element.style.setProperty(kebabCase(property), value);
   });
+}
+
+function normalizeOverriddenInlineStyles(doc: Document, properties: Array<keyof RichTextStyle>) {
+  const styleProperties = Array.from(new Set(properties.filter((property) => property !== "textAlign")));
+  if (styleProperties.length === 0) return;
+
+  Array.from(doc.body.querySelectorAll<HTMLElement>(inlineTags.join(",")))
+    .sort((left, right) => descendantDepth(right) - descendantDepth(left))
+    .forEach((element) => {
+      if (!element.isConnected) return;
+      styleProperties.forEach((property) => {
+        const cssProperty = kebabCase(property);
+        if (hasInlineStyleValue(element, cssProperty) && isInlineStyleCoveredByDescendants(element, cssProperty)) {
+          element.style.removeProperty(cssProperty);
+        }
+      });
+      if (element.getAttribute("style") !== null && !element.style.cssText.trim()) element.removeAttribute("style");
+      if (element.tagName === "SPAN" && element.attributes.length === 0) unwrapElement(element);
+    });
+}
+
+function isInlineStyleCoveredByDescendants(element: HTMLElement, cssProperty: string) {
+  const textNodes: Text[] = [];
+  collectTextNodes(element, textNodes);
+  const meaningfulTextNodes = textNodes.filter((node) => Boolean(node.textContent?.trim()));
+  return meaningfulTextNodes.length > 0 && meaningfulTextNodes.every((node) => hasStyledDescendantAncestor(node, element, cssProperty));
+}
+
+function hasStyledDescendantAncestor(node: Node, boundary: HTMLElement, cssProperty: string) {
+  let current = node.parentElement;
+  while (current && current !== boundary) {
+    if (isHtmlElement(current) && hasCoveringInlineStyleValue(current, cssProperty)) return true;
+    current = current.parentElement;
+  }
+  return false;
+}
+
+function hasInlineStyleValue(element: HTMLElement, cssProperty: string) {
+  return !isSkippableStyleValue(element.style.getPropertyValue(cssProperty));
+}
+
+function hasCoveringInlineStyleValue(element: HTMLElement, cssProperty: string) {
+  const value = element.style.getPropertyValue(cssProperty);
+  return hasInlineStyleValue(element, cssProperty) && isIndependentStyleValue(cssProperty, value);
+}
+
+function isIndependentStyleValue(cssProperty: string, value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (cssProperty === "font-size") return /^(0|(\d+|\d*\.\d+)px)$/i.test(normalized);
+  if (cssProperty === "letter-spacing") return /^(0|[-+]?(\d+|\d*\.\d+)px)$/i.test(normalized);
+  if (cssProperty === "line-height") return /^(0|(\d+|\d*\.\d+)px)$/i.test(normalized);
+  return !["inherit", "initial", "revert", "revert-layer", "unset", "currentcolor"].includes(normalized);
+}
+
+function collectTextNodes(node: Node, output: Text[]) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    output.push(node as Text);
+    return;
+  }
+  node.childNodes.forEach((child) => collectTextNodes(child, output));
 }
 
 function isSkippableStyleValue(value: string) {

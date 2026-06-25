@@ -1,6 +1,6 @@
 import { AlignCenter, AlignLeft, AlignRight, Bold, Crosshair, Image, Italic, PaintBucket, Redo2, Strikethrough, Underline, Undo2 } from "lucide-react";
 import { scrollbarClass } from "@ai-app/ui/app-shell";
-import { Toolbar, ToolbarColorInput, ToolbarDivider, ToolbarGroup, ToolbarIconButton, ToolbarNumberInput, ToolbarRow, ToolbarSelect } from "@ai-app/ui/toolbar";
+import { FontSizeControl, Toolbar, ToolbarColorInput, ToolbarDivider, ToolbarGroup, ToolbarIconButton, ToolbarRow, ToolbarSelect } from "@ai-app/ui/toolbar";
 import type { PointerEvent } from "react";
 import type { InlineFormatTag, RichTextStyle } from "@ai-app/ui/rich-text";
 import { deckSlideDisplayName } from "@ai-slide/shared";
@@ -285,7 +285,7 @@ function DeckToolbar(props: {
               </option>
             ))}
           </ToolbarSelect>
-          <ToolbarNumberInput disabled={textControlDisabled} title="Font size" value={props.state.fontSize} onChange={props.onFontSize} />
+          <FontSizeControl disabled={textControlDisabled} value={props.state.fontSize} onChange={props.onFontSize} />
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup>
