@@ -29,8 +29,8 @@ export function BlankTemplateCard(props: { outputType: OutputType; onCreate: () 
         <Plus className="opacity-60" size={26} />
       </button>
       <div className="mt-2 min-w-0 px-1">
-        <div className="truncate text-[15px] font-semibold text-[#2A2620]">{t("home.blankDeck")}</div>
-        <div className="mt-0.5 truncate text-[11px] text-[#8B8275]">{props.outputType === "html" ? t("home.blankPresentation") : props.outputType.toUpperCase()}</div>
+        <div className="truncate text-[15px] font-semibold text-[#2A2620]">{t("home.blankPresentation")}</div>
+        <div className="mt-0.5 truncate text-[11px] text-[#8B8275]">{blankPresentationTypeLabel(props.outputType)}</div>
       </div>
     </div>
   );
@@ -267,6 +267,11 @@ function ProjectTypeIcon(props: { type: SlideArtifactType }) {
 function projectTypeLabel(type: SlideArtifactType, t: ReturnType<typeof useI18n>["t"]) {
   if (type === "pptx") return t("history.typePptx");
   return t("history.typeDeck");
+}
+
+function blankPresentationTypeLabel(type: OutputType) {
+  if (type === "pptx") return "PPTX";
+  return "Deck";
 }
 
 function humanizeCategory(value: string) {

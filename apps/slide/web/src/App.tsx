@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hasActiveAgentRun } from "@ai-app/agent/conversation";
 import {
-  FileText,
   History,
   Upload,
 } from "lucide-react";
@@ -24,8 +23,10 @@ import {
   HomePanelToggle,
   HomePageShell,
   HomeTopAction,
+  HomeTitleText,
   homeTitleClass,
   homeWorkSectionClass,
+  TemplatesFilledIcon,
 } from "@ai-app/ui/app-shell";
 import type { ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { artifactInteractionForAgentBusy, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
@@ -484,7 +485,9 @@ export function App() {
       </HomeTopAction>
       <div className={homeContentClass}>
         <section className={homeHeroSectionClass}>
-          <h1 className={cn("m-0", homeTitleClass)}>{t("home.heading")}</h1>
+          <h1 className={cn("m-0", homeTitleClass)}>
+            <HomeTitleText emphasisTerms={["presentation", "演示文稿"]} title={t("home.heading")} />
+          </h1>
           <HomeComposer
             attachments={homeAttachments.attachments}
             creating={creating}
@@ -507,8 +510,8 @@ export function App() {
         </section>
 
         <section className={homeWorkSectionClass}>
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-4" aria-label="Home panels">
+          <div className="flex flex-col gap-8">
+            <div className="flex items-center" aria-label="Home panels">
               <div className="h-px min-w-0 flex-1 bg-[#B8A07C]/30" />
               <div className="relative inline-grid grid-cols-2 rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6]/48 p-1">
                 <span
@@ -518,7 +521,7 @@ export function App() {
                   aria-hidden="true"
                 />
                 <div className="contents">
-                  <HomePanelToggle active={activePanel === "templates"} icon={<FileText size={15} />} label={t("home.templates")} onClick={() => setActivePanel("templates")} />
+                  <HomePanelToggle active={activePanel === "templates"} icon={<TemplatesFilledIcon size={15} />} label={t("home.templates")} onClick={() => setActivePanel("templates")} />
                   <HomePanelToggle active={activePanel === "history"} icon={<History size={15} />} label={t("home.history")} onClick={() => setActivePanel("history")} />
                 </div>
               </div>

@@ -1,5 +1,4 @@
-import { FileCode2, FileText } from "lucide-react";
-import { ArtifactHomeComposer, type ArtifactHomeFormatOption } from "@ai-app/ui/home-composer";
+import { ArtifactHomeComposer, CodeFilledFormatIcon, PptFilledFormatIcon, type ArtifactHomeFormatOption } from "@ai-app/ui/home-composer";
 import { contextAttachmentFileAccept } from "@ai-app/shared/context-attachments";
 import type { LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-slide/shared";
 import { useI18n } from "../i18n";
@@ -77,7 +76,7 @@ function slideFormatOptions(input: {
       id: "html",
       label: "Deck",
       description: input.t("composer.deckDescription"),
-      icon: <FileCode2 size={20} />,
+      icon: <CodeFilledFormatIcon />,
     },
     {
       id: "pptx",
@@ -85,7 +84,7 @@ function slideFormatOptions(input: {
       description: formatPptxOutputDescription(input.officeCliStatus, input.t),
       disabled: !input.pptxAvailable || input.pptxInstalling,
       downloadLabel: input.t("composer.downloadOfficeCli"),
-      icon: <FileText size={20} />,
+      icon: <PptFilledFormatIcon />,
       installing: input.pptxInstalling,
       showInstall: !input.pptxAvailable && input.officeCliStatus?.canInstall === true,
       title: !input.pptxAvailable ? input.officeCliStatus?.reason ?? input.t("composer.officeCliRequired") : undefined,

@@ -65,14 +65,15 @@ export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
     }
   };
 
-  const loadBlankDocument = async () => {
+  const loadBlankDocument = async (typeOverride?: DocumentType) => {
+    const type = typeOverride ?? input.outputType;
     input.setError("");
     input.setLoading(true);
     try {
       const project = await createProject({
         title: input.t("project.untitledDoc"),
-        content: input.outputType === "markdown" ? undefined : initialContentForType(input.outputType),
-        type: input.outputType,
+        content: type === "markdown" ? undefined : initialContentForType(type),
+        type,
       });
       input.setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
       openProject(project);
