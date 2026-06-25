@@ -368,8 +368,19 @@ export function useHtmlTiptapEditor(input: {
         pendingImageReplacePositionRef.current = position;
         input.onRequestImageFile();
       };
+      const onDeleteTableMessage = (event: MessageEvent) => {
+        const data = event.data as { source?: unknown; type?: unknown; tableIndex?: unknown } | null;
+        if (data?.source !== "ai-doc-html-editor" || data.type !== "delete-table" || typeof data.tableIndex !== "number") return;
+        const table = editor.view.dom.querySelectorAll<HTMLTableElement>("table").item(data.tableIndex);
+        if (!table) return;
+        deleteTableElement(editor, table);
+      };
       doc.addEventListener(imageReplaceEventName, onReplaceImage);
-      cleanup = () => doc.removeEventListener(imageReplaceEventName, onReplaceImage);
+      window.addEventListener("message", onDeleteTableMessage);
+      cleanup = () => {
+        doc.removeEventListener(imageReplaceEventName, onReplaceImage);
+        window.removeEventListener("message", onDeleteTableMessage);
+      };
     };
     install();
     return () => {
@@ -611,6 +622,55 @@ export function HtmlTiptapEditorSurface(props: { editor: Editor | null; projectI
   );
 }
 
+function deleteTableElement(editor: Editor, table: HTMLTableElement) {
+  const range = tableNodeRangeFromElement(editor, table);
+  if (!range) return editor.chain().focus().deleteTable().run();
+  try {
+    if (editor.chain().focus().deleteRange(range).run()) return true;
+  } catch {
+    // Fall back to a direct ProseMirror transaction below.
+  }
+  const view = mountedEditorView(editor);
+  if (!view) return false;
+  try {
+    let tr = editor.state.tr.delete(range.from, range.to);
+    if (tr.doc.childCount === 0) {
+      const paragraph = editor.schema.nodes.paragraph?.createAndFill();
+      if (paragraph) tr = tr.insert(0, paragraph);
+    }
+    view.dispatch(tr.scrollIntoView());
+    view.focus();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function tableNodeRangeFromElement(editor: Editor, table: HTMLTableElement) {
+  const view = mountedEditorView(editor);
+  const cell = table.querySelector<HTMLElement>("th, td") ?? table;
+  if (!view) return null;
+  try {
+    const position = clampPosition(view.posAtDOM(cell, 0), editor.state.doc.content.size);
+    const resolvedPosition = editor.state.doc.resolve(position);
+    for (let depth = resolvedPosition.depth; depth > 0; depth -= 1) {
+      if (resolvedPosition.node(depth).type.name === "table") {
+        return {
+          from: resolvedPosition.before(depth),
+          to: resolvedPosition.after(depth),
+        };
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function clampPosition(position: number, contentSize: number) {
+  return Math.max(0, Math.min(position, contentSize));
+}
+
 function editorBodyHtml(bodyInnerHTML: string, projectId: string | null) {
   return renderHtmlProjectFragmentAssetReferences(normalizeTaskListsForTiptap(bodyInnerHTML || "<p></p>"), projectId);
 }
@@ -831,14 +891,11 @@ function updateCurrentBlockAttributes(
 }
 
 function applyIndentChange(editor: Editor, selectionBookmarkRef: MutableRefObject<StoredSelectionBookmark | null>, direction: 1 | -1) {
-  if (editor.isActive("taskItem")) {
-    const currentMarginLeft = readCurrentMarginLeft(editor, "taskItem");
+  const listBlockType = editor.isActive("taskItem") ? "taskItem" : editor.isActive("listItem") ? "listItem" : null;
+  if (listBlockType) {
+    const currentMarginLeft = readCurrentMarginLeft(editor, listBlockType);
     updateCurrentBlockAttributes(editor, { marginLeft: nextIndentMarginLeft(currentMarginLeft, direction) }, selectionBookmarkRef);
     return;
-  }
-  if (editor.isActive("listItem")) {
-    const command = direction > 0 ? toolbarChain(editor, selectionBookmarkRef).sinkListItem("listItem") : toolbarChain(editor, selectionBookmarkRef).liftListItem("listItem");
-    if (command.run()) return;
   }
   const blockType = currentIndentBlockType(editor);
   const currentMarginLeft = blockType ? readCurrentMarginLeft(editor, blockType) : "";

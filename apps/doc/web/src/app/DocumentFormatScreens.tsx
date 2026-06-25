@@ -7,6 +7,8 @@ import { AgentConversationPanel } from "./AgentConversationPanel";
 import { DocxPreview } from "./DocxPreview";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { markdownParagraphCount, markdownWordCount } from "./documentWorkbenchContent";
+import { artifactEditorCopy } from "../i18n/copy";
+import { useI18n } from "../i18n";
 
 type SharedShellProps = {
   activeSelectionText: string;
@@ -46,23 +48,25 @@ export function MarkdownDocumentScreen(props: SharedShellProps & {
   onTableCellCommitterChange: (committer: (() => boolean) | null) => void;
   onUndo: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <ArtifactEditorWorkspace
-      title={props.runtime.title || "Untitled Markdown"}
+      title={props.runtime.title || t("editor.untitledMarkdown")}
       saveState={props.saveState}
       agentWorking={props.agentProcessing}
       stats={[
-        `${markdownWordCount(props.runtime.content)} words`,
-        `${markdownParagraphCount(props.runtime.content)} blocks`,
+        t("editor.wordCount", { count: markdownWordCount(props.runtime.content) }),
+        t("editor.blockCount", { count: markdownParagraphCount(props.runtime.content) }),
       ]}
+      copy={artifactEditorCopy(t)}
       exportItems={[
         {
-          label: "DOCX (coming soon)",
+          label: t("editor.docxComingSoon"),
           disabled: true,
           onSelect: () => undefined,
         },
         {
-          label: props.pdfExporting ? "PDF exporting..." : "PDF",
+          label: props.pdfExporting ? t("editor.pdfExporting") : "PDF",
           disabled: props.pdfExporting || !props.pdfExportAvailable,
           loading: props.pdfExporting,
           onSelect: () => props.onExportPdf(props.runtime.content),
@@ -101,15 +105,17 @@ export function DocxDocumentScreen(props: SharedShellProps & {
   onExportPdf: (previewElement: HTMLElement | null) => Promise<void>;
   onSelectionChange: (selection: DocxSelection) => void;
 }) {
+  const { t } = useI18n();
   const previewRef = useRef<HTMLDivElement | null>(null);
   return (
     <ArtifactEditorWorkspace
-      title={props.runtime.title || "Untitled Word Doc"}
+      title={props.runtime.title || t("editor.untitledWordDoc")}
       saveState={props.loading ? "loading" : props.dirty ? "saving" : "saved"}
       agentWorking={props.agentProcessing}
+      copy={artifactEditorCopy(t)}
       exportItems={[
         {
-          label: props.pdfExporting ? "PDF exporting..." : "PDF",
+          label: props.pdfExporting ? t("editor.pdfExporting") : "PDF",
           disabled: props.pdfExporting || !props.pdfExportAvailable,
           loading: props.pdfExporting,
           onSelect: () => props.onExportPdf(previewRef.current),

@@ -3,6 +3,8 @@ import { ArtifactEditorWorkspace, type ArtifactSaveState } from "@ai-app/ui/edit
 import type { LocalAgentProviderStatus, ProjectDetailResponse, RuntimeProfile, SheetRunTimelineItem } from "@ai-sheet/shared";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { XlsxPreview } from "./XlsxPreview";
+import { artifactEditorCopy } from "../i18n/copy";
+import { useI18n } from "../i18n";
 import type { XlsxRuntimeState } from "../artifact/xlsxArtifactAdapter";
 
 export function SheetViewerScreen(props: {
@@ -28,6 +30,7 @@ export function SheetViewerScreen(props: {
   onDismissExport: () => void;
   onSendPrompt: (prompt: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const manifest = props.detail.xlsxManifest;
   const sheets = props.runtime?.renderWorkbook?.sheets.length ?? 0;
   const activeSelectionText = useMemo(() => {
@@ -36,9 +39,9 @@ export function SheetViewerScreen(props: {
     return `${selection.sheetName || "Sheet"}!${selection.address}`;
   }, [props.runtime?.selection]);
   const stats = [
-    manifest?.exists ? `${formatBytes(manifest.sizeBytes)} XLSX` : "No file",
-    sheets ? `${sheets} sheets` : props.detail.artifact.type.toUpperCase(),
-    `Revision ${props.detail.artifact.revision}`,
+    manifest?.exists ? `${formatBytes(manifest.sizeBytes)} XLSX` : t("editor.noFile"),
+    sheets ? t("editor.sheetCount", { count: sheets }) : props.detail.artifact.type.toUpperCase(),
+    t("editor.revision", { revision: props.detail.artifact.revision }),
   ];
 
   return (
@@ -46,9 +49,10 @@ export function SheetViewerScreen(props: {
       title={props.detail.project.title}
       saveState={props.saveState}
       stats={stats}
+      copy={artifactEditorCopy(t)}
       exportItems={[
         {
-          label: props.exporting ? "XLSX exporting..." : "XLSX copy",
+          label: props.exporting ? t("editor.xlsxExporting") : t("editor.xlsxCopy"),
           disabled: !manifest?.exists || props.exporting,
           loading: props.exporting,
           onSelect: props.onExportXlsx,
@@ -62,7 +66,7 @@ export function SheetViewerScreen(props: {
       onOpenExportLocation={props.onOpenExportLocation}
       sidebar={
         <AgentConversationPanel
-          activeSelectionLabel="Active cell"
+          activeSelectionLabel={t("agent.activeSelection")}
           activeSelectionText={activeSelectionText}
           activeSelectionVisible={false}
           artifactLabel="xlsx"

@@ -9,6 +9,8 @@ import type { RuntimeState, SelectionState } from "../artifact/runtime/types";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { HtmlEditorToolbar } from "./HtmlEditorToolbar";
 import { HtmlTiptapEditorSurface, useHtmlTiptapEditor } from "./HtmlTiptapEditorSurface";
+import { artifactEditorCopy } from "../i18n/copy";
+import { useI18n } from "../i18n";
 import type { Alignment, EditorStats, HeadingTag, ImageAttributes, InlineFormatTag, LinkDraft, ListKind, ToolbarState } from "./runtimeWorkbenchTypes";
 
 const linkEditorPanelWidth = 300;
@@ -21,10 +23,11 @@ type LinkEditorPosition = {
 };
 
 export function DocumentLoadingScreen(props: { error: string; loading: boolean }) {
+  const { t } = useI18n();
   return (
     <section className="relative flex h-full min-h-0 flex-col bg-[#E6DDCD] text-[#2A2620]">
       <header className="flex h-12 shrink-0 items-center border-b border-[#B8A07C]/45 px-5">
-        <div className="min-w-0 truncate text-[13px] font-semibold text-[#2A2620]">Loading doc</div>
+        <div className="min-w-0 truncate text-[13px] font-semibold text-[#2A2620]">{t("editor.loadingDoc")}</div>
       </header>
       <div className="grid min-h-0 flex-1 place-items-center bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-6 text-center">
         <div className="max-w-[360px] text-[13px] font-semibold text-[#8B8275]">
@@ -33,7 +36,7 @@ export function DocumentLoadingScreen(props: { error: string; loading: boolean }
           ) : (
             <span className="inline-flex items-center gap-2">
               {props.loading ? <Loader2 className="animate-spin" size={16} /> : null}
-              Loading doc...
+              {t("editor.loadingDocProgress")}
             </span>
           )}
         </div>
@@ -106,6 +109,7 @@ export type HtmlEditorScreenProps = {
 };
 
 export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
+  const { t } = useI18n();
   const toolbarDisabled = props.toolbarDisabled || props.readOnly;
   const [spacingMenuOpen, setSpacingMenuOpen] = useState(false);
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
@@ -220,8 +224,8 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
               value={props.linkDraft.text}
               onChange={(event) => props.onLinkDraftChange({ ...props.linkDraft, text: event.currentTarget.value })}
               onMouseDown={(event) => event.stopPropagation()}
-              placeholder="Text"
-              aria-label="Link text"
+              placeholder={t("editor.linkText")}
+              aria-label={t("editor.linkTextAria")}
             />
             <div className="flex min-w-0 items-center gap-1">
               <input
@@ -230,10 +234,10 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
                 onChange={(event) => props.onLinkDraftChange({ ...props.linkDraft, href: event.currentTarget.value })}
                 onMouseDown={(event) => event.stopPropagation()}
                 placeholder="https://"
-                aria-label="Link URL"
+                aria-label={t("editor.linkUrlAria")}
               />
               <button className="h-7 rounded-[10px] bg-[#2A2620] px-2.5 text-[10px] font-semibold text-[#F4EFE6]" type="submit">
-                Apply
+                {t("editor.apply")}
               </button>
               {tiptapEditor.toolbarState.link ? (
                 <button
@@ -242,7 +246,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
                   onClick={tiptapEditor.toolbarProps.onRemoveLink}
                   onMouseDown={(event) => event.stopPropagation()}
                 >
-                  Remove
+                  {t("editor.remove")}
                 </button>
               ) : null}
             </div>
@@ -254,10 +258,11 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
   return (
     <>
       <ArtifactEditorWorkspace
-        title={props.runtime?.title ?? "Untitled Doc"}
+        title={props.runtime?.title ?? t("editor.untitledDoc")}
         saveState={props.saveState}
         agentWorking={props.agentProcessing}
         exportNotice={props.exportNotice}
+        copy={artifactEditorCopy(t)}
         bodyClassName="flex flex-col"
         tone="lumen"
         onBackHome={props.onBackHome}
@@ -265,12 +270,12 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
         onOpenExportLocation={props.onOpenExportLocation}
         exportItems={[
           {
-            label: "DOCX (coming soon)",
+            label: t("editor.docxComingSoon"),
             disabled: true,
             onSelect: () => undefined,
           },
           {
-            label: props.pdfExporting ? "PDF exporting..." : "PDF",
+            label: props.pdfExporting ? t("editor.pdfExporting") : "PDF",
             disabled: props.pdfExporting || !props.pdfExportAvailable,
             loading: props.pdfExporting,
             onSelect: () => props.onExportPdf(),
@@ -320,7 +325,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
             <HtmlTiptapEditorSurface editor={tiptapEditor.editor} projectId={props.projectId} runtime={props.runtime} />
           ) : (
             <div className="mx-auto grid min-h-[620px] max-w-[860px] place-items-center rounded-[20px] border border-[#B8A07C]/55 bg-[#F4EFE6]/55 text-center text-[#8B8275]">
-              Loading doc...
+              {t("editor.loadingDocProgress")}
             </div>
           )}
         </div>

@@ -45,6 +45,20 @@ export const homeContentClass = "mx-auto flex w-full max-w-[1220px] flex-col px-
 export const homeHeroSectionClass = "mx-auto flex w-full max-w-[820px] flex-col items-center";
 export const homeWorkSectionClass = "mt-6";
 
+export type ArtifactHistoryCopy = {
+  clearHistory: string;
+  deleteProject: string;
+  deleteProjectAria: (title: string) => string;
+  openProjectAria: (title: string) => string;
+};
+
+export const defaultArtifactHistoryCopy: ArtifactHistoryCopy = {
+  clearHistory: "Clear history",
+  deleteProject: "Delete project",
+  deleteProjectAria: (title) => `Delete ${title}`,
+  openProjectAria: (title) => `Open ${title}`,
+};
+
 export function HomePageShell(props: { children: ReactNode; className?: string }) {
   return <div className={cx("h-full", appShell.page, props.className)}>{props.children}</div>;
 }
@@ -255,6 +269,7 @@ export function HomeSectionHeader(props: {
 
 export function ArtifactHistoryPanel<Project>(props: {
   clearLabel?: string;
+  copy?: Partial<ArtifactHistoryCopy>;
   emptyDescription: string;
   emptyIcon?: ReactNode;
   emptyTitle: string;
@@ -270,11 +285,13 @@ export function ArtifactHistoryPanel<Project>(props: {
   onDeleteProject: (projectId: string) => void;
   onOpenProject: (project: Project) => void;
 }) {
+  const copy = { ...defaultArtifactHistoryCopy, ...props.copy };
   if (props.projects.length === 0) {
     return (
       <div className="mt-5">
         <ArtifactHistoryActions
           clearLabel={props.clearLabel}
+          copy={copy}
           loading={props.loading}
           projectCount={props.projects.length}
           onClearHistory={props.onClearHistory}
@@ -292,6 +309,7 @@ export function ArtifactHistoryPanel<Project>(props: {
     <div className="mt-5">
       <ArtifactHistoryActions
         clearLabel={props.clearLabel}
+        copy={copy}
         loading={props.loading}
         projectCount={props.projects.length}
         onClearHistory={props.onClearHistory}
@@ -303,6 +321,7 @@ export function ArtifactHistoryPanel<Project>(props: {
           return (
             <ArtifactHistoryCard
               id={id}
+              copy={copy}
               icon={icon}
               key={id}
               preview={props.getPreview?.(project)}
@@ -321,6 +340,7 @@ export function ArtifactHistoryPanel<Project>(props: {
 
 function ArtifactHistoryActions(props: {
   clearLabel?: string;
+  copy: ArtifactHistoryCopy;
   loading: boolean;
   projectCount: number;
   onClearHistory: () => void;
@@ -331,17 +351,18 @@ function ArtifactHistoryActions(props: {
         className={historyClearButtonClass}
         type="button"
         disabled={props.loading || props.projectCount === 0}
-        title={props.clearLabel ?? "Clear history"}
+        title={props.clearLabel ?? props.copy.clearHistory}
         onClick={props.onClearHistory}
       >
         <Trash2 size={13} />
-        {props.clearLabel ?? "Clear history"}
+        {props.clearLabel ?? props.copy.clearHistory}
       </button>
     </div>
   );
 }
 
 function ArtifactHistoryCard(props: {
+  copy: ArtifactHistoryCopy;
   id: string;
   icon: ReactNode;
   preview?: string;
@@ -354,7 +375,7 @@ function ArtifactHistoryCard(props: {
   return (
     <div className={cx("group", historyCardClass())}>
       <button
-        aria-label={`Open ${props.title}`}
+        aria-label={props.copy.openProjectAria(props.title)}
         className="block h-full min-h-[132px] w-full rounded-[20px] p-4 text-left"
         type="button"
         onClick={props.onOpen}
@@ -373,10 +394,10 @@ function ArtifactHistoryCard(props: {
         {props.icon}
       </div>
       <button
-        aria-label={`Delete ${props.title}`}
+        aria-label={props.copy.deleteProjectAria(props.title)}
         className={historyDeleteButtonClass}
         type="button"
-        title="Delete project"
+        title={props.copy.deleteProject}
         onClick={() => props.onDelete(props.id)}
       >
         <Trash2 size={13} />

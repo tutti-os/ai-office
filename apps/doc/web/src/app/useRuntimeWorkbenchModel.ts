@@ -27,6 +27,7 @@ import {
 import { useHomeAttachments } from "./useHomeAttachments";
 import { createHomeDocumentActions } from "./useHomeDocumentActions";
 import { useDocumentWorkbenchBootstrap } from "./useDocumentWorkbenchBootstrap";
+import { useI18n } from "../i18n";
 import {
   defaultToolbarState,
   type EditorStats,
@@ -37,6 +38,7 @@ import {
 } from "./runtimeWorkbenchTypes";
 
 export function useRuntimeWorkbenchModel() {
+  const { t } = useI18n();
   const lastSelectionRef = useRef<SelectionState | null>(null);
   const artifactReadOnlyRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -184,6 +186,7 @@ export function useRuntimeWorkbenchModel() {
     setOfficeCliStatus,
     setPrompt,
     setRoute,
+    t,
   });
 
   const { requestHomeRoute } = useDocumentRouteLifecycle({
@@ -306,6 +309,7 @@ export function useRuntimeWorkbenchModel() {
     setExportNotice,
     setPdfExporting,
     setSourceExporting,
+    t,
   });
 
   return {

@@ -24,6 +24,7 @@ import { useAgentConversation } from "./app/useAgentConversation";
 import { useHomeAttachments } from "./app/useHomeAttachments";
 import { XlsxArtifactRuntimeAdapter } from "./artifact/xlsxArtifactAdapter";
 import { useXlsxArtifactRuntime } from "./artifact/useXlsxArtifactRuntime";
+import { useI18n } from "./i18n";
 
 type AppRoute = { name: "home" } | { name: "sheet"; projectId: string };
 
@@ -48,6 +49,7 @@ function pushHomeRoute() {
 }
 
 export function App() {
+  const { t } = useI18n();
   const [route, setRoute] = useState<AppRoute>(() => readCurrentRoute());
   const [historyProjects, setHistoryProjects] = useState<SheetProject[]>([]);
   const [projectDetail, setProjectDetail] = useState<ProjectDetailResponse | null>(null);
@@ -106,7 +108,7 @@ export function App() {
         source: "missing" as const,
         canInstall: false,
         installing: false,
-        reason: err instanceof Error ? err.message : "Unable to check OfficeCLI status.",
+        reason: err instanceof Error ? err.message : t("error.officeCliStatus"),
       },
     });
     void Promise.all([
@@ -121,7 +123,7 @@ export function App() {
         setOfficeCliStatus(officeCli.officecli);
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void fetchLocalAgentProviders()
@@ -172,8 +174,8 @@ export function App() {
     setLoading(true);
     setError("");
     try {
-      if (officeCliStatus?.available !== true) throw new Error(officeCliStatus?.reason ?? "OfficeCLI is required for XLSX workbooks.");
-      if (!file.name.toLowerCase().endsWith(".xlsx")) throw new Error("Only XLSX files are supported.");
+      if (officeCliStatus?.available !== true) throw new Error(officeCliStatus?.reason ?? t("error.officeCliRequired"));
+      if (!file.name.toLowerCase().endsWith(".xlsx")) throw new Error(t("error.onlyXlsx"));
       const detail = await importProjectFile(file);
       setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
       setRoute(pushSheetRoute(detail.project.id));
@@ -182,19 +184,19 @@ export function App() {
     } finally {
       setLoading(false);
     }
-  }, [officeCliStatus]);
+  }, [officeCliStatus, t]);
 
   const createWorkbook = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      if (officeCliStatus?.available !== true) throw new Error(officeCliStatus?.reason ?? "OfficeCLI is required for XLSX workbooks.");
+      if (officeCliStatus?.available !== true) throw new Error(officeCliStatus?.reason ?? t("error.officeCliRequired"));
       const initialPrompt = prompt.trim();
-      const title = initialPrompt ? initialPrompt.slice(0, 80) : "Untitled Workbook";
+      const title = initialPrompt ? initialPrompt.slice(0, 80) : t("project.untitledWorkbook");
       const detail = await createProject({ title });
       const attachments = homeAttachments.attachments;
       const uploadedAttachments = attachments.length ? await uploadHomeContextAttachments(detail.project.id, attachments) : [];
-      const initialUserPrompt = initialPromptWithAttachmentContext(initialPrompt, uploadedAttachments).trim();
+      const initialUserPrompt = initialPromptWithAttachmentContext(initialPrompt, uploadedAttachments, t("project.attachmentPrompt")).trim();
       setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
       if (initialUserPrompt) {
         await startAiEdit(detail.project.id, {
@@ -215,11 +217,11 @@ export function App() {
     } finally {
       setLoading(false);
     }
-  }, [homeAttachments, officeCliStatus, prompt, selectedAgent]);
+  }, [homeAttachments, officeCliStatus, prompt, selectedAgent, t]);
 
   const sendAgentPrompt = useCallback(async (userPrompt: string) => {
-    if (!currentProjectId) throw new Error("Project is not open");
-    if (!xlsxRuntime) throw new Error("Workbook runtime is not ready");
+    if (!currentProjectId) throw new Error(t("error.projectNotOpen"));
+    if (!xlsxRuntime) throw new Error(t("error.runtimeNotReady"));
     setAgentSending(true);
     setError("");
     try {
@@ -240,7 +242,7 @@ export function App() {
     } finally {
       setAgentSending(false);
     }
-  }, [agentConversation, currentProjectId, selectedAgent, xlsxArtifactAdapter, xlsxRuntime]);
+  }, [agentConversation, currentProjectId, selectedAgent, t, xlsxArtifactAdapter, xlsxRuntime]);
 
   const cancelAgentRun = useCallback(async (runId: string) => {
     setError("");
@@ -259,7 +261,7 @@ export function App() {
     try {
       const response = await installOfficeCli();
       setOfficeCliStatus(response.officecli);
-      if (!response.officecli.available) setError(response.officecli.reason ?? "Unable to install OfficeCLI");
+      if (!response.officecli.available) setError(response.officecli.reason ?? t("error.officeCliInstall"));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       try {
@@ -271,7 +273,7 @@ export function App() {
     } finally {
       setOfficeCliInstalling(false);
     }
-  }, []);
+  }, [t]);
 
   const openProject = useCallback((project: SheetProject) => {
     setRoute(pushSheetRoute(project.id));
@@ -308,13 +310,13 @@ export function App() {
     setXlsxExporting(true);
     try {
       const exported = await exportProjectXlsxFile(projectDetail.project.id);
-      setExportMessage(`Exported ${exported.fileName}`);
+      setExportMessage(t("editor.exported", { fileName: exported.fileName }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setXlsxExporting(false);
     }
-  }, [projectDetail, xlsxExporting]);
+  }, [projectDetail, t, xlsxExporting]);
 
   const openExports = useCallback(async () => {
     if (!projectDetail) return;

@@ -24,9 +24,9 @@ export async function uploadHomeContextAttachments(projectId: string, attachment
   return uploaded;
 }
 
-export function initialPromptWithAttachmentContext(userPrompt: string, attachments: UploadedHomeContextAttachment[]) {
+export function initialPromptWithAttachmentContext(userPrompt: string, attachments: UploadedHomeContextAttachment[], defaultInstruction: string) {
   if (attachments.length === 0) return userPrompt;
-  const instruction = userPrompt.trim() || "Create a workbook from the attached context files.";
+  const instruction = userPrompt.trim() || defaultInstruction;
   return [
     instruction,
     "",

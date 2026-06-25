@@ -3,6 +3,32 @@ import { ArrowLeft, ChevronDown, Download, Loader2, X } from "lucide-react";
 
 export type ArtifactEditorKind = "html" | "markdown" | "docx" | "deck" | "pptx" | "xlsx";
 
+export type ArtifactEditorCopy = {
+  agentWorking: string;
+  backHome: string;
+  dismiss: string;
+  dismissExportNotice: string;
+  export: string;
+  exporting: string;
+  loading: string;
+  saveError: string;
+  saved: string;
+  saving: string;
+};
+
+export const defaultArtifactEditorCopy: ArtifactEditorCopy = {
+  agentWorking: "Agent working",
+  backHome: "Back to home",
+  dismiss: "Dismiss",
+  dismissExportNotice: "Dismiss export notice",
+  export: "Export",
+  exporting: "Exporting...",
+  loading: "Loading",
+  saveError: "Save error",
+  saved: "Saved",
+  saving: "Saving",
+};
+
 export const artifactEditorGridClass =
   "grid h-dvh min-h-0 grid-cols-[400px_minmax(0,1fr)] overflow-hidden bg-[#1f1f1f] font-sans text-white";
 
@@ -32,6 +58,7 @@ export function ArtifactEditorWorkspace(props: {
   bodyClassName?: string;
   className?: string;
   contentClassName?: string;
+  copy?: Partial<ArtifactEditorCopy>;
   exportNotice?: string;
   onBackHome?: () => void;
   onDismissExportNotice?: () => void;
@@ -42,6 +69,7 @@ export function ArtifactEditorWorkspace(props: {
 }) {
   const tone = props.tone ?? "lumen";
   const exportNotice = props.exportNotice ?? "";
+  const copy = { ...defaultArtifactEditorCopy, ...props.copy };
   return (
     <ArtifactEditorFrame
       className={cx(tone === "lumen" ? "bg-[#E6DDCD] text-[#2A2620]" : undefined, props.className)}
@@ -55,11 +83,13 @@ export function ArtifactEditorWorkspace(props: {
           agentWorking={props.agentWorking}
           stats={props.stats}
           exportItems={props.exportItems}
+          copy={copy}
           tone={tone}
           onBackHome={props.onBackHome}
         />
         <ArtifactExportToast
           message={exportNotice}
+          copy={copy}
           onClose={props.onDismissExportNotice ?? noop}
           onOpenLocation={props.onOpenExportLocation ?? noop}
         />
@@ -103,10 +133,16 @@ export function ArtifactAgentProcessingOverlay(props: {
 
 export function ArtifactExportToast(props: {
   message: string;
+  copy?: ArtifactEditorCopy;
   onClose: () => void;
   onOpenLocation: () => void;
 }) {
   if (!props.message) return null;
+  const copy = props.copy ?? defaultArtifactEditorCopy;
+  const openLocationAndClose = () => {
+    props.onOpenLocation();
+    props.onClose();
+  };
   return (
     <div className="absolute left-1/2 top-3 z-[100] w-[640px] max-w-[calc(100%-32px)] -translate-x-1/2 rounded-[16px] border border-[#B8A07C]/55 bg-[#F4EFE6] px-4 py-2.5 text-[#2A2620] shadow-[0_18px_46px_rgba(0,0,0,0.16)]">
       <div className="flex min-w-0 items-center gap-3">
@@ -114,15 +150,15 @@ export function ArtifactExportToast(props: {
           className="min-w-0 flex-1 truncate text-left text-[13px] font-bold text-[#2A2620] hover:text-[#5C6B50]"
           type="button"
           title={props.message}
-          onClick={props.onOpenLocation}
+          onClick={openLocationAndClose}
         >
           {props.message}
         </button>
         <button
           className="grid h-7 w-7 shrink-0 place-items-center rounded-[10px] text-[#8B8275] hover:bg-[#E6DDCD]/55 hover:text-[#5C6B50]"
           type="button"
-          aria-label="Dismiss export notice"
-          title="Dismiss"
+          aria-label={copy.dismissExportNotice}
+          title={copy.dismiss}
           onClick={props.onClose}
         >
           <X size={16} />
@@ -147,6 +183,7 @@ export function ArtifactWorkspaceHeader(props: {
   agentWorking?: boolean;
   stats?: string[];
   exportItems: ArtifactExportItem[];
+  copy?: ArtifactEditorCopy;
   onBackHome?: () => void;
   tone?: "dark" | "lumen";
 }) {
@@ -154,6 +191,7 @@ export function ArtifactWorkspaceHeader(props: {
   const [pendingExportLabel, setPendingExportLabel] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const lumen = props.tone === "lumen";
+  const copy = props.copy ?? defaultArtifactEditorCopy;
   const exportingItem = props.exportItems.find((item) => item.loading || item.label === pendingExportLabel);
   const exporting = Boolean(exportingItem);
 
@@ -189,15 +227,15 @@ export function ArtifactWorkspaceHeader(props: {
                 : "border-white/10 bg-white/8 text-white/72 hover:bg-white/14 hover:text-white",
             )}
             type="button"
-            aria-label="Back to home"
-            title="Back to home"
+            aria-label={copy.backHome}
+            title={copy.backHome}
             onClick={props.onBackHome}
           >
             <ArrowLeft size={16} />
           </button>
         ) : null}
         <div className={cx("min-w-0 truncate text-[13px] font-semibold", lumen ? "text-[#2A2620]" : "text-white")}>{props.title}</div>
-        <SaveStateBadge agentWorking={props.agentWorking} state={props.saveState} tone={props.tone} />
+        <SaveStateBadge agentWorking={props.agentWorking} copy={copy} state={props.saveState} tone={props.tone} />
         {props.stats?.length ? (
           <div className={cx("hidden min-w-0 items-center gap-1.5 text-[11px] font-semibold md:flex", lumen ? "text-[#8B8275]" : "text-white/32")}>
             {props.stats.map((stat, index) => (
@@ -225,7 +263,7 @@ export function ArtifactWorkspaceHeader(props: {
           onClick={() => setOpen((current) => !current)}
         >
           {exporting ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
-          {exporting ? "Exporting..." : "Export"}
+          {exporting ? copy.exporting : copy.export}
           <ChevronDown size={13} />
         </button>
         {open ? (
@@ -273,7 +311,7 @@ export function ArtifactWorkspaceHeader(props: {
   );
 }
 
-function SaveStateBadge(props: { state: ArtifactSaveState; agentWorking?: boolean; tone?: "dark" | "lumen" }) {
+function SaveStateBadge(props: { state: ArtifactSaveState; agentWorking?: boolean; copy: ArtifactEditorCopy; tone?: "dark" | "lumen" }) {
   const tone = props.agentWorking
     ? "animate-pulse bg-[#38a7ff] shadow-[0_0_0_3px_rgba(56,167,255,0.16)]"
     : props.state === "error"
@@ -282,14 +320,14 @@ function SaveStateBadge(props: { state: ArtifactSaveState; agentWorking?: boolea
         ? "bg-[#37d67a] shadow-[0_0_0_3px_rgba(55,214,122,0.12)]"
         : "bg-[#f5c542] shadow-[0_0_0_3px_rgba(245,197,66,0.14)]";
   const label = props.agentWorking
-    ? "Agent working"
+    ? props.copy.agentWorking
     : props.state === "error"
-      ? "Save error"
+      ? props.copy.saveError
       : props.state === "saved"
-        ? "Saved"
+        ? props.copy.saved
         : props.state === "loading"
-          ? "Loading"
-          : "Saving";
+          ? props.copy.loading
+          : props.copy.saving;
   return (
     <span className={cx("relative top-px inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold", props.tone === "lumen" ? "text-[#8B8275]" : "text-white/42")} title={label}>
       <span className={`size-1.5 rounded-full ${tone}`} />

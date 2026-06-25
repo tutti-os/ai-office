@@ -23,6 +23,7 @@ export function iframeHtmlDocumentShell(document: RuntimeDocument, projectId: st
 ${headHTML}
 <style data-ai-html-editor-shell>
 html, body { margin: 0; min-height: 100%; }
+#ai-html-tiptap-root { position: relative; }
 .ai-html-tiptap-editor { min-height: 860px; outline: none; }
 .ai-html-tiptap-editor .ProseMirror { outline: none; }
 	.ai-html-tiptap-editor .ProseMirror-selectednode { outline: 2px solid #2563eb; }
@@ -139,6 +140,60 @@ html, body { margin: 0; min-height: 100%; }
 	.ai-html-tiptap-editor .ProseMirror.resize-cursor {
 	  cursor: col-resize;
 	}
+	.ai-html-table-handle-layer {
+	  inset: 0;
+	  pointer-events: none;
+	  position: fixed;
+	  z-index: 30;
+	}
+	.ai-html-table-hover-outline {
+	  border: 2px solid rgba(37, 99, 235, 0.62);
+	  border-radius: 4px;
+	  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.72);
+	  box-sizing: border-box;
+	  pointer-events: none;
+	  position: absolute;
+	}
+	.ai-html-table-handle {
+	  align-items: center;
+	  background: #ffffff;
+	  border: 1px solid rgba(42, 38, 32, 0.16);
+	  border-radius: 10px;
+	  box-shadow: 0 10px 24px rgba(42, 38, 32, 0.18);
+	  display: inline-flex;
+	  gap: 2px;
+	  overflow: hidden;
+	  pointer-events: auto;
+	  position: absolute;
+	}
+	.ai-html-table-handle button {
+	  align-items: center;
+	  appearance: none;
+	  background: transparent;
+	  border: 0;
+	  color: #2a2620;
+	  cursor: pointer;
+	  display: inline-grid;
+	  height: 30px;
+	  justify-content: center;
+	  padding: 0;
+	  place-items: center;
+	  width: 30px;
+	}
+	.ai-html-table-handle button:hover {
+	  background: #f6f8fa;
+	}
+	.ai-html-table-grip-button {
+	  cursor: grab;
+	  color: rgba(42, 38, 32, 0.62);
+	}
+	.ai-html-table-delete-button {
+	  color: #b42318;
+	}
+	.ai-html-table-delete-button:hover {
+	  background: #fff1f0 !important;
+	  color: #912018;
+	}
 	.ai-html-tiptap-editor .ProseMirror ul[data-type="taskList"],
 .ai-html-tiptap-editor .ProseMirror ul:has(> li[data-checked]) {
   list-style: none !important;
@@ -183,6 +238,125 @@ ${scopedHtmlDocumentStyles(document, projectId)}
 </head>
 <body>
 <div id="ai-html-tiptap-root"></div>
+<script data-ai-html-table-handle>
+(() => {
+  const root = document.getElementById("ai-html-tiptap-root");
+  if (!root) return;
+  let activeTable = null;
+  let layer = null;
+  let outline = null;
+  let handle = null;
+
+  const gripIcon = '<svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>';
+  const trashIcon = '<svg aria-hidden="true" focusable="false" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.35" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/></svg>';
+
+  function ensureLayer() {
+    if (layer && document.body.contains(layer)) return;
+    if (layer) {
+      document.body.append(layer);
+      return;
+    }
+    layer = document.createElement("div");
+    layer.className = "ai-html-table-handle-layer";
+    outline = document.createElement("div");
+    outline.className = "ai-html-table-hover-outline";
+    handle = document.createElement("div");
+    handle.className = "ai-html-table-handle";
+
+    const gripButton = document.createElement("button");
+    gripButton.type = "button";
+    gripButton.className = "ai-html-table-grip-button";
+    gripButton.title = "Table";
+    gripButton.setAttribute("aria-label", "Table");
+    gripButton.innerHTML = gripIcon;
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "ai-html-table-delete-button";
+    deleteButton.title = "Delete table";
+    deleteButton.setAttribute("aria-label", "Delete table");
+    deleteButton.innerHTML = trashIcon;
+    deleteButton.addEventListener("mousedown", blockChromeEvent);
+    deleteButton.addEventListener("click", (event) => {
+      blockChromeEvent(event);
+      if (!activeTable) return;
+      const tableIndex = Array.from(document.querySelectorAll(".ai-html-tiptap-editor .ProseMirror table")).indexOf(activeTable);
+      window.parent.postMessage({ source: "ai-doc-html-editor", type: "delete-table", tableIndex }, "*");
+      hide();
+    });
+
+    handle.append(gripButton, deleteButton);
+    layer.append(outline, handle);
+    document.body.append(layer);
+  }
+
+  function blockChromeEvent(event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function tableFromTarget(target) {
+    if (!(target instanceof Element)) return null;
+    if (target.closest(".ai-html-table-handle-layer")) return activeTable;
+    return target.closest(".ai-html-tiptap-editor .ProseMirror table");
+  }
+
+  function tableFromSelection() {
+    const selection = document.getSelection();
+    const node = selection && selection.anchorNode;
+    const element = node instanceof Element ? node : node && node.parentElement;
+    return element ? element.closest(".ai-html-tiptap-editor .ProseMirror table") : null;
+  }
+
+  function tableFromHoverOrSelection() {
+    return document.querySelector(".ai-html-tiptap-editor .ProseMirror table:hover") ||
+      tableFromSelection() ||
+      document.querySelector(".ai-html-tiptap-editor .ProseMirror table");
+  }
+
+  function update(table) {
+    if (!table || table.tagName !== "TABLE" || !root.contains(table)) {
+      hide();
+      return;
+    }
+    ensureLayer();
+    activeTable = table;
+    const tableRect = table.getBoundingClientRect();
+    const left = tableRect.left;
+    const top = tableRect.top;
+    layer.style.display = "block";
+    outline.style.left = left + "px";
+    outline.style.top = top + "px";
+    outline.style.width = tableRect.width + "px";
+    outline.style.height = tableRect.height + "px";
+    handle.style.left = Math.max(6, left + 6) + "px";
+    handle.style.top = Math.max(6, top + Math.max(6, tableRect.height - 36)) + "px";
+  }
+
+  function hide() {
+    activeTable = null;
+    if (layer) layer.style.display = "none";
+  }
+
+  document.addEventListener("pointermove", (event) => update(tableFromTarget(event.target)));
+  document.addEventListener("pointerdown", (event) => update(tableFromTarget(event.target)));
+  document.addEventListener("mousemove", (event) => update(tableFromTarget(event.target)));
+  document.addEventListener("mousedown", (event) => update(tableFromTarget(event.target)));
+  document.addEventListener("selectionchange", () => update(tableFromSelection()));
+  document.addEventListener("scroll", () => activeTable ? update(activeTable) : hide(), true);
+  window.addEventListener("resize", () => activeTable ? update(activeTable) : hide());
+  function updateFromAmbientTable() {
+    try {
+      const table = tableFromHoverOrSelection();
+      update(table);
+    } catch {
+      hide();
+    }
+  }
+  window.setInterval(updateFromAmbientTable, 180);
+  window.requestAnimationFrame(updateFromAmbientTable);
+})();
+</script>
 </body>
 </html>`;
 }

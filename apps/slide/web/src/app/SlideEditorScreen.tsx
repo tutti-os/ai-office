@@ -10,6 +10,8 @@ import { PptxPreview } from "./PptxPreview";
 import { savePptxPdfExport } from "./pptxExport";
 import { isTuttiPdfExportAvailable } from "./tuttiPdfBridge";
 import { usePptxArtifactRuntime } from "../artifact/usePptxArtifactRuntime";
+import { artifactEditorCopy } from "../i18n/copy";
+import { useI18n } from "../i18n";
 import type { DeckAgentRuntimeProvider } from "../artifact/deckArtifactAdapter";
 import type { ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
 import type { LocalAgentProviderStatus, ProjectDetailResponse, RuntimeProfile, SlideArtifactType, SlideRunTimelineItem } from "@ai-slide/shared";
@@ -41,6 +43,7 @@ export function SlideEditorScreen(props: {
   onSelectedAgentChange: (value: string) => void;
   onSend: (prompt: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [deckSaveState, setDeckSaveState] = useState<ArtifactSaveState>("saved");
   const [htmlExporting, setHtmlExporting] = useState(false);
   const [pptxExporting, setPptxExporting] = useState(false);
@@ -59,10 +62,10 @@ export function SlideEditorScreen(props: {
     try {
       const exported = await exportProjectHtmlDeck(props.projectId);
       console.info(`[ai-slide] Exported HTML to ${exported.path}`);
-      setExportNotice(`Exported HTML to ${exported.path}`);
+      setExportNotice(t("editor.exportedHtml", { path: exported.path }));
     } catch (error) {
       console.error(error);
-      setExportNotice(error instanceof Error ? error.message : "HTML export failed.");
+      setExportNotice(error instanceof Error ? error.message : t("editor.htmlExportFailed"));
     } finally {
       setHtmlExporting(false);
     }
@@ -80,10 +83,10 @@ export function SlideEditorScreen(props: {
         title: props.detail.project.title,
       });
       console.info(`[ai-slide] Exported deck PDF to ${exported.path}`);
-      setExportNotice(`Exported PDF to ${exported.path}`);
+      setExportNotice(t("editor.exportedPdf", { path: exported.path }));
     } catch (error) {
       console.error(error);
-      setExportNotice(error instanceof Error ? error.message : "PDF export failed.");
+      setExportNotice(error instanceof Error ? error.message : t("editor.pdfExportFailed"));
     } finally {
       setPdfExporting(false);
     }
@@ -101,10 +104,10 @@ export function SlideEditorScreen(props: {
         title: props.detail.project.title,
       });
       console.info(`[ai-slide] Exported PPTX PDF to ${exported.path}`);
-      setExportNotice(`Exported PDF to ${exported.path}`);
+      setExportNotice(t("editor.exportedPdf", { path: exported.path }));
     } catch (error) {
       console.error(error);
-      setExportNotice(error instanceof Error ? error.message : "PDF export failed.");
+      setExportNotice(error instanceof Error ? error.message : t("editor.pdfExportFailed"));
     } finally {
       setPptxExporting(false);
     }
@@ -124,7 +127,7 @@ export function SlideEditorScreen(props: {
 
   return (
     <ArtifactEditorWorkspace
-      title={props.detail?.project.title ?? "Untitled Presentation"}
+      title={props.detail?.project.title ?? t("editor.untitledPresentation")}
       saveState={headerSaveState}
       agentWorking={agentProcessing}
       exportItems={slideExportItems({
@@ -137,8 +140,10 @@ export function SlideEditorScreen(props: {
         pdfExporting,
         pptxPdfReady: Boolean(props.pptxRuntime?.preview?.renderPresentation),
         pptxExporting,
+        t,
       })}
       exportNotice={exportNotice}
+      copy={artifactEditorCopy(t)}
       bodyClassName="flex flex-col"
       tone="lumen"
       onBackHome={props.onBackHome}
@@ -166,9 +171,9 @@ export function SlideEditorScreen(props: {
       }
     >
       {props.loading ? (
-        <EditorInfoPanel title="Loading presentation..." />
+        <EditorInfoPanel title={t("editor.loadingPresentation")} />
       ) : props.error ? (
-        <EditorInfoPanel detail={props.error} title="Presentation not found" />
+        <EditorInfoPanel detail={props.error} title={t("editor.presentationNotFound")} />
       ) : props.detail?.artifact.type === "deck" ? (
         <DeckEditor
           detail={props.detail}
@@ -177,6 +182,8 @@ export function SlideEditorScreen(props: {
           onAgentRuntimeProviderChange={props.onDeckAgentRuntimeProviderChange}
           onAgentSelectionPreviewChange={props.onDeckSelectionPreviewChange}
           onSaveStateChange={setDeckSaveState}
+          selectedBlockLabel={t("editor.selectedBlock")}
+          selectedTextLabel={t("editor.selectedText")}
         />
       ) : props.detail?.artifact.type === "pptx" && props.pptxRuntime ? (
         <PptxPreview
@@ -186,7 +193,7 @@ export function SlideEditorScreen(props: {
         />
       ) : props.detail ? (
         <EditorInfoPanel
-          detail={`Waiting for ${props.detail.artifact.fileRef}`}
+          detail={t("editor.waitingForFile", { fileRef: props.detail.artifact.fileRef })}
           title={props.detail.project.title}
         />
       ) : null}
@@ -204,11 +211,12 @@ function slideExportItems(input: {
   pdfExporting: boolean;
   pptxPdfReady: boolean;
   pptxExporting: boolean;
+  t: ReturnType<typeof useI18n>["t"];
 }) {
   if (input.artifactType === "pptx") {
     return [
       {
-        label: input.pptxExporting ? "PDF exporting..." : "PDF",
+        label: input.pptxExporting ? input.t("editor.pdfExporting") : "PDF",
         disabled: input.pptxExporting || !input.pdfExportAvailable || !input.pptxPdfReady,
         loading: input.pptxExporting,
         onSelect: () => input.onExportPptxPdf(),
@@ -217,7 +225,7 @@ function slideExportItems(input: {
   }
   const items = [
     {
-      label: input.htmlExporting ? "HTML exporting..." : "HTML",
+      label: input.htmlExporting ? input.t("editor.htmlExporting") : "HTML",
       disabled: input.htmlExporting,
       loading: input.htmlExporting,
       onSelect: () => input.onExportDeckHtml(),
@@ -225,14 +233,14 @@ function slideExportItems(input: {
   ];
   if (input.pdfExportAvailable) {
     items.push({
-      label: input.pdfExporting ? "PDF exporting..." : "PDF",
+      label: input.pdfExporting ? input.t("editor.pdfExporting") : "PDF",
       disabled: input.pdfExporting,
       loading: input.pdfExporting,
       onSelect: () => input.onExportDeckPdf(),
     });
   }
   items.push({
-    label: "PPTX (coming soon)",
+    label: input.t("editor.pptxComingSoon"),
     disabled: true,
     loading: false,
     onSelect: async () => {},
