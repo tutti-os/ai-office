@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import {
   AlignCenterHorizontal,
   AlignCenterVertical,
@@ -13,6 +14,7 @@ import {
   Trash2,
   Unlock,
 } from "lucide-react";
+import { useToolbarFloatingMenuPosition, type ToolbarFloatingMenuPosition } from "@ai-app/ui/toolbar";
 import type { DeckObjectAlignment, DeckObjectGeometry, DeckObjectGeometryPatch, DeckResizeHandle, DeckSnapGuide } from "./deckInteractionLayer";
 
 type DeckInteractionSelectionBox = {
@@ -60,6 +62,7 @@ const objectToolbarTooltip =
   "relative before:pointer-events-none before:absolute before:left-1/2 before:top-full before:z-50 before:mt-2 before:-translate-x-1/2 before:whitespace-nowrap before:rounded-md before:bg-[#111827] before:px-2 before:py-1 before:text-[10px] before:font-bold before:leading-none before:text-white before:opacity-0 before:shadow-[0_10px_24px_rgba(0,0,0,0.22)] before:transition-opacity before:duration-150 before:content-[attr(data-tip)] after:pointer-events-none after:absolute after:left-1/2 after:top-full after:z-50 after:mt-0.5 after:-translate-x-1/2 after:border-x-[5px] after:border-b-[5px] after:border-x-transparent after:border-b-[#111827] after:opacity-0 after:transition-opacity after:duration-150 hover:before:opacity-100 hover:after:opacity-100 focus-visible:before:opacity-100 focus-visible:after:opacity-100";
 
 type GeometryNumberKey = "left" | "top" | "width" | "height";
+const geometryPanelWidth = 300;
 
 const alignmentActions: Array<{ value: DeckObjectAlignment; label: string; icon: ReactNode }> = [
   { value: "left", label: "Align left", icon: <AlignStartVertical size={14} /> },
@@ -75,6 +78,10 @@ export function DeckInteractionLayer(props: DeckInteractionLayerProps) {
   const [proportionLocked, setProportionLocked] = useState(false);
   const objectToolbarRef = useRef<HTMLDivElement | null>(null);
   const geometryPanelRef = useRef<HTMLDivElement | null>(null);
+  const geometryPanelPosition = useToolbarFloatingMenuPosition(geometryPanelOpen, objectToolbarRef, geometryPanelRef, {
+    align: "center",
+    width: geometryPanelWidth,
+  });
   const aspectRatio = useMemo(() => {
     if (!props.activeGeometry?.height) return 1;
     return props.activeGeometry.width / props.activeGeometry.height;
@@ -199,10 +206,9 @@ export function DeckInteractionLayer(props: DeckInteractionLayerProps) {
           {!props.readOnly && geometryPanelOpen && props.activeGeometry ? (
             <ObjectGeometryPanel
               geometry={props.activeGeometry}
-              left={props.selectionBox.left + props.selectionBox.width / 2}
               panelRef={geometryPanelRef}
+              position={geometryPanelPosition}
               proportionLocked={proportionLocked}
-              top={props.selectionBox.top + 8}
               onAlign={props.onAlignObject}
               onPointerDown={(event) => event.stopPropagation()}
               onToggleProportion={() => setProportionLocked((locked) => !locked)}
@@ -217,20 +223,24 @@ export function DeckInteractionLayer(props: DeckInteractionLayerProps) {
 
 function ObjectGeometryPanel(props: {
   geometry: DeckObjectGeometry;
-  left: number;
   panelRef: RefObject<HTMLDivElement | null>;
+  position: ToolbarFloatingMenuPosition;
   proportionLocked: boolean;
-  top: number;
   onAlign: (alignment: DeckObjectAlignment) => void;
   onPointerDown: (event: PointerEvent<HTMLDivElement>) => void;
   onToggleProportion: () => void;
   onUpdateNumber: (key: GeometryNumberKey, value: number) => void;
 }) {
-  return (
+  return createPortal(
     <div
-      className="absolute z-[5] w-[300px] -translate-x-1/2 rounded-lg border border-black/8 bg-white p-2.5 text-[#202124] shadow-[0_14px_38px_rgba(0,0,0,0.18)]"
+      className="fixed z-50 w-[300px] overflow-y-auto rounded-lg border border-black/8 bg-white p-2.5 text-[#202124] shadow-[0_14px_38px_rgba(0,0,0,0.18)]"
       ref={props.panelRef}
-      style={{ left: props.left, top: props.top }}
+      style={{
+        left: props.position.left,
+        top: props.position.top,
+        maxHeight: props.position.maxHeight,
+        width: props.position.width ?? geometryPanelWidth,
+      }}
       onPointerDown={props.onPointerDown}
     >
       <div className="grid grid-cols-3 gap-1">
@@ -266,7 +276,8 @@ function ObjectGeometryPanel(props: {
         <GeometryNumberInput label="X" value={props.geometry.left} onChange={(value) => props.onUpdateNumber("left", value)} />
         <GeometryNumberInput label="Y" value={props.geometry.top} onChange={(value) => props.onUpdateNumber("top", value)} />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

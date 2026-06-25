@@ -13,6 +13,7 @@ import { ChevronDown, Minus, Plus } from "lucide-react";
 import { ToolbarFloatingInteractionContext } from "./menuPrimitives.js";
 
 export { ToolbarLayoutMenu, ToolbarLetterSpacingMenu, ToolbarLineHeightMenu, ToolbarMoreMenu, ToolbarParagraphSpacingMenu, ToolbarSpacingMenu } from "./menus.js";
+export { useDismissableFloatingLayer, useToolbarFloatingMenuPosition, type ToolbarFloatingMenuAlign, type ToolbarFloatingMenuPosition } from "./menuPrimitives.js";
 
 export type ToolbarDensity = "compact" | "comfortable";
 export type ToolbarWidth = "content" | "full";

@@ -16,7 +16,7 @@ export type ToolbarFloatingMenuPosition = {
   maxHeight?: number;
 };
 
-type FloatingMenuAlign = "start" | "center" | "end";
+export type ToolbarFloatingMenuAlign = "start" | "center" | "end";
 
 const floatingMenuViewportMargin = 12;
 const floatingMenuAnchorGap = 8;
@@ -72,7 +72,7 @@ export function useToolbarFloatingMenuPosition(
   anchorRef: RefObject<HTMLElement | null>,
   menuRef: RefObject<HTMLElement | null>,
   options: {
-    align?: FloatingMenuAlign;
+    align?: ToolbarFloatingMenuAlign;
     gap?: number;
     maxHeight?: number;
     viewportMargin?: number;
@@ -125,7 +125,7 @@ export function useToolbarFloatingMenuPosition(
 }
 
 function getToolbarFloatingMenuPosition(anchor: HTMLElement, menu: HTMLElement, options: {
-  align?: FloatingMenuAlign;
+  align?: ToolbarFloatingMenuAlign;
   gap?: number;
   maxHeight?: number;
   viewportMargin?: number;
