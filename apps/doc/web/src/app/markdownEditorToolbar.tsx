@@ -34,7 +34,7 @@ import {
 } from "@mdxeditor/editor";
 import { $createHeadingNode, $createQuoteNode, type HeadingTagType } from "@lexical/rich-text";
 import { AlignCenter, AlignLeft, AlignRight, Bold, Code2, Image, Italic, Link2, List, ListOrdered, ListTodo, Minus, Quote, Replace, Strikethrough, Table2 } from "lucide-react";
-import { IconButtonLight, Toolbar, ToolbarDivider, ToolbarGroup, ToolbarRow, ToolbarSelect } from "@ai-app/ui/toolbar";
+import { IconButtonLight, Toolbar, ToolbarDivider, ToolbarGroup, ToolbarRow, ToolbarSelect, editorToolbarClass } from "@ai-app/ui/toolbar";
 import { uploadProjectAsset } from "../api/projects";
 import { MarkdownToolbarContext, type MarkdownEditorStateSnapshot, type MarkdownTableCellEditor } from "./markdownEditorContext";
 import { clampNumber } from "./markdownEditorState";
@@ -330,7 +330,7 @@ function MarkdownToolbarAdapter() {
 
   const toolbar = (
       <div className="flex items-center justify-center">
-        <Toolbar className="relative !mb-0 !rounded-none !border-t-0 !border-l-0 !bg-[#EEE8DC] overflow-visible" display={{ maxWidth: 1500 }} onPointerDownCapture={toolbarContext.onToolbarInteractionStart}>
+        <Toolbar className={editorToolbarClass} display={{ maxWidth: 1500, width: "full" }} onPointerDownCapture={toolbarContext.onToolbarInteractionStart}>
           <input ref={imageFileInputRef} className="hidden" type="file" accept="image/*" onChange={handleImageFileInputChange} />
           <ToolbarRow wrap className="gap-y-1.5">
             {!imageSelected ? (

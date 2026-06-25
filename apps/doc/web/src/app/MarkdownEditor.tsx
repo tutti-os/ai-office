@@ -17,6 +17,7 @@ import {
 import "@mdxeditor/editor/style.css";
 import { scrollbarClass } from "@ai-app/ui/app-shell";
 import { Redo2, Undo2 } from "lucide-react";
+import { editorToolbarStripClass } from "@ai-app/ui/toolbar";
 import type { MarkdownRuntimeState, MarkdownSelection } from "../artifact/markdownArtifactAdapter";
 import { MarkdownToolbarContext, type MarkdownTableCellEditor } from "./markdownEditorContext";
 import {
@@ -362,7 +363,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       }}
     >
       <section className="relative flex h-full min-h-0 flex-col bg-[#EEE8DC]">
-        <div ref={setToolbarHost} className="relative z-20 shrink-0" />
+        <div ref={setToolbarHost} className={editorToolbarStripClass} />
         <div className={`h-full overflow-x-hidden overflow-y-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-3 pb-5 pt-5 md:px-6 md:pb-7 md:pt-7 ${scrollbarClass}`}>
           <div
             className="mx-auto min-h-[760px] w-full max-w-[1120px]"

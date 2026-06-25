@@ -25,15 +25,18 @@ ${headHTML}
 html, body { margin: 0; min-height: 100%; }
 #ai-html-tiptap-root { position: relative; }
 .ai-html-tiptap-editor { min-height: 860px; outline: none; }
-.ai-html-tiptap-editor .ProseMirror { outline: none; }
+.ai-html-tiptap-editor .ProseMirror { cursor: text; outline: none; }
+.ai-html-tiptap-editor .ProseMirror * { cursor: text; }
 	.ai-html-tiptap-editor .ProseMirror-selectednode { outline: 2px solid #2563eb; }
 	.ai-html-tiptap-editor .ProseMirror .ai-html-image-node-view {
+	  cursor: default;
 	  line-height: 0;
 	  max-width: 100%;
 	  position: relative;
 	  vertical-align: top;
 	}
 	.ai-html-tiptap-editor .ProseMirror .ai-html-image-node-view > img {
+	  cursor: default;
 	  display: block;
 	  height: auto;
 	  max-width: 100%;

@@ -3,11 +3,8 @@ import {
   ArrowUp,
   ChevronDown,
   CheckCircle2,
-  CircleDashed,
   File,
   Loader2,
-  Sparkles,
-  Square,
   WandSparkles,
   XCircle,
 } from "lucide-react";
@@ -143,6 +140,7 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
   };
   const showQuickPrompts = props.quickPromptsVisible === true && props.copy.quickPrompts.length > 0;
   const showActiveSelection = props.activeSelectionVisible ?? Boolean(props.activeSelectionText.trim());
+  const sendButtonBusy = Boolean(props.sending || activeRun);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -178,7 +176,7 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
           {props.copy.homeLabel}
         </button>
         <div className={cx.headerStatus}>
-          {props.loading ? <Loader2 className={cx.spin} size={13} /> : <CircleDashed size={13} />}
+          {props.loading ? <Loader2 className={cx.spin} size={13} /> : null}
           {props.artifactLabel}
         </div>
       </div>
@@ -246,13 +244,19 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
               <div />
             )}
             <div className={cx.composerActions}>
-              {activeRun && props.onCancel ? (
-                <button className={cx.cancelButton} type="button" aria-label={uiCopy.stopAgent} disabled={cancellingActiveRun} onClick={() => void cancelActiveRun()}>
-                  {cancellingActiveRun ? <Loader2 className={cx.spin} size={13} /> : <Square size={13} />}
-                </button>
-              ) : null}
-              <button className={cx.sendButton} type="button" disabled={!draft.trim() || props.sending} onClick={() => void submit()}>
-                {props.sending ? <Loader2 className={cx.spin} size={15} /> : <ArrowUp size={15} />}
+              <button
+                className={[cx.sendButton, sendButtonBusy ? cx.sendButtonBusy : ""].filter(Boolean).join(" ")}
+                type="button"
+                aria-label={activeRun && props.onCancel ? uiCopy.stopAgent : undefined}
+                aria-busy={sendButtonBusy}
+                aria-disabled={(!draft.trim() && !sendButtonBusy) || (sendButtonBusy && !activeRun)}
+                disabled={!draft.trim() && !sendButtonBusy}
+                onClick={() => {
+                  if (activeRun && props.onCancel) void cancelActiveRun();
+                  else if (!sendButtonBusy) void submit();
+                }}
+              >
+                {sendButtonBusy ? <BusyStopIcon /> : <ArrowUp size={15} />}
               </button>
             </div>
           </div>
@@ -262,13 +266,22 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
   );
 }
 
+function BusyStopIcon() {
+  return (
+    <span className="relative grid size-8 place-items-center" aria-hidden="true">
+      <svg className="absolute inset-0 size-8" viewBox="0 0 32 32">
+        <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" strokeOpacity="0.16" strokeWidth="2.5" />
+        <circle className="animate-spin origin-center" cx="16" cy="16" r="14" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2.5" strokeDasharray="22 66" />
+      </svg>
+      <span className="absolute size-[9px] rounded-[2px] bg-current" />
+    </span>
+  );
+}
+
 function IntroCard(props: { copy: AgentConversationCopy; cx: ConversationClassNames }) {
   return (
     <div className={props.cx.introCard}>
       <div className={props.cx.introMain}>
-        <div className={props.cx.introIcon}>
-          <Sparkles size={15} />
-        </div>
         <div>
           <div className={props.cx.introTitle}>{props.copy.introTitle}</div>
           <p className={props.cx.introBody}>{props.copy.introBody}</p>
