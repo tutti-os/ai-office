@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FileText } from "lucide-react";
-import { darkScrollbarClass } from "@ai-app/ui/app-shell";
-import { ArtifactAgentProcessingOverlay } from "@ai-app/ui/editor-frame";
+import { scrollbarClass } from "@ai-app/ui/app-shell";
 import {
   clearPersistentSelectionHighlight,
   persistentSelectionRectsForRange,
@@ -22,7 +20,7 @@ type PptxPreviewProps = {
   onSelectionChange: (selection: PptxSelection) => void;
 };
 
-const filmstripClass = "flex min-h-32 min-w-0 shrink-0 items-center gap-3 overflow-x-auto overflow-y-hidden border-t border-[#B8A07C]/30 bg-[#242424] px-5 pb-4 pt-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+const filmstripClass = "min-h-32 min-w-0 shrink-0 border-t border-[#B8A07C]/30 bg-[#EEE8DC] px-5 pb-4 pt-3.5";
 
 export function PptxPreview(props: PptxPreviewProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -147,12 +145,12 @@ export function PptxPreview(props: PptxPreviewProps) {
   });
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#1f1f1f]">
-      <div ref={stageRef} className={`relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#2a2a2a] px-8 py-7 outline-none ${darkScrollbarClass}`} tabIndex={0}>
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#EEE8DC]">
+      <div ref={stageRef} className={`relative flex min-h-0 flex-1 !cursor-default items-center justify-center overflow-auto bg-[#EEE8DC] px-8 py-7 outline-none ${scrollbarClass}`} tabIndex={0}>
         {props.error ? <div className="absolute left-1/2 top-4 z-[2] w-[min(calc(100%_-_48px),980px)] -translate-x-1/2 rounded-[10px] bg-[#3a241f] p-3 text-[13px] leading-5 text-[#ffad9f]">{props.error}</div> : null}
         <div
           ref={rootRef}
-          className="relative shrink-0 overflow-hidden rounded-[2px] border border-[#B8A07C]/30 bg-white text-[#202124]  [&_.tsh-pptx-document]:block [&_.tsh-pptx-slide]:shadow-none"
+          className={`relative shrink-0 overflow-hidden rounded-[2px] border border-[#B8A07C]/30 ${currentPresentation ? "bg-white text-[#202124]" : "bg-[#F4EFE6] text-[#2A2620]"} [&_.tsh-pptx-document]:block [&_.tsh-pptx-slide]:shadow-none`}
           style={currentPresentation ? { width: frameWidth, height: frameHeight } : undefined}
           onKeyUp={syncSelection}
           onMouseDownCapture={clearPersistentSelection}
@@ -170,14 +168,12 @@ export function PptxPreview(props: PptxPreviewProps) {
               <PptxRenderer presentation={currentPresentation} />
             </div>
           ) : (
-            <div className="grid min-h-[420px] w-[min(calc(100vw_-_420px),760px)] min-w-[360px] place-items-center content-center gap-2.5 p-8 text-center text-[#5f6368]">
-              <FileText className="text-[#2f66d9]" size={36} />
-              <strong className="text-[15px] text-[#202124]">Waiting for slides.pptx</strong>
-              <span className="max-w-[380px] text-[13px] leading-5">The agent can create or update the canonical PowerPoint file in this project workspace.</span>
+            <div className="grid min-h-[420px] w-[min(calc(100vw_-_420px),760px)] min-w-[360px] place-items-center content-center gap-2.5 p-8 text-center text-[#8B8275]">
+              <strong className="text-[15px] text-[#2A2620]">Waiting for slides.pptx</strong>
+              <span className="max-w-[380px] text-[13px] leading-5 text-[#8B8275]">The agent can create or update the canonical PowerPoint file in this project workspace.</span>
             </div>
           )}
           <PersistentSelectionOverlay rects={persistentSelectionRects} />
-          <ArtifactAgentProcessingOverlay active={props.agentProcessing} />
         </div>
       </div>
       {presentation && visibleSlides.length > 0 ? (

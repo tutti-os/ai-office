@@ -32,6 +32,10 @@ export const defaultArtifactEditorCopy: ArtifactEditorCopy = {
 export const artifactEditorGridClass =
   "grid h-dvh min-h-0 grid-cols-[400px_minmax(0,1fr)] overflow-hidden bg-[#1f1f1f] font-sans text-white";
 
+const lumenHeaderButtonClass =
+  "border-[#B8A07C]/55 bg-[#F4EFE6]/70 text-[#2A2620]/72 hover:border-[#5C6B50]/50 hover:text-[#5C6B50]";
+const darkHeaderButtonClass = "border-white/10 bg-white/8 text-white/72 hover:bg-white/14 hover:text-white";
+
 export function ArtifactEditorFrame(props: {
   sidebar: ReactNode;
   children: ReactNode;
@@ -54,6 +58,7 @@ export function ArtifactEditorWorkspace(props: {
   title: string;
   saveState: ArtifactSaveState;
   exportItems: ArtifactExportItem[];
+  agentOverlayActive?: boolean;
   agentWorking?: boolean;
   bodyClassName?: string;
   className?: string;
@@ -95,7 +100,7 @@ export function ArtifactEditorWorkspace(props: {
         />
         <div className={cx("relative min-h-0 flex-1 overflow-hidden", props.bodyClassName)}>
           {props.children}
-          <ArtifactAgentProcessingOverlay active={Boolean(props.agentWorking)} />
+          <ArtifactAgentProcessingOverlay active={props.agentOverlayActive ?? Boolean(props.agentWorking)} />
         </div>
       </section>
     </ArtifactEditorFrame>
@@ -112,10 +117,10 @@ export function ArtifactAgentProcessingOverlay(props: {
       <style>
         {`
           @keyframes ai-artifact-agent-sweep {
-            0% { transform: translateX(-130%) skewX(-14deg); opacity: 0; }
+            0% { transform: translateX(-130%); opacity: 0; }
             18% { opacity: 0.72; }
             56% { opacity: 0.58; }
-            100% { transform: translateX(330%) skewX(-14deg); opacity: 0; }
+            100% { transform: translateX(330%); opacity: 0; }
           }
           @media (prefers-reduced-motion: reduce) {
             .ai-artifact-agent-sweep { animation-duration: 4.8s !important; }
@@ -124,7 +129,7 @@ export function ArtifactAgentProcessingOverlay(props: {
       </style>
       <div className="absolute inset-0 bg-white/[0.025]" />
       <div
-        className="ai-artifact-agent-sweep absolute -inset-y-16 left-0 w-1/3 bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.05)_18%,rgba(255,255,255,0.34)_48%,rgba(147,197,253,0.20)_58%,transparent_100%)] blur-[0.5px]"
+        className="ai-artifact-agent-sweep absolute -inset-y-16 left-0 w-1/3 bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.05)_18%,rgba(255,255,255,0.34)_48%,rgba(255,255,255,0.18)_58%,transparent_100%)] blur-[0.5px]"
         style={{ animation: "ai-artifact-agent-sweep 2.35s cubic-bezier(0.4, 0, 0.2, 1) infinite" }}
       />
     </div>
@@ -216,15 +221,13 @@ export function ArtifactWorkspaceHeader(props: {
   }, [open]);
 
   return (
-    <header className={cx("flex h-12 shrink-0 items-center justify-between gap-4 border-b px-5", lumen ? "border-[#B8A07C]/45 bg-[#E6DDCD] text-[#2A2620]" : "border-white/8")}>
+    <header className={cx("flex h-12 shrink-0 items-center justify-between gap-4 border-b px-5", lumen ? "border-[#B8A07C]/30 bg-[#EEE8DC] text-[#2A2620]" : "border-white/8")}>
       <div className="flex min-w-0 items-center gap-2">
         {props.onBackHome ? (
           <button
             className={cx(
               "grid size-8 shrink-0 place-items-center rounded-[10px] border transition",
-              lumen
-                ? "border-[#B8A07C]/55 bg-[#F4EFE6]/70 text-[#2A2620]/72 hover:border-[#5C6B50]/50 hover:text-[#5C6B50]"
-                : "border-white/10 bg-white/8 text-white/72 hover:bg-white/14 hover:text-white",
+              lumen ? lumenHeaderButtonClass : darkHeaderButtonClass,
             )}
             type="button"
             aria-label={copy.backHome}
@@ -252,8 +255,8 @@ export function ArtifactWorkspaceHeader(props: {
           className={cx(
             "inline-flex h-8 items-center gap-2 rounded-[16px] border px-3 text-[12px] font-semibold transition",
             lumen
-              ? "border-[#B8A07C]/55 bg-[#F4EFE6]/70 text-[#2A2620]/72 hover:border-[#5C6B50]/50 hover:text-[#5C6B50] disabled:cursor-wait disabled:border-[#B8A07C]/35 disabled:text-[#8B8275]/65"
-              : "border-white/10 bg-white/8 text-white/72 hover:bg-white/14 hover:text-white disabled:cursor-wait disabled:text-white/38",
+              ? `${lumenHeaderButtonClass} disabled:cursor-wait disabled:border-[#B8A07C]/35 disabled:text-[#8B8275]/65`
+              : `${darkHeaderButtonClass} disabled:cursor-wait disabled:text-white/38`,
           )}
           type="button"
           aria-haspopup="menu"

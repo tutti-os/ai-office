@@ -256,6 +256,7 @@ export function useHtmlTiptapEditor(input: {
   const { props } = input;
   const selectionBookmarkRef = useRef<StoredSelectionBookmark | null>(null);
   const pendingImageReplacePositionRef = useRef<number | null>(null);
+  const [focused, setFocused] = useState(false);
   const runtimeId = props.runtime?.id;
   const tiptapExtensions = useMemo(
     () => [
@@ -333,6 +334,12 @@ export function useHtmlTiptapEditor(input: {
         rememberSelectionBookmark(currentEditor, selectionBookmarkRef);
         const selection = safeSelectionStateFromTiptap(currentEditor);
         props.onTiptapSelectionChange(selection, safeToolbarStateFromTiptap(currentEditor, props.toolbarState));
+      },
+      onFocus: () => {
+        setFocused(true);
+      },
+      onBlur: () => {
+        setFocused(false);
       },
       onTransaction: ({ editor: currentEditor }) => {
         rememberSelectionBookmark(currentEditor, selectionBookmarkRef);
@@ -421,6 +428,7 @@ export function useHtmlTiptapEditor(input: {
     editor,
     toolbarProps,
     toolbarState,
+    focused,
     insertImage: (attributes: { src: string; alt?: string }) => {
       if (!editor) return false;
       const replacePosition = pendingImageReplacePositionRef.current;

@@ -107,6 +107,10 @@ const toolbarFloatingMenuButton =
   "flex h-7 w-full items-center justify-between border-0 bg-transparent px-2.5 text-left text-[11px] font-semibold text-inherit hover:not-disabled:bg-[#EEE8DC]/55 disabled:text-[#8B8275]/50";
 const ToolbarWrapContext = createContext(false);
 
+export const editorToolbarStripClass = "sticky top-0 z-20 shrink-0 border-b border-[#B8A07C]/30 bg-[#EEE8DC]";
+export const editorToolbarClass =
+  "relative !m-0 !w-full !max-w-none !rounded-none !border-0 !bg-transparent !px-3 !py-2 !shadow-none overflow-visible md:!px-5";
+
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -307,7 +311,7 @@ export function ToolbarSelect(props: {
   children: ReactNode;
 }) {
   return (
-    <label className={cx(toolbarInputShell, "relative overflow-hidden", props.compact ? "w-[104px]" : "w-[116px]")}>
+    <label className={cx(toolbarInputShell, "group relative overflow-hidden", props.compact ? "w-[104px]" : "w-[116px]")}>
       <span className="sr-only">{props.title}</span>
       <select
         className={cx(toolbarInputText, "absolute inset-0 h-full min-w-0 cursor-pointer truncate px-2.5 pr-7 disabled:cursor-default")}
@@ -318,7 +322,7 @@ export function ToolbarSelect(props: {
       >
         {props.children}
       </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8B8275]" size={13} />
+      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8B8275] transition-colors group-has-[select:disabled]:text-[#8B8275]/45" size={13} />
     </label>
   );
 }

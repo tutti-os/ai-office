@@ -145,13 +145,13 @@ export function TemplatePreviewModal(props: {
             />
             {previewSlides.length > 1 ? (
               <>
-                <button className="absolute left-3 top-1/2 z-[2] grid size-[46px] -translate-y-1/2 place-items-center rounded-full border border-[#202124]/8 bg-white/86 text-[#202124] shadow-[0_10px_24px_rgba(0,0,0,0.12)]" type="button" aria-label={t("home.previousSlide")} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => {
+                <button className="pointer-events-none absolute left-3 top-1/2 z-[2] grid size-[46px] -translate-y-1/2 place-items-center rounded-full border border-[#202124]/8 bg-white/86 text-[#202124] opacity-0 shadow-[0_10px_24px_rgba(0,0,0,0.12)] transition-opacity group-hover/preview:pointer-events-auto group-hover/preview:opacity-100 group-focus-within/preview:pointer-events-auto group-focus-within/preview:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100" type="button" aria-label={t("home.previousSlide")} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => {
                   event.stopPropagation();
                   move(-1);
                 }}>
                   <ChevronLeft size={22} />
                 </button>
-                <button className="absolute right-3 top-1/2 z-[2] grid size-[46px] -translate-y-1/2 place-items-center rounded-full border border-[#202124]/8 bg-white/86 text-[#202124] shadow-[0_10px_24px_rgba(0,0,0,0.12)]" type="button" aria-label={t("home.nextSlide")} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => {
+                <button className="pointer-events-none absolute right-3 top-1/2 z-[2] grid size-[46px] -translate-y-1/2 place-items-center rounded-full border border-[#202124]/8 bg-white/86 text-[#202124] opacity-0 shadow-[0_10px_24px_rgba(0,0,0,0.12)] transition-opacity group-hover/preview:pointer-events-auto group-hover/preview:opacity-100 group-focus-within/preview:pointer-events-auto group-focus-within/preview:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100" type="button" aria-label={t("home.nextSlide")} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => {
                   event.stopPropagation();
                   move(1);
                 }}>

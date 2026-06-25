@@ -1,7 +1,7 @@
 import { AlignCenter, AlignLeft, AlignRight, Bold, Crosshair, Image, Italic, PaintBucket, Redo2, Strikethrough, Underline, Undo2 } from "lucide-react";
 import { scrollbarClass } from "@ai-app/ui/app-shell";
 import { ArtifactAgentProcessingOverlay } from "@ai-app/ui/editor-frame";
-import { FontSizeControl, Toolbar, ToolbarColorInput, ToolbarDivider, ToolbarGroup, ToolbarIconButton, ToolbarRow, ToolbarSelect } from "@ai-app/ui/toolbar";
+import { FontSizeControl, Toolbar, ToolbarColorInput, ToolbarDivider, ToolbarGroup, ToolbarIconButton, ToolbarRow, ToolbarSelect, editorToolbarClass, editorToolbarStripClass } from "@ai-app/ui/toolbar";
 import type { PointerEvent } from "react";
 import type { InlineFormatTag, RichTextStyle } from "@ai-app/ui/rich-text";
 import { deckSlideDisplayName } from "@ai-slide/shared";
@@ -19,8 +19,7 @@ function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
-const scrollbarHidden = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
-const slideFilmstripClass = cn("flex min-h-32 min-w-0 shrink-0 items-center gap-3 overflow-x-auto overflow-y-hidden border-t border-[#B8A07C]/30 bg-[#EEE8DC] px-5 pb-4 pt-3.5", scrollbarHidden);
+const slideFilmstripClass = "min-h-32 min-w-0 shrink-0 border-t border-[#B8A07C]/30 bg-[#EEE8DC] px-5 pb-4 pt-3.5";
 
 export function DeckEditorView(input: { agentProcessing: boolean; model: ReturnType<typeof useDeckEditorModel> }) {
   const {
@@ -77,7 +76,7 @@ export function DeckEditorView(input: { agentProcessing: boolean; model: ReturnT
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#EEE8DC]">
-      <div className="sticky top-0 z-20 shrink-0 border-b border-[#B8A07C]/30 bg-[#EEE8DC]">
+      <div className={editorToolbarStripClass}>
         <DeckToolbar
           activeObject={activeObject}
           directTextEditMode={directTextEditMode}
@@ -102,7 +101,7 @@ export function DeckEditorView(input: { agentProcessing: boolean; model: ReturnT
       <input ref={imageFileInputRef} className="hidden" type="file" accept="image/*" onChange={replaceActiveImageFromFile} />
       <div
         ref={hostRef}
-        className={cn("relative flex min-h-0 flex-1 items-center justify-center overflow-auto px-3 pb-5 pt-2.5 outline-none md:px-8 md:pb-7 md:pt-3", scrollbarClass)}
+        className={cn("relative flex min-h-0 flex-1 !cursor-default items-center justify-center overflow-auto px-3 pb-5 pt-2.5 outline-none md:px-8 md:pb-7 md:pt-3", scrollbarClass)}
         tabIndex={0}
         onKeyDown={handleSlideNavigationKey}
         onPointerDown={(event) => {
@@ -287,7 +286,7 @@ function DeckToolbar(props: {
   const hasCurrentFontOption = deckFontOptions.some((option) => option.value === props.state.fontFamily);
   return (
     <Toolbar
-      className="relative !m-0 !w-full !max-w-none !rounded-none !border-0 !bg-transparent !px-3 !py-2 overflow-visible md:!px-5"
+      className={editorToolbarClass}
       display={{ maxWidth: 1500, width: "full" }}
       onPointerDownCapture={props.onToolbarInteractionStart}
     >

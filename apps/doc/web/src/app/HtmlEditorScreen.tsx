@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { Loader2 } from "lucide-react";
+import { Loader2, Redo2, Undo2 } from "lucide-react";
 import { scrollbarClass } from "@ai-app/ui/app-shell";
-import { ArtifactEditorWorkspace, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
-import { type ToolbarLayoutValue } from "@ai-app/ui/toolbar";
+import { ArtifactAgentProcessingOverlay, ArtifactEditorWorkspace, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
+import { editorToolbarStripClass, type ToolbarLayoutValue } from "@ai-app/ui/toolbar";
 import type { DocumentRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
 import type { RuntimeState, SelectionState } from "../artifact/runtime/types";
 import { AgentConversationPanel } from "./AgentConversationPanel";
@@ -110,17 +110,19 @@ export type HtmlEditorScreenProps = {
 
 export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
   const { t } = useI18n();
-  const toolbarDisabled = props.toolbarDisabled || props.readOnly;
+  const baseToolbarDisabled = props.toolbarDisabled || props.readOnly;
   const [spacingMenuOpen, setSpacingMenuOpen] = useState(false);
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
   const linkEditorRef = useRef<HTMLDivElement | null>(null);
   const linkEditorPanelRef = useRef<HTMLFormElement | null>(null);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const editorScrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const toolbarHostRef = useRef<HTMLDivElement | null>(null);
+  const [toolbarFocusActive, setToolbarFocusActive] = useState(false);
   const [linkEditorPosition, setLinkEditorPosition] = useState<LinkEditorPosition | null>(null);
   const tiptapEditor = useHtmlTiptapEditor({
     props,
-    toolbarDisabled,
+    toolbarDisabled: baseToolbarDisabled,
     onRequestLinkEditor: (draft) => {
       props.onLinkDraftChange(draft);
       props.onCreateLink();
@@ -133,6 +135,8 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
       fileInput.click();
     },
   });
+  const toolbarActive = tiptapEditor.focused || toolbarFocusActive || props.linkEditorOpen;
+  const toolbarDisabled = baseToolbarDisabled || !toolbarActive;
 
   const handleTiptapImageFileInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const fileInput = event.currentTarget;
@@ -203,6 +207,19 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
     };
   }, [props.linkEditorOpen, props.onCloseLinkEditor]);
 
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && (toolbarHostRef.current?.contains(target) || linkEditorPanelRef.current?.contains(target))) {
+        setToolbarFocusActive(true);
+        return;
+      }
+      setToolbarFocusActive(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, []);
+
   const linkEditorStyle: CSSProperties = linkEditorPosition
     ? { left: linkEditorPosition.left, top: linkEditorPosition.top, width: linkEditorPosition.width }
     : { visibility: "hidden" };
@@ -261,6 +278,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
         title={props.runtime?.title ?? t("editor.untitledDoc")}
         saveState={props.saveState}
         agentWorking={props.agentProcessing}
+        agentOverlayActive={false}
         exportNotice={props.exportNotice}
         copy={artifactEditorCopy(t)}
         bodyClassName="flex flex-col"
@@ -307,11 +325,21 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
           accept="image/*"
           onChange={(event) => void handleTiptapImageFileInputChange(event)}
         />
-        <div ref={editorScrollContainerRef} className={`h-full overflow-x-hidden overflow-y-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-3 py-5 md:px-6 md:py-7 ${scrollbarClass}`}>
+        <div
+          ref={toolbarHostRef}
+          className={editorToolbarStripClass}
+          onFocusCapture={() => setToolbarFocusActive(true)}
+          onBlurCapture={() => {
+            window.requestAnimationFrame(() => {
+              const activeElement = document.activeElement;
+              if (activeElement instanceof Node && toolbarHostRef.current?.contains(activeElement)) return;
+              setToolbarFocusActive(false);
+            });
+          }}
+          onMouseDownCapture={() => setToolbarFocusActive(true)}
+        >
           <HtmlEditorToolbar
             canCreateLink={tiptapEditor.canCreateLink}
-            canRedo={tiptapEditor.canRedo}
-            canUndo={tiptapEditor.canUndo}
             layoutMenuOpen={layoutMenuOpen}
             linkEditorRef={linkEditorRef}
             props={tiptapEditor.toolbarProps}
@@ -320,7 +348,8 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
             onLayoutMenuOpenChange={setLayoutMenuOpen}
             onSpacingMenuOpenChange={setSpacingMenuOpen}
           />
-
+        </div>
+        <div ref={editorScrollContainerRef} className={`relative h-full overflow-x-hidden overflow-y-auto bg-[#EEE9DD] bg-[linear-gradient(90deg,rgba(42,38,32,0.024)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.022)_1px,transparent_1px)] bg-[size:28px_28px] px-3 py-5 md:px-6 md:py-7 ${scrollbarClass}`}>
           {props.runtime ? (
             <HtmlTiptapEditorSurface editor={tiptapEditor.editor} projectId={props.projectId} runtime={props.runtime} />
           ) : (
@@ -328,7 +357,15 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
               {t("editor.loadingDocProgress")}
             </div>
           )}
+          <ArtifactAgentProcessingOverlay active={props.agentProcessing} className="opacity-45" />
         </div>
+        <HtmlHistoryToolbar
+          canRedo={tiptapEditor.canRedo}
+          canUndo={tiptapEditor.canUndo}
+          onRedo={props.onRedo}
+          onToolbarInteractionStart={tiptapEditor.toolbarProps.onToolbarInteractionStart}
+          onUndo={props.onUndo}
+        />
       </ArtifactEditorWorkspace>
       {linkEditorPortal}
     </>
@@ -337,4 +374,46 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
 
 function clampNumber(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function HtmlHistoryToolbar(props: {
+  canRedo: boolean;
+  canUndo: boolean;
+  onRedo: () => void;
+  onToolbarInteractionStart: () => void;
+  onUndo: () => void;
+}) {
+  return (
+    <div
+      className="absolute bottom-4 left-4 z-30 inline-flex items-center gap-1 rounded-[12px] border border-[#B8A07C]/30 bg-[#F9F4EC] p-1 text-[#2A2620] "
+      data-toolbar-skip-selection-preserve="true"
+      aria-label="History tools"
+      onMouseDownCapture={(event) => {
+        props.onToolbarInteractionStart();
+        event.preventDefault();
+      }}
+      onPointerDownCapture={props.onToolbarInteractionStart}
+    >
+      <button
+        className="grid size-7 place-items-center rounded-[8px] border-0 bg-transparent text-[#2A2620]/72 outline-none transition hover:not-disabled:bg-[#EEE8DC]/70 hover:not-disabled:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275] disabled:opacity-45"
+        type="button"
+        aria-label="Undo"
+        title="Undo"
+        disabled={!props.canUndo}
+        onClick={props.onUndo}
+      >
+        <Undo2 size={18} />
+      </button>
+      <button
+        className="grid size-7 place-items-center rounded-[8px] border-0 bg-transparent text-[#2A2620]/72 outline-none transition hover:not-disabled:bg-[#EEE8DC]/70 hover:not-disabled:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275] disabled:opacity-45"
+        type="button"
+        aria-label="Redo"
+        title="Redo"
+        disabled={!props.canRedo}
+        onClick={props.onRedo}
+      >
+        <Redo2 size={18} />
+      </button>
+    </div>
+  );
 }

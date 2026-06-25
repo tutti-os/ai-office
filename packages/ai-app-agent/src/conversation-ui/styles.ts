@@ -8,7 +8,6 @@ export type ConversationClassNames = {
   scroll: string;
   introCard: string;
   introMain: string;
-  introIcon: string;
   introTitle: string;
   introBody: string;
   quickPrompts: string;
@@ -30,6 +29,7 @@ export type ConversationClassNames = {
   agentSelectChevron: string;
   cancelButton: string;
   sendButton: string;
+  sendButtonBusy: string;
   userRow: string;
   userMessage: string;
   userSelection: string;
@@ -90,8 +90,7 @@ export const classes: Record<AgentConversationVariant, ConversationClassNames> =
     headerStatus: "flex items-center gap-2 text-[11px] font-semibold text-[#8B8275]",
     scroll: cx("min-h-0 flex-1 overflow-auto overscroll-contain px-4 pb-0 pt-5", documentScrollbarClass),
     introCard: "rounded-[20px] border border-[#B8A07C]/30 bg-[#F9F4EC] p-4  backdrop-blur",
-    introMain: "flex items-start gap-3",
-    introIcon: "grid size-8 shrink-0 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]",
+    introMain: "flex items-start",
     introTitle: "text-[13px] font-semibold text-[#2A2620]",
     introBody: "mt-1 text-[13px] leading-5 text-[#8B8275]",
     quickPrompts: "mb-3 flex flex-wrap gap-2 px-1",
@@ -113,6 +112,7 @@ export const classes: Record<AgentConversationVariant, ConversationClassNames> =
     agentSelectChevron: "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#8B8275]",
     cancelButton: "grid size-8 place-items-center rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6] text-[#7b2e24] hover:border-[#B8A07C]/30 disabled:cursor-wait disabled:opacity-70",
     sendButton: "grid size-8 place-items-center rounded-full bg-[#2A2620] text-[#F4EFE6] disabled:bg-[#B8A07C]/32 disabled:text-[#8B8275]",
+    sendButtonBusy: "relative !bg-transparent !text-[#2A2620] disabled:!bg-transparent disabled:!text-[#2A2620]",
     userRow: "flex justify-end",
     userMessage: "max-w-[88%] rounded-[20px] rounded-tr-md bg-[#5C6B50] px-3 py-2 text-[13px] leading-5 text-[#F4EFE6]",
     userSelection: "mb-2 rounded-[14px] bg-[#F4EFE6]/16 px-2 py-1.5 text-[11px] leading-4 text-[#F4EFE6]/72",
@@ -174,8 +174,7 @@ export const classes: Record<AgentConversationVariant, ConversationClassNames> =
     headerStatus: "flex items-center gap-[7px] text-[11px] font-bold text-white/38",
     scroll: cx("min-h-0 flex-1 overflow-auto overscroll-contain px-4 pb-0 pt-5", slideScrollbarClass),
     introCard: "rounded-2xl bg-[#2c2c2c] p-4 ",
-    introMain: "flex items-start gap-3",
-    introIcon: "grid size-8 shrink-0 place-items-center rounded-full bg-white text-black",
+    introMain: "flex items-start",
     introTitle: "text-[13px] font-extrabold text-white",
     introBody: "mt-1 text-[13px] leading-[1.65] text-white/55",
     quickPrompts: "mb-3 flex flex-wrap gap-2 px-1",
@@ -197,6 +196,7 @@ export const classes: Record<AgentConversationVariant, ConversationClassNames> =
     agentSelectChevron: "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/46",
     cancelButton: "grid size-8 place-items-center rounded-full border border-[#B8A07C]/30 bg-[#3a241f] text-[#ffad9f] hover:bg-[#4a2a24] disabled:cursor-wait disabled:opacity-70",
     sendButton: "grid size-8 place-items-center rounded-full border-0 bg-white text-black disabled:cursor-default disabled:bg-white/20 disabled:text-white/40",
+    sendButtonBusy: "relative !bg-transparent !text-[#2A2620] disabled:!bg-transparent disabled:!text-[#2A2620]",
     userRow: "flex justify-end",
     userMessage: "max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-white px-3 py-2 text-[13px] leading-[1.65] text-[#1f1f1f]",
     userSelection: "mb-2 rounded-xl bg-black/[0.06] px-2 py-1.5 text-[11px] leading-4 text-black/58",

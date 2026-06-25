@@ -1,12 +1,10 @@
-import { AlignCenter, AlignJustify, AlignLeft, AlignRight, BetweenHorizontalEnd, Bold, Columns2, Image, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, ListTodo, Minus, PaintBucket, Redo2, Rows3, Strikethrough, Table2, Underline, Undo2 } from "lucide-react";
-import { FontSizeControl, IconButtonLight, Toolbar, ToolbarColorInput, ToolbarDivider, ToolbarGroup, ToolbarLayoutMenu, ToolbarRow, ToolbarSelect, ToolbarSpacingMenu } from "@ai-app/ui/toolbar";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, BetweenHorizontalEnd, Bold, Columns2, Image, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, ListTodo, Minus, PaintBucket, Rows3, Strikethrough, Table2, Underline } from "lucide-react";
+import { FontSizeControl, IconButtonLight, Toolbar, ToolbarColorInput, ToolbarDivider, ToolbarGroup, ToolbarLayoutMenu, ToolbarRow, ToolbarSelect, ToolbarSpacingMenu, editorToolbarClass } from "@ai-app/ui/toolbar";
 import type { HeadingTag } from "./runtimeWorkbenchTypes";
 import type { HtmlEditorScreenProps } from "./HtmlEditorScreen";
 
 export function HtmlEditorToolbar(input: {
   canCreateLink: boolean;
-  canRedo: boolean;
-  canUndo: boolean;
   layoutMenuOpen: boolean;
   linkEditorRef: React.RefObject<HTMLDivElement | null>;
   props: HtmlEditorScreenProps;
@@ -20,19 +18,14 @@ export function HtmlEditorToolbar(input: {
   const layoutMenuOpen = input.layoutMenuOpen;
   return (
   <Toolbar
-    className="relative -translate-y-1.5 overflow-visible !shadow-[0_12px_10px_rgba(0,0,0,0.08)]"
-    display={{ maxWidth: 1500, width: "content" }}
+    className={editorToolbarClass}
+    display={{ maxWidth: 1500, width: "full" }}
     onMouseDownCapture={(event) => {
       props.onToolbarInteractionStart();
       if (shouldKeepEditorSelectionOnToolbarCommand(event.target)) event.preventDefault();
     }}
   >
     <ToolbarRow wrap className="gap-y-1.5">
-      <ToolbarGroup>
-        <IconButtonLight disabled={!input.canUndo} title="Undo" onClick={props.onUndo}><Undo2 size={18} /></IconButtonLight>
-        <IconButtonLight disabled={!input.canRedo} title="Redo" onClick={props.onRedo}><Redo2 size={18} /></IconButtonLight>
-      </ToolbarGroup>
-      <ToolbarDivider />
       <ToolbarGroup className="[column-gap:4px]">
         <ToolbarSelect disabled={toolbarDisabled} title="Block style" value={props.toolbarState.block} onChange={(value) => props.onHeading(value as HeadingTag)}>
           <option value="p">Normal Text</option>
