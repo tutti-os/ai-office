@@ -314,6 +314,10 @@ ${scopedHtmlDocumentStyles(document, projectId)}
       document.querySelector(".ai-html-tiptap-editor .ProseMirror table");
   }
 
+  function tableFromTargetOrSelection(target) {
+    return tableFromTarget(target) || tableFromSelection();
+  }
+
   function update(table) {
     if (!table || table.tagName !== "TABLE" || !root.contains(table)) {
       hide();
@@ -338,10 +342,10 @@ ${scopedHtmlDocumentStyles(document, projectId)}
     if (layer) layer.style.display = "none";
   }
 
-  document.addEventListener("pointermove", (event) => update(tableFromTarget(event.target)));
-  document.addEventListener("pointerdown", (event) => update(tableFromTarget(event.target)));
-  document.addEventListener("mousemove", (event) => update(tableFromTarget(event.target)));
-  document.addEventListener("mousedown", (event) => update(tableFromTarget(event.target)));
+  document.addEventListener("pointermove", (event) => update(tableFromTargetOrSelection(event.target)));
+  document.addEventListener("pointerdown", (event) => update(tableFromTargetOrSelection(event.target)));
+  document.addEventListener("mousemove", (event) => update(tableFromTargetOrSelection(event.target)));
+  document.addEventListener("mousedown", (event) => update(tableFromTargetOrSelection(event.target)));
   document.addEventListener("selectionchange", () => update(tableFromSelection()));
   document.addEventListener("scroll", () => activeTable ? update(activeTable) : hide(), true);
   window.addEventListener("resize", () => activeTable ? update(activeTable) : hide());
