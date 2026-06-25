@@ -176,6 +176,7 @@ export function SlideEditorScreen(props: {
         <EditorInfoPanel detail={props.error} title={t("editor.presentationNotFound")} />
       ) : props.detail?.artifact.type === "deck" ? (
         <DeckEditor
+          agentProcessing={agentProcessing}
           detail={props.detail}
           interaction={props.artifactInteraction}
           projectId={props.projectId}
@@ -187,6 +188,7 @@ export function SlideEditorScreen(props: {
         />
       ) : props.detail?.artifact.type === "pptx" && props.pptxRuntime ? (
         <PptxPreview
+          agentProcessing={agentProcessing}
           runtime={props.pptxRuntime}
           error={props.pptxError}
           onSelectionChange={props.onPptxSelectionChange}

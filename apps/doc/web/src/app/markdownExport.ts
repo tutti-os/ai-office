@@ -39,7 +39,7 @@ function markdownPrintHtml(input: { title: string; markdown: string }) {
   <meta charset="utf-8">
   <title>${escapeHtml(input.title || "Untitled Markdown")}</title>
   <style>
-    :root { color: #1f2933; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    :root { color: #1f2933; font-family: Lexend, ui-sans-serif, system-ui, sans-serif; }
     body { margin: 0; padding: 32px; background: #fff; font-size: 14px; line-height: 1.62; }
     main { max-width: 760px; margin: 0 auto; }
     h1, h2, h3, h4, h5, h6 { color: #111827; line-height: 1.22; margin: 1.35em 0 0.55em; }

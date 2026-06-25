@@ -224,7 +224,7 @@ server.setNotFoundHandler((request, reply) => {
   if (existsSync(indexPath)) return reply.sendFile("index.html");
   return reply.type("text/html").send(`
     <html>
-      <body style="font-family: system-ui; padding: 32px">
+      <body style="font-family: Lexend, ui-sans-serif, system-ui, sans-serif; padding: 32px">
         <h1>ai-slide server is running</h1>
         <p>Build the web app or run <code>pnpm dev:web</code> for the Vite client.</p>
       </body>

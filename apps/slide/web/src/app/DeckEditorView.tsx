@@ -1,5 +1,6 @@
 import { AlignCenter, AlignLeft, AlignRight, Bold, Crosshair, Image, Italic, PaintBucket, Redo2, Strikethrough, Underline, Undo2 } from "lucide-react";
 import { scrollbarClass } from "@ai-app/ui/app-shell";
+import { ArtifactAgentProcessingOverlay } from "@ai-app/ui/editor-frame";
 import { FontSizeControl, Toolbar, ToolbarColorInput, ToolbarDivider, ToolbarGroup, ToolbarIconButton, ToolbarRow, ToolbarSelect } from "@ai-app/ui/toolbar";
 import type { PointerEvent } from "react";
 import type { InlineFormatTag, RichTextStyle } from "@ai-app/ui/rich-text";
@@ -19,9 +20,9 @@ function cn(...classes: Array<string | false | null | undefined>) {
 }
 
 const scrollbarHidden = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
-const slideFilmstripClass = cn("flex min-h-32 min-w-0 shrink-0 items-center gap-3 overflow-x-auto overflow-y-hidden border-t border-[#B8A07C]/45 bg-[#E6DDCD] px-5 pb-4 pt-3.5", scrollbarHidden);
+const slideFilmstripClass = cn("flex min-h-32 min-w-0 shrink-0 items-center gap-3 overflow-x-auto overflow-y-hidden border-t border-[#B8A07C]/30 bg-[#EEE8DC] px-5 pb-4 pt-3.5", scrollbarHidden);
 
-export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorModel> }) {
+export function DeckEditorView(input: { agentProcessing: boolean; model: ReturnType<typeof useDeckEditorModel> }) {
   const {
     activeObject,
     activeObjectGeometry,
@@ -75,41 +76,47 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#E6DDCD] px-3 py-3.5 md:px-6 md:pb-6 md:pt-5">
-      <DeckToolbar
-        activeObject={activeObject}
-        directTextEditMode={directTextEditMode}
-        readOnly={readOnly}
-        saveState={saveState}
-        selectionMode={selectionMode}
-        state={toolbarState}
-        canRedo={canRedo}
-        canUndo={canUndo}
-        onAlign={updateTextAlignment}
-        onFillColor={(color) => updateObjectStyle({ backgroundColor: color })}
-        onFontFamily={(fontFamily) => updateTextStyle({ fontFamily })}
-        onFontSize={(fontSize) => updateTextStyle({ fontSize: normalizeCssSize(fontSize) })}
-        onImage={requestImageReplacement}
-        onRedo={() => applyHistoryOffset(1)}
-        onTextColor={updateTextColor}
-        onToolbarInteractionStart={preserveActiveTextSelection}
-        onToggleBold={() => toggleInlineFormat("strong")}
-        onToggleItalic={() => toggleInlineFormat("em")}
-        onToggleStrikethrough={() => toggleInlineFormat("s")}
-        onToggleDirectTextEditMode={() => setDirectTextEditMode((current) => !current)}
-        onToggleUnderline={() => toggleInlineFormat("u")}
-        onUndo={() => applyHistoryOffset(-1)}
-      />
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#EEE8DC]">
+      <div className="sticky top-0 z-20 shrink-0 border-b border-[#B8A07C]/30 bg-[#EEE8DC]">
+        <DeckToolbar
+          activeObject={activeObject}
+          directTextEditMode={directTextEditMode}
+          readOnly={readOnly}
+          saveState={saveState}
+          selectionMode={selectionMode}
+          state={toolbarState}
+          onAlign={updateTextAlignment}
+          onFillColor={(color) => updateObjectStyle({ backgroundColor: color })}
+          onFontFamily={(fontFamily) => updateTextStyle({ fontFamily })}
+          onFontSize={(fontSize) => updateTextStyle({ fontSize: normalizeCssSize(fontSize) })}
+          onImage={requestImageReplacement}
+          onTextColor={updateTextColor}
+          onToolbarInteractionStart={preserveActiveTextSelection}
+          onToggleBold={() => toggleInlineFormat("strong")}
+          onToggleItalic={() => toggleInlineFormat("em")}
+          onToggleStrikethrough={() => toggleInlineFormat("s")}
+          onToggleDirectTextEditMode={() => setDirectTextEditMode((current) => !current)}
+          onToggleUnderline={() => toggleInlineFormat("u")}
+        />
+      </div>
       <input ref={imageFileInputRef} className="hidden" type="file" accept="image/*" onChange={replaceActiveImageFromFile} />
       <div
         ref={hostRef}
-        className={cn("flex min-h-0 flex-1 items-center justify-center overflow-auto px-0 pb-5 pt-2.5 outline-none md:px-2 md:pb-7 md:pt-3", scrollbarClass)}
+        className={cn("relative flex min-h-0 flex-1 items-center justify-center overflow-auto px-3 pb-5 pt-2.5 outline-none md:px-8 md:pb-7 md:pt-3", scrollbarClass)}
         tabIndex={0}
         onKeyDown={handleSlideNavigationKey}
         onPointerDown={(event) => {
           if (!activeTextEdit) event.currentTarget.focus();
         }}
       >
+        <DeckHistoryControls
+          canRedo={canRedo}
+          canUndo={canUndo}
+          readOnly={readOnly}
+          onInteractionStart={preserveActiveTextSelection}
+          onRedo={() => applyHistoryOffset(1)}
+          onUndo={() => applyHistoryOffset(-1)}
+        />
         {activeSlide ? (
           (() => {
             const slide = activeSlide;
@@ -121,15 +128,15 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
             return (
               <article className="min-w-0 shrink-0" key={slide.id} style={{ width: frameWidth || undefined }}>
                 <div className="mb-2 flex items-center gap-2.5">
-                  <span className="inline-flex h-6 items-center rounded-md bg-[#5C6B50] px-[7px] font-mono text-[12px] font-black text-[#F4EFE6]">{String(activeSlideIndex + 1).padStart(2, "0")}</span>
-                  <strong className="min-w-0 truncate text-[12px] font-semibold text-[#2A2620]/78">{slideTitle}</strong>
+                  <span className="inline-flex h-6 items-center rounded-md bg-[#5C6B50] px-[7px] font-mono text-[13px] font-black text-[#F4EFE6]">{String(activeSlideIndex + 1).padStart(2, "0")}</span>
+                  <strong className="min-w-0 truncate text-[13px] font-semibold text-[#2A2620]/78">{slideTitle}</strong>
                 </div>
                 <div
-                  className={cn("relative overflow-hidden rounded-[2px] border border-[#B8A07C]/60 bg-white shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)]", selectionMode === "object" && activeObject?.slideId === slide.id ? "border-[#5C6B50]" : "")}
+                  className={cn("relative overflow-hidden rounded-[2px] border border-[#B8A07C]/30 bg-white ", selectionMode === "object" && activeObject?.slideId === slide.id ? "border-[#B8A07C]/30" : "")}
                   style={{ width: frameWidth || undefined, height: frameHeight || undefined }}
                 >
                   <iframe
-                    className="absolute left-0 top-0 block origin-top-left border-0"
+                    className={cn("absolute left-0 top-0 block origin-top-left border-0 transition-opacity duration-200", input.agentProcessing ? "opacity-50" : "opacity-100")}
                     height={canvas.height}
                     ref={(iframe) => {
                       if (iframe) initializeFrame(slide, iframe);
@@ -144,6 +151,7 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
                     title={slideTitle}
                     onLoad={(event) => initializeFrame(slide, event.currentTarget)}
                   />
+                  <ArtifactAgentProcessingOverlay active={input.agentProcessing} />
                   <DeckInteractionLayer
                     activeObject={activeObject?.slideId === slide.id ? activeObject : null}
                     activeGeometry={activeObject?.slideId === slide.id ? activeObjectGeometry : null}
@@ -229,10 +237,31 @@ export function DeckEditorView(input: { model: ReturnType<typeof useDeckEditorMo
   );
 }
 
-function DeckToolbar(props: {
-  activeObject: ActiveDeckObject | null;
+function DeckHistoryControls(props: {
   canRedo: boolean;
   canUndo: boolean;
+  readOnly: boolean;
+  onInteractionStart: () => void;
+  onRedo: () => void;
+  onUndo: () => void;
+}) {
+  return (
+    <div
+      className="absolute bottom-4 left-4 z-10 flex items-center gap-1 rounded-[12px] border border-[#B8A07C]/30 bg-[#F9F4EC]/92 p-1 "
+      onPointerDownCapture={props.onInteractionStart}
+    >
+      <ToolbarIconButton disabled={props.readOnly || !props.canUndo} title="Undo" onClick={props.onUndo}>
+        <Undo2 size={16} />
+      </ToolbarIconButton>
+      <ToolbarIconButton disabled={props.readOnly || !props.canRedo} title="Redo" onClick={props.onRedo}>
+        <Redo2 size={16} />
+      </ToolbarIconButton>
+    </div>
+  );
+}
+
+function DeckToolbar(props: {
+  activeObject: ActiveDeckObject | null;
   directTextEditMode: boolean;
   readOnly: boolean;
   saveState: "saved" | "saving" | "error";
@@ -243,7 +272,6 @@ function DeckToolbar(props: {
   onFontFamily: (fontFamily: string) => void;
   onFontSize: (fontSize: string) => void;
   onImage: () => void;
-  onRedo: () => void;
   onTextColor: (color: string) => void;
   onToolbarInteractionStart: () => void;
   onToggleBold: () => void;
@@ -251,7 +279,6 @@ function DeckToolbar(props: {
   onToggleItalic: () => void;
   onToggleStrikethrough: () => void;
   onToggleUnderline: () => void;
-  onUndo: () => void;
 }) {
   const disabled = props.readOnly || !props.activeObject;
   const textControlDisabled = disabled || props.selectionMode !== "text";
@@ -259,17 +286,12 @@ function DeckToolbar(props: {
   const imageControlDisabled = props.activeObject?.objectType !== "image";
   const hasCurrentFontOption = deckFontOptions.some((option) => option.value === props.state.fontFamily);
   return (
-    <Toolbar className="relative overflow-visible" display={{ maxWidth: 1500, width: "content" }} onPointerDownCapture={props.onToolbarInteractionStart}>
+    <Toolbar
+      className="relative !m-0 !w-full !max-w-none !rounded-none !border-0 !bg-transparent !px-3 !py-2 overflow-visible md:!px-5"
+      display={{ maxWidth: 1500, width: "full" }}
+      onPointerDownCapture={props.onToolbarInteractionStart}
+    >
       <ToolbarRow wrap className="gap-y-1.5">
-        <ToolbarGroup>
-          <ToolbarIconButton disabled={props.readOnly || !props.canUndo} title="Undo" onClick={props.onUndo}>
-            <Undo2 size={16} />
-          </ToolbarIconButton>
-          <ToolbarIconButton disabled={props.readOnly || !props.canRedo} title="Redo" onClick={props.onRedo}>
-            <Redo2 size={16} />
-          </ToolbarIconButton>
-        </ToolbarGroup>
-        <ToolbarDivider />
         <ToolbarGroup className="[column-gap:4px]">
           <ToolbarSelect compact disabled={textControlDisabled} title="Block style" value={props.state.block} onChange={() => {}}>
             <option value="normal">Normal Text</option>

@@ -86,7 +86,7 @@ export function useDeckEditorModel(props: {
   const activeSlide = slides.find((slide) => slide.id === activeSlideId) ?? slides[0] ?? null;
   const activeSlideIndex = activeSlide ? slides.findIndex((slide) => slide.id === activeSlide.id) : -1;
   const availableFrameWidth = Math.max(0, hostWidth - 64);
-  const availableFrameHeight = Math.max(0, hostHeight - 92);
+  const availableFrameHeight = Math.max(0, hostHeight - 72);
   const scale = fitScale({ availableHeight: availableFrameHeight, availableWidth: availableFrameWidth, height: canvas.height, minScale: 0.4, width: canvas.width });
   const frameWidth = scaledWidth({ scale, width: canvas.width });
   const frameHeight = scaledHeight({ height: canvas.height, scale });

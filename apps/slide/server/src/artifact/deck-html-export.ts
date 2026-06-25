@@ -223,7 +223,7 @@ function renderDeckHtmlExport(input: {
       overflow: hidden;
       background: var(--stage-bg);
       color: #fff;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: Lexend, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     .deck-viewport {

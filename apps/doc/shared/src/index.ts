@@ -289,7 +289,7 @@ export const defaultHtmlDocument = `<!DOCTYPE html>
   <style>
     :root {
       color: #1f2933;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: Lexend, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #ffffff;
     }
     body {

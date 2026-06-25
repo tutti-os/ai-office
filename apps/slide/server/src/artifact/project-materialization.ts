@@ -29,7 +29,7 @@ export function materializeDeckProject(root: string, project: SlideProject, arti
   if (!existsSync(stylesPath)) {
     writeFileSync(
       stylesPath,
-      `html, body { margin: 0; width: 100%; height: 100%; }\nbody { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }\n.slide { width: 1920px; height: 1080px; box-sizing: border-box; padding: 96px; }\n`,
+      `html, body { margin: 0; width: 100%; height: 100%; }\nbody { font-family: Lexend, ui-sans-serif, system-ui, sans-serif; }\n.slide { width: 1920px; height: 1080px; box-sizing: border-box; padding: 96px; }\n`,
       "utf8",
     );
   }
@@ -244,7 +244,7 @@ function missingTemplateSlideHtml(title: string, fileName: string) {
   <title>${escapeHtml(fileName)}</title>
 </head>
 <body>
-  <section style="width:1920px;height:1080px;box-sizing:border-box;padding:96px;font-family:Inter,system-ui,sans-serif;">
+  <section style="width:1920px;height:1080px;box-sizing:border-box;padding:96px;font-family:Lexend,system-ui,sans-serif;">
     <p style="margin:0 0 24px;color:#667085;font-size:28px;font-weight:700;">${escapeHtml(title)}</p>
     <h1 style="margin:0;color:#111827;font-size:72px;line-height:1.1;">Missing template slide: ${escapeHtml(fileName)}</h1>
   </section>

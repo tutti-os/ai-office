@@ -10,7 +10,7 @@ export const blankHtmlDocument = `<!DOCTYPE html>
       margin: 0 auto;
       padding: 56px 72px 96px;
       color: #1f2933;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: Lexend, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       line-height: 1.62;
     }
   </style>

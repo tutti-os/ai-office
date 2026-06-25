@@ -22,7 +22,7 @@ function renderTemplateShell(template: DocumentTemplate, body: string, extraCss 
       margin: 0 auto;
       padding: 56px 72px 96px;
       color: #263238;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: Lexend, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       line-height: 1.62;
     }
     h1 { margin: 0 0 18px; font-size: 34px; line-height: 1.15; letter-spacing: 0; }

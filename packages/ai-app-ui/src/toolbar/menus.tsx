@@ -207,7 +207,7 @@ function SpacingControl(props: {
       />
       <input
         aria-label={`${props.label} value`}
-        className="h-7 rounded-[10px] border border-[#B8A07C]/50 bg-[#F4EFE6] px-1.5 text-center text-[12px] font-semibold text-[#2A2620] outline-none focus:border-[#5C6B50]/60"
+        className="h-7 rounded-[8px] border border-[#B8A07C]/30 bg-[#F9F4EC] px-1.5 text-center text-[13px] font-semibold text-[#2A2620] outline-none focus:border-[#B8A07C]/30"
         inputMode="decimal"
         max={props.max}
         min={props.min}
@@ -315,7 +315,7 @@ function ToolbarObjectMenu<T extends { label: string }>(props: {
               onClick={() => props.onSelect(option)}
             >
               <span>{option.label}</span>
-              <span className="text-[9px] text-[#8B8275]">{props.secondary(option)}</span>
+              <span className="text-[11px] text-[#8B8275]">{props.secondary(option)}</span>
             </button>
           ))}
         </ToolbarFloatingMenu>

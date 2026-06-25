@@ -104,7 +104,6 @@ function pptxPdfPrintHtml(input: {
       background: #fff;
       break-after: page;
       page-break-after: always;
-      box-shadow: none;
       border: 0;
     }
 

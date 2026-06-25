@@ -156,13 +156,17 @@ function eventsToBlocks<TEvent extends BaseRunEvent, TRun extends BaseRun>(event
     blocks.push({ type: "result", text: run.resultPreview.trim() });
   } else if (run.status === "failed" && run.error) {
     blocks.push({ type: "error", text: run.error });
-  } else if (run.status === "cancelled") {
-    blocks.push({ type: "status", text: run.error || "Cancelled" });
-  } else if (!blocks.length) {
-    blocks.push({ type: "status", text: run.status === "accepted" ? "Queued" : "Working" });
+  } else if (!blocks.length && run.status !== "cancelled" && !isAgentRunActive(run)) {
+    blocks.push({ type: "status", text: runStatusFallbackText(run.status) });
   }
 
   return blocks;
+}
+
+function runStatusFallbackText(status: BaseRun["status"]) {
+  if (status === "completed") return "Completed";
+  if (status === "failed") return "Failed";
+  return status;
 }
 
 function appendTextLikeBlock(blocks: AgentConversationBlock[], type: "thinking" | "status" | "error" | "result", text: string) {

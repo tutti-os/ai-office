@@ -6,6 +6,7 @@ import type { ProjectDetailResponse } from "@ai-slide/shared";
 import type { DeckAgentRuntimeProvider } from "../artifact/deckArtifactAdapter";
 
 export function DeckEditor(props: {
+  agentProcessing: boolean;
   detail: ProjectDetailResponse;
   interaction: ArtifactInteractionPolicy;
   projectId: string;
@@ -15,5 +16,5 @@ export function DeckEditor(props: {
   selectedBlockLabel: string;
   selectedTextLabel: string;
 }) {
-  return <DeckEditorView model={useDeckEditorModel(props)} />;
+  return <DeckEditorView agentProcessing={props.agentProcessing} model={useDeckEditorModel(props)} />;
 }

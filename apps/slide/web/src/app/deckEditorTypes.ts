@@ -77,7 +77,7 @@ export const defaultDeckToolbarState: DeckToolbarState = {
 
 export const selectedDeckObjectToolbarState: DeckToolbarState = {
   block: "normal",
-  fontFamily: "Inter, sans-serif",
+  fontFamily: "Lexend, sans-serif",
   fontSize: "16",
   bold: false,
   italic: false,
@@ -90,7 +90,7 @@ export const selectedDeckObjectToolbarState: DeckToolbarState = {
 
 export const deckFontOptions = [
   { value: "'PingFang SC', sans-serif", label: "PingFang SC" },
-  { value: "Inter, sans-serif", label: "Inter" },
+  { value: "Lexend, sans-serif", label: "Lexend" },
   { value: "'IBM Plex Sans', sans-serif", label: "IBM Plex Sans" },
   { value: "'IBM Plex Mono', monospace", label: "IBM Plex Mono" },
   { value: "'JetBrains Mono', monospace", label: "JetBrains Mono" },
