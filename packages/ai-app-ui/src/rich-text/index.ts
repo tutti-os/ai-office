@@ -535,7 +535,9 @@ function nearestElement(node: Node): Element | null {
 }
 
 function isHtmlElement(value: unknown): value is HTMLElement {
-  return value instanceof Element && value.ownerDocument.defaultView ? value instanceof value.ownerDocument.defaultView.HTMLElement : false;
+  if (!value || typeof value !== "object" || !("ownerDocument" in value)) return false;
+  const view = (value as { ownerDocument?: Document | null }).ownerDocument?.defaultView;
+  return Boolean(view && value instanceof view.HTMLElement);
 }
 
 function buildNodePath(node: Node, doc: Document) {

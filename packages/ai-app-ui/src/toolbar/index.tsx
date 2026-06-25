@@ -343,7 +343,7 @@ export function ToolbarNumberInput(props: {
   );
 }
 
-export function FontSizeControl(props: { value: string; disabled?: boolean; onChange: (fontSize: string) => void }) {
+export function FontSizeControl(props: { value: string; disabled?: boolean; commitOnInput?: boolean; onChange: (fontSize: string) => void }) {
   const [draft, setDraft] = useState(fontSizeNumber(props.value));
   const [editing, setEditing] = useState(false);
   const skipBlurCommitRef = useRef(false);
@@ -361,6 +361,7 @@ export function FontSizeControl(props: { value: string; disabled?: boolean; onCh
 
   const step = (delta: number) => {
     const next = clampFontSize(String((Number.parseInt(draft, 10) || 14) + delta));
+    setDraft(String(next));
     props.onChange(`${next}px`);
   };
 
@@ -384,7 +385,11 @@ export function FontSizeControl(props: { value: string; disabled?: boolean; onCh
         disabled={props.disabled}
         inputMode="numeric"
         value={draft}
-        onChange={(event) => setDraft(event.currentTarget.value.replace(/[^\d]/g, "").slice(0, 3))}
+        onInput={(event) => {
+          const nextDraft = event.currentTarget.value.replace(/[^\d]/g, "").slice(0, 3);
+          setDraft(nextDraft);
+          if (props.commitOnInput && nextDraft) props.onChange(`${clampFontSize(nextDraft)}px`);
+        }}
         onBlur={() => {
           setEditing(false);
           if (skipBlurCommitRef.current) {

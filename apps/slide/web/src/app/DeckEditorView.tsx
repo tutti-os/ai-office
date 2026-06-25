@@ -285,7 +285,7 @@ function DeckToolbar(props: {
               </option>
             ))}
           </ToolbarSelect>
-          <FontSizeControl disabled={textControlDisabled} value={props.state.fontSize} onChange={props.onFontSize} />
+          <FontSizeControl commitOnInput disabled={textControlDisabled} value={props.state.fontSize} onChange={props.onFontSize} />
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup>
