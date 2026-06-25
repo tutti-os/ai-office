@@ -188,7 +188,7 @@ export function readToolbarState(doc: Document, fallbackNode: Node | null, fallb
       : null;
   const fallbackTarget = resolveEditorTarget(doc, fallbackNode, fallbackPath);
   const selectionTarget = nearestSelectionTarget(doc, selection);
-  const target = fallbackTarget ?? (rangeElement && rangeElement !== doc.body ? rangeElement : null) ?? selectionTarget ?? firstEditableChildForToolbar(doc.body) ?? doc.body;
+  const target = (rangeElement && rangeElement !== doc.body ? rangeElement : null) ?? selectionTarget ?? fallbackTarget ?? firstEditableChildForToolbar(doc.body) ?? doc.body;
   const block = nearestBlockForToolbar(target, doc);
   const styleTarget = target !== doc.body && !isToolbarBlock(target) ? target : block ?? target;
   const computed = doc.defaultView?.getComputedStyle(styleTarget);
@@ -325,12 +325,7 @@ export function blockTagForToolbar(element: Element | null): HeadingTag {
 }
 
 export function normalizeToolbarFont(fontFamily: string) {
-  const lower = fontFamily.toLowerCase();
-  if (lower.includes("courier")) return "'Courier New', monospace";
-  if (lower.includes("times")) return "'Times New Roman', serif";
-  if (lower.includes("georgia")) return "Georgia, serif";
-  if (lower.includes("inter")) return "Inter, sans-serif";
-  return "Arial, sans-serif";
+  return fontFamily.trim() || "Arial, sans-serif";
 }
 
 export function normalizeToolbarFontSize(fontSize: string) {

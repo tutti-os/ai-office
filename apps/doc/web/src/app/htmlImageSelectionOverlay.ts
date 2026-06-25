@@ -2,6 +2,15 @@ import { imageResizeHandleStyle, positionImageSelectionOverlay, removeImageSelec
 import type { ImageObjectElement, ResizeHandle } from "./runtimeWorkbenchTypes";
 
 const imageResizeHandles: ResizeHandle[] = ["top-left", "top", "top-right", "right", "bottom-right", "bottom", "bottom-left", "left"];
+const lucideReplaceIconNode = [
+  ["path", { d: "M14 4a1 1 0 0 1 1-1" }],
+  ["path", { d: "M15 10a1 1 0 0 1-1-1" }],
+  ["path", { d: "M21 4a1 1 0 0 0-1-1" }],
+  ["path", { d: "M21 9a1 1 0 0 1-1 1" }],
+  ["path", { d: "m3 7 3 3 3-3" }],
+  ["path", { d: "M6 10V5a2 2 0 0 1 2-2h2" }],
+  ["rect", { x: "3", y: "14", width: "7", height: "7", rx: "1" }],
+] as const;
 
 export function renderImageSelectionOverlay(input: {
   doc: Document;
@@ -19,7 +28,7 @@ export function renderImageSelectionOverlay(input: {
     position: "fixed",
     zIndex: "2147483647",
     pointerEvents: "none",
-    border: "2px solid #2684ff",
+    border: "2px solid #5C6B50",
     boxSizing: "border-box",
     boxShadow: "0 0 0 1px rgba(255,255,255,0.95)",
   } satisfies Partial<CSSStyleDeclaration>);
@@ -73,7 +82,7 @@ function createReplaceButton(doc: Document, image: ImageObjectElement, onReplace
     minHeight: "28px",
     boxSizing: "border-box",
     border: "0",
-    borderRadius: "7px",
+    borderRadius: "8px",
     background: "transparent",
     padding: "0",
     margin: "0",
@@ -124,20 +133,10 @@ function createReplaceIcon(doc: Document) {
     flex: "0 0 auto",
   } satisfies Partial<CSSStyleDeclaration>);
 
-  const imagePath = doc.createElementNS("http://www.w3.org/2000/svg", "path");
-  imagePath.setAttribute("d", "M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7");
-  const mountainPath = doc.createElementNS("http://www.w3.org/2000/svg", "path");
-  mountainPath.setAttribute("d", "m21 15-3.1-3.1a2 2 0 0 0-2.8 0L9 18");
-  const imageLinePath = doc.createElementNS("http://www.w3.org/2000/svg", "path");
-  imageLinePath.setAttribute("d", "m3 15 4-4a2 2 0 0 1 2.8 0L13 14");
-  const circle = doc.createElementNS("http://www.w3.org/2000/svg", "circle");
-  circle.setAttribute("cx", "9");
-  circle.setAttribute("cy", "9");
-  circle.setAttribute("r", "2");
-  const replacePath = doc.createElementNS("http://www.w3.org/2000/svg", "path");
-  replacePath.setAttribute("d", "M17 3h4v4");
-  const arrowPath = doc.createElementNS("http://www.w3.org/2000/svg", "path");
-  arrowPath.setAttribute("d", "m21 3-5 5");
-  icon.append(imagePath, mountainPath, imageLinePath, circle, replacePath, arrowPath);
+  lucideReplaceIconNode.forEach(([tagName, attributes]) => {
+    const node = doc.createElementNS("http://www.w3.org/2000/svg", tagName);
+    Object.entries(attributes).forEach(([name, value]) => node.setAttribute(name, value));
+    icon.append(node);
+  });
   return icon;
 }

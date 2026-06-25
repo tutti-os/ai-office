@@ -139,6 +139,7 @@ export function SlideEditorScreen(props: {
         pptxExporting,
       })}
       exportNotice={exportNotice}
+      agentOverlayEnabled={false}
       bodyClassName="flex flex-col"
       tone="lumen"
       onBackHome={props.onBackHome}
@@ -171,6 +172,7 @@ export function SlideEditorScreen(props: {
         <EditorInfoPanel detail={props.error} title="Presentation not found" />
       ) : props.detail?.artifact.type === "deck" ? (
         <DeckEditor
+          agentProcessing={agentProcessing}
           detail={props.detail}
           interaction={props.artifactInteraction}
           projectId={props.projectId}
@@ -180,6 +182,7 @@ export function SlideEditorScreen(props: {
         />
       ) : props.detail?.artifact.type === "pptx" && props.pptxRuntime ? (
         <PptxPreview
+          agentProcessing={agentProcessing}
           runtime={props.pptxRuntime}
           error={props.pptxError}
           onSelectionChange={props.onPptxSelectionChange}

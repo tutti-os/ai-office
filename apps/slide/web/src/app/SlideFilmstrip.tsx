@@ -52,8 +52,8 @@ export function SlideFilmstrip(props: SlideFilmstripProps) {
           <button
             aria-selected={isActive}
             className={cn(
-              "relative w-36 shrink-0 rounded-[16px] border border-[#B8A07C]/50 bg-[#F4EFE6]/58 p-[7px] text-[#2A2620]/70 shadow-[0_1px_2px_rgba(0,0,0,0.05)] outline-none",
-              "aria-selected:border-[#2A2620] aria-selected:shadow-[0_0_0_2px_rgba(42,38,32,0.22)]",
+              "relative w-36 shrink-0 rounded-[16px] border border-[#B8A07C]/30 bg-[#F4EFE6]/58 p-[7px] text-[#2A2620]/70  outline-none",
+              "aria-selected:border-[#B8A07C]/30 ",
               "focus:outline-none focus-visible:outline-none",
             )}
             key={item.id}

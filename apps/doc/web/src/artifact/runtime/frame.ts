@@ -2,6 +2,8 @@ import { serializeRuntimeDocument } from "./document";
 import type { RuntimeState } from "./types";
 import type { ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
 
+const linkNavigationGuardDocuments = new WeakSet<Document>();
+
 export function runtimeStateToSrcDoc(state: RuntimeState) {
   return serializeRuntimeDocument(state.document);
 }
@@ -66,13 +68,14 @@ function installReadOnlyMutationGuard(doc: Document) {
 }
 
 function installLinkNavigationGuard(doc: Document) {
-  if (doc.documentElement.dataset.aiDocLinkNavigationGuardInstalled === "true") return;
-  doc.documentElement.dataset.aiDocLinkNavigationGuardInstalled = "true";
+  if (linkNavigationGuardDocuments.has(doc)) return;
+  linkNavigationGuardDocuments.add(doc);
 
   const preventLinkNavigation = (event: Event) => {
     const link = linkFromEventTarget(doc, event.target);
     if (!link || !doc.body.contains(link)) return;
     event.preventDefault();
+    requestHostLinkNavigation(doc, link, event);
   };
 
   doc.addEventListener("click", preventLinkNavigation, true);
@@ -84,6 +87,39 @@ function linkFromEventTarget(doc: Document, target: EventTarget | null) {
   if (!view || !(target instanceof view.Node)) return null;
   const element = target instanceof view.Element ? target : target.parentElement;
   return element?.closest<HTMLAnchorElement>("a[href]") ?? null;
+}
+
+function requestHostLinkNavigation(doc: Document, link: HTMLAnchorElement, event: Event) {
+  if (!isLinkActivationEvent(event)) return;
+  const href = navigableLinkHref(doc, link);
+  if (!href) return;
+  openHostLink(doc, href);
+}
+
+function isLinkActivationEvent(event: Event) {
+  if (event.type === "click") return !("button" in event) || event.button === 0;
+  return event.type === "auxclick" && "button" in event && event.button === 1;
+}
+
+function navigableLinkHref(doc: Document, link: HTMLAnchorElement) {
+  const rawHref = link.getAttribute("href")?.trim();
+  if (!rawHref) return "";
+  try {
+    const url = new URL(rawHref, doc.location.href);
+    return isAllowedLinkProtocol(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function isAllowedLinkProtocol(protocol: string) {
+  return protocol === "http:" || protocol === "https:" || protocol === "mailto:" || protocol === "tel:";
+}
+
+function openHostLink(doc: Document, href: string) {
+  const hostWindow = doc.defaultView?.parent ?? window;
+  const opened = hostWindow.open(href, "_blank", "noopener,noreferrer");
+  if (opened) opened.opener = null;
 }
 
 function markTableCellsEditable(doc: Document) {
@@ -275,9 +311,9 @@ function ensureRuntimeEditingStyles(doc: Document) {
 
     td[data-ai-table-cell-selected],
     th[data-ai-table-cell-selected] {
-      outline: 2px solid #3b82f6 !important;
+      outline: 2px solid #5c6b50 !important;
       outline-offset: -2px !important;
-      background-image: linear-gradient(rgba(59, 130, 246, 0.14), rgba(59, 130, 246, 0.14)) !important;
+      background-image: linear-gradient(rgba(92, 107, 80, 0.18), rgba(92, 107, 80, 0.18)) !important;
     }
   `;
   doc.head.append(style);

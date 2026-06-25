@@ -59,7 +59,7 @@ const resizeHandlePosition: Record<DeckResizeHandle, string> = {
   left: "-left-1 top-1/2 -translate-y-1/2 cursor-ew-resize",
 };
 const objectToolbarTooltip =
-  "relative before:pointer-events-none before:absolute before:left-1/2 before:top-full before:z-50 before:mt-2 before:-translate-x-1/2 before:whitespace-nowrap before:rounded-md before:bg-[#111827] before:px-2 before:py-1 before:text-[10px] before:font-bold before:leading-none before:text-white before:opacity-0 before:shadow-[0_10px_24px_rgba(0,0,0,0.22)] before:transition-opacity before:duration-150 before:content-[attr(data-tip)] after:pointer-events-none after:absolute after:left-1/2 after:top-full after:z-50 after:mt-0.5 after:-translate-x-1/2 after:border-x-[5px] after:border-b-[5px] after:border-x-transparent after:border-b-[#111827] after:opacity-0 after:transition-opacity after:duration-150 hover:before:opacity-100 hover:after:opacity-100 focus-visible:before:opacity-100 focus-visible:after:opacity-100";
+  "relative before:pointer-events-none before:absolute before:left-1/2 before:top-full before:z-50 before:mt-2 before:-translate-x-1/2 before:whitespace-nowrap before:rounded-md before:bg-[#111827] before:px-2 before:py-1 before:text-[11px] before:font-bold before:leading-none before:text-white before:opacity-0  before:transition-opacity before:duration-150 before:content-[attr(data-tip)] after:pointer-events-none after:absolute after:left-1/2 after:top-full after:z-50 after:mt-0.5 after:-translate-x-1/2 after:border-x-[5px] after:border-b-[5px] after:border-x-transparent after:border-b-[#B8A07C]/30 after:opacity-0 after:transition-opacity after:duration-150 hover:before:opacity-100 hover:after:opacity-100 focus-visible:before:opacity-100 focus-visible:after:opacity-100";
 
 type GeometryNumberKey = "left" | "top" | "width" | "height";
 const geometryPanelWidth = 300;
@@ -148,7 +148,7 @@ export function DeckInteractionLayer(props: DeckInteractionLayerProps) {
       {props.selectionBox ? (
         <>
           <div
-            className={cx("absolute z-[3] border border-violet-500 shadow-none", !props.readOnly && props.activeObject?.movable ? "cursor-move" : "cursor-default")}
+            className={cx("absolute z-[3] border border-[#B8A07C]/30 shadow-none", !props.readOnly && props.activeObject?.movable ? "cursor-move" : "cursor-default")}
             style={{
               left: props.selectionBox.left,
               top: props.selectionBox.top,
@@ -163,7 +163,7 @@ export function DeckInteractionLayer(props: DeckInteractionLayerProps) {
             {props.readOnly ? null : resizeHandles.map((handle) => (
               <button
                 aria-label={`Resize ${handle}`}
-                className={cx("pointer-events-auto absolute size-2 rounded-full border border-violet-500 bg-white p-0 shadow-[0_1px_4px_rgba(0,0,0,0.18)]", resizeHandlePosition[handle])}
+                className={cx("pointer-events-auto absolute size-2 rounded-full border border-[#B8A07C]/30 bg-white p-0 ", resizeHandlePosition[handle])}
                 data-handle={handle}
                 key={handle}
                 type="button"
@@ -174,7 +174,7 @@ export function DeckInteractionLayer(props: DeckInteractionLayerProps) {
               aria-label="Rotate object"
               className={cx(
                 objectToolbarTooltip,
-                "pointer-events-auto absolute grid size-6 -translate-x-1/2 place-items-center rounded-full border border-violet-500 bg-white p-0 text-violet-700 shadow-[0_4px_14px_rgba(0,0,0,0.18)] hover:bg-violet-50",
+                "pointer-events-auto absolute grid size-6 -translate-x-1/2 place-items-center rounded-full border border-[#B8A07C]/30 bg-white p-0 text-violet-700  hover:bg-violet-50",
               )}
               data-tip="Rotate"
               style={{ left: "50%", top: "calc(100% + 12px)" }}
@@ -186,7 +186,7 @@ export function DeckInteractionLayer(props: DeckInteractionLayerProps) {
             </button>}
           </div>
           {props.readOnly ? null : <div
-            className="absolute z-[4] inline-flex h-[30px] -translate-x-1/2 -translate-y-[calc(100%_+_8px)] items-center gap-px overflow-visible rounded-md border border-black/8 bg-white p-[3px] shadow-[0_8px_22px_rgba(0,0,0,0.16)] [&>button]:grid [&>button]:size-[22px] [&>button]:place-items-center [&>button]:rounded-[5px] [&>button]:border-0 [&>button]:bg-transparent [&>button]:p-0 [&>button]:text-black/58 [&>button:disabled]:cursor-default [&>button:disabled]:text-black/20 [&>button:hover:not(:disabled)]:bg-black/[0.06] [&>button:hover:not(:disabled)]:text-[#111]"
+            className="absolute z-[4] inline-flex h-[30px] -translate-x-1/2 -translate-y-[calc(100%_+_8px)] items-center gap-px overflow-visible rounded-md border border-[#B8A07C]/30 bg-white p-[3px]  [&>button]:grid [&>button]:size-[22px] [&>button]:place-items-center [&>button]:rounded-[5px] [&>button]:border-0 [&>button]:bg-transparent [&>button]:p-0 [&>button]:text-black/58 [&>button:disabled]:cursor-default [&>button:disabled]:text-black/20 [&>button:hover:not(:disabled)]:bg-black/[0.06] [&>button:hover:not(:disabled)]:text-[#111]"
             ref={objectToolbarRef}
             style={{
               left: props.selectionBox.left + props.selectionBox.width / 2,
@@ -233,7 +233,7 @@ function ObjectGeometryPanel(props: {
 }) {
   return createPortal(
     <div
-      className="fixed z-50 w-[300px] overflow-y-auto rounded-lg border border-black/8 bg-white p-2.5 text-[#202124] shadow-[0_14px_38px_rgba(0,0,0,0.18)]"
+      className="fixed z-50 w-[300px] overflow-y-auto rounded-lg border border-[#B8A07C]/30 bg-white p-2.5 text-[#202124] "
       ref={props.panelRef}
       style={{
         left: props.position.left,
@@ -262,8 +262,8 @@ function ObjectGeometryPanel(props: {
         <GeometryNumberInput label="H" value={props.geometry.height} onChange={(value) => props.onUpdateNumber("height", value)} />
         <button
           className={cx(
-            "grid h-8 place-items-center rounded-md border border-black/10 bg-[#f6f7f8] text-black/55 hover:bg-black/[0.06] hover:text-black",
-            props.proportionLocked && "border-violet-500/40 bg-violet-50 text-violet-700",
+            "grid h-8 place-items-center rounded-md border border-[#B8A07C]/30 bg-[#f6f7f8] text-black/55 hover:bg-black/[0.06] hover:text-black",
+            props.proportionLocked && "border-[#B8A07C]/30 bg-violet-50 text-violet-700",
           )}
           type="button"
           title={props.proportionLocked ? "Unlock proportion" : "Lock proportion"}
@@ -284,17 +284,17 @@ function ObjectGeometryPanel(props: {
 function GeometryNumberInput(props: { icon?: ReactNode; label: string; suffix?: string; value: number; onChange: (value: number) => void }) {
   return (
     <label className="block min-w-0">
-      <span className="mb-1 block text-[10px] font-bold uppercase leading-none text-black/42">{props.label}</span>
-      <span className="flex h-8 min-w-0 items-center overflow-hidden rounded-md border border-black/10 bg-[#f6f7f8] focus-within:border-violet-500/50 focus-within:bg-white">
+      <span className="mb-1 block text-[11px] font-bold uppercase leading-none text-black/42">{props.label}</span>
+      <span className="flex h-8 min-w-0 items-center overflow-hidden rounded-md border border-[#B8A07C]/30 bg-[#f6f7f8] focus-within:border-[#B8A07C]/30 focus-within:bg-white">
         {props.icon ? <span className="grid w-6 shrink-0 place-items-center text-black/45">{props.icon}</span> : null}
         <input
-          className="h-full min-w-0 flex-1 border-0 bg-transparent px-2 text-[12px] font-semibold text-[#202124] outline-none"
+          className="h-full min-w-0 flex-1 border-0 bg-transparent px-2 text-[13px] font-semibold text-[#202124] outline-none"
           inputMode="decimal"
           type="number"
           value={formatGeometryNumber(props.value)}
           onChange={(event) => props.onChange(Number.parseFloat(event.currentTarget.value))}
         />
-        <span className="shrink-0 pr-2 text-[10px] font-bold text-black/35">{props.suffix ?? "px"}</span>
+        <span className="shrink-0 pr-2 text-[11px] font-bold text-black/35">{props.suffix ?? "px"}</span>
       </span>
     </label>
   );

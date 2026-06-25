@@ -135,6 +135,12 @@ export function setElementStyle(doc: Document, targetElement: Element | null | u
   const selectedCells = selectedTableStyleTargets(doc);
   if (selectedCells.length > 0) return applyElementStyles(selectedCells, normalized);
 
+  const context = getFormattingContext(doc);
+  if (context.selection && context.range && !context.range.collapsed) {
+    const inlineAttributes = inlineStyleAttributesForTextSelection(normalized);
+    if (Object.keys(inlineAttributes).length > 0) return styleTextSelection(doc, context.range, context.selection, inlineAttributes);
+  }
+
   const rawTarget = targetElement && doc.body.contains(targetElement) ? targetElement : selectedElement(doc) ?? currentBlockFromSelection(doc);
   const target = rawTarget ? styleTargetElement(rawTarget, doc) ?? rawTarget : currentBlockFromSelection(doc);
   if (!isHtmlElement(target) || target === doc.body) return false;
@@ -211,6 +217,14 @@ export function applyElementStyles(targets: HTMLElement[], attributes: ElementSt
     });
   });
   return changed;
+}
+
+function inlineStyleAttributesForTextSelection(attributes: ElementStyleAttributes): Partial<CSSStyleDeclaration> {
+  const inlineAttributes: Partial<CSSStyleDeclaration> = {};
+  if ("lineHeight" in attributes && attributes.lineHeight) inlineAttributes.lineHeight = attributes.lineHeight;
+  if ("letterSpacing" in attributes && attributes.letterSpacing) inlineAttributes.letterSpacing = attributes.letterSpacing;
+  if ("verticalAlign" in attributes && attributes.verticalAlign) inlineAttributes.verticalAlign = attributes.verticalAlign;
+  return inlineAttributes;
 }
 
 export function copyCurrentPresentationStyle(doc: Document, targetElement?: Element | null): PresentationStyle | null {

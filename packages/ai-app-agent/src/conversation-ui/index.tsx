@@ -3,11 +3,8 @@ import {
   ArrowUp,
   ChevronDown,
   CheckCircle2,
-  CircleDashed,
   File,
   Loader2,
-  Sparkles,
-  Square,
   WandSparkles,
   XCircle,
 } from "lucide-react";
@@ -111,6 +108,7 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
   const cx = classes[props.variant];
   const showQuickPrompts = props.quickPromptsVisible === true && props.copy.quickPrompts.length > 0;
   const showActiveSelection = props.activeSelectionVisible ?? Boolean(props.activeSelectionText.trim());
+  const actionIsStop = Boolean(activeRun && props.onCancel);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -146,7 +144,7 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
           {props.copy.homeLabel}
         </button>
         <div className={cx.headerStatus}>
-          {props.loading ? <Loader2 className={cx.spin} size={13} /> : <CircleDashed size={13} />}
+          {props.loading ? <Loader2 className={cx.spin} size={13} /> : null}
           {props.artifactLabel}
         </div>
       </div>
@@ -214,13 +212,40 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
               <div />
             )}
             <div className={cx.composerActions}>
-              {activeRun && props.onCancel ? (
-                <button className={cx.cancelButton} type="button" aria-label="Stop agent" disabled={cancellingActiveRun} onClick={() => void cancelActiveRun()}>
-                  {cancellingActiveRun ? <Loader2 className={cx.spin} size={13} /> : <Square size={13} />}
-                </button>
-              ) : null}
-              <button className={cx.sendButton} type="button" disabled={!draft.trim() || props.sending} onClick={() => void submit()}>
-                {props.sending ? <Loader2 className={cx.spin} size={15} /> : <ArrowUp size={15} />}
+              <button
+                className={`${cx.sendButton} relative ${actionIsStop ? "!bg-transparent !text-[#2A2620] disabled:!bg-transparent disabled:!text-[#2A2620]" : ""}`}
+                type="button"
+                aria-label={actionIsStop ? "Stop agent" : "Send prompt"}
+                disabled={actionIsStop ? cancellingActiveRun : !draft.trim() || props.sending}
+                onClick={() => {
+                  if (actionIsStop) void cancelActiveRun();
+                  else void submit();
+                }}
+              >
+                {actionIsStop ? (
+                  <>
+                    <svg className="absolute inset-0 size-8 text-[#2A2620]/18" aria-hidden="true" viewBox="0 0 32 32">
+                      <circle cx="16" cy="16" fill="none" r="14" stroke="currentColor" strokeWidth="2.6" />
+                    </svg>
+                    <svg className="absolute inset-0 size-8 animate-spin" aria-hidden="true" viewBox="0 0 32 32">
+                      <circle
+                        cx="16"
+                        cy="16"
+                        fill="none"
+                        r="14"
+                        stroke="currentColor"
+                        strokeDasharray="68 20"
+                        strokeLinecap="round"
+                        strokeWidth="2.6"
+                      />
+                    </svg>
+                    <span className="block size-2.5 rounded-[2px] bg-current" />
+                  </>
+                ) : props.sending ? (
+                  <Loader2 className={cx.spin} size={15} />
+                ) : (
+                  <ArrowUp size={15} />
+                )}
               </button>
             </div>
           </div>
@@ -234,9 +259,6 @@ function IntroCard(props: { copy: AgentConversationCopy; cx: ConversationClassNa
   return (
     <div className={props.cx.introCard}>
       <div className={props.cx.introMain}>
-        <div className={props.cx.introIcon}>
-          <Sparkles size={15} />
-        </div>
         <div>
           <div className={props.cx.introTitle}>{props.copy.introTitle}</div>
           <p className={props.cx.introBody}>{props.copy.introBody}</p>
@@ -280,6 +302,14 @@ function ConversationMessage<TRun extends BaseRun>(props: { cx: ConversationClas
 
 function RunStatusBadge<TRun extends BaseRun>(props: { cx: ConversationClassNames; message: Extract<AgentConversationMessage<TRun>, { role: "assistant" }> }) {
   const status = props.message.run.status;
+  const statusLabel =
+    status === "cancelled" && props.message.run.error?.trim().toLowerCase() === "cancelled by user"
+      ? "cancelled by user"
+      : status;
+  const cancelledReason =
+    status === "cancelled" && props.message.run.error?.trim() && statusLabel === status
+      ? props.message.run.error.trim()
+      : "";
   const icon =
     status === "completed" ? (
       <CheckCircle2 size={13} />
@@ -291,7 +321,8 @@ function RunStatusBadge<TRun extends BaseRun>(props: { cx: ConversationClassName
   return (
     <div className={props.cx.runStatus}>
       {icon}
-      {props.message.run.provider} · {status}
+      {props.message.run.provider} · {statusLabel}
+      {cancelledReason ? `: ${cancelledReason}` : ""}
     </div>
   );
 }

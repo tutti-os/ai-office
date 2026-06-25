@@ -177,18 +177,18 @@ function ArtifactGlobalErrorToast(props: {
   if (!props.error) return null;
   return (
     <div className="pointer-events-none fixed inset-x-0 top-3 z-[1000] flex justify-center px-4">
-      <section className="pointer-events-auto flex w-full max-w-[560px] items-start gap-3 rounded-lg border border-[#B8A07C]/55 bg-[#F4EFE6] px-4 py-3 text-[#2A2620] shadow-[0_18px_46px_rgba(0,0,0,0.16)]">
-        <div className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full border border-[#B8A07C]/60 bg-white text-[#7b2e24]">
+      <section className="pointer-events-auto flex w-full max-w-[560px] items-start gap-3 rounded-lg border border-[#B8A07C]/30 bg-[#F4EFE6] px-4 py-3 text-[#2A2620] ">
+        <div className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full border border-[#B8A07C]/30 bg-white text-[#7b2e24]">
           <AlertTriangle size={15} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-[13px] font-semibold">{props.appName} caught a background error</div>
-          <div className="mt-1 truncate text-[12px] text-[#5f574e]" title={props.error.message || props.error.name}>
+          <div className="mt-1 truncate text-[13px] text-[#5f574e]" title={props.error.message || props.error.name}>
             {props.error.message || props.error.name}
           </div>
         </div>
         <button
-          className="grid size-7 shrink-0 place-items-center rounded-md text-[#8B8275] hover:bg-[#E6DDCD]/55 hover:text-[#5C6B50]"
+          className="grid size-7 shrink-0 place-items-center rounded-md text-[#8B8275] hover:bg-[#EEE8DC]/55 hover:text-[#5C6B50]"
           type="button"
           aria-label="Dismiss error"
           title="Dismiss"
@@ -209,14 +209,14 @@ function ArtifactErrorFallbackLayout(props: {
   secondaryAction: ArtifactErrorAction;
 }) {
   return (
-    <main className="grid h-dvh min-h-0 place-items-center bg-[#E6DDCD] px-5 font-sans text-[#2A2620]">
-      <section className="w-full max-w-[520px] rounded-lg border border-[#B8A07C]/55 bg-[#F4EFE6] p-6 shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)]">
-        <div className="mb-4 grid size-10 place-items-center rounded-full border border-[#B8A07C]/60 bg-white text-[#7b2e24]">
+    <main className="grid h-dvh min-h-0 place-items-center bg-[#EEE8DC] px-5 font-sans text-[#2A2620]">
+      <section className="w-full max-w-[520px] rounded-lg border border-[#B8A07C]/30 bg-[#F4EFE6] p-6 ">
+        <div className="mb-4 grid size-10 place-items-center rounded-full border border-[#B8A07C]/30 bg-white text-[#7b2e24]">
           <AlertTriangle size={19} />
         </div>
-        <h1 className="text-[18px] font-semibold leading-6">{props.title}</h1>
+        <h1 className="text-[15px] font-semibold leading-6">{props.title}</h1>
         <p className="mt-2 text-[13px] leading-5 text-[#5f574e]">{props.message}</p>
-        <pre className="mt-4 max-h-32 overflow-auto rounded-md border border-[#B8A07C]/45 bg-white/70 p-3 text-[11px] leading-4 text-[#7b2e24]">
+        <pre className="mt-4 max-h-32 overflow-auto rounded-md border border-[#B8A07C]/30 bg-white/70 p-3 text-[11px] leading-4 text-[#7b2e24]">
           {props.error.message || props.error.name}
         </pre>
         <div className="mt-5 flex flex-wrap gap-2">
@@ -239,8 +239,8 @@ function ArtifactErrorActionButton(props: { action: ArtifactErrorAction; primary
     <button
       className={
         props.primary
-          ? "inline-flex h-9 items-center gap-2 rounded-md bg-[#2A2620] px-3 text-[12px] font-semibold text-[#F4EFE6] hover:bg-[#5C6B50]"
-          : "inline-flex h-9 items-center gap-2 rounded-md border border-[#B8A07C]/60 bg-white/70 px-3 text-[12px] font-semibold text-[#2A2620] hover:bg-white"
+          ? "inline-flex h-9 items-center gap-2 rounded-md bg-[#2A2620] px-3 text-[13px] font-semibold text-[#F4EFE6] hover:bg-[#5C6B50]"
+          : "inline-flex h-9 items-center gap-2 rounded-md border border-[#B8A07C]/30 bg-white/70 px-3 text-[13px] font-semibold text-[#2A2620] hover:bg-white"
       }
       type="button"
       onClick={props.action.onClick}

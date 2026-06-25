@@ -1,0 +1,10 @@
+{
+  "files": [
+    "apps/doc/web/index.html",
+    "apps/sheet/web/index.html",
+    "apps/slide/web/index.html"
+  ],
+  "insertBefore": "</body>",
+  "commentSyntax": "html",
+  "cspChecked": true
+}

@@ -53,7 +53,7 @@ export function ToolbarLayoutMenu(props: {
       {props.open ? (
         <ToolbarFloatingMenu menuRef={menuRef} position={position} width={width}>
           <div className="px-3 py-3" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="mb-3 border-b border-[#B8A07C]/45 pb-2 text-[11px] font-bold text-[#8B8275]">{props.targetLabel || "element"}</div>
+            <div className="mb-3 border-b border-[#B8A07C]/30 pb-2 text-[11px] font-bold text-[#8B8275]">{props.targetLabel || "element"}</div>
             <LayoutBoxSection
               title="Margin"
               top={props.value.marginTop}
@@ -81,9 +81,9 @@ export function ToolbarLayoutMenu(props: {
                 paddingLeft: value.left,
               })}
             />
-            <div className="mt-4 flex justify-center gap-2 border-t border-[#B8A07C]/45 pt-3">
+            <div className="mt-4 flex justify-center gap-2 border-t border-[#B8A07C]/30 pt-3">
               <button
-                className="h-7 rounded-[10px] border border-[#B8A07C]/50 bg-[#F4EFE6] px-3 text-[11px] font-bold text-[#8B8275] hover:bg-[#E6DDCD]/55 hover:text-[#5C6B50]"
+                className="h-7 rounded-[8px] border border-[#B8A07C]/30 bg-[#F9F4EC] px-3 text-[11px] font-bold text-[#8B8275] hover:bg-[#EEE8DC]/55 hover:text-[#5C6B50]"
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => props.onChange({ marginTop: "", marginRight: "", marginBottom: "", marginLeft: "" })}
@@ -91,7 +91,7 @@ export function ToolbarLayoutMenu(props: {
                 Reset Margin
               </button>
               <button
-                className="h-7 rounded-[10px] border border-[#B8A07C]/50 bg-[#F4EFE6] px-3 text-[11px] font-bold text-[#8B8275] hover:bg-[#E6DDCD]/55 hover:text-[#5C6B50]"
+                className="h-7 rounded-[8px] border border-[#B8A07C]/30 bg-[#F9F4EC] px-3 text-[11px] font-bold text-[#8B8275] hover:bg-[#EEE8DC]/55 hover:text-[#5C6B50]"
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => props.onChange({ paddingTop: "", paddingRight: "", paddingBottom: "", paddingLeft: "" })}
@@ -124,7 +124,7 @@ function LayoutBoxSection(props: {
   const update = (side: keyof typeof value, next: string) => props.onChange({ ...value, [side]: next });
   return (
     <section className={props.className}>
-      <h3 className="mb-2 text-[12px] font-bold text-[#2A2620]">{props.title}</h3>
+      <h3 className="mb-2 text-[13px] font-bold text-[#2A2620]">{props.title}</h3>
       <div className="grid grid-cols-2 gap-x-4 gap-y-2">
         <LayoutSideControl label="Top" value={props.top} onChange={(next) => update("top", next)} />
         <LayoutSideControl label="Right" value={props.right} onChange={(next) => update("right", next)} />
@@ -154,7 +154,7 @@ function LayoutSideControl(props: { label: string; value: string; onChange: (val
       />
       <input
         aria-label={`${props.label} value`}
-        className="h-7 rounded-[10px] border border-[#B8A07C]/50 bg-[#F4EFE6] px-1.5 text-center text-[12px] font-semibold text-[#2A2620] outline-none focus:border-[#5C6B50]/60"
+        className="h-7 rounded-[8px] border border-[#B8A07C]/30 bg-[#F9F4EC] px-1.5 text-center text-[13px] font-semibold text-[#2A2620] outline-none focus:border-[#B8A07C]/30"
         inputMode="decimal"
         max={96}
         min={0}

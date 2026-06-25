@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { Loader2 } from "lucide-react";
+import { Loader2, Redo2, Undo2 } from "lucide-react";
 import { scrollbarClass } from "@ai-app/ui/app-shell";
-import { ArtifactEditorWorkspace, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
+import { ArtifactAgentProcessingOverlay, ArtifactEditorWorkspace, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
 import { type ToolbarLayoutValue } from "@ai-app/ui/toolbar";
 import type { DocumentRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
 import type { AdjacentInsertPosition, Alignment, ElementStyleAttributes, HeadingTag, ImageAttributes, InlineFormatTag, ListKind } from "../artifact/runtime/operations";
@@ -12,7 +12,7 @@ import { HtmlEditorToolbar } from "./HtmlEditorToolbar";
 import type { AttributeDraft, EditorStats, LinkDraft, OperationPanelMode, ToolbarState } from "./runtimeWorkbenchTypes";
 
 const minimumHtmlFrameHeight = 860;
-const linkEditorPanelWidth = 300;
+const linkEditorPanelWidth = 260;
 const linkEditorViewportMargin = 8;
 const linkEditorAnchorGap = 8;
 type LinkEditorPosition = {
@@ -23,8 +23,8 @@ type LinkEditorPosition = {
 
 export function DocumentLoadingScreen(props: { error: string; loading: boolean }) {
   return (
-    <section className="relative flex h-full min-h-0 flex-col bg-[#E6DDCD] text-[#2A2620]">
-      <header className="flex h-12 shrink-0 items-center border-b border-[#B8A07C]/45 px-5">
+    <section className="relative flex h-full min-h-0 flex-col bg-[#EEE8DC] text-[#2A2620]">
+      <header className="flex h-12 shrink-0 items-center border-b border-[#B8A07C]/30 px-5">
         <div className="min-w-0 truncate text-[13px] font-semibold text-[#2A2620]">Loading doc</div>
       </header>
       <div className="grid min-h-0 flex-1 place-items-center bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-6 text-center">
@@ -144,6 +144,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
   const hasPreservedWriteSelection = Boolean(props.runtime?.activeSelection?.selectionType === "write" && props.runtime.activeSelection.commonAncestorPath);
   const canUseRangeSelection = props.toolbarState.rangeSelection || hasPreservedRangeSelection;
   const canCreateLink = !toolbarDisabled && (canUseRangeSelection || hasPreservedWriteSelection || props.toolbarState.table || props.toolbarState.contentElement);
+  const linkEditorOpen = props.linkEditorOpen && !props.toolbarState.image;
 
   const updateHtmlFrameHeight = (pass = 0) => {
     const frame = props.iframeRef.current;
@@ -212,7 +213,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
   }, [props.iframeRef]);
 
   useLayoutEffect(() => {
-    if (!props.linkEditorOpen) {
+    if (!linkEditorOpen) {
       setLinkEditorPosition(null);
       return;
     }
@@ -252,19 +253,19 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
       window.removeEventListener("scroll", updatePosition, true);
       scroller?.removeEventListener("scroll", updatePosition);
     };
-  }, [props.linkEditorOpen]);
+  }, [linkEditorOpen]);
 
   useEffect(() => {
-    if (!props.linkEditorOpen) return;
+    if (!linkEditorOpen) return;
     const doc = props.iframeRef.current?.contentDocument;
     if (!doc) return;
     const onFramePointerDown = () => props.onCloseLinkEditor();
     doc.addEventListener("pointerdown", onFramePointerDown, true);
     return () => doc.removeEventListener("pointerdown", onFramePointerDown, true);
-  }, [props.frameRevision, props.iframeRef, props.linkEditorOpen, props.onCloseLinkEditor]);
+  }, [props.frameRevision, props.iframeRef, linkEditorOpen, props.onCloseLinkEditor]);
 
   useEffect(() => {
-    if (!props.linkEditorOpen) return;
+    if (!linkEditorOpen) return;
     const onPointerDown = (event: PointerEvent) => {
       if (linkEditorRef.current?.contains(event.target as Node) || linkEditorPanelRef.current?.contains(event.target as Node)) return;
       props.onCloseLinkEditor();
@@ -278,18 +279,18 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [props.linkEditorOpen, props.onCloseLinkEditor]);
+  }, [linkEditorOpen, props.onCloseLinkEditor]);
 
   const linkEditorStyle: CSSProperties = linkEditorPosition
     ? { left: linkEditorPosition.left, top: linkEditorPosition.top, width: linkEditorPosition.width }
     : { visibility: "hidden" };
   const linkEditorPortal =
-    props.linkEditorOpen && typeof document !== "undefined"
+    linkEditorOpen && typeof document !== "undefined"
       ? createPortal(
           <form
             ref={linkEditorPanelRef}
             data-toolbar-skip-selection-preserve="true"
-            className="fixed z-50 grid w-[300px] max-w-[calc(100vw-16px)] gap-1.5 rounded-[16px] border border-[#B8A07C]/55 bg-[#F4EFE6] p-2 shadow-[0_18px_46px_rgba(0,0,0,0.16)]"
+            className="fixed z-50 grid w-[260px] max-w-[calc(100vw-16px)] gap-1.5 rounded-[8px] border border-[#B8A07C]/30 bg-[#EEE8DC] p-2 "
             style={linkEditorStyle}
             onSubmit={(event) => {
               event.preventDefault();
@@ -297,7 +298,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
             }}
           >
             <input
-              className="h-7 w-full rounded-[10px] border border-[#B8A07C]/50 bg-[#E6DDCD]/55 px-2 text-[11px] font-medium text-[#2A2620] outline-none placeholder:text-[#8B8275]"
+              className="h-7 w-full rounded-[8px] border border-[#B8A07C]/30 bg-[#F9F4EC] px-2 text-[11px] font-medium text-[#2A2620] outline-none placeholder:text-[#8B8275]"
               value={props.linkDraft.text}
               onChange={(event) => props.onLinkDraftChange({ ...props.linkDraft, text: event.currentTarget.value })}
               onMouseDown={(event) => event.stopPropagation()}
@@ -306,19 +307,19 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
             />
             <div className="flex min-w-0 items-center gap-1">
               <input
-                className="h-7 min-w-0 flex-1 rounded-[10px] border border-[#B8A07C]/50 bg-[#E6DDCD]/55 px-2 text-[11px] font-medium text-[#2A2620] outline-none placeholder:text-[#8B8275]"
+                className="h-7 min-w-0 flex-1 rounded-[8px] border border-[#B8A07C]/30 bg-[#F9F4EC] px-2 text-[11px] font-medium text-[#2A2620] outline-none placeholder:text-[#8B8275]"
                 value={props.linkDraft.href}
                 onChange={(event) => props.onLinkDraftChange({ ...props.linkDraft, href: event.currentTarget.value })}
                 onMouseDown={(event) => event.stopPropagation()}
                 placeholder="https://"
                 aria-label="Link URL"
               />
-              <button className="h-7 rounded-[10px] bg-[#2A2620] px-2.5 text-[10px] font-semibold text-[#F4EFE6]" type="submit">
+              <button className="h-7 rounded-[8px] bg-[#2A2620] px-2.5 text-[11px] font-semibold text-[#F4EFE6]" type="submit">
                 Apply
               </button>
               {props.toolbarState.link ? (
                 <button
-                  className="h-7 rounded-[10px] border border-[#B8A07C]/50 bg-[#F4EFE6] px-2.5 text-[10px] font-semibold text-[#2A2620]"
+                  className="h-7 rounded-[8px] border border-[#B8A07C]/30 bg-[#F9F4EC] px-2.5 text-[11px] font-semibold text-[#2A2620]"
                   type="button"
                   onClick={props.onRemoveLink}
                   onMouseDown={(event) => event.stopPropagation()}
@@ -338,6 +339,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
         title={props.runtime?.title ?? "Untitled Doc"}
         saveState={props.saveState}
         agentWorking={props.agentProcessing}
+        agentOverlayEnabled={false}
         exportNotice={props.exportNotice}
         bodyClassName="flex flex-col"
         tone="lumen"
@@ -376,50 +378,99 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
           />
         }
       >
-        <div ref={frameScrollContainerRef} className={`h-full overflow-x-hidden overflow-y-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-3 py-5 md:px-6 md:py-7 ${scrollbarClass}`}>
-          <HtmlEditorToolbar
-            canCreateLink={canCreateLink}
-            canRedo={canRedo}
-            canUndo={canUndo}
-            layoutMenuOpen={layoutMenuOpen}
-            linkEditorRef={linkEditorRef}
-            props={props}
-            spacingMenuOpen={spacingMenuOpen}
-            toolbarDisabled={toolbarDisabled}
-            onLayoutMenuOpenChange={setLayoutMenuOpen}
-            onSpacingMenuOpenChange={setSpacingMenuOpen}
-          />
-
+        <HtmlEditorToolbar
+          canCreateLink={canCreateLink}
+          layoutMenuOpen={layoutMenuOpen}
+          linkEditorRef={linkEditorRef}
+          props={props}
+          spacingMenuOpen={spacingMenuOpen}
+          toolbarDisabled={toolbarDisabled}
+          onLayoutMenuOpenChange={setLayoutMenuOpen}
+          onSpacingMenuOpenChange={setSpacingMenuOpen}
+        />
+        <div ref={frameScrollContainerRef} className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-3 py-5 md:px-6 md:py-7 ${scrollbarClass}`}>
           {props.frameSrcDoc ? (
-            <iframe
-              key={props.frameRevision}
-              ref={props.iframeRef}
-              className="mx-auto block min-h-[860px] w-full max-w-[980px] overflow-clip rounded-[2px] border border-[#B8A07C]/55 bg-white shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)]"
-              style={{ height: frameHeight }}
-              title={props.runtime?.title ?? "Runtime doc"}
-              sandbox="allow-scripts allow-same-origin"
-              scrolling="no"
-              srcDoc={props.frameSrcDoc}
-              onLoad={() => {
-                props.onFrameLoad();
-                scheduleHtmlFrameResize();
-              }}
-              onInput={() => {
-                props.onMutation("input", "User edited doc body");
-                scheduleHtmlFrameResize();
-              }}
-              onKeyUp={props.onSelection}
-              onMouseUp={props.onSelection}
-            />
+            <div className="relative mx-auto w-full max-w-[980px] overflow-hidden rounded-[8px]" style={{ height: frameHeight }}>
+              <iframe
+                key={props.frameRevision}
+                ref={props.iframeRef}
+                className={`block min-h-[860px] w-full overflow-clip rounded-[8px] border border-[#B8A07C]/30 bg-white transition-opacity duration-200 ${props.agentProcessing ? "opacity-50" : "opacity-100"}`}
+                style={{ height: frameHeight }}
+                title={props.runtime?.title ?? "Runtime doc"}
+                sandbox="allow-scripts allow-same-origin"
+                scrolling="no"
+                srcDoc={props.frameSrcDoc}
+                onLoad={() => {
+                  props.onFrameLoad();
+                  scheduleHtmlFrameResize();
+                }}
+                onInput={() => {
+                  props.onMutation("input", "User edited doc body");
+                  scheduleHtmlFrameResize();
+                }}
+                onKeyUp={props.onSelection}
+                onMouseUp={props.onSelection}
+              />
+              <ArtifactAgentProcessingOverlay active={props.agentProcessing} />
+            </div>
           ) : (
-            <div className="mx-auto grid min-h-[620px] max-w-[860px] place-items-center rounded-[20px] border border-[#B8A07C]/55 bg-[#F4EFE6]/55 text-center text-[#8B8275]">
+            <div className="mx-auto grid min-h-[620px] max-w-[860px] place-items-center rounded-[8px] border border-[#B8A07C]/30 bg-[#F4EFE6]/55 text-center text-[13px] text-[#8B8275]">
               Loading doc...
             </div>
           )}
         </div>
+        <HtmlHistoryToolbar
+          canRedo={canRedo}
+          canUndo={canUndo}
+          onRedo={props.onRedo}
+          onToolbarInteractionStart={props.onToolbarInteractionStart}
+          onUndo={props.onUndo}
+        />
       </ArtifactEditorWorkspace>
       {linkEditorPortal}
     </>
+  );
+}
+
+function HtmlHistoryToolbar(props: {
+  canRedo: boolean;
+  canUndo: boolean;
+  onRedo: () => void;
+  onToolbarInteractionStart: () => void;
+  onUndo: () => void;
+}) {
+  return (
+    <div
+      className="absolute bottom-4 left-4 z-30 inline-flex items-center gap-1 rounded-[12px] border border-[#B8A07C]/30 bg-[#F9F4EC] p-1 text-[#2A2620] "
+      data-toolbar-skip-selection-preserve="true"
+      aria-label="History tools"
+      onMouseDownCapture={(event) => {
+        props.onToolbarInteractionStart();
+        event.preventDefault();
+      }}
+      onPointerDownCapture={props.onToolbarInteractionStart}
+    >
+      <button
+        className="grid size-7 place-items-center rounded-[8px] border-0 bg-transparent text-[#2A2620]/72 outline-none transition hover:not-disabled:bg-[#EEE8DC]/70 hover:not-disabled:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275] disabled:opacity-45"
+        type="button"
+        aria-label="Undo"
+        title="Undo"
+        disabled={!props.canUndo}
+        onClick={props.onUndo}
+      >
+        <Undo2 size={18} />
+      </button>
+      <button
+        className="grid size-7 place-items-center rounded-[8px] border-0 bg-transparent text-[#2A2620]/72 outline-none transition hover:not-disabled:bg-[#EEE8DC]/70 hover:not-disabled:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275] disabled:opacity-45"
+        type="button"
+        aria-label="Redo"
+        title="Redo"
+        disabled={!props.canRedo}
+        onClick={props.onRedo}
+      >
+        <Redo2 size={18} />
+      </button>
+    </div>
   );
 }
 

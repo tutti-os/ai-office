@@ -104,24 +104,25 @@ export function HomePage(props: {
         </section>
 
         <section className={homeWorkSectionClass}>
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div className="flex min-w-0 flex-col gap-2">
-                <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-4">
+              <div className="h-px min-w-0 flex-1 bg-[#B8A07C]/30" />
+              <div className="relative inline-grid grid-cols-2 rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6]/48 p-1">
+                <span
+                  className={`absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full bg-[#2A2620] transition-transform duration-200 ease-out motion-reduce:transition-none ${
+                    props.activePanel === "history" ? "translate-x-full" : "translate-x-0"
+                  }`}
+                  aria-hidden="true"
+                />
+                <div className="contents">
                   <HomePanelToggle active={props.activePanel === "templates"} icon={<FileText size={15} />} label={t("home.templates")} onClick={() => props.onActivePanelChange("templates")} />
                   <HomePanelToggle active={props.activePanel === "history"} icon={<History size={15} />} label={t("home.history")} onClick={() => props.onActivePanelChange("history")} />
                 </div>
-                <div className="text-[12px] font-medium text-[#8B8275]">
-                  {props.activePanel === "templates"
-                    ? props.selectedCategory === allTemplatesLabel
-                      ? t("home.templateCount", { count: props.templateCounts[allTemplatesLabel] ?? 0 })
-                      : t("home.templateCount", { count: props.templateCounts[props.selectedCategory] ?? 0 })
-                    : t("home.projectCount", { count: props.historyProjects.length })}
-                </div>
               </div>
+              <div className="h-px min-w-0 flex-1 bg-[#B8A07C]/30" />
             </div>
             {props.activePanel === "templates" ? (
-              <div className="flex min-w-0 gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex min-w-0 gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {props.categories.map((item) => {
                   const active = item === props.selectedCategory;
                   const count = props.templateCounts[item] ?? 0;
@@ -254,13 +255,13 @@ function BlankTemplateCard(props: { onCreate: () => void }) {
   return (
     <div className="group w-full min-w-0">
       <button
-        className="flex aspect-[0.72] w-full min-h-[212px] flex-col items-center justify-center rounded-[20px] border border-[#B8A07C]/60 bg-[#F4EFE6]/70 text-[#5C6B50] shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)] backdrop-blur transition hover:-translate-y-0.5 hover:border-[#5C6B50]/60"
+        className="flex aspect-[0.72] w-full min-h-[212px] flex-col items-center justify-center rounded-[16px] border border-[#B8A07C]/30 bg-[#F8F4EC] text-[#5C6B50]  backdrop-blur transition hover:-translate-y-0.5 hover:border-[#B8A07C]/30"
         type="button"
         onClick={props.onCreate}
       >
         <Plus className="mb-4 opacity-60" size={26} />
       </button>
-      <div className="mt-2 truncate px-1 text-[12px] font-medium text-[#2A2620]">{t("home.blankDoc")}</div>
+      <div className="mt-2 truncate px-1 text-[15px] font-semibold text-[#2A2620]">{t("home.blankDoc")}</div>
     </div>
   );
 }
@@ -313,28 +314,28 @@ function TemplateCard(props: { template: TuttiTemplate; onSelect: (template: Tut
   return (
     <div className="group w-full min-w-0">
       <button
-        className="relative w-full overflow-hidden rounded-[20px] bg-[#F4EFE6] text-left text-[#2A2620] shadow-[0_22px_18px_rgba(0,0,0,0.06),0_42px_33px_rgba(0,0,0,0.07)] ring-1 ring-[#B8A07C]/45 transition hover:-translate-y-0.5 hover:shadow-[0_12px_10px_rgba(0,0,0,0.08)]"
+        className="relative w-full overflow-hidden rounded-[16px] bg-[#F4EFE6] text-left text-[#2A2620]  ring-1 ring-[#B8A07C]/30 transition hover:-translate-y-0.5 "
         type="button"
         aria-label={`Create ${props.template.name}`}
         onClick={() => props.onSelect(props.template)}
-        style={{ aspectRatio, minHeight: 212 }}
+        style={{ aspectRatio }}
       >
         {props.template.screenshot_cdn_url ? (
           <img
-            className="h-full w-full object-cover object-top"
+            className="h-full w-full origin-top scale-[1.18] object-cover object-top"
             src={props.template.screenshot_cdn_url}
             alt=""
             loading="lazy"
             draggable={false}
           />
         ) : (
-          <div className="grid h-full place-items-center bg-[#F4EFE6] px-4 text-center text-[12px] font-medium text-[#8B8275]">
+          <div className="grid h-full place-items-center bg-[#F4EFE6] px-4 text-center text-[13px] font-medium text-[#8B8275]">
             {props.template.name}
           </div>
         )}
       </button>
       <div className="mt-2 min-w-0 px-1">
-        <div className="truncate text-[12px] font-medium text-[#2A2620]">{props.template.name}</div>
+        <div className="truncate text-[15px] font-semibold text-[#2A2620]">{props.template.name}</div>
         <div className="mt-0.5 truncate text-[11px] text-[#8B8275]">{props.template.classification}</div>
       </div>
     </div>

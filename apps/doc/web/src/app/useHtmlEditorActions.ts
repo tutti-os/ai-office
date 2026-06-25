@@ -116,6 +116,7 @@ export function createHtmlEditorActions(input: HtmlEditorActionsInput) {
     input.htmlEditorController.executeOperation(input.runtime, {
       operationType: `set_${tagName}`,
       description: `Apply ${tagName} formatting`,
+      refocus: false,
       mutate: (doc, target) => applyInlineFormat(doc, tagName, target),
     });
   };
@@ -176,6 +177,7 @@ export function createHtmlEditorActions(input: HtmlEditorActionsInput) {
       operationType: "setFontFamily",
       description: `Set font family ${fontFamily}`,
       preferTypingSelection: true,
+      refocus: false,
       mutate: (doc, target) => setFontFamily(doc, fontFamily, target),
     });
   };
@@ -185,6 +187,7 @@ export function createHtmlEditorActions(input: HtmlEditorActionsInput) {
       operationType: "setFontSize",
       description: `Set font size ${fontSize}`,
       preferTypingSelection: true,
+      refocus: false,
       mutate: (doc, target) => setFontSize(doc, fontSize, target),
     });
   };
@@ -194,6 +197,7 @@ export function createHtmlEditorActions(input: HtmlEditorActionsInput) {
       operationType: "setForeColor",
       description: `Set text color ${color}`,
       preferTypingSelection: true,
+      refocus: false,
       mutate: (doc, target) => setForeColor(doc, color, target),
     });
   };
@@ -203,6 +207,7 @@ export function createHtmlEditorActions(input: HtmlEditorActionsInput) {
       operationType: "setBackColor",
       description: `Set fill color ${color}`,
       preferTypingSelection: true,
+      refocus: false,
       mutate: (doc, target) => setBackColor(doc, color, target),
     });
   };
@@ -279,6 +284,7 @@ export function createHtmlEditorActions(input: HtmlEditorActionsInput) {
     input.activeImageRef.current = image;
     input.lastEditorTargetRef.current = image;
     input.lastResolvedTargetRef.current = image;
+    input.setLinkEditorOpen(false);
     selectElementInDocument(doc, image);
     input.htmlEditorController.syncSelection(image);
     renderImageSelectionOverlay({
@@ -448,6 +454,7 @@ export function createHtmlEditorActions(input: HtmlEditorActionsInput) {
       operationType: input.operationPanelMode,
       description: operationPanelTitle[input.operationPanelMode],
       requiresSelection: input.operationPanelMode === "wrapSelection" || input.operationPanelMode === "replaceSelection",
+      ...(input.operationPanelMode === "style" ? { refocus: false } : {}),
       mutate: (doc, target) => {
         if (input.operationPanelMode === "insertText") return hasContent ? insertText(doc, content, target) : false;
         if (input.operationPanelMode === "insertHtml") return hasContent ? insertHtml(doc, content, target) : false;
@@ -470,7 +477,7 @@ export function createHtmlEditorActions(input: HtmlEditorActionsInput) {
     if (!applied) return;
     input.setOperationPanelMode(null);
     input.setOperationDraft("");
-    input.htmlEditorController.refocusFrame();
+    if (input.operationPanelMode !== "style") input.htmlEditorController.refocusFrame();
   };
 
   return {

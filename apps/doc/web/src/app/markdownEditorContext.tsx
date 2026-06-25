@@ -18,6 +18,7 @@ export const MarkdownToolbarContext = createContext<{
   canUndo: boolean;
   projectId: string | null;
   readOnly: boolean;
+  toolbarHost: HTMLElement | null;
   onToolbarInteractionStart: () => void;
   onRedo: () => void;
   runProgrammaticChange: <T>(mutation: () => T) => T | undefined;
@@ -28,6 +29,7 @@ export const MarkdownToolbarContext = createContext<{
   canUndo: false,
   projectId: null,
   readOnly: false,
+  toolbarHost: null,
   onToolbarInteractionStart: () => undefined,
   onRedo: () => undefined,
   runProgrammaticChange: () => undefined,

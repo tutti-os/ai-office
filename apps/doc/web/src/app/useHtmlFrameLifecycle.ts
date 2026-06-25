@@ -122,7 +122,62 @@ export function useHtmlFrameLifecycle(input: HtmlFrameLifecycleInput) {
     return () => window.clearTimeout(id);
   }, [input.currentDocumentType, input.editorOpen, input.frameRevision, input.frameSrcDoc]);
 
+  useEffect(() => {
+    if (!input.editorOpen || input.currentDocumentType !== "html" || !input.frameSrcDoc) return;
+    const frame = input.iframeRef.current;
+    const doc = frame?.contentDocument;
+    if (!frame || !doc) return;
+    let lastToolbarInteractionAt = 0;
+    let focusCheckFrame: number | null = null;
+
+    const deactivateToolbarIfFocusLeftEditor = () => {
+      if (focusCheckFrame !== null) window.cancelAnimationFrame(focusCheckFrame);
+      focusCheckFrame = window.requestAnimationFrame(() => {
+        focusCheckFrame = null;
+        if (isHtmlEditorFocusActive(frame, doc, lastToolbarInteractionAt)) return;
+        input.setHtmlToolbarActive(false);
+      });
+    };
+    const handleFrameFocusOut = () => deactivateToolbarIfFocusLeftEditor();
+    const handleHostPointerDown = (event: PointerEvent) => {
+      if (event.target === frame) return;
+      if (isToolbarInteractionTarget(event.target)) {
+        lastToolbarInteractionAt = Date.now();
+        return;
+      }
+      input.setHtmlToolbarActive(false);
+    };
+    const handleHostFocusIn = (event: FocusEvent) => {
+      if (event.target === frame || isToolbarInteractionTarget(event.target)) return;
+      deactivateToolbarIfFocusLeftEditor();
+    };
+
+    doc.addEventListener("focusout", handleFrameFocusOut, true);
+    document.addEventListener("pointerdown", handleHostPointerDown, true);
+    document.addEventListener("focusin", handleHostFocusIn, true);
+    window.addEventListener("blur", deactivateToolbarIfFocusLeftEditor);
+    return () => {
+      doc.removeEventListener("focusout", handleFrameFocusOut, true);
+      document.removeEventListener("pointerdown", handleHostPointerDown, true);
+      document.removeEventListener("focusin", handleHostFocusIn, true);
+      window.removeEventListener("blur", deactivateToolbarIfFocusLeftEditor);
+      if (focusCheckFrame !== null) window.cancelAnimationFrame(focusCheckFrame);
+    };
+  }, [input.currentDocumentType, input.editorOpen, input.frameRevision, input.frameSrcDoc]);
+
   return { handleFrameLoad };
+}
+
+function isHtmlEditorFocusActive(frame: HTMLIFrameElement, doc: Document, lastToolbarInteractionAt: number) {
+  if (doc.hasFocus()) return true;
+  if (document.activeElement === frame) return true;
+  if (Date.now() - lastToolbarInteractionAt < 100) return true;
+  return isToolbarInteractionTarget(document.activeElement);
+}
+
+function isToolbarInteractionTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest('[data-ai-toolbar-root="true"], [data-toolbar-skip-selection-preserve="true"]'));
 }
 
 function htmlHistoryShortcutOffset(event: KeyboardEvent): -1 | 1 | null {

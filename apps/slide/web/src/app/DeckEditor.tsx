@@ -6,6 +6,7 @@ import type { ProjectDetailResponse } from "@ai-slide/shared";
 import type { DeckAgentRuntimeProvider } from "../artifact/deckArtifactAdapter";
 
 export function DeckEditor(props: {
+  agentProcessing: boolean;
   detail: ProjectDetailResponse;
   interaction: ArtifactInteractionPolicy;
   projectId: string;
@@ -13,5 +14,5 @@ export function DeckEditor(props: {
   onAgentSelectionPreviewChange: (preview: { label: string; text: string; visible: boolean }) => void;
   onSaveStateChange: (state: ArtifactSaveState) => void;
 }) {
-  return <DeckEditorView model={useDeckEditorModel(props)} />;
+  return <DeckEditorView agentProcessing={props.agentProcessing} model={useDeckEditorModel(props)} />;
 }

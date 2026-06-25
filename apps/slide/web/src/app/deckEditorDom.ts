@@ -300,7 +300,6 @@ export function ensureSlideEditorStyles(doc: Document) {
     [contenteditable="true"],
     [contenteditable="true"]:focus {
       outline: none !important;
-      box-shadow: none !important;
     }
     ::selection {
       background: rgba(148, 163, 184, 0.35);
@@ -463,7 +462,7 @@ export function normalizeFontFamily(value: string) {
   if (normalized.includes("times new roman")) return "'Times New Roman', serif";
   if (value.includes("Georgia")) return "Georgia, serif";
   if (value.includes("Arial")) return "Arial, sans-serif";
-  return "Inter, sans-serif";
+  return "Lexend, sans-serif";
 }
 
 export function fontFamilyLabel(value: string) {
