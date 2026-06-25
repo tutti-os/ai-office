@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, FileCode2, FileText, Loader2, Plus, X } from "lucide-react";
-import { appShell, ArtifactHistoryPanel, HomeCategoryPill, scrollbarClass, templateCardClass } from "@ai-app/ui/app-shell";
+import { appShell, ArtifactHistoryPanel, HomeCategoryPill, scrollbarClass } from "@ai-app/ui/app-shell";
 import type { SlideArtifactType, SlideProject } from "@ai-slide/shared";
 import type { OutputType, SlideTemplate } from "../templates";
 import { useI18n } from "../i18n";
@@ -17,34 +17,45 @@ export function CategoryButton(props: { active: boolean; count: number; label: s
 
 export function BlankTemplateCard(props: { outputType: OutputType; onCreate: () => void }) {
   return (
-    <button className={cn("mb-5 flex h-[292px] w-full min-w-0 break-inside-avoid flex-col items-center justify-center gap-2.5 rounded-[20px] border border-[#B8A07C]/60 bg-[#F4EFE6]/70 text-left text-[#5C6B50] backdrop-blur transition hover:-translate-y-0.5 hover:border-[#5C6B50]/60", appShell.cardShadow)} type="button" onClick={props.onCreate}>
-      <span className="grid size-[58px] place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]">
-        <Plus size={26} />
-      </span>
-      <strong className="text-[14px] font-medium text-[#2A2620]">Blank deck</strong>
-      <small className="text-[#8B8275]">Blank presentation</small>
-      <em className="text-[11px] not-italic font-medium text-[#8B8275]">{props.outputType === "html" ? "DECK" : props.outputType.toUpperCase()}</em>
-    </button>
+    <div className="group w-full min-w-0">
+      <button
+        className="flex aspect-video w-full min-h-[148px] flex-col items-center justify-center rounded-[16px] border border-[#B8A07C]/30 bg-[#F8F4EC] text-[#5C6B50] backdrop-blur transition hover:-translate-y-0.5 hover:border-[#B8A07C]/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B8A07C]/45"
+        type="button"
+        onClick={props.onCreate}
+      >
+        <Plus className="opacity-60" size={26} />
+      </button>
+      <div className="mt-2 min-w-0 px-1">
+        <div className="truncate text-[15px] font-semibold text-[#2A2620]">Blank deck</div>
+        <div className="mt-0.5 truncate text-[11px] text-[#8B8275]">{props.outputType === "html" ? "Deck" : props.outputType.toUpperCase()}</div>
+      </div>
+    </div>
   );
 }
 
 export function TemplateCard(props: { showCategory: boolean; template: SlideTemplate; onSelect: (template: SlideTemplate) => void }) {
   const { template } = props;
   return (
-    <button
-      className={cn("mb-5 grid w-full min-w-0 break-inside-avoid grid-rows-[auto_1fr]", templateCardClass())}
-      type="button"
-      aria-label={`Create ${template.name}`}
-      onClick={() => props.onSelect(template)}
-    >
-      <span className="block aspect-video overflow-hidden bg-white">
-        {template.coverImage ? <img className="block size-full object-cover" src={template.coverImage} alt="" loading="lazy" draggable={false} /> : <span className="grid h-full place-items-center p-5 text-center text-[12px] font-extrabold text-[#222]">{template.name}</span>}
-      </span>
-      <span className={cn("flex min-w-0 flex-col justify-start gap-[7px] p-3", props.showCategory ? "min-h-[92px]" : "min-h-0")}>
-        <strong className="line-clamp-3 overflow-hidden text-[12px] font-medium leading-[1.35] text-[#2A2620]">{template.name}</strong>
-        {props.showCategory ? <span className="mt-auto inline-flex h-6 w-fit max-w-full items-center overflow-hidden truncate rounded-full border border-[#B8A07C]/55 bg-[#E6DDCD]/55 px-2.5 text-[11px] font-medium text-[#8B8275]">{humanizeCategory(template.category)}</span> : null}
-      </span>
-    </button>
+    <div className="group w-full min-w-0">
+      <button
+        className="relative w-full overflow-hidden rounded-[16px] bg-[#F4EFE6] text-left text-[#2A2620] ring-1 ring-[#B8A07C]/30 transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B8A07C]/45"
+        type="button"
+        aria-label={`Create ${template.name}`}
+        onClick={() => props.onSelect(template)}
+      >
+        <span className="block aspect-video overflow-hidden bg-white">
+          {template.coverImage ? (
+            <img className="block size-full origin-top object-cover object-top" src={template.coverImage} alt="" loading="lazy" draggable={false} />
+          ) : (
+            <span className="grid h-full place-items-center bg-[#F4EFE6] p-5 text-center text-[13px] font-medium text-[#8B8275]">{template.name}</span>
+          )}
+        </span>
+      </button>
+      <div className="mt-2 min-w-0 px-1">
+        <div className="line-clamp-2 text-[15px] font-semibold leading-[1.35] text-[#2A2620]">{template.name}</div>
+        {props.showCategory ? <div className="mt-0.5 truncate text-[11px] text-[#8B8275]">{humanizeCategory(template.category)}</div> : null}
+      </div>
+    </div>
   );
 }
 
@@ -106,22 +117,22 @@ export function TemplatePreviewModal(props: {
         role="dialog"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <button className="absolute right-7 top-5 z-[3] grid size-9 place-items-center rounded-full border border-[#B8A07C]/45 bg-[#F4EFE6]/70 text-[#8B8275] hover:text-[#5C6B50] disabled:cursor-default disabled:opacity-50 max-md:right-4 max-md:top-3" type="button" aria-label="Close template preview" disabled={props.creating} onClick={props.onClose}>
+        <button className="absolute right-7 top-5 z-[3] grid size-9 place-items-center rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6]/70 text-[#8B8275] hover:text-[#5C6B50] disabled:cursor-default disabled:opacity-50 max-md:right-4 max-md:top-3" type="button" aria-label="Close template preview" disabled={props.creating} onClick={props.onClose}>
           <X size={26} />
         </button>
 
         <div className="grid shrink-0 basis-[340px] grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] gap-7 px-[34px] pb-[18px] pt-[58px] max-md:basis-auto max-md:grid-cols-1 max-md:gap-6 max-md:px-[18px] max-md:pb-[18px] max-md:pt-[52px]">
           <div className="min-w-0">
-            <div className="inline-flex h-[30px] max-w-full items-center overflow-hidden whitespace-nowrap rounded-full bg-[#5C6B50] px-3.5 text-[12px] font-medium uppercase tracking-[0.08em] text-[#F4EFE6] max-md:h-[34px]">{humanizeCategory(props.template.category)}</div>
-            <h2 className="my-3 mt-[18px] max-w-full text-[30px] font-semibold leading-[1.16] text-[#2A2620] md:text-[32px]">{props.template.name}</h2>
-            <div className="inline-flex h-[34px] max-w-full items-center gap-2.5 overflow-hidden rounded-full border border-[#B8A07C]/50 bg-[#E6DDCD]/55 px-3 text-[13px] font-medium text-[#2A2620]/72 max-md:h-10">
+            <div className="inline-flex h-[30px] max-w-full items-center overflow-hidden whitespace-nowrap rounded-full bg-[#5C6B50] px-3.5 text-[13px] font-medium uppercase tracking-[0.08em] text-[#F4EFE6] max-md:h-[34px]">{humanizeCategory(props.template.category)}</div>
+            <h2 className="my-3 mt-[18px] max-w-full text-[15px] font-semibold leading-[1.16] text-[#2A2620] md:text-[15px]">{props.template.name}</h2>
+            <div className="inline-flex h-[34px] max-w-full items-center gap-2.5 overflow-hidden rounded-full border border-[#B8A07C]/30 bg-[#EEE8DC]/55 px-3 text-[13px] font-medium text-[#2A2620]/72 max-md:h-10">
               <span className="text-[#8B8275]">Name:</span>
               <code className="min-w-0 truncate font-mono">{props.template.slug}</code>
             </div>
-            <blockquote className="mt-[18px] line-clamp-2 max-w-[840px] overflow-hidden border-l-[5px] border-[#5C6B50] pl-[18px] text-[16px] italic leading-[1.55] text-[#2A2620]/78 max-md:text-[17px]">{props.template.shortDescription || props.template.description}</blockquote>
+            <blockquote className="mt-[18px] line-clamp-2 max-w-[840px] overflow-hidden border-l-[5px] border-[#B8A07C]/30 pl-[18px] text-[15px] italic leading-[1.55] text-[#2A2620]/78 max-md:text-[15px]">{props.template.shortDescription || props.template.description}</blockquote>
           </div>
 
-          <div className="relative self-center overflow-hidden rounded-[20px] border border-[#B8A07C]/45 bg-white shadow-[inset_0_0_0_1px_rgba(17,24,39,0.02)]">
+          <div className="group/preview relative self-center overflow-hidden rounded-[20px] border border-[#B8A07C]/30 bg-white ">
             <TemplatePreviewImage
               fallbackLabel={props.template.name}
               preview={selectedSlide?.preview ?? props.template.coverImage}
@@ -129,17 +140,17 @@ export function TemplatePreviewModal(props: {
             />
             {previewSlides.length > 1 ? (
               <>
-                <button className="absolute left-3 top-1/2 z-[2] grid size-[46px] -translate-y-1/2 place-items-center rounded-full border border-[#202124]/8 bg-white/86 text-[#202124] shadow-[0_10px_24px_rgba(0,0,0,0.12)]" type="button" aria-label="Previous slide" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => {
+                <button className="pointer-events-none absolute left-2.5 top-1/2 z-[2] grid size-9 -translate-y-1/2 place-items-center rounded-full border border-[#B8A07C]/30 bg-white/86 text-[#202124] opacity-0 transition-opacity duration-150 group-hover/preview:pointer-events-auto group-hover/preview:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100" type="button" aria-label="Previous slide" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => {
                   event.stopPropagation();
                   move(-1);
                 }}>
-                  <ChevronLeft size={30} />
+                  <ChevronLeft size={22} />
                 </button>
-                <button className="absolute right-3 top-1/2 z-[2] grid size-[46px] -translate-y-1/2 place-items-center rounded-full border border-[#202124]/8 bg-white/86 text-[#202124] shadow-[0_10px_24px_rgba(0,0,0,0.12)]" type="button" aria-label="Next slide" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => {
+                <button className="pointer-events-none absolute right-2.5 top-1/2 z-[2] grid size-9 -translate-y-1/2 place-items-center rounded-full border border-[#B8A07C]/30 bg-white/86 text-[#202124] opacity-0 transition-opacity duration-150 group-hover/preview:pointer-events-auto group-hover/preview:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100" type="button" aria-label="Next slide" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => {
                   event.stopPropagation();
                   move(1);
                 }}>
-                  <ChevronRight size={30} />
+                  <ChevronRight size={22} />
                 </button>
               </>
             ) : null}
@@ -150,8 +161,8 @@ export function TemplatePreviewModal(props: {
         </div>
 
         <div className={cn("min-h-0 flex-1 overflow-y-auto", scrollbarClass)}>
-          <div className="flex items-center justify-between gap-4 border-t border-[#B8A07C]/45 px-[34px] py-[18px] max-md:px-[18px]">
-            <h3 className="m-0 text-[22px] font-semibold leading-tight text-[#2A2620]">All Slides</h3>
+          <div className="flex items-center justify-between gap-4 border-t border-[#B8A07C]/30 px-[34px] py-[18px] max-md:px-[18px]">
+            <h3 className="m-0 text-[15px] font-semibold leading-tight text-[#2A2620]">All Slides</h3>
             <span className="text-[13px] font-medium text-[#8B8275]">{slideCount} slides</span>
           </div>
 
@@ -159,20 +170,20 @@ export function TemplatePreviewModal(props: {
             {previewSlides.map((slide, index) => (
               <button
                 key={`${slide.thumbnail || slide.preview}-${index}`}
-                className={cn("relative basis-[calc(33.333%_-_11px)] overflow-hidden rounded-xl border border-[#e5e7eb] bg-white p-0 text-left shadow-[0_10px_24px_rgba(0,0,0,0.08)] max-md:basis-full", index === selectedIndex ? "border-[#202124] ring-2 ring-[#202124]/12" : "")}
+                className={cn("relative basis-[calc(33.333%_-_11px)] overflow-hidden rounded-xl border border-[#B8A07C]/30 bg-white p-0 text-left  max-md:basis-full", index === selectedIndex ? "border-[#B8A07C]/30 ring-2 ring-[#B8A07C]/30" : "")}
                 type="button"
                 aria-label={`Preview slide ${index + 1}`}
                 disabled={props.creating}
                 onClick={() => props.onSelectIndex(index)}
               >
-                <span className="absolute left-2 top-2 z-[2] rounded-md bg-black/58 px-1.5 py-1 font-mono text-[10px] font-black text-white">{String(index + 1).padStart(2, "0")}</span>
+                <span className="absolute left-2 top-2 z-[2] rounded-md bg-black/58 px-1.5 py-1 font-mono text-[11px] font-black text-white">{String(index + 1).padStart(2, "0")}</span>
                 <img className="block aspect-video w-full object-cover" src={slide.thumbnail || slide.preview} alt="" loading="lazy" draggable={false} />
               </button>
             ))}
           </div>
         </div>
 
-        <div className="flex shrink-0 justify-end border-t border-[#B8A07C]/45 bg-[#F4EFE6]/96 px-[34px] py-4 backdrop-blur max-md:px-[18px]">
+        <div className="flex shrink-0 justify-end border-t border-[#B8A07C]/30 bg-[#F4EFE6]/96 px-[34px] py-4 backdrop-blur max-md:px-[18px]">
           <button className="inline-flex h-10 min-w-[96px] items-center justify-center gap-2 rounded-full border-0 bg-[#2A2620] px-7 text-[15px] font-medium text-[#F4EFE6] disabled:cursor-default disabled:bg-[#B8A07C]/32 disabled:text-[#8B8275]" type="button" disabled={props.creating} onClick={() => props.onUseTemplate(props.template)}>
             {props.creating ? <Loader2 className="animate-spin" size={17} /> : null}
             <span>{props.creating ? "Adding..." : "Use"}</span>
@@ -193,7 +204,7 @@ function TemplatePreviewImage(props: { fallbackLabel: string; preview?: string; 
   }, [preview, thumbnail]);
 
   if (!preview && !thumbnail) {
-    return <div className="grid aspect-video w-full place-items-center bg-[#f3f0ea] p-7 text-center text-[18px] font-extrabold text-[#202124]">{props.fallbackLabel}</div>;
+    return <div className="grid aspect-video w-full place-items-center bg-[#f3f0ea] p-7 text-center text-[15px] font-extrabold text-[#202124]">{props.fallbackLabel}</div>;
   }
 
   if (!preview || preview === thumbnail) {
@@ -226,7 +237,7 @@ export function ProjectHistory(props: {
   return (
     <ArtifactHistoryPanel
       emptyDescription="Create a presentation or open a template to see it here."
-      emptyIcon={<FileText size={17} />}
+      emptyIcon={null}
       emptyTitle="No history yet"
       getId={(project) => project.id}
       getSubtitle={(project) => projectTypeLabel(project.artifactType, t)}

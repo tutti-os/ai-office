@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hasActiveAgentRun } from "@ai-app/agent/conversation";
 import {
+  FileText,
   History,
-  Layers3,
   Upload,
 } from "lucide-react";
 import { allCategoriesForTemplates, categoryCountsForTemplates, type OutputType, type SlideTemplate } from "./templates";
@@ -18,7 +18,15 @@ import { DeckArtifactRuntimeAdapter, type DeckAgentRuntimeProvider } from "./art
 import { PptxArtifactRuntimeAdapter } from "./artifact/pptxArtifactAdapter";
 import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
 import { useI18n } from "./i18n";
-import { appShell, HomePanelToggle, HomePageShell, HomeTopAction, homeTitleClass } from "@ai-app/ui/app-shell";
+import {
+  homeContentClass,
+  homeHeroSectionClass,
+  HomePanelToggle,
+  HomePageShell,
+  HomeTopAction,
+  homeTitleClass,
+  homeWorkSectionClass,
+} from "@ai-app/ui/app-shell";
 import type { ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { artifactInteractionForAgentBusy, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
 import type { LocalAgentProviderStatus, OfficeCliStatus, ProjectDetailResponse, RuntimeProfile, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
@@ -454,7 +462,7 @@ export function App() {
   }
 
   return (
-    <HomePageShell className="h-dvh px-3.5 pb-12 pt-10 font-sans md:px-7 md:pb-16">
+    <HomePageShell className="h-dvh font-sans">
       <input
         ref={importInputRef}
         className="hidden"
@@ -474,82 +482,89 @@ export function App() {
       >
         {t("home.import")}
       </HomeTopAction>
-      <section className="mx-auto flex w-full max-w-[820px] flex-col items-center text-center">
-        <h1 className={cn("m-0", homeTitleClass)}>{t("home.heading")}</h1>
-        <HomeComposer
-          attachments={homeAttachments.attachments}
-          creating={creating}
-          error={error}
-          officeCliInstalling={officeCliInstalling}
-          officeCliStatus={officeCliStatus}
-          outputType={outputType}
-          prompt={prompt}
-          selectedAgent={selectedAgent}
-          localAgentProviders={localAgentProviders}
-          runtimeProfiles={runtimeProfiles}
-          onAddFiles={homeAttachments.addFiles}
-          onCreate={createFromPrompt}
-          onInstallOfficeCli={downloadOfficeCli}
-          onOutputTypeChange={setOutputType}
-          onPromptChange={setPrompt}
-          onRemoveAttachment={homeAttachments.removeAttachment}
-          onSelectedAgentChange={setSelectedAgent}
-        />
-      </section>
+      <div className={homeContentClass}>
+        <section className={homeHeroSectionClass}>
+          <h1 className={cn("m-0", homeTitleClass)}>{t("home.heading")}</h1>
+          <HomeComposer
+            attachments={homeAttachments.attachments}
+            creating={creating}
+            error={error}
+            officeCliInstalling={officeCliInstalling}
+            officeCliStatus={officeCliStatus}
+            outputType={outputType}
+            prompt={prompt}
+            selectedAgent={selectedAgent}
+            localAgentProviders={localAgentProviders}
+            runtimeProfiles={runtimeProfiles}
+            onAddFiles={homeAttachments.addFiles}
+            onCreate={createFromPrompt}
+            onInstallOfficeCli={downloadOfficeCli}
+            onOutputTypeChange={setOutputType}
+            onPromptChange={setPrompt}
+            onRemoveAttachment={homeAttachments.removeAttachment}
+            onSelectedAgentChange={setSelectedAgent}
+          />
+        </section>
 
-      <section className="mx-auto mt-6 w-full max-w-[1180px]">
-        <div className="flex flex-col items-stretch justify-between gap-4 md:flex-row md:items-end">
-          <div className="flex min-w-0 flex-col gap-2">
-            <div className="flex items-center gap-2" aria-label="Home panels">
-              <HomePanelToggle active={activePanel === "templates"} icon={<Layers3 size={15} />} label={t("home.templates")} onClick={() => setActivePanel("templates")} />
-              <HomePanelToggle active={activePanel === "history"} icon={<History size={15} />} label={t("home.history")} onClick={() => setActivePanel("history")} />
-            </div>
-            <div className={appShell.countText}>
-              {activePanel === "templates"
-                ? templatesLoading
-                  ? t("home.loadingTemplates")
-                  : t("home.templateCount", { count: visibleTemplates.length })
-                : t("home.projectCount", { count: historyProjects.length })}
-            </div>
-          </div>
-        </div>
-
-        {activePanel === "templates" ? (
-          <>
-            <div className={cn("mt-4 flex gap-2 overflow-x-auto pb-2", scrollbarHidden)}>
-              <CategoryButton
-                active={selectedCategory === "All"}
-                count={slideTemplates.length}
-                label={t("home.allTemplates")}
-                onClick={() => setSelectedCategory("All")}
-              />
-              {allCategories.map((category) => (
-                <CategoryButton
-                  key={category}
-                  active={selectedCategory === category}
-                  count={categoryCounts[category] ?? 0}
-                  label={category}
-                  onClick={() => setSelectedCategory(category)}
+        <section className={homeWorkSectionClass}>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-4" aria-label="Home panels">
+              <div className="h-px min-w-0 flex-1 bg-[#B8A07C]/30" />
+              <div className="relative inline-grid grid-cols-2 rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6]/48 p-1">
+                <span
+                  className={`absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full bg-[#2A2620] transition-transform duration-200 ease-out motion-reduce:transition-none ${
+                    activePanel === "history" ? "translate-x-full" : "translate-x-0"
+                  }`}
+                  aria-hidden="true"
                 />
-              ))}
+                <div className="contents">
+                  <HomePanelToggle active={activePanel === "templates"} icon={<FileText size={15} />} label={t("home.templates")} onClick={() => setActivePanel("templates")} />
+                  <HomePanelToggle active={activePanel === "history"} icon={<History size={15} />} label={t("home.history")} onClick={() => setActivePanel("history")} />
+                </div>
+              </div>
+              <div className="h-px min-w-0 flex-1 bg-[#B8A07C]/30" />
             </div>
-            <div className="mt-4 columns-1 gap-5 md:columns-2 lg:columns-3">
+
+            {activePanel === "templates" ? (
+              <div className={cn("flex min-w-0 gap-2 overflow-x-auto", scrollbarHidden)}>
+                <CategoryButton
+                  active={selectedCategory === "All"}
+                  count={slideTemplates.length}
+                  label={t("home.allTemplates")}
+                  onClick={() => setSelectedCategory("All")}
+                />
+                {allCategories.map((category) => (
+                  <CategoryButton
+                    key={category}
+                    active={selectedCategory === category}
+                    count={categoryCounts[category] ?? 0}
+                    label={category}
+                    onClick={() => setSelectedCategory(category)}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          {activePanel === "templates" ? (
+            <div className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-x-5 gap-y-7">
               {selectedCategory === "All" ? <BlankTemplateCard outputType={outputType} onCreate={createBlank} /> : null}
               {visibleTemplates.map((template) => (
                 <TemplateCard key={template.id} showCategory={selectedCategory === "All"} template={template} onSelect={openTemplate} />
               ))}
+              {templatesLoading ? <div className="text-[13px] font-medium text-[#8B8275]">{t("home.loadingTemplates")}</div> : null}
             </div>
-          </>
-        ) : (
-          <ProjectHistory
-            loading={loadingProject}
-            projects={historyProjects}
-            onClearHistory={() => void clearHistory()}
-            onDeleteProject={(projectId) => void deleteHistoryProject(projectId)}
-            onOpenProject={openHistoryProject}
-          />
-        )}
-      </section>
+          ) : (
+            <ProjectHistory
+              loading={loadingProject}
+              projects={historyProjects}
+              onClearHistory={() => void clearHistory()}
+              onDeleteProject={(projectId) => void deleteHistoryProject(projectId)}
+              onOpenProject={openHistoryProject}
+            />
+          )}
+        </section>
+      </div>
       {selectedTemplate ? (
         <TemplatePreviewModal
           creating={creating}
