@@ -1,8 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
-import { HomePage } from "./HomePage";
-import { DocxDocumentScreen, MarkdownDocumentScreen } from "./DocumentFormatScreens";
-import { HtmlEditorController } from "./HtmlEditorController";
-import { DocumentLoadingScreen, HtmlEditorScreen } from "./HtmlEditorScreen";
+import { useMemo, useRef, useState } from "react";
 import { isTuttiPdfExportAvailable } from "./tuttiPdfBridge";
 import { resolveDocumentActiveState } from "./documentActiveState";
 import { createDocumentRuntimeLoaders } from "./documentRuntimeLoaders";
@@ -10,8 +6,7 @@ import { createDocumentExportActions } from "./useDocumentExportActions";
 import { useDocumentAgentRuntime } from "./useDocumentAgentRuntime";
 import { useDocumentRouteLifecycle } from "./useDocumentRouteLifecycle";
 import { pushDocumentRoute, pushHomeRoute, readCurrentRoute, routePath, type AppRoute } from "./documentWorkbenchRoutes";
-import { renderImageSelectionOverlay } from "./htmlImageSelectionOverlay";
-import { uploadProjectAsset } from "../api/projects";
+import { uploadHtmlEditorImageFileAsset } from "./htmlEditorUploads";
 import type { DocumentProject, DocumentType, LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
 import { DocxArtifactRuntimeAdapter } from "../artifact/docxArtifactAdapter";
 import { HtmlArtifactRuntimeAdapter } from "../artifact/htmlArtifactAdapter";
@@ -20,14 +15,6 @@ import { useDocxArtifactRuntime } from "../artifact/useDocxArtifactRuntime";
 import { useHtmlArtifactRuntime } from "../artifact/useHtmlArtifactRuntime";
 import { useMarkdownArtifactRuntime } from "../artifact/useMarkdownArtifactRuntime";
 import { RuntimeApplier } from "../artifact/runtime/applier";
-import { runtimeDocumentFromFrame } from "../artifact/runtime/document";
-import { htmlProjectAssetRuntimeUrl } from "../artifact/runtime/projectAssets";
-import {
-  type AdjacentInsertPosition,
-  type ElementStyleAttributes,
-  type ImageAttributes,
-} from "../artifact/runtime/operations";
-import { captureSelectionState } from "../artifact/runtime/selection";
 import type { RuntimeState, SelectionState } from "../artifact/runtime/types";
 import {
   allTemplatesLabel,
@@ -39,34 +26,19 @@ import {
 } from "../templates/tuttiTemplates";
 import { useHomeAttachments } from "./useHomeAttachments";
 import { createHomeDocumentActions } from "./useHomeDocumentActions";
-import { createHtmlEditorActions } from "./useHtmlEditorActions";
-import { useHtmlFrameLifecycle } from "./useHtmlFrameLifecycle";
 import { useDocumentWorkbenchBootstrap } from "./useDocumentWorkbenchBootstrap";
 import {
   defaultToolbarState,
-  operationPanelTitle,
-  type AttributeDraft,
   type EditorStats,
   type HomePanel,
-  type ImageObjectElement,
+  type ImageAttributes,
   type LinkDraft,
-  type OperationPanelMode,
-  type ResizeHandle,
   type ToolbarState,
 } from "./runtimeWorkbenchTypes";
 
 export function useRuntimeWorkbenchModel() {
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const runtimeRef = useRef<RuntimeState | null>(null);
-  const lastEditorTargetRef = useRef<Node | null>(null);
-  const lastResolvedTargetRef = useRef<Element | null>(null);
   const lastSelectionRef = useRef<SelectionState | null>(null);
-  const activeImageRef = useRef<ImageObjectElement | null>(null);
-  const pendingImageTargetRef = useRef<ImageObjectElement | null>(null);
   const artifactReadOnlyRef = useRef(false);
-  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
-  const initializedFrameDocsRef = useRef<WeakSet<Document>>(new WeakSet());
-  const toolbarSelectionPreserveTimestampRef = useRef(0);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const htmlSaveGenerationRef = useRef(0);
   const markdownSaveGenerationRef = useRef(0);
@@ -83,17 +55,13 @@ export function useRuntimeWorkbenchModel() {
   const {
     runtime,
     setRuntime,
-    frameSrcDoc,
-    frameRevision,
     saveState,
     setSaveState,
     loadArtifact,
     clearArtifact,
-    resetFrameFromRuntime: resetHtmlFrameFromRuntime,
     serialize: serializeHtmlRuntime,
     createAiEditRequest,
   } = htmlArtifact;
-  runtimeRef.current = runtime;
   const {
     runtime: markdownRuntime,
     setRuntime: setMarkdownRuntime,
@@ -141,53 +109,9 @@ export function useRuntimeWorkbenchModel() {
   const [htmlToolbarActive, setHtmlToolbarActive] = useState(false);
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
   const [linkDraft, setLinkDraft] = useState<LinkDraft>({ text: "", href: "https://" });
-  const [operationPanelMode, setOperationPanelMode] = useState<OperationPanelMode>(null);
-  const [operationDraft, setOperationDraft] = useState("");
-  const [operationPosition, setOperationPosition] = useState<AdjacentInsertPosition>("afterend");
-  const [operationIsHtml, setOperationIsHtml] = useState(false);
-  const [operationWrapperTag, setOperationWrapperTag] = useState("span");
-  const [attributeDraft, setAttributeDraft] = useState<AttributeDraft>({ id: "", className: "", title: "", custom: "" });
-  const [imageDraft, setImageDraft] = useState<ImageAttributes>({ src: "", alt: "", width: "", height: "" });
-  const [tableDraft, setTableDraft] = useState({ rows: "3", columns: "3" });
   const [markdownTableCellEditPending, setMarkdownTableCellEditPending] = useState(false);
   const [queuedHomeNavigation, setQueuedHomeNavigation] = useState(false);
-  const [styleDraft, setStyleDraft] = useState<ElementStyleAttributes>({
-    width: "",
-    height: "",
-    lineHeight: "",
-    letterSpacing: "",
-    verticalAlign: "",
-    borderWidth: "",
-    borderStyle: "",
-    borderColor: "#d0d5dd",
-    borderRadius: "",
-    padding: "",
-    paddingTop: "",
-    paddingRight: "",
-    paddingBottom: "",
-    paddingLeft: "",
-    marginTop: "",
-    marginRight: "",
-    marginBottom: "",
-    marginLeft: "",
-  });
   const [editorStats, setEditorStats] = useState<EditorStats>({ characterCount: 0, wordCount: 0, paragraphCount: 0, elementCount: 0 });
-  const htmlEditorController = useMemo(
-    () =>
-      new HtmlEditorController({
-        applier,
-        iframeRef,
-        lastEditorTargetRef,
-        lastResolvedTargetRef,
-        lastSelectionRef,
-        toolbarSelectionPreserveTimestampRef,
-        isReadOnly: () => artifactReadOnlyRef.current,
-        setEditorStats,
-        setRuntime,
-        setToolbarState,
-      }),
-    [applier, setRuntime],
-  );
   const editorOpen = route.name === "document";
   const currentProjectId = route.name === "document" ? route.projectId : null;
   const loadedCurrentProject = currentProjectId && currentProject?.id === currentProjectId ? currentProject : null;
@@ -220,12 +144,9 @@ export function useRuntimeWorkbenchModel() {
   });
 
   const { loadDocxDocument, loadHtmlDocument, loadMarkdownDocument } = createDocumentRuntimeLoaders({
-    activeImageRef,
     clearArtifact,
     clearDocxArtifact,
     clearMarkdownArtifact,
-    lastEditorTargetRef,
-    lastResolvedTargetRef,
     lastSelectionRef,
     loadArtifact,
     loadDocxArtifact,
@@ -321,98 +242,47 @@ export function useRuntimeWorkbenchModel() {
     currentProject,
     currentProjectId,
     docxRuntime,
-    iframeRef,
     loadDocxDocument,
     loadHtmlDocument,
     loadMarkdownDocument,
     markdownRuntime,
-    pendingImageTargetRef,
     runtime,
     selectedRuntimeProfileId,
     setCurrentProject,
     setError,
     setHistoryProjects,
     setLinkEditorOpen,
-    setOperationPanelMode,
   });
 
-  const {
-    applyAlignment,
-    applyBackColor,
-    applyFontFamily,
-    applyFontSize,
-    applyForeColor,
-    applyFormat,
-    applyHeading,
-    applyLink,
-    applyList,
-    applyOperationPanel,
-    applyRemoveLink,
-    applyToolbarMoreAction,
-    clearImageObjectSelection,
-    handleImageFileInputChange,
-    openLinkEditor,
-    requestImageFileSelection,
-    selectImageObject,
-  } = createHtmlEditorActions({
-    activeImageRef,
-    artifactReadOnlyRef,
-    attributeDraft,
-    currentProjectId,
-    htmlEditorController,
-    iframeRef,
-    imageDraft,
-    imageFileInputRef,
-    lastEditorTargetRef,
-    lastResolvedTargetRef,
-    lastSelectionRef,
-    operationDraft,
-    operationIsHtml,
-    operationPanelMode,
-    operationPosition,
-    operationWrapperTag,
-    pendingImageTargetRef,
-    runtime,
-    setAttributeDraft,
-    setError,
-    setImageDraft,
-    setLinkDraft,
-    setLinkEditorOpen,
-    setOperationDraft,
-    setOperationIsHtml,
-    setOperationPanelMode,
-    setOperationPosition,
-    setStyleDraft,
-    setTableDraft,
-    styleDraft,
-    tableDraft,
-    toolbarState,
-  });
+  const syncHtmlEditorBody = (bodyInnerHTML: string, selection: SelectionState | null) => {
+    setRuntime((current) =>
+      current
+        ? applier.syncFromEditorBody(current, bodyInnerHTML, {
+            operationType: "editHtmlBody",
+            description: "Edit HTML body",
+            replaceCurrentSnapshot: true,
+            selection,
+          })
+        : current,
+    );
+  };
 
-  const { handleFrameLoad } = useHtmlFrameLifecycle({
-    applier,
-    artifactInteraction,
-    artifactReadOnlyRef,
-    clearImageObjectSelection,
-    currentDocumentType,
-    editorOpen,
-    frameRevision,
-    frameSrcDoc,
-    htmlEditorController,
-    iframeRef,
-    initializedFrameDocsRef,
-    lastEditorTargetRef,
-    runtimeRef,
-    selectImageObject,
-    setEditorStats,
-    setHtmlToolbarActive,
-    setRuntime,
-  });
+  const updateHtmlEditorSelection = (selection: SelectionState | null, nextToolbarState?: ToolbarState) => {
+    lastSelectionRef.current = selection;
+    if (nextToolbarState) {
+      setToolbarState(nextToolbarState);
+      setHtmlToolbarActive(true);
+    }
+    setRuntime((current) => (current ? applier.apply(current, { type: "selection-changed", selection }) : current));
+  };
 
-  const resetFrameFromRuntime = () => {
-    if (!runtime) return;
-    setToolbarState(defaultToolbarState);
-    resetHtmlFrameFromRuntime();
+  const uploadHtmlEditorImageFile = async (file: File): Promise<ImageAttributes> => {
+    return uploadHtmlEditorImageFileAsset({
+      artifactReadOnly: artifactReadOnlyRef.current,
+      currentProjectId: currentProjectId ?? "",
+      file,
+      onError: setError,
+    });
   };
 
   const exportInProgress = sourceExporting || pdfExporting;
@@ -445,19 +315,6 @@ export function useRuntimeWorkbenchModel() {
     agentConversation,
     artifactInteraction,
     artifactReadOnly,
-    applyAlignment,
-    applyBackColor,
-    applyFontFamily,
-    applyFontSize,
-    applyForeColor,
-    applyFormat,
-    applyHeading,
-    applyLink,
-    applyList,
-    applyOperationPanel,
-    applyRemoveLink,
-    applyToolbarMoreAction,
-    attributeDraft,
     cancelAgentRun,
     clearHistory,
     currentDocumentType,
@@ -474,18 +331,10 @@ export function useRuntimeWorkbenchModel() {
     dismissExportNotice: () => setExportNotice(""),
     openCurrentProjectExportsDir,
     filteredTemplates,
-    frameRevision,
-    frameSrcDoc,
-    handleFrameLoad,
-    handleImageFileInputChange,
     historyProjects,
     homeAttachments,
     homePanel,
-    htmlEditorController,
     htmlToolbarActive,
-    iframeRef,
-    imageFileInputRef,
-    imageDraft,
     linkDraft,
     linkEditorOpen,
     loadBlankDocument,
@@ -500,55 +349,39 @@ export function useRuntimeWorkbenchModel() {
     officeCliInstalling,
     officeCliStatus,
     openHistoryProject,
-    openLinkEditor,
-    operationDraft,
-    operationIsHtml,
-    operationPanelMode,
-    operationPosition,
-    operationWrapperTag,
     outputType,
     pdfExportAvailable: isTuttiPdfExportAvailable(),
     pdfExporting,
     prompt,
     redoMarkdown,
     requestHomeRoute,
-    requestImageFileSelection,
-    resetFrameFromRuntime,
     runtime,
     runtimeProfiles,
     saveState,
     selectedRuntimeProfileId,
     selectedTemplateCategory,
     sendAgentPrompt,
+    syncHtmlEditorBody,
+    uploadHtmlEditorImageFile,
     sourceExporting,
     exportCurrentDocxPdf,
     exportCurrentHtml,
     exportCurrentHtmlPdf,
     exportCurrentMarkdown,
     exportCurrentMarkdownPdf,
-    setAttributeDraft,
     setEditorStats,
     setHomePanel,
-    setImageDraft,
     setLinkDraft,
     setLinkEditorOpen,
-    setOperationDraft,
-    setOperationIsHtml,
-    setOperationPanelMode,
-    setOperationPosition,
-    setOperationWrapperTag,
     setOutputType,
     setPrompt,
     setRoute,
     setSelectedRuntimeProfileId,
     setSelectedTemplateCategory,
-    setStyleDraft,
-    setTableDraft,
-    styleDraft,
-    tableDraft,
     templateCategories,
     templateCounts,
     toolbarState,
+    updateHtmlEditorSelection,
     undoMarkdown,
     updateDocxSelection,
     updateMarkdownContent,

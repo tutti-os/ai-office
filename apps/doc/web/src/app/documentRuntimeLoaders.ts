@@ -1,18 +1,15 @@
 import type { DocumentProject } from "@ai-doc/shared";
 import type { RuntimeState } from "../artifact/runtime/types";
 import { markdownWordCount } from "./documentWorkbenchContent";
-import { defaultToolbarState, type EditorStats, type ImageObjectElement, type ToolbarState } from "./runtimeWorkbenchTypes";
+import { defaultToolbarState, type EditorStats, type ToolbarState } from "./runtimeWorkbenchTypes";
 
 type Ref<T> = { current: T };
 type StateSetter<T> = (value: T | ((current: T) => T)) => void;
 
 type DocumentRuntimeLoadersInput = {
-  activeImageRef: Ref<ImageObjectElement | null>;
   clearArtifact: () => void;
   clearDocxArtifact: () => void;
   clearMarkdownArtifact: () => void;
-  lastEditorTargetRef: Ref<Node | null>;
-  lastResolvedTargetRef: Ref<Element | null>;
   lastSelectionRef: Ref<unknown>;
   loadArtifact: (input: { content: string; projectId?: string | null; title: string; source?: RuntimeState["source"] }) => void;
   loadDocxArtifact: (projectId: string, input: { content: string; title: string; source?: RuntimeState["source"] }) => Promise<unknown>;
@@ -32,10 +29,7 @@ export function createDocumentRuntimeLoaders(input: DocumentRuntimeLoadersInput)
     input.setQueuedHomeNavigation(false);
     input.setToolbarState(defaultToolbarState);
     input.setHtmlToolbarActive(false);
-    input.lastEditorTargetRef.current = null;
-    input.lastResolvedTargetRef.current = null;
     input.lastSelectionRef.current = null;
-    input.activeImageRef.current = null;
     input.setEditorStats(stats);
   };
 
