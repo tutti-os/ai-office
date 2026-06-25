@@ -14,7 +14,7 @@ export const darkScrollbarClass =
 export const appShell = {
   page:
     cx(
-      "relative overflow-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] text-[#2A2620] [color-scheme:light]",
+      "relative overflow-auto bg-[#F4EFE6] text-[#2A2620] [color-scheme:light] before:pointer-events-none before:fixed before:inset-0 before:bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] before:bg-[size:28px_28px] before:[-webkit-mask-image:linear-gradient(to_bottom,#000_0%,rgba(0,0,0,0.7)_38%,transparent_100%)] before:[mask-image:linear-gradient(to_bottom,#000_0%,rgba(0,0,0,0.7)_38%,transparent_100%)] before:content-['']",
       scrollbarClass,
     ),
   topAction:
@@ -32,7 +32,7 @@ export const appShell = {
   promptComposer: "border-[#B8A07C]/30! bg-[#F8F4EC]! ",
   promptTextarea: "text-[#2A2620]! placeholder:text-[#8B8275]!",
   iconAction:
-    "grid size-9 shrink-0 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]  transition-colors hover:bg-[#4C5E42]",
+    "grid size-9 shrink-0 place-items-center rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6]/70 text-[#2A2620] transition-colors hover:border-[#B8A07C]/30 hover:text-[#5C6B50] disabled:cursor-default disabled:opacity-50",
   submitAction:
     "grid size-10 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]  transition-colors hover:bg-[#4C5E42] disabled:bg-[#D8CDB9]/70 disabled:text-[#8B8275] disabled:shadow-none",
   cardShadow: "",
@@ -98,6 +98,20 @@ export function HomePanelToggle(props: {
   );
 }
 
+export function TemplatesFilledIcon(props: { size?: number }) {
+  const size = props.size ?? 15;
+  return (
+    <svg aria-hidden="true" fill="none" height={size} viewBox="0 0 24 24" width={size}>
+      <path
+        clipRule="evenodd"
+        d="M4.4959 2.27794C2.84132 2.36466 1.5703 3.77626 1.65702 5.43084L2.12804 14.4185C2.21475 16.0731 3.62635 17.3441 5.28094 17.2574L5.39979 17.2512L5.8153 9.32268C5.93092 7.11657 7.81305 5.42189 10.0192 5.53751L16.7015 5.88772L16.6365 4.6458C16.5497 2.99122 15.1381 1.72021 13.4836 1.80692L4.4959 2.27794ZM7.20098 9.90047C7.2877 8.24589 8.6993 6.97488 10.3539 7.06159L19.3415 7.53261C20.9961 7.61933 22.2671 9.03093 22.1804 10.6855L21.7094 19.6732C21.6227 21.3278 20.2111 22.5988 18.5565 22.5121L9.56884 22.041C7.91426 21.9543 6.64325 20.5427 6.72996 18.8881L7.20098 9.90047ZM12.4143 10.3629C12.4679 10.2058 12.6913 10.2093 12.7399 10.368L12.7771 10.4891C13.1784 11.7979 14.1643 12.864 15.4323 13.3801C15.5926 13.4454 15.5819 13.6789 15.4144 13.7229C14.0956 14.0693 13.0143 15.0118 12.4912 16.2711L12.4205 16.4413C12.3569 16.5944 12.1341 16.5746 12.0984 16.4128C11.7923 15.026 10.7918 13.8955 9.45242 13.423L9.39548 13.403C9.23389 13.346 9.2433 13.1143 9.40899 13.0706L9.54572 13.0346C10.8889 12.6804 11.9657 11.6775 12.4143 10.3629ZM17.6877 15.2216C17.655 15.1148 17.5046 15.1124 17.4686 15.2181C17.1665 16.1032 16.4416 16.7783 15.5373 17.0168L15.4453 17.0411C15.3338 17.0705 15.3274 17.2264 15.4362 17.2648L15.4745 17.2783C16.3762 17.5964 17.0498 18.3574 17.2558 19.2911C17.2799 19.4 17.4299 19.4133 17.4727 19.3103L17.5203 19.1957C17.8724 18.3479 18.6004 17.7134 19.4883 17.4802C19.601 17.4506 19.6082 17.2934 19.5003 17.2494C18.6467 16.9019 17.9829 16.1843 17.7128 15.3031L17.6877 15.2216Z"
+        fill="currentColor"
+        fillRule="evenodd"
+      />
+    </svg>
+  );
+}
+
 export function HomeCategoryPill(props: {
   active: boolean;
   count?: number;
@@ -141,10 +155,10 @@ export function categoryPillClass(active: boolean) {
 
 export function formatOptionClass(active: boolean, disabled?: boolean) {
   return cx(
-    "flex min-h-16 items-center justify-between gap-3 rounded-2xl border p-3 text-left transition-colors",
-    active && !disabled && "border-[#B8A07C]/30 bg-[#F8F4EC] text-[#2A2620] ",
-    (!active || disabled) && "border-[#B8A07C]/30 bg-[#F4EFE6]/10 text-[#F4EFE6]/86",
-    !active && !disabled && "hover:border-[#B8A07C]/30 hover:bg-[#F4EFE6]/16",
+    "relative flex min-h-16 items-center justify-between gap-3 rounded-b-[7px] rounded-t-[16px] border p-3 text-left transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out motion-reduce:transition-none",
+    active && !disabled && "z-10 border-white/15 border-b-transparent bg-[#F8F4EC] text-[#2A2620] shadow-[inset_0_1px_0_rgba(255,255,255,0.36)] ",
+    (!active || disabled) && "border-white/15 bg-[#F4EFE6]/10 text-[#F4EFE6]/86",
+    !active && !disabled && "hover:border-white/15 hover:bg-[#F4EFE6]/16",
     disabled && "opacity-45",
   );
 }
@@ -152,8 +166,8 @@ export function formatOptionClass(active: boolean, disabled?: boolean) {
 export function formatOptionIconClass(active: boolean, disabled?: boolean) {
   return cx(
     "grid size-9 shrink-0 place-items-center rounded-[8px]",
-    active && !disabled && "bg-[#5C6B50] text-[#F4EFE6]",
-    (!active || disabled) && "bg-[#F4EFE6]/12 text-[#F4EFE6]/70",
+    active && !disabled && "bg-[#5C6B50] text-white",
+    (!active || disabled) && "bg-[#F4EFE6]/12 text-white/70",
   );
 }
 
@@ -385,7 +399,7 @@ function ArtifactHistoryCard(props: {
     <div className={cx("group", historyCardClass())}>
       <button
         aria-label={props.copy.openProjectAria(props.title)}
-        className="block h-full min-h-[132px] w-full rounded-[20px] p-4 text-left"
+        className="block h-full min-h-[132px] w-full rounded-[16px] p-4 text-left"
         type="button"
         onClick={props.onOpen}
       >
@@ -445,7 +459,7 @@ export function templateCardClass() {
 }
 
 export function historyCardClass() {
-  return "relative min-h-[132px] rounded-[20px] border border-[#B8A07C]/30 bg-[#F9F4EC]  backdrop-blur transition hover:-translate-y-0.5 ";
+  return "relative min-h-[132px] rounded-[16px] border border-[#B8A07C]/30 bg-[#F9F4EC]  backdrop-blur transition hover:-translate-y-0.5 ";
 }
 
 export const historyActionsClass = "mt-4 flex items-center justify-start";
@@ -459,7 +473,7 @@ export const historyEmptyIconClass = "grid size-9 place-items-center rounded-ful
 
 export function AgentSelectShell(props: { children: ReactNode }) {
   return (
-    <label className="relative mr-auto flex h-9 w-auto flex-1 basis-[150px] items-center md:w-[168px] md:flex-none md:basis-auto">
+    <label className="relative mr-auto flex h-9 min-w-0 w-auto flex-1 basis-[150px] items-center overflow-hidden md:w-[168px] md:flex-none md:basis-auto">
       {props.children}
     </label>
   );

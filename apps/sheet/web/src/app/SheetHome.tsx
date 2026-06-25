@@ -1,8 +1,8 @@
 import { useRef } from "react";
-import { FileSpreadsheet, History, Sparkles, Upload } from "lucide-react";
+import { FileSpreadsheet, History, Upload } from "lucide-react";
 import type { LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile, SheetProject } from "@ai-sheet/shared";
 import { contextAttachmentFileAccept } from "@ai-app/shared/context-attachments";
-import { ArtifactHomeComposer, type ArtifactHomeFormatOption } from "@ai-app/ui/home-composer";
+import { ArtifactHomeComposer, ProductFilledFormatIcon, type ArtifactHomeFormatOption } from "@ai-app/ui/home-composer";
 import {
   ArtifactHistoryPanel,
   homeContentClass,
@@ -184,7 +184,7 @@ function sheetFormatOptions(input: {
       description: formatXlsxDescription(input.officeCliStatus, input.installing, input.t),
       disabled: input.disabled,
       downloadLabel: input.t("composer.downloadOfficeCli"),
-      icon: <FileSpreadsheet size={20} />,
+      icon: <ProductFilledFormatIcon />,
       installing: input.installing,
       showInstall: input.officeCliStatus?.available !== true && input.officeCliStatus?.canInstall === true,
       title: input.officeCliStatus?.available === true ? undefined : input.officeCliStatus?.reason ?? input.t("composer.officeCliRequired"),
@@ -195,7 +195,7 @@ function sheetFormatOptions(input: {
       label: "Smart Sheet",
       description: input.t("composer.smartSheetDescription"),
       disabled: true,
-      icon: <Sparkles size={20} />,
+      icon: <ProductFilledFormatIcon />,
       statusLabel: input.t("composer.comingSoon"),
     },
   ];

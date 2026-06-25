@@ -15,6 +15,7 @@ import {
   homeTitleClass,
   HomeTopAction,
   homeWorkSectionClass,
+  TemplatesFilledIcon,
 } from "@ai-app/ui/app-shell";
 import { HomeComposer } from "./HomeComposer";
 import { artifactHistoryCopy } from "../i18n/copy";
@@ -42,7 +43,7 @@ export function HomePage(props: {
   onAddFiles: (files: File[]) => void;
   onCategoryChange: (category: string) => void;
   onClearHistory: () => void;
-  onCreateBlank: () => void;
+  onCreateBlank: (type: DocumentType) => void;
   onCreateFromPrompt: () => void;
   onDeleteHistoryProject: (projectId: string) => void;
   onOpenHistoryProject: (project: DocumentProject) => void;
@@ -116,7 +117,7 @@ export function HomePage(props: {
                   aria-hidden="true"
                 />
                 <div className="contents">
-                  <HomePanelToggle active={props.activePanel === "templates"} icon={<FileText size={15} />} label={t("home.templates")} onClick={() => props.onActivePanelChange("templates")} />
+                  <HomePanelToggle active={props.activePanel === "templates"} icon={<TemplatesFilledIcon size={15} />} label={t("home.templates")} onClick={() => props.onActivePanelChange("templates")} />
                   <HomePanelToggle active={props.activePanel === "history"} icon={<History size={15} />} label={t("home.history")} onClick={() => props.onActivePanelChange("history")} />
                 </div>
               </div>
@@ -143,6 +144,7 @@ export function HomePage(props: {
 
           {props.activePanel === "templates" ? (
             <TemplateMasonry
+              outputType={props.outputType}
               showBlank={props.selectedCategory === allTemplatesLabel}
               templates={props.templates}
               onCreateBlank={props.onCreateBlank}
@@ -172,9 +174,10 @@ const templateMasonryMinColumnWidthPx = 190;
 const templateMasonryMaxColumns = 5;
 
 function TemplateMasonry(props: {
+  outputType: DocumentType;
   showBlank: boolean;
   templates: TuttiTemplate[];
-  onCreateBlank: () => void;
+  onCreateBlank: (type: DocumentType) => void;
   onSelectTemplate: (template: TuttiTemplate) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -219,7 +222,7 @@ function TemplateMasonry(props: {
       {columns.map((column, index) => (
         <div key={index} className="flex min-w-0 flex-1 flex-col gap-7">
           {column.map((item) => item.kind === "blank"
-            ? <BlankTemplateCard key="blank" onCreate={props.onCreateBlank} />
+            ? <BlankTemplateCard key="blank" outputType={props.outputType} onCreate={props.onCreateBlank} />
             : <TemplateCard key={item.template.id} template={item.template} onSelect={props.onSelectTemplate} />,
           )}
         </div>
@@ -251,7 +254,7 @@ function estimatedTemplateCardHeight(item: MasonryItem, columnWidth: number) {
   return columnWidth / aspectRatio + 42;
 }
 
-function BlankTemplateCard(props: { onCreate: () => void }) {
+function BlankTemplateCard(props: { outputType: DocumentType; onCreate: (type: DocumentType) => void }) {
   const { t } = useI18n();
   return (
     <div className="group w-full min-w-0">
@@ -259,11 +262,12 @@ function BlankTemplateCard(props: { onCreate: () => void }) {
         className="flex aspect-[0.72] w-full min-h-[212px] flex-col items-center justify-center rounded-[16px] border border-[#B8A07C]/30 bg-[#F8F4EC] text-[#5C6B50]  backdrop-blur transition hover:-translate-y-0.5 hover:border-[#B8A07C]/30"
         type="button"
         aria-label={t("home.blankDocAria")}
-        onClick={props.onCreate}
+        onClick={() => props.onCreate(props.outputType)}
       >
         <Plus className="mb-4 opacity-60" size={26} />
       </button>
       <div className="mt-2 truncate px-1 text-[15px] font-semibold text-[#2A2620]">{t("home.blankDoc")}</div>
+      <div className="mt-0.5 truncate px-1 text-[11px] text-[#8B8275]">{projectTypeLabel(props.outputType, t)}</div>
     </div>
   );
 }

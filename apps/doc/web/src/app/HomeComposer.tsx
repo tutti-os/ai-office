@@ -1,5 +1,4 @@
-import { FileCode2, FileText, Hash } from "lucide-react";
-import { ArtifactHomeComposer, type ArtifactHomeFormatOption } from "@ai-app/ui/home-composer";
+import { ArtifactHomeComposer, CodeFilledFormatIcon, MarkdownFilledFormatIcon, ProductFilledFormatIcon, type ArtifactHomeFormatOption } from "@ai-app/ui/home-composer";
 import { contextAttachmentFileAccept } from "@ai-app/shared/context-attachments";
 import type { DocumentType, LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
 import { useI18n } from "../i18n";
@@ -76,13 +75,13 @@ function documentFormatOptions(input: {
       id: "html",
       label: "HTML",
       description: input.t("composer.htmlDescription"),
-      icon: <FileCode2 size={20} />,
+      icon: <CodeFilledFormatIcon />,
     },
     {
       id: "markdown",
       label: "Markdown",
       description: input.t("composer.markdownDescription"),
-      icon: <Hash size={20} />,
+      icon: <MarkdownFilledFormatIcon />,
     },
     {
       id: "docx",
@@ -90,7 +89,7 @@ function documentFormatOptions(input: {
       description: formatDocxOutputDescription(input.officeCliStatus, input.t),
       disabled: !input.docxAvailable || input.docxInstalling,
       downloadLabel: input.t("composer.downloadOfficeCli"),
-      icon: <FileText size={20} />,
+      icon: <ProductFilledFormatIcon />,
       installing: input.docxInstalling,
       showInstall: !input.docxAvailable && input.officeCliStatus?.canInstall === true,
       title: !input.docxAvailable ? input.officeCliStatus?.reason ?? input.t("composer.officeCliRequired") : undefined,

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hasActiveAgentRun } from "@ai-app/agent/conversation";
 import {
-  FileText,
   History,
   Upload,
 } from "lucide-react";
@@ -26,6 +25,7 @@ import {
   HomeTopAction,
   homeTitleClass,
   homeWorkSectionClass,
+  TemplatesFilledIcon,
 } from "@ai-app/ui/app-shell";
 import type { ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { artifactInteractionForAgentBusy, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
@@ -518,7 +518,7 @@ export function App() {
                   aria-hidden="true"
                 />
                 <div className="contents">
-                  <HomePanelToggle active={activePanel === "templates"} icon={<FileText size={15} />} label={t("home.templates")} onClick={() => setActivePanel("templates")} />
+                  <HomePanelToggle active={activePanel === "templates"} icon={<TemplatesFilledIcon size={15} />} label={t("home.templates")} onClick={() => setActivePanel("templates")} />
                   <HomePanelToggle active={activePanel === "history"} icon={<History size={15} />} label={t("home.history")} onClick={() => setActivePanel("history")} />
                 </div>
               </div>
