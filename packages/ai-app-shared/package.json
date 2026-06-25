@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./types": "./src/types/index.ts",
+    "./import-source": "./src/import-source/index.ts",
     "./local-paths": "./src/local-paths/index.ts",
     "./local-open": "./src/local-open/index.ts",
     "./event-hub": "./src/event-hub/index.ts",

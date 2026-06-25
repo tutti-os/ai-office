@@ -7,6 +7,7 @@ import type {
   RunStatus,
   RuntimeProfile,
   StreamEvent as BaseStreamEvent,
+  TuttiAppOpenResult,
   WsServerMessage as BaseWsServerMessage,
 } from "@ai-app/shared/types";
 import type { AgentArtifactContextBase, ArtifactSelectionBase } from "@ai-app/shared/artifact-runtime";
@@ -21,6 +22,7 @@ export type {
   RunStatus,
   RuntimeKind,
   RuntimeProfile,
+  TuttiAppOpenResult,
   WsClientMessage,
 } from "@ai-app/shared/types";
 
@@ -174,6 +176,30 @@ export interface CreateProjectRequest {
   templateName?: string | null;
   content?: string;
   type?: DocumentType;
+}
+
+export interface OpenDocumentCliRequest {
+  path: string;
+  title?: string;
+}
+
+export interface DocumentWorkspaceContext {
+  workspaceRoot: string;
+  focusedPath: string;
+  focusedPathKind: "file";
+  focusedFilePath: string;
+  agentInstructionsPath: string;
+}
+
+export interface OpenDocumentCliResponse {
+  ok: true;
+  action: "imported";
+  sourcePath: string;
+  project: DocumentProject;
+  route: string;
+  url: string;
+  workspace: DocumentWorkspaceContext;
+  tuttiAppOpen: TuttiAppOpenResult;
 }
 
 export interface UpdateProjectRequest {

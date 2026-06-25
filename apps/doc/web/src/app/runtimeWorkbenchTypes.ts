@@ -1,13 +1,34 @@
 import { type ToolbarLayoutValue } from "@ai-app/ui/toolbar";
-import {
-  getEditorStats,
-  tableEditActions,
-  type Alignment,
-  type HeadingTag,
-  type ListKind,
-  type TableActionAvailability,
-  type TableHeaderState,
-} from "../artifact/runtime/operations";
+
+export type InlineFormatTag = "strong" | "em" | "u" | "s";
+export type HeadingTag = "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "blockquote";
+export type Alignment = "left" | "center" | "right" | "justify";
+export type ListKind = "ordered" | "unordered";
+export type ImageAttributes = {
+  src: string;
+  alt?: string;
+  width?: string;
+  height?: string;
+};
+
+export const tableEditActions = [
+  "addRowBefore",
+  "addRowAfter",
+  "addColumnBefore",
+  "addColumnAfter",
+  "toggleHeaderRow",
+  "toggleHeaderColumn",
+  "deleteRow",
+  "deleteColumn",
+  "deleteTable",
+  "splitCell",
+] as const;
+export type TableEditAction = (typeof tableEditActions)[number];
+export type TableActionAvailability = Record<TableEditAction, boolean>;
+export type TableHeaderState = {
+  rowHeader: boolean;
+  columnHeader: boolean;
+};
 
 export type ToolbarState = {
   targetLabel: string;
@@ -38,31 +59,14 @@ export type ToolbarState = {
   rangeSelection: boolean;
 };
 
-export type AttributeDraft = { id: string; className: string; title: string; custom: string };
-
-export const operationPanelModes = [
-  "insertText",
-  "insertHtml",
-  "replaceSelection",
-  "appendText",
-  "appendHtml",
-  "insertAtPosition",
-  "setAttributes",
-  "wrapSelection",
-  "image",
-  "style",
-  "table",
-] as const;
-
-export type OperationPanelMode = (typeof operationPanelModes)[number] | null;
-
-export type EditorStats = ReturnType<typeof getEditorStats>;
+export type EditorStats = {
+  characterCount: number;
+  wordCount: number;
+  paragraphCount: number;
+  elementCount: number;
+};
 
 export type HomePanel = "templates" | "history";
-
-export type ResizeHandle = "top-left" | "top" | "top-right" | "right" | "bottom-right" | "bottom" | "bottom-left" | "left";
-
-export type ImageObjectElement = HTMLElement;
 
 export type LinkDraft = {
   text: string;
@@ -105,20 +109,6 @@ export const defaultToolbarState: ToolbarState = {
   contentElement: false,
   textSelection: false,
   rangeSelection: false,
-};
-
-export const operationPanelTitle: Record<Exclude<OperationPanelMode, null>, string> = {
-  insertText: "Insert text",
-  insertHtml: "Insert HTML",
-  replaceSelection: "Replace selection",
-  appendText: "Append text",
-  appendHtml: "Append HTML",
-  insertAtPosition: "Insert at position",
-  setAttributes: "Set attributes",
-  wrapSelection: "Wrap selection",
-  image: "Image",
-  style: "Style",
-  table: "Table",
 };
 
 function defaultTableActions(): TableActionAvailability {

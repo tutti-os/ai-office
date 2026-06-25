@@ -5,10 +5,7 @@ import type { AiEditRequest, DocumentProject } from "@ai-doc/shared";
 import { cancelRun, startAiEdit } from "../api/projects";
 import type { DocxRuntimeState } from "../artifact/docxArtifactAdapter";
 import type { MarkdownRuntimeState } from "../artifact/markdownArtifactAdapter";
-import { setEditableFrameInteraction } from "../artifact/runtime/frame";
 import type { RuntimeState } from "../artifact/runtime/types";
-import { removeImageSelectionOverlay } from "./htmlRuntimeDom";
-import type { ImageObjectElement, OperationPanelMode } from "./runtimeWorkbenchTypes";
 import { useAgentConversation } from "./useAgentConversation";
 
 type Ref<T> = { current: T };
@@ -38,19 +35,16 @@ type DocumentAgentRuntimeInput = {
   currentProject: DocumentProject | null;
   currentProjectId: string | null;
   docxRuntime: DocxRuntimeState | null;
-  iframeRef: Ref<HTMLIFrameElement | null>;
   loadDocxDocument: (project: DocumentProject) => Promise<void>;
   loadHtmlDocument: (html: string, input: { projectId?: string | null; title: string; source?: RuntimeState["source"] }) => void;
   loadMarkdownDocument: (content: string, input: { title: string; source?: RuntimeState["source"] }) => void;
   markdownRuntime: MarkdownRuntimeState | null;
-  pendingImageTargetRef: Ref<ImageObjectElement | null>;
   runtime: RuntimeState | null;
   selectedRuntimeProfileId: string;
   setCurrentProject: StateSetter<DocumentProject | null>;
   setError: (value: string) => void;
   setHistoryProjects: StateSetter<DocumentProject[]>;
   setLinkEditorOpen: StateSetter<boolean>;
-  setOperationPanelMode: StateSetter<OperationPanelMode>;
 };
 
 export function useDocumentAgentRuntime(input: DocumentAgentRuntimeInput) {
@@ -80,15 +74,8 @@ export function useDocumentAgentRuntime(input: DocumentAgentRuntimeInput) {
   input.artifactReadOnlyRef.current = artifactReadOnly;
 
   useEffect(() => {
-    const doc = input.iframeRef.current?.contentDocument;
-    if (doc?.body) setEditableFrameInteraction(doc, artifactInteraction);
-    if (artifactReadOnly) {
-      input.setLinkEditorOpen(false);
-      input.setOperationPanelMode(null);
-      input.pendingImageTargetRef.current = null;
-      if (doc) removeImageSelectionOverlay(doc);
-    }
-  }, [artifactInteraction, artifactReadOnly]);
+    if (artifactReadOnly) input.setLinkEditorOpen(false);
+  }, [artifactReadOnly]);
 
   const sendAgentPrompt = async (userPrompt: string) => {
     if (!input.currentProjectId) throw new Error("Project is not open");

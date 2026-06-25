@@ -1,7 +1,7 @@
 import { copyFile, readFile, stat, writeFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { basename, extname, join, resolve } from "node:path";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import {
   createEmptyXlsxManifest,
   type CreateProjectRequest,
@@ -103,6 +103,7 @@ export class SheetRepository {
     const project = this.getProject(id);
     const artifact = this.getArtifact(artifactId);
     if (!project || !artifact) throw new Error("Unable to create project");
+    this.writeProjectAgentInstructions(project);
     return { project, artifact };
   }
 
@@ -318,6 +319,11 @@ export class SheetRepository {
   updateProjectSessionTitle(projectId: string, title: string) {
     return this.conversations.updateProjectSessionTitle(projectId, title);
   }
+
+  private writeProjectAgentInstructions(project: SheetProject) {
+    const root = ensureProjectDirs(project.id);
+    writeFileSync(join(root, "AGENTS.md"), sheetProjectAgentInstructions(project), "utf8");
+  }
 }
 
 type ProjectRow = {
@@ -389,6 +395,19 @@ async function readXlsxManifestFromFile(projectId: string): Promise<XlsxManifest
 
 function xlsxFilePath(projectId: string) {
   return join(ensureProjectDirs(projectId), xlsxArtifactFileRef);
+}
+
+function sheetProjectAgentInstructions(project: SheetProject) {
+  const targetXlsxPath = join(projectWorkspaceRoot(project.id), xlsxArtifactFileRef);
+  return [
+    "# AI Sheet Workspace",
+    "",
+    "You are editing an XLSX workbook with the local AI Sheet app.",
+    `Current focused file: ${targetXlsxPath}`,
+    "Use the officecli command-line tool to inspect, create, edit, and validate the focused XLSX file when possible.",
+    "When asked to create or edit spreadsheet content, write the final workbook to the focused file with filesystem tools.",
+    "Do not convert the workbook to Markdown, CSV, or HTML unless explicitly asked for a separate export.",
+  ].join("\n");
 }
 
 function importedProjectTitle(fileName: string) {

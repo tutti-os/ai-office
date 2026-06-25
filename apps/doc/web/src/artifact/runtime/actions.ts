@@ -8,15 +8,11 @@ export type RuntimeAction =
       source: "imported-html" | "blank" | "fixture";
     }
   | {
-      type: "frame-loaded";
-      document: RuntimeDocument;
-    }
-  | {
       type: "selection-changed";
       selection: SelectionState | null;
     }
   | {
-      type: "sync-from-frame";
+      type: "sync-from-editor";
       document: RuntimeDocument;
       operationType: string;
       description: string;

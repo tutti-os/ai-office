@@ -1,7 +1,7 @@
 {
   "schemaVersion": "tutti.app.cli.v1",
   "scope": "doc",
-  "description": "Create and inspect AI Doc projects.",
+  "description": "Open, create, and inspect AI Doc projects.",
   "documentation": {
     "file": "COMMANDS.md"
   },
@@ -54,6 +54,35 @@
         "method": "POST",
         "path": "/tutti/cli/list-projects",
         "timeoutMs": 10000
+      }
+    },
+    {
+      "path": ["open"],
+      "summary": "Open a document file",
+      "description": "Import an HTML, Markdown, or DOCX file into AI Doc, open its app route through Tutti CLI, and return workspace paths for agent editing.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["path"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path, home-relative path, or path relative to the Tutti workspace root."
+          },
+          "title": {
+            "type": "string",
+            "description": "Optional project title override."
+          }
+        }
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/open",
+        "timeoutMs": 30000
       }
     },
     {

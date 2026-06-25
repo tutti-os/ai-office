@@ -1,6 +1,6 @@
 import type { AgentArtifactContext, ArtifactSelection, AiEditRequest } from "@ai-doc/shared";
 import { RuntimeApplier } from "./runtime/applier";
-import { runtimeStateToSrcDoc } from "./runtime/frame";
+import { serializeRuntimeDocument } from "./runtime/document";
 import type { RuntimeState } from "./runtime/types";
 import type { AgentEditRequestInput, ArtifactRuntimeAdapter, ArtifactRuntimeParseInput } from "./types";
 
@@ -17,7 +17,7 @@ export class HtmlArtifactRuntimeAdapter implements ArtifactRuntimeAdapter<Runtim
   }
 
   serialize(runtime: RuntimeState) {
-    return runtimeStateToSrcDoc(runtime);
+    return serializeRuntimeDocument(runtime.document);
   }
 
   getSelection(runtime: RuntimeState): ArtifactSelection | null {

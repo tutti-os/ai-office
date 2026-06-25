@@ -19,6 +19,7 @@ fi
 
 export HOST="${TUTTI_APP_HOST:-127.0.0.1}"
 export PORT="${TUTTI_APP_PORT:-8790}"
+export TUTTI_APP_ID="${TUTTI_APP_ID:-ai-doc}"
 export AI_DOC_APP_VERSION="0.1.0"
 export AI_DOC_WEB_DIST="$web_dist"
 export AI_DOC_HOME="${TUTTI_APP_DATA_DIR:-$script_dir/.ai-doc-dev}"

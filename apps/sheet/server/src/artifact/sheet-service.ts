@@ -1,8 +1,11 @@
 import { openPathInFileManager } from "@ai-app/shared/local-open";
 import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
+import { resolveWorkspaceImportSourcePath } from "@ai-app/shared/import-source";
 import type { RuntimeProfile } from "@ai-app/shared/types";
-import type { AiEditRequest, ApplySheetCommandsRequest, CreateProjectRequest, SheetRun, SheetRunEvent, UpdateProjectRequest } from "@ai-sheet/shared";
+import type { AiEditRequest, ApplySheetCommandsRequest, CreateProjectRequest, SheetArtifact, SheetRun, SheetRunEvent, SheetWorkspaceContext, UpdateProjectRequest } from "@ai-sheet/shared";
+import { join } from "node:path";
+import { projectWorkspaceRoot } from "../local/paths.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
 import type { SheetRuntimeProject } from "../runtimes/runtime-provider.js";
 import { EventHub } from "../ws/event-hub.js";
@@ -72,12 +75,15 @@ export class SheetService {
   async importXlsxProject(input: { path?: string; title?: string }) {
     await requireOfficeCli();
     if (!input.path?.trim()) throw new Error("XLSX path is required");
+    const sourcePath = resolveWorkspaceImportSourcePath(input.path, {
+      workspaceEnvVars: ["AI_SHEET_WORKSPACE_ROOT", "TUTTI_WORKSPACE_ROOT"],
+    });
     const result = await this.repo.importXlsxProjectFromFile({
-      sourcePath: input.path,
+      sourcePath,
       title: input.title,
     });
     this.events.emit({ type: "project.created", projectId: result.project.id, payload: result });
-    return result;
+    return { ...result, sourcePath };
   }
 
   async importXlsxProjectFile(input: { fileName: string; bytes: Buffer; title?: string }) {
@@ -199,6 +205,18 @@ export class SheetService {
     const path = this.repo.projectExportsDir(projectId);
     await openPathInFileManager(path);
     return { path };
+  }
+
+  projectWorkspaceContext(projectId: string, artifact: Pick<SheetArtifact, "fileRef">): SheetWorkspaceContext {
+    const workspaceRoot = projectWorkspaceRoot(projectId);
+    const focusedPath = join(workspaceRoot, artifact.fileRef);
+    return {
+      workspaceRoot,
+      focusedPath,
+      focusedPathKind: "file",
+      focusedFilePath: focusedPath,
+      agentInstructionsPath: join(workspaceRoot, "AGENTS.md"),
+    };
   }
 
   async applyCommands(projectId: string, input: ApplySheetCommandsRequest) {

@@ -13,6 +13,8 @@ import {
   HomeTopAction,
   homeWorkSectionClass,
 } from "@ai-app/ui/app-shell";
+import { artifactHistoryCopy } from "../i18n/copy";
+import { useI18n } from "../i18n";
 import type { HomeAttachment } from "./useHomeAttachments";
 
 export function SheetHome(props: {
@@ -37,6 +39,7 @@ export function SheetHome(props: {
   onRemoveAttachment: (id: string) => void;
   onRuntimeProfileChange: (profileId: string) => void;
 }) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const openImportPicker = () => inputRef.current?.click();
   const officeCliReady = props.officeCliStatus?.available === true;
@@ -57,12 +60,12 @@ export function SheetHome(props: {
           if (file) props.onImportFile(file);
         }}
       />
-      <HomeTopAction disabled={props.loading || workbookUnavailable} icon={<Upload size={14} />} onClick={openImportPicker}>
-        Import
+      <HomeTopAction disabled={props.loading || workbookUnavailable} icon={<Upload size={14} />} title={t("home.importTitle")} onClick={openImportPicker}>
+        {t("home.import")}
       </HomeTopAction>
       <div className={homeContentClass}>
         <section className={homeHeroSectionClass}>
-          <h1 className={homeTitleClass}>Create a workbook</h1>
+          <h1 className={homeTitleClass}>{t("home.heading")}</h1>
           <SheetComposer
             attachments={props.attachments}
             canCreate={canCreate}
@@ -86,16 +89,17 @@ export function SheetHome(props: {
 
         <section className={homeWorkSectionClass}>
           <HomeSectionHeader
-            countText={`${props.projects.length} workbooks`}
+            countText={t("home.workbookCount", { count: props.projects.length })}
             icon={<History size={15} />}
-            label="Recent"
+            label={t("home.recent")}
           />
           <ArtifactHistoryPanel
-            emptyDescription="Create or import an XLSX workbook to see it here."
+            copy={artifactHistoryCopy(t)}
+            emptyDescription={t("history.emptyDescription")}
             emptyIcon={<History size={17} />}
-            emptyTitle="No workbooks yet"
+            emptyTitle={t("history.noHistory")}
             getId={(project) => project.id}
-            getSubtitle={() => "XLSX workbook"}
+            getSubtitle={() => t("history.typeXlsx")}
             getTitle={(project) => project.title}
             getUpdatedAt={(project) => project.updatedAt}
             icon={<FileSpreadsheet size={15} />}
@@ -130,12 +134,13 @@ function SheetComposer(props: {
   onRemoveAttachment: (id: string) => void;
   onRuntimeProfileChange: (profileId: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <ArtifactHomeComposer
-      addFilesLabel="Add context"
+      addFilesLabel={t("composer.addContext")}
       agentProfiles={props.runtimeProfiles}
       agentProviders={props.localAgentProviders}
-      agentUnavailableLabel="unavailable"
+      agentUnavailableLabel={t("composer.agentUnavailable")}
       acceptedFileTypes={contextAttachmentFileAccept}
       attachments={props.attachments}
       canSubmit={props.canCreate}
@@ -144,16 +149,17 @@ function SheetComposer(props: {
         disabled: props.disabled,
         installing: props.officeCliInstalling,
         officeCliStatus: props.officeCliStatus,
+        t,
         onInstallOfficeCli: props.onInstallOfficeCli,
       })}
       loading={props.loading}
       multipleFiles={false}
-      placeholder={formatPromptPlaceholder(props.officeCliStatus, props.officeCliInstalling)}
+      placeholder={formatPromptPlaceholder(props.officeCliStatus, props.officeCliInstalling, t)}
       prompt={props.prompt}
       selectedAgentId={props.selectedRuntimeProfileId}
       selectedFormatId="xlsx"
-      selectAgentLabel="Select ACP agent"
-      submitLabel="Create"
+      selectAgentLabel={t("composer.selectAgent")}
+      submitLabel={t("composer.create")}
       onAddFiles={props.onAddFiles}
       onFormatChange={() => undefined}
       onPromptChange={props.onPromptChange}
@@ -168,42 +174,43 @@ function sheetFormatOptions(input: {
   disabled: boolean;
   installing: boolean;
   officeCliStatus: OfficeCliStatus | null;
+  t: ReturnType<typeof useI18n>["t"];
   onInstallOfficeCli: () => void;
 }): ArtifactHomeFormatOption<"xlsx" | "smart-sheet">[] {
   return [
     {
       id: "xlsx",
       label: "XLSX",
-      description: formatXlsxDescription(input.officeCliStatus, input.installing),
+      description: formatXlsxDescription(input.officeCliStatus, input.installing, input.t),
       disabled: input.disabled,
-      downloadLabel: "Download OfficeCLI",
+      downloadLabel: input.t("composer.downloadOfficeCli"),
       icon: <FileSpreadsheet size={20} />,
       installing: input.installing,
       showInstall: input.officeCliStatus?.available !== true && input.officeCliStatus?.canInstall === true,
-      title: input.officeCliStatus?.available === true ? undefined : input.officeCliStatus?.reason ?? "OfficeCLI is required for XLSX workbooks",
+      title: input.officeCliStatus?.available === true ? undefined : input.officeCliStatus?.reason ?? input.t("composer.officeCliRequired"),
       onInstall: input.onInstallOfficeCli,
     },
     {
       id: "smart-sheet",
       label: "Smart Sheet",
-      description: "AI-native spreadsheet",
+      description: input.t("composer.smartSheetDescription"),
       disabled: true,
       icon: <Sparkles size={20} />,
-      statusLabel: "Coming soon",
+      statusLabel: input.t("composer.comingSoon"),
     },
   ];
 }
 
-function formatXlsxDescription(officeCliStatus: OfficeCliStatus | null, installing: boolean) {
-  if (!officeCliStatus) return "Checking OfficeCLI";
-  if (installing) return "Installing OfficeCLI";
-  if (officeCliStatus.available) return officeCliStatus.version ? `OfficeCLI ${officeCliStatus.version}` : "OfficeCLI ready";
-  return "Available after installing OfficeCLI";
+function formatXlsxDescription(officeCliStatus: OfficeCliStatus | null, installing: boolean, t: ReturnType<typeof useI18n>["t"]) {
+  if (!officeCliStatus) return t("composer.checkingOfficeCli");
+  if (installing) return t("composer.installingOfficeCli");
+  if (officeCliStatus.available) return officeCliStatus.version ? `OfficeCLI ${officeCliStatus.version}` : t("composer.officeCliReady");
+  return t("composer.officeCliInstallRequired");
 }
 
-function formatPromptPlaceholder(officeCliStatus: OfficeCliStatus | null, installing: boolean) {
-  if (!officeCliStatus) return "Checking OfficeCLI...";
-  if (installing) return "Installing OfficeCLI...";
-  if (!officeCliStatus.available) return "Install OfficeCLI to create XLSX workbooks";
-  return "Describe the workbook to create...";
+function formatPromptPlaceholder(officeCliStatus: OfficeCliStatus | null, installing: boolean, t: ReturnType<typeof useI18n>["t"]) {
+  if (!officeCliStatus) return t("composer.checkingOfficeCliPlaceholder");
+  if (installing) return t("composer.installingOfficeCliPlaceholder");
+  if (!officeCliStatus.available) return t("composer.installOfficeCliPlaceholder");
+  return t("composer.placeholder");
 }

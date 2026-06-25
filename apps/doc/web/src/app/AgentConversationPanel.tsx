@@ -1,6 +1,8 @@
 import { ArtifactAgentConversationPanel } from "@ai-app/agent/conversation-ui";
 import type { ArtifactEditorKind } from "@ai-app/ui/editor-frame";
 import type { DocumentRun, DocumentRunEvent, DocumentRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
+import { agentConversationUiCopy } from "../i18n/copy";
+import { useI18n } from "../i18n";
 
 type AgentConversationPanelProps = {
   activeSelectionText: string;
@@ -20,17 +22,19 @@ type AgentConversationPanelProps = {
 };
 
 export function AgentConversationPanel(props: AgentConversationPanelProps) {
+  const { t } = useI18n();
   return (
     <ArtifactAgentConversationPanel<DocumentRun, DocumentRunEvent>
       {...props}
       copy={{
-        homeLabel: "AI Doc",
-        introTitle: "AI Doc Agent",
-        introBody: "Select text in the doc, then ask for a rewrite, continuation, polish, or structural edit.",
-        placeholder: "Ask AI to edit this doc...",
-        quickPrompts: ["Rewrite selection", "Continue writing", "Polish tone", "Format section"],
+        homeLabel: t("app.title"),
+        introTitle: t("agent.introTitle"),
+        introBody: t("agent.introBody"),
+        placeholder: t("agent.placeholder"),
+        quickPrompts: [t("agent.quickRewrite"), t("agent.quickContinue"), t("agent.quickPolish"), t("agent.quickFormat")],
       }}
-      formatUnavailableRuntimeProfileLabel={(profile, provider) => `${profile.displayName} (${provider?.authState ?? "unknown"})`}
+      uiCopy={agentConversationUiCopy(t)}
+      formatUnavailableRuntimeProfileLabel={(profile, provider) => `${profile.displayName} (${provider?.authState ?? t("agent.unknown")})`}
       selectedRuntimeProfileId={props.selectedRuntimeProfileId}
       onRuntimeProfileChange={props.onRuntimeProfileChange}
     />

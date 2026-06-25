@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState, type ReactNode, type RefObject } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 
 export const toolbarIconButton =
@@ -222,36 +222,65 @@ function clipsOverflow(value: string) {
 }
 
 export function useDismissableFloatingLayer(open: boolean, onOpenChange: (open: boolean) => void, ref: RefObject<HTMLElement | null>) {
+  const layerPointerActiveRef = useRef(false);
+  const onOpenChangeRef = useRef(onOpenChange);
+
+  useLayoutEffect(() => {
+    onOpenChangeRef.current = onOpenChange;
+  }, [onOpenChange]);
+
   useEffect(() => {
     if (!open) return;
     const ownerDocument = ref.current?.ownerDocument ?? document;
-    const close = () => onOpenChange(false);
+    let pointerClearTimer: number | null = null;
+    const clearLayerPointerActiveSoon = () => {
+      if (pointerClearTimer !== null) window.clearTimeout(pointerClearTimer);
+      pointerClearTimer = window.setTimeout(() => {
+        layerPointerActiveRef.current = false;
+        pointerClearTimer = null;
+      }, 80);
+    };
+    const close = () => onOpenChangeRef.current(false);
+    const closeWhenLayerPointerIdle = () => {
+      if (layerPointerActiveRef.current) return;
+      close();
+    };
     const closeOnOutsidePointerDown = (event: PointerEvent) => {
-      if (isInsideDismissableLayer(event, ref.current)) return;
+      if (isInsideDismissableLayer(event, ref.current)) {
+        layerPointerActiveRef.current = true;
+        return;
+      }
+      if (layerPointerActiveRef.current) return;
       close();
     };
     const closeOnOutsideScroll = (event: Event) => {
       if (isInsideDismissableLayer(event, ref.current)) return;
-      close();
+      closeWhenLayerPointerIdle();
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") close();
     };
-    window.addEventListener("resize", close);
+    window.addEventListener("resize", closeWhenLayerPointerIdle);
     window.addEventListener("scroll", closeOnOutsideScroll, true);
-    window.addEventListener("blur", close);
+    window.addEventListener("blur", closeWhenLayerPointerIdle);
     ownerDocument.addEventListener("pointerdown", closeOnOutsidePointerDown, true);
+    ownerDocument.addEventListener("pointerup", clearLayerPointerActiveSoon, true);
+    ownerDocument.addEventListener("pointercancel", clearLayerPointerActiveSoon, true);
     ownerDocument.addEventListener("keydown", onKeyDown);
-    const cleanupFrameListeners = listenToSameOriginFrames(ownerDocument, close);
+    const cleanupFrameListeners = listenToSameOriginFrames(ownerDocument, closeWhenLayerPointerIdle);
     return () => {
-      window.removeEventListener("resize", close);
+      if (pointerClearTimer !== null) window.clearTimeout(pointerClearTimer);
+      layerPointerActiveRef.current = false;
+      window.removeEventListener("resize", closeWhenLayerPointerIdle);
       window.removeEventListener("scroll", closeOnOutsideScroll, true);
-      window.removeEventListener("blur", close);
+      window.removeEventListener("blur", closeWhenLayerPointerIdle);
       ownerDocument.removeEventListener("pointerdown", closeOnOutsidePointerDown, true);
+      ownerDocument.removeEventListener("pointerup", clearLayerPointerActiveSoon, true);
+      ownerDocument.removeEventListener("pointercancel", clearLayerPointerActiveSoon, true);
       ownerDocument.removeEventListener("keydown", onKeyDown);
       cleanupFrameListeners();
     };
-  }, [open, onOpenChange, ref]);
+  }, [open, ref]);
 }
 
 function isInsideDismissableLayer(event: Event, layer: HTMLElement | null) {

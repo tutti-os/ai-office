@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import type { TuttiAppOpenResult } from "@ai-app/shared/types";
 
 export interface TuttiCliStatus {
   configured: boolean;
@@ -54,4 +55,37 @@ export function runTuttiCli(args: string[], timeoutMs = 15000) {
       }
     });
   });
+}
+
+export async function openTuttiAppRoute(appId: string, route: string, timeoutMs = 10000): Promise<TuttiAppOpenResult> {
+  const executablePath = configuredTuttiCliPath();
+  if (!executablePath) {
+    return {
+      attempted: false,
+      configured: false,
+      appId,
+      route,
+      result: null,
+      error: "TUTTI_CLI is not configured",
+    };
+  }
+  try {
+    return {
+      attempted: true,
+      configured: true,
+      appId,
+      route,
+      result: await runTuttiCli(["--json", "app", "open", "--app-id", appId, "--route", route], timeoutMs),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      attempted: true,
+      configured: true,
+      appId,
+      route,
+      result: null,
+      error: error instanceof Error ? error.message : "Unable to open Tutti app route.",
+    };
+  }
 }

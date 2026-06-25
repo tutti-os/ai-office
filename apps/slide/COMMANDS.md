@@ -2,6 +2,11 @@
 
 AI Slide exposes the `slide` CLI scope to Tutti apps and agents.
 
+Help:
+
+- `slide --help`: show the AI Slide command list.
+- `slide open --help`: show inputs for opening an existing presentation file.
+
 ## `slide status`
 
 Returns app health, project count, runtime provider count, and whether `TUTTI_CLI` is available to the app runtime.
@@ -11,6 +16,21 @@ Returns app health, project count, runtime provider count, and whether `TUTTI_CL
 Lists recent slide projects. Optional input:
 
 - `limit`: maximum number of rows to return.
+
+## `slide open`
+
+Imports a PPTX file into AI Slide. Inputs:
+
+- `path`: absolute path, `~/...` path, or path relative to `AI_SLIDE_WORKSPACE_ROOT` / `TUTTI_WORKSPACE_ROOT`.
+- `title`: optional project title override.
+
+After import, the command calls `$TUTTI_CLI --json app open --app-id "$TUTTI_APP_ID" --route /slide/<projectId>` when `TUTTI_CLI` is configured. It also returns JSON with the imported project, artifact, route, full URL, source path, focused workspace path, project `AGENTS.md` path, and the Tutti app-open result.
+
+Example:
+
+```bash
+slide open --path ./deck.pptx --title "Quarterly Review"
+```
 
 ## `slide create`
 

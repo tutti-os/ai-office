@@ -1,10 +1,24 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { deckSlideDisplayName, pptxMimeType, type AiEditRequest, type CreateProjectRequest, type DeckAssetUploadResponse, type RuntimeProfile, type SlideRun, type SlideRunEvent, type UpdateDeckSlideHtmlRequest, type UpdateProjectRequest } from "@ai-slide/shared";
+import {
+  deckSlideDisplayName,
+  pptxMimeType,
+  type AiEditRequest,
+  type CreateProjectRequest,
+  type DeckAssetUploadResponse,
+  type RuntimeProfile,
+  type SlideArtifact,
+  type SlideRun,
+  type SlideRunEvent,
+  type SlideWorkspaceContext,
+  type UpdateDeckSlideHtmlRequest,
+  type UpdateProjectRequest,
+} from "@ai-slide/shared";
 import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
 import { projectAssetFileExtensions, projectAssetMimeTypes } from "@ai-app/shared/artifact-assets";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
+import { resolveWorkspaceImportSourcePath } from "@ai-app/shared/import-source";
 import { openPathInFileManager } from "@ai-app/shared/local-open";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
@@ -58,17 +72,24 @@ export class ProjectService {
   }
 
   async importPptxProject(input: { path?: string; title?: string }) {
+    await requireOfficeCli();
     if (!input.path?.trim()) throw new Error("PPTX path is required");
+    const sourcePath = resolveWorkspaceImportSourcePath(input.path, {
+      workspaceEnvVars: ["AI_SLIDE_WORKSPACE_ROOT", "TUTTI_WORKSPACE_ROOT"],
+    });
     const imported = await this.repo.importPptxProjectFromFile({
-      sourcePath: input.path,
+      sourcePath,
       title: input.title,
     });
-    return {
+    const detail = {
       project: imported.project,
       artifact: imported.artifact,
       deckManifest: null,
       pptxManifest: imported.pptxManifest,
+      sourcePath,
     };
+    this.events.emit({ type: "project.created", projectId: imported.project.id, payload: detail });
+    return detail;
   }
 
   async importPptxProjectFile(input: { fileName: string; mimeType: string; bytes: Buffer; title?: string }) {
@@ -197,6 +218,18 @@ export class ProjectService {
     const path = this.repo.projectExportsDir(projectId);
     await openPathInFileManager(path);
     return { path };
+  }
+
+  projectWorkspaceContext(projectId: string, artifact: Pick<SlideArtifact, "fileRef" | "type">): SlideWorkspaceContext {
+    const workspaceRoot = projectWorkspaceRoot(projectId);
+    const focusedPath = join(workspaceRoot, artifact.fileRef);
+    return {
+      workspaceRoot,
+      focusedPath,
+      focusedPathKind: artifact.type === "deck" ? "directory" : "file",
+      focusedFilePath: artifact.type === "pptx" ? focusedPath : undefined,
+      agentInstructionsPath: join(workspaceRoot, "AGENTS.md"),
+    };
   }
 
   readPptxFile(projectId: string) {

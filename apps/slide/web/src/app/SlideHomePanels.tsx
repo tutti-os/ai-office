@@ -4,18 +4,21 @@ import { appShell, ArtifactHistoryPanel, HomeCategoryPill, scrollbarClass } from
 import type { SlideArtifactType, SlideProject } from "@ai-slide/shared";
 import type { OutputType, SlideTemplate } from "../templates";
 import { useI18n } from "../i18n";
+import { artifactHistoryCopy } from "../i18n/copy";
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
 export function CategoryButton(props: { active: boolean; count: number; label: string; onClick: () => void }) {
+  const { t } = useI18n();
   return (
-    <HomeCategoryPill active={props.active} count={props.count} label={humanizeCategory(props.label)} onClick={props.onClick} />
+    <HomeCategoryPill active={props.active} count={props.count} label={props.label === "All" ? t("home.allTemplates") : humanizeCategory(props.label)} onClick={props.onClick} />
   );
 }
 
 export function BlankTemplateCard(props: { outputType: OutputType; onCreate: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="group w-full min-w-0">
       <button
@@ -26,8 +29,8 @@ export function BlankTemplateCard(props: { outputType: OutputType; onCreate: () 
         <Plus className="opacity-60" size={26} />
       </button>
       <div className="mt-2 min-w-0 px-1">
-        <div className="truncate text-[15px] font-semibold text-[#2A2620]">Blank deck</div>
-        <div className="mt-0.5 truncate text-[11px] text-[#8B8275]">{props.outputType === "html" ? "Deck" : props.outputType.toUpperCase()}</div>
+        <div className="truncate text-[15px] font-semibold text-[#2A2620]">{t("home.blankDeck")}</div>
+        <div className="mt-0.5 truncate text-[11px] text-[#8B8275]">{props.outputType === "html" ? t("home.blankPresentation") : props.outputType.toUpperCase()}</div>
       </div>
     </div>
   );
@@ -35,12 +38,13 @@ export function BlankTemplateCard(props: { outputType: OutputType; onCreate: () 
 
 export function TemplateCard(props: { showCategory: boolean; template: SlideTemplate; onSelect: (template: SlideTemplate) => void }) {
   const { template } = props;
+  const { t } = useI18n();
   return (
     <div className="group w-full min-w-0">
       <button
         className="relative w-full overflow-hidden rounded-[16px] bg-[#F4EFE6] text-left text-[#2A2620] ring-1 ring-[#B8A07C]/30 transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B8A07C]/45"
         type="button"
-        aria-label={`Create ${template.name}`}
+        aria-label={t("home.createTemplateAria", { title: template.name })}
         onClick={() => props.onSelect(template)}
       >
         <span className="block aspect-video overflow-hidden bg-white">
@@ -67,6 +71,7 @@ export function TemplatePreviewModal(props: {
   onSelectIndex: (index: number) => void;
   onUseTemplate: (template: SlideTemplate) => void;
 }) {
+  const { t } = useI18n();
   const previewSlides = useMemo(() => {
     const imageCount = Math.max(props.template.previewImages.length, props.template.thumbnailImages.length, props.template.coverImage ? 1 : 0);
     return Array.from({ length: imageCount }, (_, index) => ({
@@ -117,16 +122,16 @@ export function TemplatePreviewModal(props: {
         role="dialog"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <button className="absolute right-7 top-5 z-[3] grid size-9 place-items-center rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6]/70 text-[#8B8275] hover:text-[#5C6B50] disabled:cursor-default disabled:opacity-50 max-md:right-4 max-md:top-3" type="button" aria-label="Close template preview" disabled={props.creating} onClick={props.onClose}>
+        <button className="absolute right-7 top-5 z-[3] grid size-9 place-items-center rounded-full border border-[#B8A07C]/45 bg-[#F4EFE6]/70 text-[#8B8275] hover:text-[#5C6B50] disabled:cursor-default disabled:opacity-50 max-md:right-4 max-md:top-3" type="button" aria-label={t("home.closeTemplatePreview")} disabled={props.creating} onClick={props.onClose}>
           <X size={26} />
         </button>
 
         <div className="grid shrink-0 basis-[340px] grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] gap-7 px-[34px] pb-[18px] pt-[58px] max-md:basis-auto max-md:grid-cols-1 max-md:gap-6 max-md:px-[18px] max-md:pb-[18px] max-md:pt-[52px]">
           <div className="min-w-0">
-            <div className="inline-flex h-[30px] max-w-full items-center overflow-hidden whitespace-nowrap rounded-full bg-[#5C6B50] px-3.5 text-[13px] font-medium uppercase tracking-[0.08em] text-[#F4EFE6] max-md:h-[34px]">{humanizeCategory(props.template.category)}</div>
-            <h2 className="my-3 mt-[18px] max-w-full text-[15px] font-semibold leading-[1.16] text-[#2A2620] md:text-[15px]">{props.template.name}</h2>
-            <div className="inline-flex h-[34px] max-w-full items-center gap-2.5 overflow-hidden rounded-full border border-[#B8A07C]/30 bg-[#EEE8DC]/55 px-3 text-[13px] font-medium text-[#2A2620]/72 max-md:h-10">
-              <span className="text-[#8B8275]">Name:</span>
+            <div className="inline-flex h-[30px] max-w-full items-center overflow-hidden whitespace-nowrap rounded-full bg-[#5C6B50] px-3.5 text-[12px] font-medium uppercase tracking-[0.08em] text-[#F4EFE6] max-md:h-[34px]">{humanizeCategory(props.template.category)}</div>
+            <h2 className="my-3 mt-[18px] max-w-full text-[30px] font-semibold leading-[1.16] text-[#2A2620] md:text-[32px]">{props.template.name}</h2>
+            <div className="inline-flex h-[34px] max-w-full items-center gap-2.5 overflow-hidden rounded-full border border-[#B8A07C]/50 bg-[#E6DDCD]/55 px-3 text-[13px] font-medium text-[#2A2620]/72 max-md:h-10">
+              <span className="text-[#8B8275]">{t("home.templateName")}</span>
               <code className="min-w-0 truncate font-mono">{props.template.slug}</code>
             </div>
             <blockquote className="mt-[18px] line-clamp-2 max-w-[840px] overflow-hidden border-l-[5px] border-[#B8A07C]/30 pl-[18px] text-[15px] italic leading-[1.55] text-[#2A2620]/78 max-md:text-[15px]">{props.template.shortDescription || props.template.description}</blockquote>
@@ -140,13 +145,13 @@ export function TemplatePreviewModal(props: {
             />
             {previewSlides.length > 1 ? (
               <>
-                <button className="pointer-events-none absolute left-2.5 top-1/2 z-[2] grid size-9 -translate-y-1/2 place-items-center rounded-full border border-[#B8A07C]/30 bg-white/86 text-[#202124] opacity-0 transition-opacity duration-150 group-hover/preview:pointer-events-auto group-hover/preview:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100" type="button" aria-label="Previous slide" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => {
+                <button className="absolute left-3 top-1/2 z-[2] grid size-[46px] -translate-y-1/2 place-items-center rounded-full border border-[#202124]/8 bg-white/86 text-[#202124] shadow-[0_10px_24px_rgba(0,0,0,0.12)]" type="button" aria-label={t("home.previousSlide")} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => {
                   event.stopPropagation();
                   move(-1);
                 }}>
                   <ChevronLeft size={22} />
                 </button>
-                <button className="pointer-events-none absolute right-2.5 top-1/2 z-[2] grid size-9 -translate-y-1/2 place-items-center rounded-full border border-[#B8A07C]/30 bg-white/86 text-[#202124] opacity-0 transition-opacity duration-150 group-hover/preview:pointer-events-auto group-hover/preview:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100" type="button" aria-label="Next slide" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => {
+                <button className="absolute right-3 top-1/2 z-[2] grid size-[46px] -translate-y-1/2 place-items-center rounded-full border border-[#202124]/8 bg-white/86 text-[#202124] shadow-[0_10px_24px_rgba(0,0,0,0.12)]" type="button" aria-label={t("home.nextSlide")} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => {
                   event.stopPropagation();
                   move(1);
                 }}>
@@ -161,9 +166,9 @@ export function TemplatePreviewModal(props: {
         </div>
 
         <div className={cn("min-h-0 flex-1 overflow-y-auto", scrollbarClass)}>
-          <div className="flex items-center justify-between gap-4 border-t border-[#B8A07C]/30 px-[34px] py-[18px] max-md:px-[18px]">
-            <h3 className="m-0 text-[15px] font-semibold leading-tight text-[#2A2620]">All Slides</h3>
-            <span className="text-[13px] font-medium text-[#8B8275]">{slideCount} slides</span>
+          <div className="flex items-center justify-between gap-4 border-t border-[#B8A07C]/45 px-[34px] py-[18px] max-md:px-[18px]">
+            <h3 className="m-0 text-[22px] font-semibold leading-tight text-[#2A2620]">{t("home.allSlides")}</h3>
+            <span className="text-[13px] font-medium text-[#8B8275]">{t("home.slideCount", { count: slideCount })}</span>
           </div>
 
           <div className="flex flex-wrap gap-4 px-[34px] pb-[34px] max-md:px-[18px]">
@@ -172,7 +177,7 @@ export function TemplatePreviewModal(props: {
                 key={`${slide.thumbnail || slide.preview}-${index}`}
                 className={cn("relative basis-[calc(33.333%_-_11px)] overflow-hidden rounded-xl border border-[#B8A07C]/30 bg-white p-0 text-left  max-md:basis-full", index === selectedIndex ? "border-[#B8A07C]/30 ring-2 ring-[#B8A07C]/30" : "")}
                 type="button"
-                aria-label={`Preview slide ${index + 1}`}
+                aria-label={t("home.previewSlide", { number: index + 1 })}
                 disabled={props.creating}
                 onClick={() => props.onSelectIndex(index)}
               >
@@ -186,7 +191,7 @@ export function TemplatePreviewModal(props: {
         <div className="flex shrink-0 justify-end border-t border-[#B8A07C]/30 bg-[#F4EFE6]/96 px-[34px] py-4 backdrop-blur max-md:px-[18px]">
           <button className="inline-flex h-10 min-w-[96px] items-center justify-center gap-2 rounded-full border-0 bg-[#2A2620] px-7 text-[15px] font-medium text-[#F4EFE6] disabled:cursor-default disabled:bg-[#B8A07C]/32 disabled:text-[#8B8275]" type="button" disabled={props.creating} onClick={() => props.onUseTemplate(props.template)}>
             {props.creating ? <Loader2 className="animate-spin" size={17} /> : null}
-            <span>{props.creating ? "Adding..." : "Use"}</span>
+            <span>{props.creating ? t("home.adding") : t("home.useTemplate")}</span>
           </button>
         </div>
       </section>
@@ -236,9 +241,10 @@ export function ProjectHistory(props: {
   const { t } = useI18n();
   return (
     <ArtifactHistoryPanel
-      emptyDescription="Create a presentation or open a template to see it here."
       emptyIcon={null}
-      emptyTitle="No history yet"
+      copy={artifactHistoryCopy(t)}
+      emptyDescription={t("history.emptyDescription")}
+      emptyTitle={t("history.noHistory")}
       getId={(project) => project.id}
       getSubtitle={(project) => projectTypeLabel(project.artifactType, t)}
       getTitle={(project) => project.title}

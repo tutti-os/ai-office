@@ -1,6 +1,8 @@
 import { ArtifactAgentConversationPanel } from "@ai-app/agent/conversation-ui";
 import type { ArtifactEditorKind } from "@ai-app/ui/editor-frame";
 import type { LocalAgentProviderStatus, RuntimeProfile, SheetRun, SheetRunEvent, SheetRunTimelineItem } from "@ai-sheet/shared";
+import { agentConversationUiCopy } from "../i18n/copy";
+import { useI18n } from "../i18n";
 
 type AgentConversationPanelProps = {
   activeSelectionLabel?: string;
@@ -22,18 +24,20 @@ type AgentConversationPanelProps = {
 };
 
 export function AgentConversationPanel(props: AgentConversationPanelProps) {
+  const { t } = useI18n();
   return (
     <ArtifactAgentConversationPanel<SheetRun, SheetRunEvent>
       {...props}
       quickPromptsVisible={false}
       copy={{
-        homeLabel: "AI Sheet",
-        introTitle: "AI Sheet Agent",
-        introBody: "Select cells in the workbook, then ask for edits, formulas, cleanup, or analysis.",
-        placeholder: "Ask AI to edit this sheet...",
+        homeLabel: t("app.title"),
+        introTitle: t("agent.introTitle"),
+        introBody: t("agent.introBody"),
+        placeholder: t("agent.placeholder"),
         quickPrompts: [],
       }}
-      formatUnavailableRuntimeProfileLabel={(profile, provider) => `${profile.displayName} (${provider?.authState ?? "unknown"})`}
+      uiCopy={agentConversationUiCopy(t)}
+      formatUnavailableRuntimeProfileLabel={(profile, provider) => `${profile.displayName} (${provider?.authState ?? t("agent.unknown")})`}
       selectedRuntimeProfileId={props.selectedRuntimeProfileId}
       onRuntimeProfileChange={props.onRuntimeProfileChange}
     />

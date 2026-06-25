@@ -12,6 +12,8 @@ export function DeckEditor(props: {
   onAgentRuntimeProviderChange: (provider: DeckAgentRuntimeProvider | null) => void;
   onAgentSelectionPreviewChange: (preview: { label: string; text: string; visible: boolean }) => void;
   onSaveStateChange: (state: ArtifactSaveState) => void;
+  selectedBlockLabel: string;
+  selectedTextLabel: string;
 }) {
   return <DeckEditorView model={useDeckEditorModel(props)} />;
 }
