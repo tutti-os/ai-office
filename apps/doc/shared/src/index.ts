@@ -176,6 +176,29 @@ export interface CreateProjectRequest {
   type?: DocumentType;
 }
 
+export interface OpenDocumentCliRequest {
+  path: string;
+  title?: string;
+}
+
+export interface DocumentWorkspaceContext {
+  workspaceRoot: string;
+  focusedPath: string;
+  focusedPathKind: "file";
+  focusedFilePath: string;
+  agentInstructionsPath: string;
+}
+
+export interface OpenDocumentCliResponse {
+  ok: true;
+  action: "imported";
+  sourcePath: string;
+  project: DocumentProject;
+  route: string;
+  url: string;
+  workspace: DocumentWorkspaceContext;
+}
+
 export interface UpdateProjectRequest {
   title?: string;
   content?: string;

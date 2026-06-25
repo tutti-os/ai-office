@@ -212,6 +212,30 @@ export interface CreateProjectRequest {
   templateName?: string | null;
 }
 
+export interface OpenSlideCliRequest {
+  path: string;
+  title?: string;
+}
+
+export interface SlideWorkspaceContext {
+  workspaceRoot: string;
+  focusedPath: string;
+  focusedPathKind: "file" | "directory";
+  focusedFilePath?: string;
+  agentInstructionsPath: string;
+}
+
+export interface OpenSlideCliResponse {
+  ok: true;
+  action: "imported";
+  sourcePath: string;
+  project: SlideProject;
+  artifact: SlideArtifact;
+  route: string;
+  url: string;
+  workspace: SlideWorkspaceContext;
+}
+
 export interface UpdateProjectRequest {
   title?: string;
   activeArtifactId?: string;

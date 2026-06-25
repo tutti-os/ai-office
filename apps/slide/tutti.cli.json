@@ -1,7 +1,7 @@
 {
   "schemaVersion": "tutti.app.cli.v1",
   "scope": "slide",
-  "description": "Create and inspect AI Slide projects.",
+  "description": "Open, create, and inspect AI Slide projects.",
   "documentation": {
     "file": "COMMANDS.md"
   },
@@ -54,6 +54,35 @@
         "method": "POST",
         "path": "/tutti/cli/list-projects",
         "timeoutMs": 10000
+      }
+    },
+    {
+      "path": ["open"],
+      "summary": "Open a presentation file",
+      "description": "Import a PPTX file into AI Slide and return the project route plus workspace paths for agent editing.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["path"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path, home-relative path, or path relative to the Tutti workspace root."
+          },
+          "title": {
+            "type": "string",
+            "description": "Optional project title override."
+          }
+        }
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/open",
+        "timeoutMs": 30000
       }
     },
     {

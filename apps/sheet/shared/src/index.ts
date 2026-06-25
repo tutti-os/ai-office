@@ -170,6 +170,30 @@ export interface CreateProjectRequest {
   title?: string;
 }
 
+export interface OpenSheetCliRequest {
+  path: string;
+  title?: string;
+}
+
+export interface SheetWorkspaceContext {
+  workspaceRoot: string;
+  focusedPath: string;
+  focusedPathKind: "file";
+  focusedFilePath: string;
+  agentInstructionsPath: string;
+}
+
+export interface OpenSheetCliResponse {
+  ok: true;
+  action: "imported";
+  sourcePath: string;
+  project: SheetProject;
+  artifact: SheetArtifact;
+  route: string;
+  url: string;
+  workspace: SheetWorkspaceContext;
+}
+
 export interface UpdateProjectRequest {
   title?: string;
   activeArtifactId?: string;

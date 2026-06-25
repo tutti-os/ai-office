@@ -56,18 +56,19 @@ This package runs AI Sheet as a local Tutti workspace app.
 - \`server/server.js\` is the bundled Fastify server.
 - \`dist/\` is the built React/Vite frontend.
 - \`tutti.app.json\` declares the app runtime, localized metadata, CLI surface, and references endpoints.
-- \`tutti.cli.json\` exposes \`sheet status\`, \`sheet list-projects\`, and \`sheet create\` for other Tutti apps and agents.
+- \`tutti.cli.json\` exposes \`sheet status\`, \`sheet list-projects\`, \`sheet open\`, and \`sheet create\` for other Tutti apps and agents.
 - Durable app data is stored under \`AI_SHEET_HOME\`.
 - Runtime scratch data is stored under \`AI_SHEET_RUNTIME_ROOT\`.
 - Backend logs, if added later, must stay under \`AI_SHEET_LOG_ROOT\`.
 - OfficeCLI auto-install uses the shared AI Office toolchain cache, not \`AI_SHEET_HOME\`; override with \`AI_SHEET_OFFICECLI_PATH\`, \`TUTTI_APP_OFFICECLI_PATH\`, or an \`*_OFFICECLI_INSTALL_ROOT\` env var.
 - AI Sheet renders XLSX directly. The editable source file for a project is \`workbook.xlsx\` under the app-owned project workspace.
 - Use \`AI_SHEET_TUTTI_CLI\` for app-to-app calls. It is populated from \`TUTTI_CLI\` by \`bootstrap.sh\`.
+- The \`sheet open\` command returns the focused workbook path and project \`AGENTS.md\` path so local agents can continue editing after import.
 
 Endpoints:
 
 - \`GET /api/health\` is the runtime healthcheck.
-- \`POST /tutti/cli/status\`, \`POST /tutti/cli/list-projects\`, and \`POST /tutti/cli/create\` implement the CLI manifest.
+- \`POST /tutti/cli/status\`, \`POST /tutti/cli/list-projects\`, \`POST /tutti/cli/open\`, and \`POST /tutti/cli/create\` implement the CLI manifest.
 - \`POST /tutti/references/list\` and \`POST /tutti/references/search\` expose app-data-relative workbook files and exports.
 `;
 }
