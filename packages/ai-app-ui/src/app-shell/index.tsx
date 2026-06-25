@@ -41,6 +41,7 @@ export const appShell = {
 
 export const homeTitleClass =
   "w-[calc(100vw-56px)] max-w-[1180px] whitespace-nowrap text-center text-[32px] font-semibold leading-10 text-[#2A2620]";
+export const homeTitleEmphasisClass = "[font-family:'Merriweather',serif] font-bold italic";
 export const homeContentClass = "mx-auto flex w-full max-w-[1220px] flex-col px-7 pb-16 pt-10";
 export const homeHeroSectionClass = "mx-auto flex w-full max-w-[820px] flex-col items-center";
 export const homeWorkSectionClass = "mt-8";
@@ -61,6 +62,24 @@ export const defaultArtifactHistoryCopy: ArtifactHistoryCopy = {
 
 export function HomePageShell(props: { children: ReactNode; className?: string }) {
   return <div className={cx("h-full", appShell.page, props.className)}>{props.children}</div>;
+}
+
+export function HomeTitleText(props: { emphasisTerms: string[]; title: string }) {
+  const lowerTitle = props.title.toLocaleLowerCase();
+  const term = [...props.emphasisTerms]
+    .sort((a, b) => b.length - a.length)
+    .find((value) => lowerTitle.includes(value.toLocaleLowerCase()));
+  if (!term) return props.title;
+
+  const start = lowerTitle.indexOf(term.toLocaleLowerCase());
+  const end = start + term.length;
+  return (
+    <>
+      {props.title.slice(0, start)}
+      <span className={homeTitleEmphasisClass}>{props.title.slice(start, end)}</span>
+      {props.title.slice(end)}
+    </>
+  );
 }
 
 export function HomeTopAction(props: {

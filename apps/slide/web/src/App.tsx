@@ -23,6 +23,7 @@ import {
   HomePanelToggle,
   HomePageShell,
   HomeTopAction,
+  HomeTitleText,
   homeTitleClass,
   homeWorkSectionClass,
   TemplatesFilledIcon,
@@ -484,7 +485,9 @@ export function App() {
       </HomeTopAction>
       <div className={homeContentClass}>
         <section className={homeHeroSectionClass}>
-          <h1 className={cn("m-0", homeTitleClass)}>{t("home.heading")}</h1>
+          <h1 className={cn("m-0", homeTitleClass)}>
+            <HomeTitleText emphasisTerms={["presentation", "演示文稿"]} title={t("home.heading")} />
+          </h1>
           <HomeComposer
             attachments={homeAttachments.attachments}
             creating={creating}
@@ -507,8 +510,8 @@ export function App() {
         </section>
 
         <section className={homeWorkSectionClass}>
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-4" aria-label="Home panels">
+          <div className="flex flex-col gap-8">
+            <div className="flex items-center" aria-label="Home panels">
               <div className="h-px min-w-0 flex-1 bg-[#B8A07C]/30" />
               <div className="relative inline-grid grid-cols-2 rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6]/48 p-1">
                 <span

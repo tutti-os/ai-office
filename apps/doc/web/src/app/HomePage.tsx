@@ -14,6 +14,7 @@ import {
   HomePanelToggle,
   homeTitleClass,
   HomeTopAction,
+  HomeTitleText,
   homeWorkSectionClass,
   TemplatesFilledIcon,
 } from "@ai-app/ui/app-shell";
@@ -82,7 +83,9 @@ export function HomePage(props: {
 
       <div className={homeContentClass}>
         <section className={homeHeroSectionClass}>
-          <h1 className={homeTitleClass}>{t("home.heading")}</h1>
+          <h1 className={homeTitleClass}>
+            <HomeTitleText emphasisTerms={["docs", "doc", "document", "文档"]} title={t("home.heading")} />
+          </h1>
 
           <HomeComposer
             attachments={props.attachments}
@@ -106,8 +109,8 @@ export function HomePage(props: {
         </section>
 
         <section className={homeWorkSectionClass}>
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-8">
+            <div className="flex items-center">
               <div className="h-px min-w-0 flex-1 bg-[#B8A07C]/30" />
               <div className="relative inline-grid grid-cols-2 rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6]/48 p-1">
                 <span
@@ -267,7 +270,7 @@ function BlankTemplateCard(props: { outputType: DocumentType; onCreate: (type: D
         <Plus className="mb-4 opacity-60" size={26} />
       </button>
       <div className="mt-2 truncate px-1 text-[15px] font-semibold text-[#2A2620]">{t("home.blankDoc")}</div>
-      <div className="mt-0.5 truncate px-1 text-[11px] text-[#8B8275]">{projectTypeLabel(props.outputType, t)}</div>
+      <div className="mt-0.5 truncate px-1 text-[11px] text-[#8B8275]">{blankDocumentTypeLabel(props.outputType)}</div>
     </div>
   );
 }
@@ -311,6 +314,12 @@ function projectTypeLabel(type: DocumentProject["type"], t: ReturnType<typeof us
   if (type === "markdown") return t("history.typeMarkdown");
   if (type === "docx") return t("history.typeDocx");
   return t("history.typeHtml");
+}
+
+function blankDocumentTypeLabel(type: DocumentType) {
+  if (type === "markdown") return "Markdown";
+  if (type === "docx") return "Word";
+  return "HTML";
 }
 
 function TemplateCard(props: { template: TuttiTemplate; onSelect: (template: TuttiTemplate) => void }) {
