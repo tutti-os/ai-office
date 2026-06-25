@@ -86,7 +86,7 @@ export function notFoundOrBadRequest(error: unknown) {
 export function statusForError(error: unknown) {
   if (error instanceof ArtifactAppError) return error.statusCode;
   if (isErrorWithStatusCode(error)) return error.statusCode;
-  const message = messageForError(error, "").toLowerCase();
+  const message = rawMessageForError(error).toLowerCase();
   if (message.includes("stale")) return 409;
   if (message.includes("officecli")) return 503;
   if (message.includes("not found") || message.includes("no such file")) return 404;
@@ -105,11 +105,18 @@ export function codeForError(error: unknown): ArtifactAppErrorCode {
   return "bad_request";
 }
 
-export function messageForError(error: unknown, fallback: string, statusCode = statusForError(error)) {
+export function messageForError(error: unknown, fallback: string, statusCode?: number) {
+  const resolvedStatusCode = statusCode ?? statusForError(error);
   if (error instanceof ArtifactAppError) return error.expose ? error.message : fallback;
-  if (error instanceof Error && statusCode < 500) return error.message;
-  if (typeof error === "string" && statusCode < 500) return error;
+  if (error instanceof Error && resolvedStatusCode < 500) return error.message;
+  if (typeof error === "string" && resolvedStatusCode < 500) return error;
   return fallback;
+}
+
+function rawMessageForError(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return "";
 }
 
 function statusForCode(code: ArtifactAppErrorCode) {
