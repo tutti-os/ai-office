@@ -25,6 +25,9 @@ export interface RichTextSelectionState {
   startOffset: number;
   endPath: string;
   endOffset: number;
+  textRootPath?: string;
+  textStartOffset?: number;
+  textEndOffset?: number;
 }
 
 const inlineCommandByTag: Record<InlineFormatTag, string> = {
@@ -83,6 +86,7 @@ export function captureRichTextSelection(doc: Document, fallbackNode?: Node | nu
   const selection = doc.getSelection();
   const fallbackDomPath = fallbackNode ? buildDomNodePath(fallbackNode, doc) : "";
   const fallbackOffset = fallbackNode ? nodeOffsetLength(fallbackNode) : 0;
+  const fallbackTextOffset = fallbackNode ? rootTextLength(fallbackNode) : 0;
   if (!selection || selection.rangeCount === 0) {
     return {
       selectedText: "",
@@ -93,6 +97,13 @@ export function captureRichTextSelection(doc: Document, fallbackNode?: Node | nu
       startOffset: fallbackOffset,
       endPath: fallbackDomPath,
       endOffset: fallbackOffset,
+      ...(fallbackNode
+        ? {
+            textRootPath: fallbackDomPath,
+            textStartOffset: fallbackTextOffset,
+            textEndOffset: fallbackTextOffset,
+          }
+        : {}),
     };
   }
 
@@ -100,6 +111,8 @@ export function captureRichTextSelection(doc: Document, fallbackNode?: Node | nu
   const holder = doc.createElement("div");
   holder.append(range.cloneContents());
   const commonAncestor = nearestElement(range.commonAncestorContainer);
+  const textOffsets = fallbackNode ? textOffsetsForRange(fallbackNode, range, doc) : null;
+  const textRootPath = fallbackNode ? buildDomNodePath(fallbackNode, doc) : "";
   return {
     selectedText: selection.toString(),
     selectedHtml: holder.innerHTML,
@@ -109,6 +122,13 @@ export function captureRichTextSelection(doc: Document, fallbackNode?: Node | nu
     startOffset: range.startOffset,
     endPath: buildDomNodePath(range.endContainer, doc),
     endOffset: range.endOffset,
+    ...(textOffsets
+      ? {
+          textRootPath,
+          textStartOffset: textOffsets.start,
+          textEndOffset: textOffsets.end,
+        }
+      : {}),
   };
 }
 
@@ -123,6 +143,28 @@ export function restoreRichTextSelection(doc: Document, selectionState: RichText
   try {
     range.setStart(startNode, clampOffset(startNode, selectionState.startOffset));
     range.setEnd(endNode, clampOffset(endNode, selectionState.endOffset));
+    if (selectionState.selectionType === "write") range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
+  } catch {
+    range.detach?.();
+    return false;
+  }
+}
+
+export function restoreRichTextSelectionByTextOffsets(doc: Document, root: Node | null | undefined, selectionState: RichTextSelectionState | null) {
+  if (!root || !selectionState || typeof selectionState.textStartOffset !== "number" || typeof selectionState.textEndOffset !== "number") return false;
+  if (!nodeBelongsToDocument(root, doc)) return false;
+  const selection = doc.getSelection();
+  if (!selection) return false;
+  const start = boundaryForTextOffset(root, selectionState.textStartOffset);
+  const end = boundaryForTextOffset(root, selectionState.textEndOffset);
+  if (!start || !end) return false;
+  const range = doc.createRange();
+  try {
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
     if (selectionState.selectionType === "write") range.collapse(false);
     selection.removeAllRanges();
     selection.addRange(range);
@@ -511,6 +553,56 @@ function collectTextNodes(node: Node, output: Text[]) {
     return;
   }
   node.childNodes.forEach((child) => collectTextNodes(child, output));
+}
+
+function textOffsetsForRange(root: Node, range: Range, doc: Document) {
+  if (!nodeBelongsToDocument(root, doc)) return null;
+  if (!nodeContains(root, range.startContainer) || !nodeContains(root, range.endContainer)) return null;
+  const start = textOffsetForBoundary(root, range.startContainer, range.startOffset, doc);
+  const end = textOffsetForBoundary(root, range.endContainer, range.endOffset, doc);
+  if (start === null || end === null) return null;
+  return { start, end };
+}
+
+function textOffsetForBoundary(root: Node, container: Node, offset: number, doc: Document) {
+  if (!nodeContains(root, container)) return null;
+  const range = doc.createRange();
+  try {
+    range.selectNodeContents(root);
+    range.setEnd(container, clampOffset(container, offset));
+    return range.toString().length;
+  } catch {
+    return null;
+  } finally {
+    range.detach?.();
+  }
+}
+
+function boundaryForTextOffset(root: Node, offset: number) {
+  const target = Math.max(0, offset);
+  const textNodes: Text[] = [];
+  collectTextNodes(root, textNodes);
+  let cursor = 0;
+  for (const node of textNodes) {
+    const length = node.textContent?.length ?? 0;
+    if (target <= cursor + length) return { node, offset: Math.max(0, Math.min(length, target - cursor)) };
+    cursor += length;
+  }
+  const last = textNodes.at(-1);
+  if (last) return { node: last, offset: last.textContent?.length ?? 0 };
+  return { node: root, offset: nodeOffsetLength(root) };
+}
+
+function rootTextLength(root: Node) {
+  return root.textContent?.length ?? 0;
+}
+
+function nodeContains(root: Node, node: Node) {
+  return root === node || root.contains(node);
+}
+
+function nodeBelongsToDocument(node: Node, doc: Document) {
+  return node === doc || node.ownerDocument === doc;
 }
 
 function isSkippableStyleValue(value: string) {

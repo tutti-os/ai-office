@@ -440,6 +440,18 @@ export function ToolbarColorInput(props: {
   icon?: ReactNode;
   onChange: (color: string) => void;
 }) {
+  const lastCommittedRef = useRef(props.color);
+
+  useEffect(() => {
+    lastCommittedRef.current = props.color;
+  }, [props.color]);
+
+  const commit = (color: string) => {
+    if (color === lastCommittedRef.current) return;
+    lastCommittedRef.current = color;
+    props.onChange(color);
+  };
+
   return (
     <label
       className={cx(
@@ -457,7 +469,8 @@ export function ToolbarColorInput(props: {
         disabled={props.disabled}
         type="color"
         value={props.color}
-        onChange={(event) => props.onChange(event.currentTarget.value)}
+        onInput={(event) => commit(event.currentTarget.value)}
+        onChange={(event) => commit(event.currentTarget.value)}
       />
     </label>
   );

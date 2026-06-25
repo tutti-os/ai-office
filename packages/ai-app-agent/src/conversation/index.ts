@@ -222,9 +222,28 @@ function toolResultFromEvent(event: BaseRunEvent): AgentConversationToolResult {
   return {
     id: toolCallId(event) || event.id,
     name: toolTitle(event, "Tool"),
-    content: event.content,
+    content: toolResultContent(event),
     status: event.status === "error" ? "error" : "success",
   };
+}
+
+function toolResultContent(event: BaseRunEvent) {
+  if (event.status === "error") return event.content;
+  if (event.metadata && "output" in event.metadata) {
+    const formatted = formatRawToolOutput(event.metadata.output);
+    if (formatted) return formatted;
+  }
+  return event.content;
+}
+
+function formatRawToolOutput(value: unknown) {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value === "string") return value.trim();
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
 }
 
 function toolGroupStatus(calls: AgentConversationToolCall[], results: AgentConversationToolResult[], running: boolean): "streaming" | "success" | "error" {

@@ -3,6 +3,7 @@ import {
   applyInlineFormat,
   applyPresentationStyle,
   captureRichTextSelection,
+  restoreRichTextSelectionByTextOffsets,
   type InlineFormatTag,
   type RichTextStyle,
 } from "@ai-app/ui/rich-text";
@@ -73,7 +74,9 @@ export function useDeckObjectMutations(input: {
     mutateActiveObject((_object, textTarget) => {
       if (!isHtmlElement(textTarget)) return;
       input.restoreActiveTextSelection(textTarget);
+      const preservedSelection = captureRichTextSelection(textTarget.ownerDocument, textTarget);
       operation(textTarget.ownerDocument, textTarget);
+      if (preservedSelection) restoreRichTextSelectionByTextOffsets(textTarget.ownerDocument, textTarget, preservedSelection);
       const selection = captureRichTextSelection(textTarget.ownerDocument, textTarget);
       if (selection) input.activeTextSelectionRef.current = { ...input.activeTextEdit!, selection };
     });
