@@ -8,6 +8,7 @@ export type ConversationClassNames = {
   scroll: string;
   introCard: string;
   introMain: string;
+  introIcon: string;
   introTitle: string;
   introBody: string;
   quickPrompts: string;
@@ -89,7 +90,8 @@ export const classes: Record<AgentConversationVariant, ConversationClassNames> =
     headerStatus: "flex items-center gap-2 text-[11px] font-semibold text-[#8B8275]",
     scroll: cx("min-h-0 flex-1 overflow-auto overscroll-contain px-4 pb-0 pt-5", documentScrollbarClass),
     introCard: "rounded-[20px] border border-[#B8A07C]/30 bg-[#F9F4EC] p-4  backdrop-blur",
-    introMain: "block",
+    introMain: "flex items-start gap-3",
+    introIcon: "grid size-8 shrink-0 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]",
     introTitle: "text-[13px] font-semibold text-[#2A2620]",
     introBody: "mt-1 text-[13px] leading-5 text-[#8B8275]",
     quickPrompts: "mb-3 flex flex-wrap gap-2 px-1",
@@ -161,7 +163,7 @@ export const classes: Record<AgentConversationVariant, ConversationClassNames> =
     thinkingBlock: "rounded-[16px] bg-[#F4EFE6]/50 px-2.5 py-2 text-[11px] leading-4 text-[#8B8275]",
     errorBlock: "rounded-[16px] border border-[#B8A07C]/30 bg-[#F4EFE6]/70 px-2.5 py-2 text-[11px] leading-4 text-[#7b2e24]",
     resultBlock:
-      cx("break-words text-[13px] leading-5 text-[#2A2620]/70 [&_a]:font-semibold [&_a]:text-[#5C6B50] [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-[#B8A07C]/30 [&_blockquote]:pl-2.5 [&_blockquote]:text-[#8B8275] [&_code]:rounded-md [&_code]:bg-[#F4EFE6]/80 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] [&_em]:text-[#2A2620]/72 [&_h1]:mb-1.5 [&_h1]:text-[15px] [&_h1]:font-bold [&_h1]:text-[#2A2620] [&_h2]:mb-1 [&_h2]:text-[13px] [&_h2]:font-bold [&_h2]:text-[#2A2620] [&_h3]:mb-1 [&_h3]:text-[13px] [&_h3]:font-bold [&_h3]:text-[#2A2620] [&_hr]:my-2 [&_hr]:border-[#B8A07C]/30 [&_li]:my-0.5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_pre]:my-1.5 [&_pre]:max-h-[220px] [&_pre]:overflow-auto [&_pre]:rounded-[12px] [&_pre]:bg-[#F4EFE6]/80 [&_pre]:p-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_strong]:font-bold [&_strong]:text-[#2A2620] [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5", documentNestedScrollbarClass),
+      cx("break-words text-[12px] leading-5 text-[#2A2620]/70 [&_.ai-agent-file-link]:border-0 [&_.ai-agent-file-link]:bg-transparent [&_.ai-agent-file-link]:p-0 [&_.ai-agent-file-link]:font-semibold [&_.ai-agent-file-link]:text-[#5C6B50] [&_.ai-agent-file-link]:underline [&_.ai-agent-file-link]:underline-offset-2 [&_a]:font-semibold [&_a]:text-[#5C6B50] [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-[#B8A07C] [&_blockquote]:pl-2.5 [&_blockquote]:text-[#8B8275] [&_code]:rounded-md [&_code]:bg-[#F4EFE6]/80 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] [&_em]:text-[#2A2620]/72 [&_h1]:mb-1.5 [&_h1]:text-[14px] [&_h1]:font-bold [&_h1]:text-[#2A2620] [&_h2]:mb-1 [&_h2]:text-[13px] [&_h2]:font-bold [&_h2]:text-[#2A2620] [&_h3]:mb-1 [&_h3]:text-[12px] [&_h3]:font-bold [&_h3]:text-[#2A2620] [&_hr]:my-2 [&_hr]:border-[#B8A07C]/55 [&_li]:my-0.5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_pre]:my-1.5 [&_pre]:max-h-[220px] [&_pre]:overflow-auto [&_pre]:rounded-[12px] [&_pre]:bg-[#F4EFE6]/80 [&_pre]:p-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_strong]:font-bold [&_strong]:text-[#2A2620] [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5", documentNestedScrollbarClass),
     statusBlock: "text-[11px] leading-4 text-[#8B8275]",
     spin: "animate-spin",
   },
@@ -172,7 +174,8 @@ export const classes: Record<AgentConversationVariant, ConversationClassNames> =
     headerStatus: "flex items-center gap-[7px] text-[11px] font-bold text-white/38",
     scroll: cx("min-h-0 flex-1 overflow-auto overscroll-contain px-4 pb-0 pt-5", slideScrollbarClass),
     introCard: "rounded-2xl bg-[#2c2c2c] p-4 ",
-    introMain: "block",
+    introMain: "flex items-start gap-3",
+    introIcon: "grid size-8 shrink-0 place-items-center rounded-full bg-white text-black",
     introTitle: "text-[13px] font-extrabold text-white",
     introBody: "mt-1 text-[13px] leading-[1.65] text-white/55",
     quickPrompts: "mb-3 flex flex-wrap gap-2 px-1",
@@ -244,7 +247,7 @@ export const classes: Record<AgentConversationVariant, ConversationClassNames> =
     thinkingBlock: "rounded-xl bg-white/[0.04] px-2.5 py-2 text-[11px] leading-4 text-white/48",
     errorBlock: "rounded-xl bg-[#3a241f] px-3 py-2.5 text-[13px] leading-5 text-[#ffad9f]",
     resultBlock:
-      cx("break-words text-[13px] leading-[1.65] text-white/70 [&_a]:font-bold [&_a]:text-white/86 [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-[#B8A07C]/30 [&_blockquote]:pl-2.5 [&_blockquote]:text-white/56 [&_code]:rounded-md [&_code]:bg-black/22 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] [&_em]:text-white/72 [&_h1]:mb-1.5 [&_h1]:text-[15px] [&_h1]:font-extrabold [&_h1]:text-white/86 [&_h2]:mb-1 [&_h2]:text-[13px] [&_h2]:font-extrabold [&_h2]:text-white/82 [&_h3]:mb-1 [&_h3]:text-[13px] [&_h3]:font-extrabold [&_h3]:text-white/78 [&_hr]:my-2 [&_hr]:border-[#B8A07C]/30 [&_li]:my-0.5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_pre]:my-1.5 [&_pre]:max-h-[220px] [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:bg-black/22 [&_pre]:p-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_strong]:font-extrabold [&_strong]:text-white/84 [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5", slideNestedScrollbarClass),
+      cx("break-words text-[12px] leading-[1.65] text-white/70 [&_.ai-agent-file-link]:border-0 [&_.ai-agent-file-link]:bg-transparent [&_.ai-agent-file-link]:p-0 [&_.ai-agent-file-link]:font-bold [&_.ai-agent-file-link]:text-white/86 [&_.ai-agent-file-link]:underline [&_.ai-agent-file-link]:underline-offset-2 [&_a]:font-bold [&_a]:text-white/86 [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-white/18 [&_blockquote]:pl-2.5 [&_blockquote]:text-white/56 [&_code]:rounded-md [&_code]:bg-black/22 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] [&_em]:text-white/72 [&_h1]:mb-1.5 [&_h1]:text-[14px] [&_h1]:font-extrabold [&_h1]:text-white/86 [&_h2]:mb-1 [&_h2]:text-[13px] [&_h2]:font-extrabold [&_h2]:text-white/82 [&_h3]:mb-1 [&_h3]:text-[12px] [&_h3]:font-extrabold [&_h3]:text-white/78 [&_hr]:my-2 [&_hr]:border-white/10 [&_li]:my-0.5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_pre]:my-1.5 [&_pre]:max-h-[220px] [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:bg-black/22 [&_pre]:p-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_strong]:font-extrabold [&_strong]:text-white/84 [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5", slideNestedScrollbarClass),
     statusBlock: "mt-1 whitespace-pre-wrap break-words text-[11px] leading-4 text-white/48",
     spin: "animate-spin",
   },

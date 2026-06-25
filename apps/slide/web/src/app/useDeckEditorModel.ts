@@ -46,6 +46,7 @@ export function useDeckEditorModel(props: {
   onAgentRuntimeProviderChange: (provider: DeckAgentRuntimeProvider | null) => void;
   onAgentSelectionPreviewChange: (preview: { label: string; text: string; visible: boolean }) => void;
   onSaveStateChange: (state: ArtifactSaveState) => void;
+  selectedBlockLabel: string; selectedTextLabel: string;
 }) {
   const { onSaveStateChange } = props;
   const { ref: hostRef, width: hostWidth, height: hostHeight } = useElementSize<HTMLDivElement>();
@@ -243,15 +244,15 @@ export function useDeckEditorModel(props: {
   useEffect(() => {
     const selection = createDeckAgentRuntimeSnapshot().selection;
     if (!selection || selection.type === "slide" || selection.type === "write" || selection.type === "none") {
-      props.onAgentSelectionPreviewChange({ label: "Selected text", text: "", visible: false });
+      props.onAgentSelectionPreviewChange({ label: props.selectedTextLabel, text: "", visible: false });
       return;
     }
     if (activeObject && !activeTextEdit) {
-      props.onAgentSelectionPreviewChange({ label: "Selected block", text: "", visible: true });
+      props.onAgentSelectionPreviewChange({ label: props.selectedBlockLabel, text: "", visible: true });
       return;
     }
-    props.onAgentSelectionPreviewChange({ label: "Selected text", text: selection.text, visible: Boolean(selection.text.trim()) });
-  }, [activeObject, activeSlideId, activeTextEdit, agentSelectionVersion, props.detail.artifact.revision, props.onAgentSelectionPreviewChange]);
+    props.onAgentSelectionPreviewChange({ label: props.selectedTextLabel, text: selection.text, visible: Boolean(selection.text.trim()) });
+  }, [activeObject, activeSlideId, activeTextEdit, agentSelectionVersion, props.detail.artifact.revision, props.onAgentSelectionPreviewChange, props.selectedBlockLabel, props.selectedTextLabel]);
 
   const rememberTextSelection = (slideId: string, doc: Document) => {
     const selection = doc.getSelection();

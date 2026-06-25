@@ -133,7 +133,17 @@ function renderInlineToken(token: string, key: number) {
   if (token.startsWith("_") && token.endsWith("_")) return <em key={key}>{token.slice(1, -1)}</em>;
   const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
   if (link) {
-    const href = safeMarkdownHref(link[2]);
+    const destination = link[2].trim();
+    const localPath = localFilePathDestination(destination);
+    if (localPath) {
+      return (
+        <button key={key} type="button" className="ai-agent-file-link" onClick={() => void openLocalFilePath(localPath)}>
+          {link[1]}
+        </button>
+      );
+    }
+
+    const href = safeMarkdownHref(destination);
     return href ? (
       <a key={key} href={href} target="_blank" rel="noreferrer">
         {link[1]}
@@ -151,7 +161,49 @@ function safeMarkdownHref(href: string) {
   return "";
 }
 
+function localFilePathDestination(destination: string) {
+  const decoded = decodeMarkdownDestination(destination);
+  if (isLocalAbsolutePath(decoded)) return decoded;
+  if (/^file:\/\//i.test(decoded)) {
+    try {
+      const url = new URL(decoded);
+      return isLocalAbsolutePath(url.pathname) ? decodeURIComponent(url.pathname) : "";
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function decodeMarkdownDestination(destination: string) {
+  try {
+    return decodeURI(destination.trim());
+  } catch {
+    return destination.trim();
+  }
+}
+
+function isLocalAbsolutePath(value: string) {
+  return /^\/(?:Users|Volumes|private|tmp|var|home|mnt|opt)(?:\/|$)/.test(value) || /^[A-Za-z]:[\\/]/.test(value);
+}
+
+async function openLocalFilePath(path: string) {
+  if (typeof window === "undefined") return;
+
+  const tuttiExternal = (window as unknown as { tuttiExternal?: { files?: { open?: (input: { path: string; name?: string; mode?: "auto" | "preview" | "reveal" }) => Promise<void> } } }).tuttiExternal;
+
+  if (tuttiExternal?.files?.open) {
+    try {
+      await tuttiExternal.files.open({ path, mode: "reveal" });
+      return;
+    } catch {
+      // Fall through to the browser fallback for non-Tutti or partially wired hosts.
+    }
+  }
+
+  window.open(`file://${encodeURI(path)}`, "_blank", "noreferrer");
+}
+
 function classNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
-

@@ -4,7 +4,7 @@ import path from "node:path";
 const rootDir = path.resolve(import.meta.dirname, "..");
 const defaultLocale = "en";
 
-for (const app of ["doc", "slide"]) {
+for (const app of ["doc", "slide", "sheet"]) {
   const localeRoot = path.join(rootDir, "apps", app, "locales");
   const localeNames = (await readdir(localeRoot, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
@@ -46,7 +46,13 @@ for (const app of ["doc", "slide"]) {
     }
   }
 
-  console.log(`AI ${app === "doc" ? "Doc" : "Slide"} i18n parity passed for ${localeNames.join(", ")}.`);
+  console.log(`AI ${appLabel(app)} i18n parity passed for ${localeNames.join(", ")}.`);
+}
+
+function appLabel(app) {
+  if (app === "doc") return "Doc";
+  if (app === "slide") return "Slide";
+  return "Sheet";
 }
 
 function flattenKeys(value, prefix = "") {

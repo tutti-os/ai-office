@@ -1,6 +1,4 @@
 import type { RuntimeDocument } from "./types";
-import { rewriteAssetReferencesInElement } from "@ai-app/shared/artifact-assets";
-import { restoreProjectAssetUrl } from "./projectAssets";
 
 const fallbackHeadHTML = `<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -52,20 +50,6 @@ ${bodyHTML}
 </html>`;
 }
 
-export function runtimeDocumentFromFrame(doc: Document): RuntimeDocument {
-  const htmlElement = doc.documentElement.cloneNode(true) as HTMLElement;
-  rewriteAssetReferencesInElement(htmlElement, restoreProjectAssetUrl);
-  const head = htmlElement.querySelector("head");
-  const body = htmlElement.querySelector("body");
-  return {
-    doctype: doc.doctype ? `<!DOCTYPE ${doc.doctype.name}>` : "<!DOCTYPE html>",
-    htmlAttributes: attributesToRecord(htmlElement),
-    headHTML: sanitizeHeadHTML(head?.innerHTML.trim() || fallbackHeadHTML),
-    bodyAttributes: sanitizeBodyAttributes(attributesToRecord(body)),
-    bodyInnerHTML: sanitizeBodyHTML(body?.innerHTML ?? ""),
-  };
-}
-
 export function getRuntimeTitle(document: RuntimeDocument) {
   const parsed = new DOMParser().parseFromString(`<head>${document.headHTML}</head>`, "text/html");
   return parsed.querySelector("title")?.textContent?.trim() || "Untitled Doc";
@@ -77,7 +61,7 @@ function emptyHtmlDocument() {
 <head>
 ${fallbackHeadHTML}
 </head>
-<body contenteditable="true"><p><br></p></body>
+<body><p><br></p></body>
 </html>`;
 }
 
@@ -133,13 +117,6 @@ function stripRuntimeOnlyAttributes(root: Element) {
       if (isRuntimeOnlyAttribute(attribute.name)) element.removeAttribute(attribute.name);
     });
   });
-}
-
-function sanitizeBodyAttributes(attributes: Record<string, string>) {
-  const next = { ...attributes };
-  if (next.contenteditable === "true") delete next.contenteditable;
-  if (next.spellcheck === "true") delete next.spellcheck;
-  return next;
 }
 
 function isRuntimeOnlyAttribute(name: string) {

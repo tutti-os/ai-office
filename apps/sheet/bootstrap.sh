@@ -19,6 +19,7 @@ fi
 
 export HOST="${TUTTI_APP_HOST:-127.0.0.1}"
 export PORT="${TUTTI_APP_PORT:-8792}"
+export TUTTI_APP_ID="${TUTTI_APP_ID:-ai-sheet}"
 export AI_SHEET_APP_VERSION="0.1.0"
 export AI_SHEET_WEB_DIST="$web_dist"
 export AI_SHEET_HOME="${TUTTI_APP_DATA_DIR:-$script_dir/.ai-sheet-dev}"

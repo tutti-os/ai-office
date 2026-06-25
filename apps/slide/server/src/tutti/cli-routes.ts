@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import type { SlideArtifactType, SlideProject } from "@ai-slide/shared";
-import { getTuttiCliStatus } from "./tutti-cli.js";
+import type { OpenSlideCliResponse, SlideArtifact, SlideArtifactType, SlideProject } from "@ai-slide/shared";
+import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { ProjectService } from "../artifact/project-service.js";
 
 interface CliInvokeEnvelope {
@@ -38,6 +38,22 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
     });
   });
 
+  server.post<{ Body: CliInvokeEnvelope | Record<string, unknown> }>("/tutti/cli/open", async (request, reply) => {
+    const input = commandInput(request.body);
+    if (typeof input.path !== "string" || !input.path.trim()) {
+      return sendCliError(reply, 400, "invalid_input", "path is required and must point to a .pptx file");
+    }
+    try {
+      const result = await projects.importPptxProject({
+        path: input.path,
+        title: typeof input.title === "string" ? input.title : undefined,
+      });
+      return reply.send(jsonOutput(await openSlideCliOutput(projects, result)));
+    } catch (error) {
+      return sendCliError(reply, cliErrorStatus(error), "open_failed", errorMessage(error));
+    }
+  });
+
   server.post<{ Body: CliInvokeEnvelope | Record<string, unknown> }>("/tutti/cli/create", async (request, reply) => {
     const input = commandInput(request.body);
     const artifactType = normalizeArtifactType(input["artifact-type"] ?? input.artifactType);
@@ -65,6 +81,24 @@ function sendCliError(reply: FastifyReply, statusCode: number, code: string, mes
   return reply.code(statusCode).send({ error: { code, message } });
 }
 
+async function openSlideCliOutput(
+  projects: ProjectService,
+  input: { sourcePath: string; project: SlideProject; artifact: SlideArtifact },
+): Promise<OpenSlideCliResponse> {
+  const route = projectRoute(input.project.id);
+  return {
+    ok: true,
+    action: "imported",
+    sourcePath: input.sourcePath,
+    project: input.project,
+    artifact: input.artifact,
+    route,
+    url: `${appBaseUrl()}${route}`,
+    workspace: projects.projectWorkspaceContext(input.project.id, input.artifact),
+    tuttiAppOpen: await openTuttiAppRoute(appId(), route),
+  };
+}
+
 function projectSummary(project: SlideProject) {
   return {
     id: project.id,
@@ -74,6 +108,33 @@ function projectSummary(project: SlideProject) {
     updatedAt: project.updatedAt,
     "updated-at": project.updatedAt,
   };
+}
+
+function projectRoute(projectId: string) {
+  return `/slide/${encodeURIComponent(projectId)}`;
+}
+
+function appId() {
+  return process.env.TUTTI_APP_ID?.trim() || "ai-slide";
+}
+
+function appBaseUrl() {
+  const configured = process.env.AI_SLIDE_SERVER_URL?.trim();
+  if (configured) return configured.replace(/\/+$/g, "");
+  const host = process.env.HOST?.trim() || "127.0.0.1";
+  const port = process.env.PORT?.trim() || "8791";
+  return `http://${host}:${port}`;
+}
+
+function cliErrorStatus(error: unknown) {
+  const message = errorMessage(error).toLowerCase();
+  if (message.includes("officecli")) return 503;
+  if (message.includes("no such file") || message.includes("enoent")) return 404;
+  return 400;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error || "Unable to open presentation");
 }
 
 function clampInteger(value: unknown, min: number, max: number, fallback: number) {

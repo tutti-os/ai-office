@@ -8,6 +8,7 @@ import type { HomeAttachment } from "./useHomeAttachments";
 import type { RuntimeState } from "../artifact/runtime/types";
 import type { HomePanel } from "./runtimeWorkbenchTypes";
 import type { TuttiTemplate } from "../templates/tuttiTemplates";
+import type { useI18n } from "../i18n";
 
 type StateSetter<T> = (value: T | ((current: T) => T)) => void;
 
@@ -30,6 +31,7 @@ type HomeDocumentActionsInput = {
   setOfficeCliStatus: (value: OfficeCliStatus) => void;
   setPrompt: (value: string) => void;
   setRoute: (route: AppRoute) => void;
+  t: ReturnType<typeof useI18n>["t"];
 };
 
 export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
@@ -49,7 +51,7 @@ export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
     try {
       const response = await installOfficeCli();
       input.setOfficeCliStatus(response.officecli);
-      if (!response.officecli.available) input.setError(response.officecli.reason ?? "Unable to install OfficeCLI");
+      if (!response.officecli.available) input.setError(response.officecli.reason ?? input.t("error.officeCliInstall"));
     } catch (err) {
       input.setError(err instanceof Error ? err.message : String(err));
       try {
@@ -68,7 +70,7 @@ export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
     input.setLoading(true);
     try {
       const project = await createProject({
-        title: "Untitled Doc",
+        title: input.t("project.untitledDoc"),
         content: input.outputType === "markdown" ? undefined : initialContentForType(input.outputType),
         type: input.outputType,
       });
@@ -87,7 +89,7 @@ export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
     try {
       const userPrompt = input.prompt.trim();
       const attachments = input.homeAttachments.attachments;
-      const attachmentTitle = attachments[0]?.name ? `Doc from ${attachments[0].name}` : "Untitled Doc";
+      const attachmentTitle = attachments[0]?.name ? input.t("project.docFromAttachment", { name: attachments[0].name }) : input.t("project.untitledDoc");
       const project = await createProject({
         title: attachmentTitle.length > 80 ? `${attachmentTitle.slice(0, 80).trim()}...` : attachmentTitle,
         content: initialContentForType(input.outputType),
@@ -96,7 +98,7 @@ export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
       const uploadedAttachments = await uploadHomeContextAttachments(project.id, attachments);
       input.setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
       openProject(project);
-      const initialUserPrompt = initialPromptWithAttachmentContext(userPrompt, uploadedAttachments);
+      const initialUserPrompt = initialPromptWithAttachmentContext(userPrompt, uploadedAttachments, input.t);
       if (initialUserPrompt) {
         await startAiEdit(project.id, createInitialPromptAiEditRequest({
           content: project.content,
@@ -228,9 +230,9 @@ async function uploadHomeContextAttachments(projectId: string, attachments: Home
   return uploaded;
 }
 
-function initialPromptWithAttachmentContext(userPrompt: string, attachments: UploadedHomeContextAttachment[]) {
+function initialPromptWithAttachmentContext(userPrompt: string, attachments: UploadedHomeContextAttachment[], t: ReturnType<typeof useI18n>["t"]) {
   if (attachments.length === 0) return userPrompt;
-  const instruction = userPrompt.trim() || "Create a document from the attached context files.";
+  const instruction = userPrompt.trim() || t("project.attachmentPrompt");
   return [
     instruction,
     "",

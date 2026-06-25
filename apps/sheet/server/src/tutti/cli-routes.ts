@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import type { SheetProject } from "@ai-sheet/shared";
-import { getTuttiCliStatus } from "./tutti-cli.js";
+import type { OpenSheetCliResponse, SheetArtifact, SheetProject } from "@ai-sheet/shared";
+import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { SheetService } from "../artifact/sheet-service.js";
 
 interface CliInvokeEnvelope {
@@ -38,6 +38,22 @@ export function registerTuttiCliRoutes(server: FastifyInstance, sheets: SheetSer
     });
   });
 
+  server.post<{ Body: CliInvokeEnvelope | Record<string, unknown> }>("/tutti/cli/open", async (request, reply) => {
+    const input = commandInput(request.body);
+    if (typeof input.path !== "string" || !input.path.trim()) {
+      return sendCliError(reply, 400, "invalid_input", "path is required and must point to an .xlsx file");
+    }
+    try {
+      const result = await sheets.importXlsxProject({
+        path: input.path,
+        title: typeof input.title === "string" ? input.title : undefined,
+      });
+      return reply.send(jsonOutput(await openSheetCliOutput(sheets, result)));
+    } catch (error) {
+      return sendCliError(reply, cliErrorStatus(error), "open_failed", errorMessage(error));
+    }
+  });
+
   server.post<{ Body: CliInvokeEnvelope | Record<string, unknown> }>("/tutti/cli/create", async (request, reply) => {
     const input = commandInput(request.body);
     if (typeof input.path !== "string" || !input.path.trim()) {
@@ -66,6 +82,24 @@ function sendCliError(reply: FastifyReply, statusCode: number, code: string, mes
   return reply.code(statusCode).send({ error: { code, message } });
 }
 
+async function openSheetCliOutput(
+  sheets: SheetService,
+  input: { sourcePath: string; project: SheetProject; artifact: SheetArtifact },
+): Promise<OpenSheetCliResponse> {
+  const route = projectRoute(input.project.id);
+  return {
+    ok: true,
+    action: "imported",
+    sourcePath: input.sourcePath,
+    project: input.project,
+    artifact: input.artifact,
+    route,
+    url: `${appBaseUrl()}${route}`,
+    workspace: sheets.projectWorkspaceContext(input.project.id, input.artifact),
+    tuttiAppOpen: await openTuttiAppRoute(appId(), route),
+  };
+}
+
 function projectSummary(project: SheetProject) {
   return {
     id: project.id,
@@ -75,6 +109,33 @@ function projectSummary(project: SheetProject) {
     updatedAt: project.updatedAt,
     "updated-at": project.updatedAt,
   };
+}
+
+function projectRoute(projectId: string) {
+  return `/sheet/${encodeURIComponent(projectId)}`;
+}
+
+function appId() {
+  return process.env.TUTTI_APP_ID?.trim() || "ai-sheet";
+}
+
+function appBaseUrl() {
+  const configured = process.env.AI_SHEET_SERVER_URL?.trim();
+  if (configured) return configured.replace(/\/+$/g, "");
+  const host = process.env.HOST?.trim() || "127.0.0.1";
+  const port = process.env.PORT?.trim() || "8792";
+  return `http://${host}:${port}`;
+}
+
+function cliErrorStatus(error: unknown) {
+  const message = errorMessage(error).toLowerCase();
+  if (message.includes("officecli")) return 503;
+  if (message.includes("no such file") || message.includes("enoent")) return 404;
+  return 400;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error || "Unable to open workbook");
 }
 
 function clampInteger(value: unknown, min: number, max: number, fallback: number) {

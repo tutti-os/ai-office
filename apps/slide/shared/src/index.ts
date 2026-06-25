@@ -8,6 +8,7 @@ import type {
   RuntimeKind,
   RuntimeProfile,
   StreamEvent as BaseStreamEvent,
+  TuttiAppOpenResult,
   WsServerMessage as BaseWsServerMessage,
 } from "@ai-app/shared/types";
 import type { AgentArtifactContextBase, ArtifactSelectionBase } from "@ai-app/shared/artifact-runtime";
@@ -20,6 +21,7 @@ export type {
   ReasoningEffort,
   RuntimeKind,
   RuntimeProfile,
+  TuttiAppOpenResult,
   WsClientMessage,
 } from "@ai-app/shared/types";
 
@@ -210,6 +212,31 @@ export interface CreateProjectRequest {
   artifactType?: SlideArtifactType;
   templateId?: string | null;
   templateName?: string | null;
+}
+
+export interface OpenSlideCliRequest {
+  path: string;
+  title?: string;
+}
+
+export interface SlideWorkspaceContext {
+  workspaceRoot: string;
+  focusedPath: string;
+  focusedPathKind: "file" | "directory";
+  focusedFilePath?: string;
+  agentInstructionsPath: string;
+}
+
+export interface OpenSlideCliResponse {
+  ok: true;
+  action: "imported";
+  sourcePath: string;
+  project: SlideProject;
+  artifact: SlideArtifact;
+  route: string;
+  url: string;
+  workspace: SlideWorkspaceContext;
+  tuttiAppOpen: TuttiAppOpenResult;
 }
 
 export interface UpdateProjectRequest {

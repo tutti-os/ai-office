@@ -2,10 +2,39 @@ import { ChevronDown, TerminalSquare } from "lucide-react";
 import type { AgentConversationBlock } from "@ai-app/agent/conversation";
 import type { ConversationClassNames } from "./styles.js";
 
-export function ToolGroupBlock(props: { cx: ConversationClassNames; block: Extract<AgentConversationBlock, { type: "tool_group" }> }) {
+export type ConversationToolCopy = {
+  error: string;
+  failed: string;
+  input: string;
+  readDoc: string;
+  readSlide: string;
+  result: string;
+  running: string;
+  saveDoc: string;
+  saveSlide: string;
+  done: string;
+  toolResult: string;
+};
+
+export const defaultConversationToolCopy: ConversationToolCopy = {
+  error: "Error",
+  failed: "failed",
+  input: "Input",
+  readDoc: "Read doc",
+  readSlide: "Read slide",
+  result: "Result",
+  running: "running",
+  saveDoc: "Save doc",
+  saveSlide: "Save slide",
+  done: "done",
+  toolResult: "Tool result",
+};
+
+export function ToolGroupBlock(props: { cx: ConversationClassNames; block: Extract<AgentConversationBlock, { type: "tool_group" }>; copy?: ConversationToolCopy }) {
   const { block, cx } = props;
+  const copy = props.copy ?? defaultConversationToolCopy;
   const primaryCall = block.calls[0];
-  const title = primaryCall ? toolDisplayName(primaryCall.name) : "Tool result";
+  const title = primaryCall ? toolDisplayName(primaryCall.name, copy) : copy.toolResult;
   const summary = summarizeToolBlock(block);
   const resultById = new Map(block.results.map((result) => [result.id, result]));
 
@@ -19,16 +48,16 @@ export function ToolGroupBlock(props: { cx: ConversationClassNames; block: Extra
         </div>
         <div className={cx.toolSummaryMeta}>
           {summary ? <span className={cx.toolPreview}>{summary}</span> : null}
-          <span className={cx.toolStatus(block.status)}>{toolStatusLabel(block.status)}</span>
+          <span className={cx.toolStatus(block.status)}>{toolStatusLabel(block.status, copy)}</span>
           <ChevronDown className={cx.toolChevron} size={13} />
         </div>
       </summary>
       <div className={cx.toolRows}>
         {block.calls.map((call) => (
-          <ToolCallRow call={call} cx={cx} key={call.id} result={resultById.get(call.id)} />
+          <ToolCallRow call={call} copy={copy} cx={cx} key={call.id} result={resultById.get(call.id)} />
         ))}
         {block.calls.length === 0
-          ? block.results.map((result) => <ToolResultRow cx={cx} key={result.id} result={result} />)
+          ? block.results.map((result) => <ToolResultRow copy={copy} cx={cx} key={result.id} result={result} />)
           : null}
       </div>
     </details>
@@ -44,34 +73,36 @@ function summarizeToolBlock(block: Extract<AgentConversationBlock, { type: "tool
 
 function ToolCallRow(props: {
   call: Extract<AgentConversationBlock, { type: "tool_group" }>["calls"][number];
+  copy: ConversationToolCopy;
   cx: ConversationClassNames;
   result?: Extract<AgentConversationBlock, { type: "tool_group" }>["results"][number];
 }) {
   return (
     <div className={props.cx.toolRow}>
       <div className={props.cx.toolRowHead}>
-        <span className={props.cx.toolName}>{toolDisplayName(props.call.name)}</span>
+        <span className={props.cx.toolName}>{toolDisplayName(props.call.name, props.copy)}</span>
         <span className={props.cx.toolRowStatus(props.result?.status ?? "streaming")}>
-          {props.result ? toolStatusLabel(props.result.status) : "running"}
+          {props.result ? toolStatusLabel(props.result.status, props.copy) : props.copy.running}
         </span>
       </div>
-      <ToolPayload label="Input" value={props.call.input} cx={props.cx} />
-      {props.result ? <ToolPayload label={props.result.status === "error" ? "Error" : "Result"} value={props.result.content} cx={props.cx} /> : null}
+      <ToolPayload label={props.copy.input} value={props.call.input} cx={props.cx} />
+      {props.result ? <ToolPayload label={props.result.status === "error" ? props.copy.error : props.copy.result} value={props.result.content} cx={props.cx} /> : null}
     </div>
   );
 }
 
 function ToolResultRow(props: {
+  copy: ConversationToolCopy;
   cx: ConversationClassNames;
   result: Extract<AgentConversationBlock, { type: "tool_group" }>["results"][number];
 }) {
   return (
     <div className={props.cx.toolRow}>
       <div className={props.cx.toolRowHead}>
-        <span className={props.cx.toolName}>{toolDisplayName(props.result.name)}</span>
-        <span className={props.cx.toolRowStatus(props.result.status)}>{toolStatusLabel(props.result.status)}</span>
+        <span className={props.cx.toolName}>{toolDisplayName(props.result.name, props.copy)}</span>
+        <span className={props.cx.toolRowStatus(props.result.status)}>{toolStatusLabel(props.result.status, props.copy)}</span>
       </div>
-      <ToolPayload label={props.result.status === "error" ? "Error" : "Result"} value={props.result.content} cx={props.cx} />
+      <ToolPayload label={props.result.status === "error" ? props.copy.error : props.copy.result} value={props.result.content} cx={props.cx} />
     </div>
   );
 }
@@ -87,19 +118,19 @@ function ToolPayload(props: { cx: ConversationClassNames; label: string; value: 
   );
 }
 
-function toolDisplayName(name: string) {
+function toolDisplayName(name: string, copy: ConversationToolCopy) {
   const normalized = name.trim();
-  if (normalized === "ai_document_get_document") return "Read doc";
-  if (normalized === "ai_document_save_document") return "Save doc";
-  if (normalized === "ai_slide_get_project") return "Read slide";
-  if (normalized === "ai_slide_save_project") return "Save slide";
+  if (normalized === "ai_document_get_document") return copy.readDoc;
+  if (normalized === "ai_document_save_document") return copy.saveDoc;
+  if (normalized === "ai_slide_get_project") return copy.readSlide;
+  if (normalized === "ai_slide_save_project") return copy.saveSlide;
   return normalized.replace(/^mcp__/, "").replace(/__/g, " / ").replace(/_/g, " ");
 }
 
-function toolStatusLabel(status: "streaming" | "success" | "error") {
-  if (status === "streaming") return "running";
-  if (status === "success") return "done";
-  return "failed";
+function toolStatusLabel(status: "streaming" | "success" | "error", copy: ConversationToolCopy) {
+  if (status === "streaming") return copy.running;
+  if (status === "success") return copy.done;
+  return copy.failed;
 }
 
 function summarizeToolInput(input: unknown) {

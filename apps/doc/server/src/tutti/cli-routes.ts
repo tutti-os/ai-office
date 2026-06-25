@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import type { DocumentProject, DocumentType } from "@ai-doc/shared";
-import { getTuttiCliStatus } from "./tutti-cli.js";
+import type { DocumentProject, DocumentType, OpenDocumentCliResponse } from "@ai-doc/shared";
+import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { DocumentService } from "../artifact/document-service.js";
 
 interface CliInvokeEnvelope {
@@ -38,6 +38,22 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
     });
   });
 
+  server.post<{ Body: CliInvokeEnvelope | Record<string, unknown> }>("/tutti/cli/open", async (request, reply) => {
+    const input = commandInput(request.body);
+    if (typeof input.path !== "string" || !input.path.trim()) {
+      return sendCliError(reply, 400, "invalid_input", "path is required");
+    }
+    try {
+      const result = await documents.importProjectPath({
+        path: input.path,
+        title: typeof input.title === "string" ? input.title : undefined,
+      });
+      return reply.send(jsonOutput(await openDocumentCliOutput(documents, result)));
+    } catch (error) {
+      return sendCliError(reply, cliErrorStatus(error), "open_failed", errorMessage(error));
+    }
+  });
+
   server.post<{ Body: CliInvokeEnvelope | Record<string, unknown> }>("/tutti/cli/create", async (request, reply) => {
     const input = commandInput(request.body);
     const type = normalizeDocumentType(input.type);
@@ -66,6 +82,23 @@ function sendCliError(reply: FastifyReply, statusCode: number, code: string, mes
   return reply.code(statusCode).send({ error: { code, message } });
 }
 
+async function openDocumentCliOutput(
+  documents: DocumentService,
+  input: { sourcePath: string; project: DocumentProject },
+): Promise<OpenDocumentCliResponse> {
+  const route = projectRoute(input.project.id);
+  return {
+    ok: true,
+    action: "imported",
+    sourcePath: input.sourcePath,
+    project: input.project,
+    route,
+    url: `${appBaseUrl()}${route}`,
+    workspace: documents.projectWorkspaceContext(input.project),
+    tuttiAppOpen: await openTuttiAppRoute(appId(), route),
+  };
+}
+
 function projectSummary(project: DocumentProject) {
   return {
     id: project.id,
@@ -75,6 +108,33 @@ function projectSummary(project: DocumentProject) {
     updatedAt: project.updatedAt,
     "updated-at": project.updatedAt,
   };
+}
+
+function projectRoute(projectId: string) {
+  return `/doc/${encodeURIComponent(projectId)}`;
+}
+
+function appId() {
+  return process.env.TUTTI_APP_ID?.trim() || "ai-doc";
+}
+
+function appBaseUrl() {
+  const configured = process.env.AI_DOC_SERVER_URL?.trim();
+  if (configured) return configured.replace(/\/+$/g, "");
+  const host = process.env.HOST?.trim() || "127.0.0.1";
+  const port = process.env.PORT?.trim() || "8790";
+  return `http://${host}:${port}`;
+}
+
+function cliErrorStatus(error: unknown) {
+  const message = errorMessage(error).toLowerCase();
+  if (message.includes("officecli")) return 503;
+  if (message.includes("no such file") || message.includes("enoent")) return 404;
+  return 400;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error || "Unable to open document");
 }
 
 function clampInteger(value: unknown, min: number, max: number, fallback: number) {

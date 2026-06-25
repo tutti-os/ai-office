@@ -3,7 +3,6 @@ import { ArtifactErrorBoundary, ArtifactSurfaceErrorFallback } from "@ai-app/ui/
 import { DocxDocumentScreen, MarkdownDocumentScreen } from "./DocumentFormatScreens";
 import { DocumentLoadingScreen, HtmlEditorScreen } from "./HtmlEditorScreen";
 import { markdownParagraphCount, markdownWordCount } from "./documentWorkbenchContent";
-import { indentBlock, outdentBlock, setElementStyle, toggleChecklist } from "../artifact/runtime/operations";
 import type { useRuntimeWorkbenchModel } from "./useRuntimeWorkbenchModel";
 import { isArtifactAgentRunning } from "@ai-app/shared/artifact-runtime";
 
@@ -15,19 +14,6 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     agentConversation,
     artifactInteraction,
     artifactReadOnly,
-    applyAlignment,
-    applyBackColor,
-    applyFontFamily,
-    applyFontSize,
-    applyForeColor,
-    applyFormat,
-    applyHeading,
-    applyLink,
-    applyList,
-    applyOperationPanel,
-    applyRemoveLink,
-    applyToolbarMoreAction,
-    attributeDraft,
     cancelAgentRun,
     clearHistory,
     currentDocumentType,
@@ -43,19 +29,11 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     exportNotice,
     dismissExportNotice,
     filteredTemplates,
-    frameRevision,
-    frameSrcDoc,
-    handleFrameLoad,
-    handleImageFileInputChange,
     historyProjects,
     homeAttachments,
     homePanel,
-    htmlEditorController,
     htmlToolbarActive,
-    iframeRef,
-    imageFileInputRef,
     importDocumentFile,
-    imageDraft,
     linkDraft,
     linkEditorOpen,
     loadBlankDocument,
@@ -70,70 +48,47 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     officeCliStatus,
     openCurrentProjectExportsDir,
     openHistoryProject,
-    openLinkEditor,
-    operationDraft,
-    operationIsHtml,
-    operationPanelMode,
-    operationPosition,
-    operationWrapperTag,
     outputType,
     pdfExportAvailable,
     pdfExporting,
     prompt,
     redoMarkdown,
     requestHomeRoute,
-    requestImageFileSelection,
-    resetFrameFromRuntime,
     runtime,
     runtimeProfiles,
     saveState,
     selectedRuntimeProfileId,
     selectedTemplateCategory,
     sendAgentPrompt,
+    syncHtmlEditorBody,
     exportCurrentDocxPdf,
     exportCurrentHtml,
     exportCurrentHtmlPdf,
     exportCurrentMarkdown,
     exportCurrentMarkdownPdf,
-    setAttributeDraft,
     setEditorStats,
     setHomePanel,
-    setImageDraft,
     setLinkDraft,
     setLinkEditorOpen,
     setMarkdownTableCellCommitter,
     setMarkdownTableCellEditPending,
-    setOperationDraft,
-    setOperationIsHtml,
-    setOperationPanelMode,
-    setOperationPosition,
-    setOperationWrapperTag,
     setOutputType,
     setPrompt,
     setSelectedRuntimeProfileId,
     setSelectedTemplateCategory,
-    setStyleDraft,
-    setTableDraft,
-    styleDraft,
-    tableDraft,
     templateCategories,
     templateCounts,
     toolbarState,
     undoMarkdown,
+    updateHtmlEditorSelection,
+    uploadHtmlEditorImageFile,
     updateDocxSelection,
     updateMarkdownContent,
     updateMarkdownSelection,
   } = props.model;
   const artifactAgentProcessing = isArtifactAgentRunning(artifactInteraction);
   return (
-    <main className="h-dvh min-h-0 overflow-hidden bg-[#EEE8DC] font-sans text-[#2A2620]">
-      <input
-        ref={imageFileInputRef}
-        className="hidden"
-        type="file"
-        accept="image/*"
-        onChange={(event) => void handleImageFileInputChange(event)}
-      />
+    <main className="h-dvh min-h-0 overflow-hidden bg-[#E6DDCD] font-sans text-[#2A2620]">
       {!editorOpen ? (
         <HomePage
           attachments={homeAttachments.attachments}
@@ -253,7 +208,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
         <DocumentLoadingScreen error={error} loading={loading} />
       ) : currentDocumentType === "html" && runtime ? (
         <ArtifactErrorBoundary
-          resetKeys={[currentProjectId, currentDocumentType, runtime.revision, frameRevision]}
+          resetKeys={[currentProjectId, currentDocumentType, runtime.id, runtime.revision]}
           fallback={({ error, resetErrorBoundary }) => (
             <ArtifactSurfaceErrorFallback surfaceName="Document view" error={error} resetErrorBoundary={resetErrorBoundary} onBackHome={requestHomeRoute} />
           )}
@@ -263,9 +218,6 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             dirty={activeDirty}
             error={error}
             exportNotice={exportNotice}
-            frameRevision={frameRevision}
-            frameSrcDoc={frameSrcDoc}
-            iframeRef={iframeRef}
             loading={loading}
             agentConversationItems={agentConversation.items}
             agentConversationLoading={agentConversation.loading}
@@ -277,6 +229,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             editorStats={editorStats}
             runtime={runtime}
             saveState={saveState}
+            projectId={currentProjectId}
             pdfExportAvailable={pdfExportAvailable}
             pdfExporting={pdfExporting}
             agentProcessing={artifactAgentProcessing}
@@ -285,89 +238,44 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             toolbarState={toolbarState}
             linkDraft={linkDraft}
             linkEditorOpen={linkEditorOpen}
-            operationDraft={operationDraft}
-            operationIsHtml={operationIsHtml}
-            operationPanelMode={operationPanelMode}
-            operationPosition={operationPosition}
-            operationWrapperTag={operationWrapperTag}
-            attributeDraft={attributeDraft}
-            imageDraft={imageDraft}
-            tableDraft={tableDraft}
-            styleDraft={styleDraft}
             onBackHome={requestHomeRoute}
+            onTiptapBodyChange={syncHtmlEditorBody}
+            onTiptapSelectionChange={updateHtmlEditorSelection}
+            onToolbarInteractionStart={() => undefined}
             onDismissExportNotice={dismissExportNotice}
             onOpenExportLocation={openCurrentProjectExportsDir}
             onExportHtml={exportCurrentHtml}
             onExportPdf={exportCurrentHtmlPdf}
-            onApplyLink={applyLink}
             onCloseLinkEditor={() => setLinkEditorOpen(false)}
-            onCreateLink={openLinkEditor}
+            onCreateLink={() => {
+              setLinkEditorOpen((current) => !current);
+            }}
             onLinkDraftChange={setLinkDraft}
-            onApplyOperation={applyOperationPanel}
-            onAttributeDraftChange={setAttributeDraft}
-            onCloseOperation={() => setOperationPanelMode(null)}
-            onOperationDraftChange={setOperationDraft}
-            onOperationHtmlChange={setOperationIsHtml}
-            onImageDraftChange={setImageDraft}
-            onPickImage={requestImageFileSelection}
-            onTableDraftChange={setTableDraft}
-            onStyleDraftChange={setStyleDraft}
-            onBackColor={applyBackColor}
-            onForeColor={applyForeColor}
-            onLineHeight={(lineHeight) => htmlEditorController.executeOperation(runtime, {
-              operationType: "setLineHeight",
-              description: `Set line height ${lineHeight || "normal"}`,
-              refocus: false,
-              mutate: (doc, target) => setElementStyle(doc, target, { lineHeight }),
-            })}
-            onLetterSpacing={(letterSpacing) => htmlEditorController.executeOperation(runtime, {
-              operationType: "setLetterSpacing",
-              description: `Set letter spacing ${letterSpacing || "normal"}`,
-              refocus: false,
-              mutate: (doc, target) => setElementStyle(doc, target, { letterSpacing }),
-            })}
-            onLayoutChange={(attributes) => htmlEditorController.executeOperation(runtime, {
-              operationType: "setLayout",
-              description: "Set layout",
-              refocus: false,
-              mutate: (doc, target) => setElementStyle(doc, target, attributes),
-            })}
-            onOperationPositionChange={setOperationPosition}
-            onOperationWrapperTagChange={setOperationWrapperTag}
-            onRemoveLink={applyRemoveLink}
-            onAlignment={applyAlignment}
-            onFontFamily={applyFontFamily}
-            onFontSize={applyFontSize}
-            onFormat={applyFormat}
-            onHeading={applyHeading}
-            onIndent={() => htmlEditorController.executeOperation(runtime, {
-              operationType: "indent",
-              description: "Indent block",
-              mutate: (doc, target) => indentBlock(doc, target),
-            })}
-            onChecklist={() => htmlEditorController.executeOperation(runtime, {
-              operationType: "toggleChecklist",
-              description: "Toggle checklist",
-              mutate: (doc, target) => toggleChecklist(doc, target),
-            })}
-            onList={applyList}
+            onUploadImageFile={uploadHtmlEditorImageFile}
+            onApplyLink={() => undefined}
+            onBackColor={() => undefined}
+            onForeColor={() => undefined}
+            onLineHeight={() => undefined}
+            onLetterSpacing={() => undefined}
+            onLayoutChange={() => undefined}
+            onRemoveLink={() => undefined}
+            onAlignment={() => undefined}
+            onFontFamily={() => undefined}
+            onFontSize={() => undefined}
+            onFormat={() => undefined}
+            onHeading={() => undefined}
+            onIndent={() => undefined}
+            onChecklist={() => undefined}
+            onList={() => undefined}
             onLoadFixture={() => void loadFixture()}
-            onMoreAction={applyToolbarMoreAction}
-            onMutation={(operationType, description) => htmlEditorController.syncMutation(operationType, description)}
-            onOutdent={() => htmlEditorController.executeOperation(runtime, {
-              operationType: "outdent",
-              description: "Outdent block",
-              mutate: (doc, target) => outdentBlock(doc, target),
-            })}
+            onMoreAction={() => undefined}
+            onOutdent={() => undefined}
+            onPickImage={() => undefined}
             onSendAgentPrompt={sendAgentPrompt}
             onRuntimeProfileChange={setSelectedRuntimeProfileId}
             onCancelAgentRun={cancelAgentRun}
-            onRedo={() => htmlEditorController.applyHistoryOffset(runtime, 1)}
-            onResetFrame={resetFrameFromRuntime}
-            onSelection={() => htmlEditorController.syncSelection()}
-            onToolbarInteractionStart={() => htmlEditorController.preserveSelection(runtime)}
-            onUndo={() => htmlEditorController.applyHistoryOffset(runtime, -1)}
-            onFrameLoad={handleFrameLoad}
+            onRedo={() => undefined}
+            onUndo={() => undefined}
           />
         </ArtifactErrorBoundary>
       ) : (

@@ -26,7 +26,12 @@ export class ArtifactErrorBoundary extends Component<ArtifactErrorBoundaryProps,
 
   componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
     const normalized = normalizeError(error);
-    console.error("Artifact app render error", normalized, errorInfo);
+    console.error("Artifact app render error", {
+      message: normalized.message,
+      name: normalized.name,
+      stack: normalized.stack,
+      componentStack: errorInfo.componentStack,
+    });
     this.props.onError?.(normalized, errorInfo);
   }
 

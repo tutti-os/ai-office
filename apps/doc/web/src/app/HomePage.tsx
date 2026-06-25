@@ -17,6 +17,7 @@ import {
   homeWorkSectionClass,
 } from "@ai-app/ui/app-shell";
 import { HomeComposer } from "./HomeComposer";
+import { artifactHistoryCopy } from "../i18n/copy";
 import { useI18n } from "../i18n";
 import type { HomeAttachment } from "./useHomeAttachments";
 
@@ -131,7 +132,7 @@ export function HomePage(props: {
                       key={item}
                       active={active}
                       count={count}
-                      label={item}
+                      label={item === allTemplatesLabel ? t("home.allTemplates") : item}
                       onClick={() => props.onCategoryChange(item)}
                     />
                   );
@@ -257,6 +258,7 @@ function BlankTemplateCard(props: { onCreate: () => void }) {
       <button
         className="flex aspect-[0.72] w-full min-h-[212px] flex-col items-center justify-center rounded-[16px] border border-[#B8A07C]/30 bg-[#F8F4EC] text-[#5C6B50]  backdrop-blur transition hover:-translate-y-0.5 hover:border-[#B8A07C]/30"
         type="button"
+        aria-label={t("home.blankDocAria")}
         onClick={props.onCreate}
       >
         <Plus className="mb-4 opacity-60" size={26} />
@@ -276,9 +278,10 @@ function ProjectHistory(props: {
   const { t } = useI18n();
   return (
     <ArtifactHistoryPanel
-      emptyDescription="Create a doc or open a template to see it here."
+      copy={artifactHistoryCopy(t)}
+      emptyDescription={t("history.emptyDescription")}
       emptyIcon={<History size={17} />}
-      emptyTitle="No history yet"
+      emptyTitle={t("history.noHistory")}
       getId={(project) => project.id}
       getPreview={(project) => projectPreview(project, t)}
       getSubtitle={(project) => projectTypeLabel(project.type, t)}
@@ -307,6 +310,7 @@ function projectTypeLabel(type: DocumentProject["type"], t: ReturnType<typeof us
 }
 
 function TemplateCard(props: { template: TuttiTemplate; onSelect: (template: TuttiTemplate) => void }) {
+  const { t } = useI18n();
   const aspectRatio =
     props.template.screenshot_width && props.template.screenshot_height
       ? `${props.template.screenshot_width} / ${props.template.screenshot_height}`
@@ -316,7 +320,7 @@ function TemplateCard(props: { template: TuttiTemplate; onSelect: (template: Tut
       <button
         className="relative w-full overflow-hidden rounded-[16px] bg-[#F4EFE6] text-left text-[#2A2620]  ring-1 ring-[#B8A07C]/30 transition hover:-translate-y-0.5 "
         type="button"
-        aria-label={`Create ${props.template.name}`}
+        aria-label={t("home.createTemplateAria", { title: props.template.name })}
         onClick={() => props.onSelect(props.template)}
         style={{ aspectRatio }}
       >

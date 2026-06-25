@@ -181,10 +181,10 @@ export function App() {
           source: "missing",
           canInstall: false,
           installing: false,
-          reason: err instanceof Error ? err.message : "Unable to check OfficeCLI status.",
+          reason: err instanceof Error ? err.message : t("error.officeCliStatus"),
         }),
       );
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (route.name !== "home" || slideTemplates.length > 0) return;
@@ -241,7 +241,7 @@ export function App() {
     try {
       const artifactType = input.artifactType ?? artifactTypeForOutput(outputType);
       if (artifactType === "pptx" && officeCliStatus?.available !== true) {
-        throw new Error(officeCliStatus?.reason ?? "OfficeCLI is required for PPTX.");
+        throw new Error(officeCliStatus?.reason ?? t("error.officeCliRequired"));
       }
       const response = await createProject({
         title: input.title,
@@ -251,7 +251,7 @@ export function App() {
       });
       setHistoryProjects((projects) => [response.project, ...projects.filter((project) => project.id !== response.project.id)]);
       const uploadedAttachments = input.attachments?.length ? await uploadHomeContextAttachments(response.project.id, input.attachments) : [];
-      const initialPrompt = initialPromptWithAttachmentContext(input.initialPrompt?.trim() ?? "", uploadedAttachments).trim();
+      const initialPrompt = initialPromptWithAttachmentContext(input.initialPrompt?.trim() ?? "", uploadedAttachments, t("project.attachmentPrompt")).trim();
       if (initialPrompt) {
         await startAiEdit(response.project.id, {
           userPrompt: initialPrompt,
@@ -282,7 +282,7 @@ export function App() {
     try {
       const response = await installOfficeCli();
       setOfficeCliStatus(response.officecli);
-      if (!response.officecli.available) setError(response.officecli.reason ?? "Unable to install OfficeCLI");
+      if (!response.officecli.available) setError(response.officecli.reason ?? t("error.officeCliInstall"));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       try {
@@ -299,7 +299,7 @@ export function App() {
   const createFromPrompt = () => {
     const attachments = homeAttachments.attachments;
     if (!prompt.trim() && attachments.length === 0) return;
-    const attachmentTitle = attachments[0]?.name ? `Deck from ${attachments[0].name}` : "Untitled Presentation";
+    const attachmentTitle = attachments[0]?.name ? t("project.deckFromAttachment", { name: attachments[0].name }) : t("editor.untitledPresentation");
     void createAndOpenProject({
       title: attachmentTitle.length > 80 ? `${attachmentTitle.slice(0, 80).trim()}...` : attachmentTitle,
       initialPrompt: prompt.trim(),
@@ -311,8 +311,8 @@ export function App() {
     setCreating(true);
     setError("");
     try {
-      if (officeCliStatus?.available !== true) throw new Error(officeCliStatus?.reason ?? "OfficeCLI is required for PPTX presentations.");
-      if (!file.name.toLowerCase().endsWith(".pptx")) throw new Error("Only PPTX files are supported.");
+      if (officeCliStatus?.available !== true) throw new Error(officeCliStatus?.reason ?? t("error.officeCliPresentationRequired"));
+      if (!file.name.toLowerCase().endsWith(".pptx")) throw new Error(t("error.onlyPptx"));
       const detail = await importProjectFile(file);
       setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
       setRoute(pushSlideRoute(detail.project.id));
@@ -324,7 +324,7 @@ export function App() {
   };
 
   const createBlank = () => {
-    void createAndOpenProject({ title: "Untitled Presentation" });
+    void createAndOpenProject({ title: t("editor.untitledPresentation") });
   };
 
   const createFromTemplate = (template: SlideTemplate) => {
@@ -368,12 +368,12 @@ export function App() {
   };
 
   const sendAgentPrompt = async (userPrompt: string) => {
-    if (!currentProjectId) throw new Error("Project is not open");
+    if (!currentProjectId) throw new Error(t("error.projectNotOpen"));
     setAgentSending(true);
     setError("");
     try {
       if (projectDetail?.artifact.type === "pptx") {
-        if (!pptxRuntime) throw new Error("PPTX runtime is not ready");
+        if (!pptxRuntime) throw new Error(t("error.pptxRuntimeNotReady"));
         await startAiEdit(
           currentProjectId,
           createPptxAiEditRequest({
@@ -387,7 +387,7 @@ export function App() {
         setProjectDetail(await getProject(currentProjectId));
       } else {
         const deckRuntime = deckAgentRuntimeProviderRef.current?.() ?? null;
-        if (!deckRuntime) throw new Error("Deck runtime is not ready");
+        if (!deckRuntime) throw new Error(t("error.deckRuntimeNotReady"));
         if (deckRuntime.activeSlide?.id && deckRuntime.currentSlideHtml.trim()) {
           await updateDeckSlideHtml(currentProjectId, deckRuntime.activeSlide.id, { html: deckRuntime.currentSlideHtml });
         }

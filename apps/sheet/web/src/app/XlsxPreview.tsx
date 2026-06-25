@@ -3,12 +3,14 @@ import { scrollbarClass } from "@ai-app/ui/app-shell";
 import { XlsxRenderer } from "@tutti-os/office-preview/xlsx";
 import "@tutti-os/office-preview/styles/xlsx.css";
 import type { XlsxRenderWorkbook } from "@tutti-os/office-preview/xlsx";
+import { useI18n } from "../i18n";
 
 export function XlsxPreview(props: {
   workbook: XlsxRenderWorkbook | null;
   loading: boolean;
   error: string;
 }) {
+  const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -35,13 +37,13 @@ export function XlsxPreview(props: {
   }, [props.workbook]);
 
   if (props.loading) {
-    return <PreviewState title="Loading workbook" body="Preparing the spreadsheet preview." />;
+    return <PreviewState title={t("preview.loadingTitle")} body={t("preview.loadingBody")} />;
   }
   if (props.error) {
-    return <PreviewState title="Unable to preview workbook" body={props.error} />;
+    return <PreviewState title={t("preview.errorTitle")} body={props.error} />;
   }
   if (!props.workbook) {
-    return <PreviewState title="No workbook loaded" body="Import an XLSX workbook to view it here." />;
+    return <PreviewState title={t("preview.emptyTitle")} body={t("preview.emptyBody")} />;
   }
   return (
     <div

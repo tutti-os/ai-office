@@ -1,6 +1,8 @@
 import { ArtifactAgentConversationPanel } from "@ai-app/agent/conversation-ui";
 import type { ArtifactEditorKind } from "@ai-app/ui/editor-frame";
 import type { LocalAgentProviderStatus, RuntimeProfile, SlideRun, SlideRunEvent, SlideRunTimelineItem } from "@ai-slide/shared";
+import { agentConversationUiCopy } from "../i18n/copy";
+import { useI18n } from "../i18n";
 
 type AgentConversationPanelProps = {
   activeSelectionLabel?: string;
@@ -22,17 +24,19 @@ type AgentConversationPanelProps = {
 };
 
 export function AgentConversationPanel(props: AgentConversationPanelProps) {
+  const { t } = useI18n();
   return (
     <ArtifactAgentConversationPanel<SlideRun, SlideRunEvent>
       {...props}
       copy={{
-        homeLabel: "AI Slide",
-        introTitle: "AI Slides Agent",
-        introBody: "Click a slide element or select text, then ask for edits to the story, copy, notes, or visuals.",
-        placeholder: "Ask AI to edit this deck...",
-        quickPrompts: ["Rewrite slide", "Add speaker notes", "Polish story", "Tighten visuals"],
+        homeLabel: t("app.title"),
+        introTitle: t("agent.introTitle"),
+        introBody: t("agent.introBody"),
+        placeholder: t("agent.placeholder"),
+        quickPrompts: [t("agent.quickRewrite"), t("agent.quickNotes"), t("agent.quickPolish"), t("agent.quickTighten")],
       }}
-      formatUnavailableRuntimeProfileLabel={(profile) => `${profile.displayName} unavailable`}
+      uiCopy={agentConversationUiCopy(t)}
+      formatUnavailableRuntimeProfileLabel={(profile) => `${profile.displayName} ${t("composer.agentUnavailable")}`}
       selectedRuntimeProfileId={props.selectedAgent}
       onRuntimeProfileChange={props.onSelectedAgentChange}
     />

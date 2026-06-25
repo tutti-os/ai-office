@@ -8,6 +8,7 @@ import {
   type ApplyTemplateRequest,
   type DocxDocumentManifest,
   type CreateProjectRequest,
+  type DocumentWorkspaceContext,
   type DocumentTemplate,
   type DocumentProject,
   type DocumentRun,
@@ -25,6 +26,7 @@ import { openPathInFileManager } from "@ai-app/shared/local-open";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { DocumentRepository } from "./document-repository.js";
 import { renderTemplateSeed } from "./document-template-renderer.js";
+import { mimeTypeForImportFileName, resolveImportSourcePath } from "./import-source.js";
 import { assistantConversationContent, previewText } from "./run-preview.js";
 import { documentTemplates, getTemplate } from "./templates.js";
 import { loadTemplateProjectSeed, materializeTemplateAssetsToProject } from "../templates/template-service.js";
@@ -102,7 +104,7 @@ export class DocumentService {
     return { project };
   }
 
-  async importProjectFile(input: { fileName: string; mimeType: string; bytes: Buffer }) {
+  async importProjectFile(input: { fileName: string; mimeType: string; bytes: Buffer; title?: string }) {
     if (input.bytes.byteLength === 0) throw new Error("Import file is empty");
     if (input.bytes.byteLength > maxProjectImportBytes) throw new Error("Import file is too large");
     const type = importedDocumentType(input.fileName, input.mimeType);
@@ -118,7 +120,7 @@ export class DocumentService {
       })
       : input.bytes.toString("utf8");
     const project = this.repo.createProject({
-      title: importedProjectTitle(input.fileName),
+      title: input.title?.trim() || importedProjectTitle(input.fileName),
       content,
       type,
       templateId: null,
@@ -129,6 +131,36 @@ export class DocumentService {
     }
     this.events.emit({ type: "project.created", projectId: project.id, payload: { project } });
     return { project };
+  }
+
+  async importProjectPath(input: { path: string; title?: string }) {
+    const sourcePath = resolveImportSourcePath(input.path);
+    const sourceStat = await stat(sourcePath).catch((error: unknown) => {
+      throw new Error(`Unable to read import file: ${error instanceof Error ? error.message : String(error)}`);
+    });
+    if (!sourceStat.isFile()) throw new Error("Import path must point to a file");
+    if (sourceStat.size === 0) throw new Error("Import file is empty");
+    if (sourceStat.size > maxProjectImportBytes) throw new Error("Import file is too large");
+    const fileName = basename(sourcePath);
+    const result = await this.importProjectFile({
+      fileName,
+      mimeType: mimeTypeForImportFileName(fileName),
+      bytes: await readFile(sourcePath),
+      title: input.title,
+    });
+    return { ...result, sourcePath };
+  }
+
+  projectWorkspaceContext(project: Pick<DocumentProject, "id" | "type">): DocumentWorkspaceContext {
+    const workspaceRoot = projectWorkspaceRoot(project.id);
+    const focusedPath = join(workspaceRoot, focusedProjectFileName(project.type));
+    return {
+      workspaceRoot,
+      focusedPath,
+      focusedPathKind: "file",
+      focusedFilePath: focusedPath,
+      agentInstructionsPath: join(workspaceRoot, "AGENTS.md"),
+    };
   }
 
   getProject(projectId: string) {
@@ -503,6 +535,12 @@ const supportedExportMimeTypes = new Set(["text/html", "text/markdown", docxMime
 
 function docxFilePath(projectId: string) {
   return join(projectWorkspaceRoot(projectId), docxFileName);
+}
+
+function focusedProjectFileName(type: DocumentProject["type"]) {
+  if (type === "docx") return docxFileName;
+  if (type === "markdown") return "document.md";
+  return "document.html";
 }
 
 function importedDocumentType(fileName: string, mimeType: string): DocumentProject["type"] {

@@ -3,15 +3,18 @@ import {
   ArrowUp,
   ChevronDown,
   CheckCircle2,
+  CircleDashed,
   File,
   Loader2,
+  Sparkles,
+  Square,
   WandSparkles,
   XCircle,
 } from "lucide-react";
 import type { BaseRun, BaseRunEvent, BaseRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { isAgentRunActive, timelineToMessages, type AgentConversationBlock, type AgentConversationMessage } from "@ai-app/agent/conversation";
 import { MarkdownText } from "./markdown.js";
-import { ToolGroupBlock } from "./toolGroup.js";
+import { defaultConversationToolCopy, ToolGroupBlock, type ConversationToolCopy } from "./toolGroup.js";
 import { classes, type ConversationClassNames } from "./styles.js";
 
 export type AgentConversationVariant = "document" | "slide";
@@ -22,6 +25,32 @@ export type AgentConversationCopy = {
   introBody: string;
   placeholder: string;
   quickPrompts: string[];
+};
+
+export type AgentConversationUiCopy = {
+  activeSelection: string;
+  accepted: string;
+  cancelled: string;
+  completed: string;
+  failed: string;
+  running: string;
+  selectAgent: string;
+  stopAgent: string;
+  thinking: string;
+  tool: ConversationToolCopy;
+};
+
+export const defaultAgentConversationUiCopy: AgentConversationUiCopy = {
+  activeSelection: "Selected text",
+  accepted: "accepted",
+  cancelled: "cancelled",
+  completed: "completed",
+  failed: "failed",
+  running: "running",
+  selectAgent: "Select ACP agent",
+  stopAgent: "Stop agent",
+  thinking: "Thinking",
+  tool: defaultConversationToolCopy,
 };
 
 export type AgentConversationOption = {
@@ -43,6 +72,7 @@ export type AgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent e
   sending: boolean;
   variant: AgentConversationVariant;
   copy: AgentConversationCopy;
+  uiCopy?: Partial<Omit<AgentConversationUiCopy, "tool">> & { tool?: Partial<ConversationToolCopy> };
   quickPromptsVisible?: boolean;
   selectedAgentId?: string;
   onBackHome: () => void;
@@ -106,9 +136,13 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
   const activeRun = useMemo(() => props.items.find((item) => isAgentRunActive(item.run))?.run ?? null, [props.items]);
   const cancellingActiveRun = Boolean(activeRun && cancellingRunId === activeRun.id);
   const cx = classes[props.variant];
+  const uiCopy: AgentConversationUiCopy = {
+    ...defaultAgentConversationUiCopy,
+    ...props.uiCopy,
+    tool: { ...defaultConversationToolCopy, ...props.uiCopy?.tool },
+  };
   const showQuickPrompts = props.quickPromptsVisible === true && props.copy.quickPrompts.length > 0;
   const showActiveSelection = props.activeSelectionVisible ?? Boolean(props.activeSelectionText.trim());
-  const actionIsStop = Boolean(activeRun && props.onCancel);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -144,7 +178,7 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
           {props.copy.homeLabel}
         </button>
         <div className={cx.headerStatus}>
-          {props.loading ? <Loader2 className={cx.spin} size={13} /> : null}
+          {props.loading ? <Loader2 className={cx.spin} size={13} /> : <CircleDashed size={13} />}
           {props.artifactLabel}
         </div>
       </div>
@@ -155,14 +189,14 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
         {props.error ? <div className={cx.error}>{props.error}</div> : null}
 
         <div className={cx.messages}>
-          {messages.map((message) => <ConversationMessage cx={cx} key={message.id} message={message} />)}
+          {messages.map((message) => <ConversationMessage copy={uiCopy} cx={cx} key={message.id} message={message} />)}
         </div>
       </div>
 
       <div className={cx.composerWrap}>
         {showActiveSelection ? (
           <div className={cx.composerSelection}>
-            <div className={cx.activeSelectionLabel}>{props.activeSelectionLabel ?? "Selected text"}</div>
+            <div className={cx.activeSelectionLabel}>{props.activeSelectionLabel ?? uiCopy.activeSelection}</div>
             {props.activeSelectionText.trim() ? <div className={cx.composerSelectionText}>{props.activeSelectionText}</div> : null}
           </div>
         ) : null}
@@ -196,7 +230,7 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
                 <select
                   className={cx.agentSelect}
                   value={props.selectedAgentId ?? props.agentOptions[0]?.id ?? ""}
-                  aria-label="Select ACP agent"
+                  aria-label={uiCopy.selectAgent}
                   disabled={props.sending}
                   onChange={(event) => props.onAgentChange?.(event.currentTarget.value)}
                 >
@@ -212,40 +246,13 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
               <div />
             )}
             <div className={cx.composerActions}>
-              <button
-                className={`${cx.sendButton} relative ${actionIsStop ? "!bg-transparent !text-[#2A2620] disabled:!bg-transparent disabled:!text-[#2A2620]" : ""}`}
-                type="button"
-                aria-label={actionIsStop ? "Stop agent" : "Send prompt"}
-                disabled={actionIsStop ? cancellingActiveRun : !draft.trim() || props.sending}
-                onClick={() => {
-                  if (actionIsStop) void cancelActiveRun();
-                  else void submit();
-                }}
-              >
-                {actionIsStop ? (
-                  <>
-                    <svg className="absolute inset-0 size-8 text-[#2A2620]/18" aria-hidden="true" viewBox="0 0 32 32">
-                      <circle cx="16" cy="16" fill="none" r="14" stroke="currentColor" strokeWidth="2.6" />
-                    </svg>
-                    <svg className="absolute inset-0 size-8 animate-spin" aria-hidden="true" viewBox="0 0 32 32">
-                      <circle
-                        cx="16"
-                        cy="16"
-                        fill="none"
-                        r="14"
-                        stroke="currentColor"
-                        strokeDasharray="68 20"
-                        strokeLinecap="round"
-                        strokeWidth="2.6"
-                      />
-                    </svg>
-                    <span className="block size-2.5 rounded-[2px] bg-current" />
-                  </>
-                ) : props.sending ? (
-                  <Loader2 className={cx.spin} size={15} />
-                ) : (
-                  <ArrowUp size={15} />
-                )}
+              {activeRun && props.onCancel ? (
+                <button className={cx.cancelButton} type="button" aria-label={uiCopy.stopAgent} disabled={cancellingActiveRun} onClick={() => void cancelActiveRun()}>
+                  {cancellingActiveRun ? <Loader2 className={cx.spin} size={13} /> : <Square size={13} />}
+                </button>
+              ) : null}
+              <button className={cx.sendButton} type="button" disabled={!draft.trim() || props.sending} onClick={() => void submit()}>
+                {props.sending ? <Loader2 className={cx.spin} size={15} /> : <ArrowUp size={15} />}
               </button>
             </div>
           </div>
@@ -259,6 +266,9 @@ function IntroCard(props: { copy: AgentConversationCopy; cx: ConversationClassNa
   return (
     <div className={props.cx.introCard}>
       <div className={props.cx.introMain}>
+        <div className={props.cx.introIcon}>
+          <Sparkles size={15} />
+        </div>
         <div>
           <div className={props.cx.introTitle}>{props.copy.introTitle}</div>
           <p className={props.cx.introBody}>{props.copy.introBody}</p>
@@ -268,7 +278,7 @@ function IntroCard(props: { copy: AgentConversationCopy; cx: ConversationClassNa
   );
 }
 
-function ConversationMessage<TRun extends BaseRun>(props: { cx: ConversationClassNames; message: AgentConversationMessage<TRun> }) {
+function ConversationMessage<TRun extends BaseRun>(props: { copy: AgentConversationUiCopy; cx: ConversationClassNames; message: AgentConversationMessage<TRun> }) {
   if (props.message.role === "user") {
     const userContent = splitUserAttachmentContext(props.message.text);
     return (
@@ -291,25 +301,17 @@ function ConversationMessage<TRun extends BaseRun>(props: { cx: ConversationClas
   return (
     <div className={props.cx.assistantRow}>
       <div className={props.cx.assistantMessage}>
-        <RunStatusBadge cx={props.cx} message={props.message} />
+        <RunStatusBadge copy={props.copy} cx={props.cx} message={props.message} />
         {props.message.blocks.map((block, index) => (
-          <ConversationBlock block={block} cx={props.cx} key={`${block.type}:${index}`} />
+          <ConversationBlock block={block} copy={props.copy} cx={props.cx} key={`${block.type}:${index}`} />
         ))}
       </div>
     </div>
   );
 }
 
-function RunStatusBadge<TRun extends BaseRun>(props: { cx: ConversationClassNames; message: Extract<AgentConversationMessage<TRun>, { role: "assistant" }> }) {
+function RunStatusBadge<TRun extends BaseRun>(props: { copy: AgentConversationUiCopy; cx: ConversationClassNames; message: Extract<AgentConversationMessage<TRun>, { role: "assistant" }> }) {
   const status = props.message.run.status;
-  const statusLabel =
-    status === "cancelled" && props.message.run.error?.trim().toLowerCase() === "cancelled by user"
-      ? "cancelled by user"
-      : status;
-  const cancelledReason =
-    status === "cancelled" && props.message.run.error?.trim() && statusLabel === status
-      ? props.message.run.error.trim()
-      : "";
   const icon =
     status === "completed" ? (
       <CheckCircle2 size={13} />
@@ -321,19 +323,26 @@ function RunStatusBadge<TRun extends BaseRun>(props: { cx: ConversationClassName
   return (
     <div className={props.cx.runStatus}>
       {icon}
-      {props.message.run.provider} · {statusLabel}
-      {cancelledReason ? `: ${cancelledReason}` : ""}
+      {props.message.run.provider} · {runStatusLabel(status, props.copy)}
     </div>
   );
 }
 
-function ConversationBlock(props: { cx: ConversationClassNames; block: AgentConversationBlock }) {
+function ConversationBlock(props: { copy: AgentConversationUiCopy; cx: ConversationClassNames; block: AgentConversationBlock }) {
   const block = props.block;
-  if (block.type === "tool_group") return <ToolGroupBlock block={block} cx={props.cx} />;
-  if (block.type === "thinking") return <div className={props.cx.thinkingBlock}>Thinking: {block.text}</div>;
+  if (block.type === "tool_group") return <ToolGroupBlock block={block} copy={props.copy.tool} cx={props.cx} />;
+  if (block.type === "thinking") return <div className={props.cx.thinkingBlock}>{props.copy.thinking}: {block.text}</div>;
   if (block.type === "error") return <div className={props.cx.errorBlock}>{block.text}</div>;
   if (block.type === "result") return <MarkdownText className={props.cx.resultBlock} text={block.text} />;
   return <div className={props.cx.statusBlock}>{block.text}</div>;
+}
+
+function runStatusLabel(status: BaseRun["status"], copy: AgentConversationUiCopy) {
+  if (status === "completed") return copy.completed;
+  if (status === "failed") return copy.failed;
+  if (status === "cancelled") return copy.cancelled;
+  if (status === "accepted") return copy.accepted;
+  return copy.running;
 }
 
 type UserAttachment = {

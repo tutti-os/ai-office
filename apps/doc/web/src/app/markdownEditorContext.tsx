@@ -18,7 +18,7 @@ export const MarkdownToolbarContext = createContext<{
   canUndo: boolean;
   projectId: string | null;
   readOnly: boolean;
-  toolbarHost: HTMLElement | null;
+  toolbarHost: HTMLDivElement | null;
   onToolbarInteractionStart: () => void;
   onRedo: () => void;
   runProgrammaticChange: <T>(mutation: () => T) => T | undefined;

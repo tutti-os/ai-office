@@ -15,7 +15,7 @@ export const blankHtmlDocument = `<!DOCTYPE html>
     }
   </style>
 </head>
-<body contenteditable="true">
+<body>
   <p><br></p>
 </body>
 </html>`;

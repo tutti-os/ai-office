@@ -25,6 +25,7 @@ package_dir="\${TUTTI_APP_PACKAGE_DIR:-$script_dir}"
 
 export HOST="\${TUTTI_APP_HOST:-127.0.0.1}"
 export PORT="\${TUTTI_APP_PORT:-8790}"
+export TUTTI_APP_ID="\${TUTTI_APP_ID:-ai-doc}"
 export AI_DOC_APP_VERSION="${version}"
 export AI_DOC_WEB_DIST="$package_dir/dist"
 export AI_DOC_HOME="\${TUTTI_APP_DATA_DIR:-$package_dir/.data}"
@@ -62,7 +63,7 @@ This package runs AI Doc as a local Tutti workspace app.
 - \`server/server.js\` is the bundled Fastify server.
 - \`dist/\` is the built React/Vite frontend.
 - \`tutti.app.json\` declares the app runtime, localized metadata, CLI surface, and references endpoints.
-- \`tutti.cli.json\` exposes \`doc status\`, \`doc list-projects\`, and \`doc create\` for other Tutti apps and agents.
+- \`tutti.cli.json\` exposes \`doc status\`, \`doc list-projects\`, \`doc open\`, and \`doc create\` for other Tutti apps and agents.
 - Durable app data is stored under \`AI_DOC_HOME\`, which defaults to \`TUTTI_APP_DATA_DIR\`.
 - Runtime scratch data is stored under \`AI_DOC_RUNTIME_ROOT\`, which defaults to \`TUTTI_APP_RUNTIME_DIR\`.
 - Backend logs, if added later, must stay under \`AI_DOC_LOG_ROOT\`, which defaults to \`TUTTI_APP_LOG_DIR\`.
@@ -78,13 +79,14 @@ I18n:
 Endpoints:
 
 - \`GET /api/health\` is the runtime healthcheck.
-- \`POST /tutti/cli/status\`, \`POST /tutti/cli/list-projects\`, and \`POST /tutti/cli/create\` implement the CLI manifest.
+- \`POST /tutti/cli/status\`, \`POST /tutti/cli/list-projects\`, \`POST /tutti/cli/open\`, and \`POST /tutti/cli/create\` implement the CLI manifest.
 - \`POST /tutti/references/list\` and \`POST /tutti/references/search\` expose app-data-relative project files and exports.
 
 Runtime composition:
 
 - Use \`AI_DOC_TUTTI_CLI\` for app-to-app calls. It is populated from \`TUTTI_CLI\` by \`bootstrap.sh\`.
 - CLI integrations must be optional and fail softly so AI Doc still works in a normal browser or development shell.
+- The \`doc open\` command imports the file, calls \`$TUTTI_CLI --json app open --app-id "$TUTTI_APP_ID" --route ...\`, and returns the focused workspace file path plus project \`AGENTS.md\` path for follow-up edits.
 `;
 }
 

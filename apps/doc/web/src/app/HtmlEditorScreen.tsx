@@ -1,18 +1,19 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Redo2, Undo2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { scrollbarClass } from "@ai-app/ui/app-shell";
-import { ArtifactAgentProcessingOverlay, ArtifactEditorWorkspace, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
+import { ArtifactEditorWorkspace, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
 import { type ToolbarLayoutValue } from "@ai-app/ui/toolbar";
 import type { DocumentRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
-import type { AdjacentInsertPosition, Alignment, ElementStyleAttributes, HeadingTag, ImageAttributes, InlineFormatTag, ListKind } from "../artifact/runtime/operations";
-import type { RuntimeState } from "../artifact/runtime/types";
+import type { RuntimeState, SelectionState } from "../artifact/runtime/types";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { HtmlEditorToolbar } from "./HtmlEditorToolbar";
-import type { AttributeDraft, EditorStats, LinkDraft, OperationPanelMode, ToolbarState } from "./runtimeWorkbenchTypes";
+import { HtmlTiptapEditorSurface, useHtmlTiptapEditor } from "./HtmlTiptapEditorSurface";
+import { artifactEditorCopy } from "../i18n/copy";
+import { useI18n } from "../i18n";
+import type { Alignment, EditorStats, HeadingTag, ImageAttributes, InlineFormatTag, LinkDraft, ListKind, ToolbarState } from "./runtimeWorkbenchTypes";
 
-const minimumHtmlFrameHeight = 860;
-const linkEditorPanelWidth = 260;
+const linkEditorPanelWidth = 300;
 const linkEditorViewportMargin = 8;
 const linkEditorAnchorGap = 8;
 type LinkEditorPosition = {
@@ -22,10 +23,11 @@ type LinkEditorPosition = {
 };
 
 export function DocumentLoadingScreen(props: { error: string; loading: boolean }) {
+  const { t } = useI18n();
   return (
-    <section className="relative flex h-full min-h-0 flex-col bg-[#EEE8DC] text-[#2A2620]">
-      <header className="flex h-12 shrink-0 items-center border-b border-[#B8A07C]/30 px-5">
-        <div className="min-w-0 truncate text-[13px] font-semibold text-[#2A2620]">Loading doc</div>
+    <section className="relative flex h-full min-h-0 flex-col bg-[#E6DDCD] text-[#2A2620]">
+      <header className="flex h-12 shrink-0 items-center border-b border-[#B8A07C]/45 px-5">
+        <div className="min-w-0 truncate text-[13px] font-semibold text-[#2A2620]">{t("editor.loadingDoc")}</div>
       </header>
       <div className="grid min-h-0 flex-1 place-items-center bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-6 text-center">
         <div className="max-w-[360px] text-[13px] font-semibold text-[#8B8275]">
@@ -34,7 +36,7 @@ export function DocumentLoadingScreen(props: { error: string; loading: boolean }
           ) : (
             <span className="inline-flex items-center gap-2">
               {props.loading ? <Loader2 className="animate-spin" size={16} /> : null}
-              Loading doc...
+              {t("editor.loadingDocProgress")}
             </span>
           )}
         </div>
@@ -48,12 +50,10 @@ export type HtmlEditorScreenProps = {
   dirty: boolean;
   pdfExportAvailable: boolean;
   pdfExporting: boolean;
+  projectId: string | null;
   error: string;
   exportNotice: string;
   editorStats: EditorStats;
-  frameRevision: number;
-  frameSrcDoc: string;
-  iframeRef: React.RefObject<HTMLIFrameElement | null>;
   agentConversationItems: DocumentRunTimelineItem[];
   agentConversationLoading: boolean;
   agentConversationError: string;
@@ -61,18 +61,9 @@ export type HtmlEditorScreenProps = {
   localAgentProviders: LocalAgentProviderStatus[];
   runtimeProfiles: RuntimeProfile[];
   selectedRuntimeProfileId: string;
-  attributeDraft: AttributeDraft;
-  imageDraft: ImageAttributes;
-  tableDraft: { rows: string; columns: string };
-  styleDraft: ElementStyleAttributes;
   linkDraft: LinkDraft;
   linkEditorOpen: boolean;
   loading: boolean;
-  operationDraft: string;
-  operationIsHtml: boolean;
-  operationPanelMode: OperationPanelMode;
-  operationPosition: AdjacentInsertPosition;
-  operationWrapperTag: string;
   runtime: RuntimeState | null;
   saveState: WorkspaceSaveState;
   agentProcessing: boolean;
@@ -81,40 +72,32 @@ export type HtmlEditorScreenProps = {
   toolbarState: ToolbarState;
   onAlignment: (alignment: Alignment) => void;
   onApplyLink: (draft: LinkDraft) => void;
-  onApplyOperation: () => void;
-  onAttributeDraftChange: (value: AttributeDraft) => void;
   onBackHome: () => void;
+  onTiptapBodyChange: (bodyInnerHTML: string, selection: SelectionState | null) => void;
+  onTiptapSelectionChange: (selection: SelectionState | null, toolbarState?: ToolbarState) => void;
+  onToolbarInteractionStart: () => void;
   onExportHtml: () => Promise<void>;
   onExportPdf: () => Promise<void>;
   onDismissExportNotice: () => void;
   onOpenExportLocation: () => void;
   onCloseLinkEditor: () => void;
-  onCloseOperation: () => void;
   onBackColor: (color: string) => void;
   onForeColor: (color: string) => void;
-  onTableDraftChange: (value: { rows: string; columns: string }) => void;
-  onStyleDraftChange: (value: ElementStyleAttributes) => void;
+  onUploadImageFile: (file: File) => Promise<ImageAttributes>;
   onLineHeight: (lineHeight: string) => void;
   onLetterSpacing: (letterSpacing: string) => void;
   onLayoutChange: (attributes: Partial<ToolbarLayoutValue>) => void;
   onCreateLink: () => void;
   onFontFamily: (fontFamily: string) => void;
   onFontSize: (fontSize: string) => void;
-  onFrameLoad: () => void;
   onFormat: (tagName: InlineFormatTag) => void;
   onHeading: (tagName: HeadingTag) => void;
-  onImageDraftChange: (value: ImageAttributes) => void;
   onIndent: () => void;
   onChecklist: () => void;
   onList: (kind: ListKind) => void;
   onLinkDraftChange: (value: LinkDraft) => void;
   onLoadFixture: () => void;
   onMoreAction: (action: string) => void;
-  onMutation: (operationType: string, description: string) => void;
-  onOperationDraftChange: (value: string) => void;
-  onOperationHtmlChange: (value: boolean) => void;
-  onOperationPositionChange: (value: AdjacentInsertPosition) => void;
-  onOperationWrapperTagChange: (value: string) => void;
   onOutdent: () => void;
   onPickImage: () => void;
   onSendAgentPrompt: (prompt: string) => Promise<void>;
@@ -122,98 +105,46 @@ export type HtmlEditorScreenProps = {
   onCancelAgentRun: (runId: string) => Promise<void>;
   onRemoveLink: () => void;
   onRedo: () => void;
-  onResetFrame: () => void;
-  onSelection: () => void;
-  onToolbarInteractionStart: () => void;
   onUndo: () => void;
 };
 
 export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
-  const canUndo = Boolean(props.runtime && props.runtime.history.currentIndex > 0);
-  const canRedo = Boolean(props.runtime && props.runtime.history.currentIndex < props.runtime.history.snapshots.length - 1);
+  const { t } = useI18n();
   const toolbarDisabled = props.toolbarDisabled || props.readOnly;
   const [spacingMenuOpen, setSpacingMenuOpen] = useState(false);
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
-  const [frameHeight, setFrameHeight] = useState(minimumHtmlFrameHeight);
   const linkEditorRef = useRef<HTMLDivElement | null>(null);
   const linkEditorPanelRef = useRef<HTMLFormElement | null>(null);
-  const frameScrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const frameResizeRafRef = useRef<number | null>(null);
+  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
+  const editorScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [linkEditorPosition, setLinkEditorPosition] = useState<LinkEditorPosition | null>(null);
-  const hasPreservedRangeSelection = Boolean(props.runtime?.activeSelection && props.runtime.activeSelection.selectionType !== "write");
-  const hasPreservedWriteSelection = Boolean(props.runtime?.activeSelection?.selectionType === "write" && props.runtime.activeSelection.commonAncestorPath);
-  const canUseRangeSelection = props.toolbarState.rangeSelection || hasPreservedRangeSelection;
-  const canCreateLink = !toolbarDisabled && (canUseRangeSelection || hasPreservedWriteSelection || props.toolbarState.table || props.toolbarState.contentElement);
-  const linkEditorOpen = props.linkEditorOpen && !props.toolbarState.image;
+  const tiptapEditor = useHtmlTiptapEditor({
+    props,
+    toolbarDisabled,
+    onRequestLinkEditor: (draft) => {
+      props.onLinkDraftChange(draft);
+      props.onCreateLink();
+    },
+    onRequestImageFile: () => {
+      if (props.readOnly) return;
+      const fileInput = imageFileInputRef.current;
+      if (!fileInput) return;
+      fileInput.value = "";
+      fileInput.click();
+    },
+  });
 
-  const updateHtmlFrameHeight = (pass = 0) => {
-    const frame = props.iframeRef.current;
-    const doc = frame?.contentDocument;
-    if (!frame || !doc?.body) return;
-    const nextHeight = measureHtmlFrameContentHeight(doc);
-    frame.style.height = `${nextHeight}px`;
-    setFrameHeight((current) => (current === nextHeight ? current : nextHeight));
-    if (pass >= 2) return;
-    frameResizeRafRef.current = window.requestAnimationFrame(() => {
-      frameResizeRafRef.current = null;
-      const renderedHeight = Math.ceil(frame.getBoundingClientRect().height);
-      if (measureHtmlFrameContentHeight(doc) > renderedHeight) updateHtmlFrameHeight(pass + 1);
-    });
+  const handleTiptapImageFileInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const fileInput = event.currentTarget;
+    const file = fileInput.files?.[0] ?? null;
+    fileInput.value = "";
+    if (!file) return;
+    const image = await props.onUploadImageFile(file);
+    tiptapEditor.insertImage({ src: image.src, alt: image.alt });
   };
-
-  const scheduleHtmlFrameResize = () => {
-    if (frameResizeRafRef.current !== null) window.cancelAnimationFrame(frameResizeRafRef.current);
-    frameResizeRafRef.current = window.requestAnimationFrame(() => {
-      frameResizeRafRef.current = null;
-      updateHtmlFrameHeight();
-    });
-  };
-
-  useEffect(() => {
-    setFrameHeight(minimumHtmlFrameHeight);
-    scheduleHtmlFrameResize();
-
-    const doc = props.iframeRef.current?.contentDocument ?? null;
-    if (!doc?.body) {
-      return () => {
-        if (frameResizeRafRef.current !== null) window.cancelAnimationFrame(frameResizeRafRef.current);
-      };
-    }
-
-    const mutationObserver = new MutationObserver(scheduleHtmlFrameResize);
-    mutationObserver.observe(doc.documentElement, {
-      attributes: true,
-      childList: true,
-      characterData: true,
-      subtree: true,
-    });
-
-    doc.addEventListener("load", scheduleHtmlFrameResize, true);
-
-    return () => {
-      mutationObserver.disconnect();
-      doc.removeEventListener("load", scheduleHtmlFrameResize, true);
-      if (frameResizeRafRef.current !== null) window.cancelAnimationFrame(frameResizeRafRef.current);
-      frameResizeRafRef.current = null;
-    };
-  }, [props.frameRevision, props.frameSrcDoc]);
-
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (event.source !== props.iframeRef.current?.contentWindow) return;
-      const data = event.data as { type?: unknown; deltaX?: unknown; deltaY?: unknown };
-      if (!data || data.type !== "ai-doc-frame-wheel") return;
-      const scroller = frameScrollContainerRef.current;
-      if (!scroller) return;
-      scroller.scrollLeft += typeof data.deltaX === "number" ? data.deltaX : 0;
-      scroller.scrollTop += typeof data.deltaY === "number" ? data.deltaY : 0;
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [props.iframeRef]);
 
   useLayoutEffect(() => {
-    if (!linkEditorOpen) {
+    if (!props.linkEditorOpen) {
       setLinkEditorPosition(null);
       return;
     }
@@ -243,7 +174,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
     };
 
     const raf = window.requestAnimationFrame(updatePosition);
-    const scroller = frameScrollContainerRef.current;
+    const scroller = editorScrollContainerRef.current;
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
     scroller?.addEventListener("scroll", updatePosition, { passive: true });
@@ -253,19 +184,10 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
       window.removeEventListener("scroll", updatePosition, true);
       scroller?.removeEventListener("scroll", updatePosition);
     };
-  }, [linkEditorOpen]);
+  }, [props.linkEditorOpen]);
 
   useEffect(() => {
-    if (!linkEditorOpen) return;
-    const doc = props.iframeRef.current?.contentDocument;
-    if (!doc) return;
-    const onFramePointerDown = () => props.onCloseLinkEditor();
-    doc.addEventListener("pointerdown", onFramePointerDown, true);
-    return () => doc.removeEventListener("pointerdown", onFramePointerDown, true);
-  }, [props.frameRevision, props.iframeRef, linkEditorOpen, props.onCloseLinkEditor]);
-
-  useEffect(() => {
-    if (!linkEditorOpen) return;
+    if (!props.linkEditorOpen) return;
     const onPointerDown = (event: PointerEvent) => {
       if (linkEditorRef.current?.contains(event.target as Node) || linkEditorPanelRef.current?.contains(event.target as Node)) return;
       props.onCloseLinkEditor();
@@ -279,52 +201,52 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [linkEditorOpen, props.onCloseLinkEditor]);
+  }, [props.linkEditorOpen, props.onCloseLinkEditor]);
 
   const linkEditorStyle: CSSProperties = linkEditorPosition
     ? { left: linkEditorPosition.left, top: linkEditorPosition.top, width: linkEditorPosition.width }
     : { visibility: "hidden" };
   const linkEditorPortal =
-    linkEditorOpen && typeof document !== "undefined"
+    props.linkEditorOpen && typeof document !== "undefined"
       ? createPortal(
           <form
             ref={linkEditorPanelRef}
             data-toolbar-skip-selection-preserve="true"
-            className="fixed z-50 grid w-[260px] max-w-[calc(100vw-16px)] gap-1.5 rounded-[8px] border border-[#B8A07C]/30 bg-[#EEE8DC] p-2 "
+            className="fixed z-50 grid w-[300px] max-w-[calc(100vw-16px)] gap-1.5 rounded-[16px] border border-[#B8A07C]/55 bg-[#F4EFE6] p-2 shadow-[0_18px_46px_rgba(0,0,0,0.16)]"
             style={linkEditorStyle}
             onSubmit={(event) => {
               event.preventDefault();
-              props.onApplyLink(props.linkDraft);
+              tiptapEditor.toolbarProps.onApplyLink(props.linkDraft);
             }}
           >
             <input
-              className="h-7 w-full rounded-[8px] border border-[#B8A07C]/30 bg-[#F9F4EC] px-2 text-[11px] font-medium text-[#2A2620] outline-none placeholder:text-[#8B8275]"
+              className="h-7 w-full rounded-[10px] border border-[#B8A07C]/50 bg-[#E6DDCD]/55 px-2 text-[11px] font-medium text-[#2A2620] outline-none placeholder:text-[#8B8275]"
               value={props.linkDraft.text}
               onChange={(event) => props.onLinkDraftChange({ ...props.linkDraft, text: event.currentTarget.value })}
               onMouseDown={(event) => event.stopPropagation()}
-              placeholder="Text"
-              aria-label="Link text"
+              placeholder={t("editor.linkText")}
+              aria-label={t("editor.linkTextAria")}
             />
             <div className="flex min-w-0 items-center gap-1">
               <input
-                className="h-7 min-w-0 flex-1 rounded-[8px] border border-[#B8A07C]/30 bg-[#F9F4EC] px-2 text-[11px] font-medium text-[#2A2620] outline-none placeholder:text-[#8B8275]"
+                className="h-7 min-w-0 flex-1 rounded-[10px] border border-[#B8A07C]/50 bg-[#E6DDCD]/55 px-2 text-[11px] font-medium text-[#2A2620] outline-none placeholder:text-[#8B8275]"
                 value={props.linkDraft.href}
                 onChange={(event) => props.onLinkDraftChange({ ...props.linkDraft, href: event.currentTarget.value })}
                 onMouseDown={(event) => event.stopPropagation()}
                 placeholder="https://"
-                aria-label="Link URL"
+                aria-label={t("editor.linkUrlAria")}
               />
-              <button className="h-7 rounded-[8px] bg-[#2A2620] px-2.5 text-[11px] font-semibold text-[#F4EFE6]" type="submit">
-                Apply
+              <button className="h-7 rounded-[10px] bg-[#2A2620] px-2.5 text-[10px] font-semibold text-[#F4EFE6]" type="submit">
+                {t("editor.apply")}
               </button>
-              {props.toolbarState.link ? (
+              {tiptapEditor.toolbarState.link ? (
                 <button
-                  className="h-7 rounded-[8px] border border-[#B8A07C]/30 bg-[#F9F4EC] px-2.5 text-[11px] font-semibold text-[#2A2620]"
+                  className="h-7 rounded-[10px] border border-[#B8A07C]/50 bg-[#F4EFE6] px-2.5 text-[10px] font-semibold text-[#2A2620]"
                   type="button"
-                  onClick={props.onRemoveLink}
+                  onClick={tiptapEditor.toolbarProps.onRemoveLink}
                   onMouseDown={(event) => event.stopPropagation()}
                 >
-                  Remove
+                  {t("editor.remove")}
                 </button>
               ) : null}
             </div>
@@ -336,11 +258,11 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
   return (
     <>
       <ArtifactEditorWorkspace
-        title={props.runtime?.title ?? "Untitled Doc"}
+        title={props.runtime?.title ?? t("editor.untitledDoc")}
         saveState={props.saveState}
         agentWorking={props.agentProcessing}
-        agentOverlayEnabled={false}
         exportNotice={props.exportNotice}
+        copy={artifactEditorCopy(t)}
         bodyClassName="flex flex-col"
         tone="lumen"
         onBackHome={props.onBackHome}
@@ -348,12 +270,12 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
         onOpenExportLocation={props.onOpenExportLocation}
         exportItems={[
           {
-            label: "DOCX (coming soon)",
+            label: t("editor.docxComingSoon"),
             disabled: true,
             onSelect: () => undefined,
           },
           {
-            label: props.pdfExporting ? "PDF exporting..." : "PDF",
+            label: props.pdfExporting ? t("editor.pdfExporting") : "PDF",
             disabled: props.pdfExporting || !props.pdfExportAvailable,
             loading: props.pdfExporting,
             onSelect: () => props.onExportPdf(),
@@ -378,122 +300,39 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
           />
         }
       >
-        <HtmlEditorToolbar
-          canCreateLink={canCreateLink}
-          layoutMenuOpen={layoutMenuOpen}
-          linkEditorRef={linkEditorRef}
-          props={props}
-          spacingMenuOpen={spacingMenuOpen}
-          toolbarDisabled={toolbarDisabled}
-          onLayoutMenuOpenChange={setLayoutMenuOpen}
-          onSpacingMenuOpenChange={setSpacingMenuOpen}
+        <input
+          ref={imageFileInputRef}
+          className="hidden"
+          type="file"
+          accept="image/*"
+          onChange={(event) => void handleTiptapImageFileInputChange(event)}
         />
-        <div ref={frameScrollContainerRef} className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-3 py-5 md:px-6 md:py-7 ${scrollbarClass}`}>
-          {props.frameSrcDoc ? (
-            <div className="relative mx-auto w-full max-w-[980px] overflow-hidden rounded-[8px]" style={{ height: frameHeight }}>
-              <iframe
-                key={props.frameRevision}
-                ref={props.iframeRef}
-                className={`block min-h-[860px] w-full overflow-clip rounded-[8px] border border-[#B8A07C]/30 bg-white transition-opacity duration-200 ${props.agentProcessing ? "opacity-50" : "opacity-100"}`}
-                style={{ height: frameHeight }}
-                title={props.runtime?.title ?? "Runtime doc"}
-                sandbox="allow-scripts allow-same-origin"
-                scrolling="no"
-                srcDoc={props.frameSrcDoc}
-                onLoad={() => {
-                  props.onFrameLoad();
-                  scheduleHtmlFrameResize();
-                }}
-                onInput={() => {
-                  props.onMutation("input", "User edited doc body");
-                  scheduleHtmlFrameResize();
-                }}
-                onKeyUp={props.onSelection}
-                onMouseUp={props.onSelection}
-              />
-              <ArtifactAgentProcessingOverlay active={props.agentProcessing} />
-            </div>
+        <div ref={editorScrollContainerRef} className={`h-full overflow-x-hidden overflow-y-auto bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] bg-[size:28px_28px] px-3 py-5 md:px-6 md:py-7 ${scrollbarClass}`}>
+          <HtmlEditorToolbar
+            canCreateLink={tiptapEditor.canCreateLink}
+            canRedo={tiptapEditor.canRedo}
+            canUndo={tiptapEditor.canUndo}
+            layoutMenuOpen={layoutMenuOpen}
+            linkEditorRef={linkEditorRef}
+            props={tiptapEditor.toolbarProps}
+            spacingMenuOpen={spacingMenuOpen}
+            toolbarDisabled={toolbarDisabled}
+            onLayoutMenuOpenChange={setLayoutMenuOpen}
+            onSpacingMenuOpenChange={setSpacingMenuOpen}
+          />
+
+          {props.runtime ? (
+            <HtmlTiptapEditorSurface editor={tiptapEditor.editor} projectId={props.projectId} runtime={props.runtime} />
           ) : (
-            <div className="mx-auto grid min-h-[620px] max-w-[860px] place-items-center rounded-[8px] border border-[#B8A07C]/30 bg-[#F4EFE6]/55 text-center text-[13px] text-[#8B8275]">
-              Loading doc...
+            <div className="mx-auto grid min-h-[620px] max-w-[860px] place-items-center rounded-[20px] border border-[#B8A07C]/55 bg-[#F4EFE6]/55 text-center text-[#8B8275]">
+              {t("editor.loadingDocProgress")}
             </div>
           )}
         </div>
-        <HtmlHistoryToolbar
-          canRedo={canRedo}
-          canUndo={canUndo}
-          onRedo={props.onRedo}
-          onToolbarInteractionStart={props.onToolbarInteractionStart}
-          onUndo={props.onUndo}
-        />
       </ArtifactEditorWorkspace>
       {linkEditorPortal}
     </>
   );
-}
-
-function HtmlHistoryToolbar(props: {
-  canRedo: boolean;
-  canUndo: boolean;
-  onRedo: () => void;
-  onToolbarInteractionStart: () => void;
-  onUndo: () => void;
-}) {
-  return (
-    <div
-      className="absolute bottom-4 left-4 z-30 inline-flex items-center gap-1 rounded-[12px] border border-[#B8A07C]/30 bg-[#F9F4EC] p-1 text-[#2A2620] "
-      data-toolbar-skip-selection-preserve="true"
-      aria-label="History tools"
-      onMouseDownCapture={(event) => {
-        props.onToolbarInteractionStart();
-        event.preventDefault();
-      }}
-      onPointerDownCapture={props.onToolbarInteractionStart}
-    >
-      <button
-        className="grid size-7 place-items-center rounded-[8px] border-0 bg-transparent text-[#2A2620]/72 outline-none transition hover:not-disabled:bg-[#EEE8DC]/70 hover:not-disabled:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275] disabled:opacity-45"
-        type="button"
-        aria-label="Undo"
-        title="Undo"
-        disabled={!props.canUndo}
-        onClick={props.onUndo}
-      >
-        <Undo2 size={18} />
-      </button>
-      <button
-        className="grid size-7 place-items-center rounded-[8px] border-0 bg-transparent text-[#2A2620]/72 outline-none transition hover:not-disabled:bg-[#EEE8DC]/70 hover:not-disabled:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275] disabled:opacity-45"
-        type="button"
-        aria-label="Redo"
-        title="Redo"
-        disabled={!props.canRedo}
-        onClick={props.onRedo}
-      >
-        <Redo2 size={18} />
-      </button>
-    </div>
-  );
-}
-
-
-function measureHtmlFrameContentHeight(doc: Document) {
-  const body = doc.body;
-  const view = doc.defaultView;
-  const computed = view?.getComputedStyle(body);
-  const contentBottom = measureBodyContentBottom(doc);
-  const paddingBottom = Number.parseFloat(computed?.paddingBottom || "") || 0;
-  const borderBottom = Number.parseFloat(computed?.borderBottomWidth || "") || 0;
-  const marginBottom = Number.parseFloat(computed?.marginBottom || "") || 0;
-  return Math.ceil(Math.max(minimumHtmlFrameHeight, contentBottom + (view?.scrollY ?? 0) + paddingBottom + borderBottom + marginBottom)) + 2;
-}
-
-function measureBodyContentBottom(doc: Document) {
-  const bodyRect = doc.body.getBoundingClientRect();
-  const elementBottom = Array.from(doc.body.querySelectorAll<HTMLElement>("body *")).reduce((max, element) => {
-    const rect = element.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) return max;
-    return Math.max(max, rect.bottom - bodyRect.top);
-  }, 0);
-  return Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight, elementBottom);
 }
 
 function clampNumber(value: number, min: number, max: number) {

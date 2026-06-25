@@ -7,6 +7,7 @@ import { openProjectExportsDir } from "../api/projects";
 import { saveDocxArtifactPdfExport } from "./docxExport";
 import { saveHtmlArtifactExport, saveHtmlArtifactPdfExport } from "./htmlExport";
 import { saveMarkdownArtifactExport, saveMarkdownArtifactPdfExport } from "./markdownExport";
+import type { useI18n } from "../i18n";
 
 type DocumentExportActionsInput = {
   currentProject: DocumentProject | null;
@@ -20,6 +21,7 @@ type DocumentExportActionsInput = {
   setExportNotice: (value: string) => void;
   setPdfExporting: (value: boolean) => void;
   setSourceExporting: (value: boolean) => void;
+  t: ReturnType<typeof useI18n>["t"];
 };
 
 export function createDocumentExportActions(input: DocumentExportActionsInput) {
@@ -39,7 +41,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
         html: input.serializeHtmlRuntime(input.runtime),
       });
       console.info(`[ai-doc] Exported HTML to ${exported.path}`);
-      input.setExportNotice(`Exported HTML to ${exported.path}`);
+      input.setExportNotice(input.t("editor.exportedHtml", { path: exported.path }));
     } catch (err) {
       input.setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -59,7 +61,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
         html: renderHtmlProjectAssetReferences(input.serializeHtmlRuntime(input.runtime), input.currentProjectId),
       });
       console.info(`[ai-doc] Exported PDF to ${exported.path}`);
-      input.setExportNotice(`Exported PDF to ${exported.path}`);
+      input.setExportNotice(input.t("editor.exportedPdf", { path: exported.path }));
     } catch (err) {
       input.setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -79,7 +81,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
         markdown,
       });
       console.info(`[ai-doc] Exported Markdown to ${exported.path}`);
-      input.setExportNotice(`Exported Markdown to ${exported.path}`);
+      input.setExportNotice(input.t("editor.exportedMarkdown", { path: exported.path }));
     } catch (err) {
       input.setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -99,7 +101,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
         markdown,
       });
       console.info(`[ai-doc] Exported Markdown PDF to ${exported.path}`);
-      input.setExportNotice(`Exported PDF to ${exported.path}`);
+      input.setExportNotice(input.t("editor.exportedPdf", { path: exported.path }));
     } catch (err) {
       input.setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -119,7 +121,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
         title: docxTitle,
       });
       console.info(`[ai-doc] Exported DOCX PDF to ${exported.path}`);
-      input.setExportNotice(`Exported PDF to ${exported.path}`);
+      input.setExportNotice(input.t("editor.exportedPdf", { path: exported.path }));
     } catch (err) {
       input.setError(err instanceof Error ? err.message : String(err));
     } finally {
