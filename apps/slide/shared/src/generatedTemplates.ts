@@ -1,6 +1,36 @@
 import type { SlideTemplate } from "./index.js";
 
-export const slideTemplates: SlideTemplate[] = [
+const hiddenTemplateIds = new Set([
+  "consulting-final-deck",
+  "consulting-capability-pitch",
+  "regional-business-review-deck",
+  "quarterly-business-review-deck",
+  "annual-budget-review-deck",
+  "five-year-vision-deck",
+  "ceo-ready-deck-polish",
+  "brand-template-system-deck",
+  "keynote-redesign-polish-deck",
+  "board-upgrade-deck-rescue",
+  "customer-qbr-renewal-deck",
+  "pricing-renewal-proposal-deck",
+  "government-enterprise-rfp-deck",
+  "rfp-response-deck",
+  "design-thinking-group-project-deck",
+  "online-course-capstone-deck",
+  "high-school-class-presentation",
+  "stem-topic-deep-dive",
+  "summer-research-pitch-deck",
+  "humanities-seminar-deck",
+  "kol-campaign-recap-deck",
+  "flagship-product-launch-deck",
+  "k12-test-prep-deck",
+  "cefr-language-lesson-deck",
+  "caregiver-cert-training-deck",
+  "vocational-trade-skills-deck",
+  "wellness-workshop-deck",
+]);
+
+const bundledSlideTemplates: SlideTemplate[] = [
   {
     "id": "consulting-diagnostic-audit-deck",
     "name": "Diagnose a Client the Way a Tier-1 Implementation Lead Would",
@@ -8304,3 +8334,5 @@ export const slideTemplates: SlideTemplate[] = [
     ]
   }
 ];
+
+export const slideTemplates = bundledSlideTemplates.filter((template) => !hiddenTemplateIds.has(template.id));

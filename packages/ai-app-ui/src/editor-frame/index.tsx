@@ -226,7 +226,7 @@ export function ArtifactWorkspaceHeader(props: {
         {props.onBackHome ? (
           <button
             className={cx(
-              "grid size-8 shrink-0 place-items-center rounded-[10px] border transition",
+              "grid size-8 shrink-0 place-items-center rounded-full border transition",
               lumen ? lumenHeaderButtonClass : darkHeaderButtonClass,
             )}
             type="button"
@@ -237,13 +237,13 @@ export function ArtifactWorkspaceHeader(props: {
             <ArrowLeft size={16} />
           </button>
         ) : null}
-        <div className={cx("min-w-0 truncate text-[13px] font-semibold", lumen ? "text-[#2A2620]" : "text-white")}>{props.title}</div>
+        <div className={cx("flex h-5 min-w-0 items-center truncate text-[13px] font-semibold leading-none", lumen ? "text-[#2A2620]" : "text-white")}>{props.title}</div>
         <SaveStateBadge agentWorking={props.agentWorking} copy={copy} state={props.saveState} tone={props.tone} />
         {props.stats?.length ? (
-          <div className={cx("hidden min-w-0 items-center gap-1.5 text-[11px] font-semibold md:flex", lumen ? "text-[#8B8275]" : "text-white/32")}>
+          <div className={cx("hidden h-5 min-w-0 items-center gap-1.5 text-[11px] font-semibold leading-none md:flex", lumen ? "text-[#8B8275]" : "text-white/32")}>
             {props.stats.map((stat, index) => (
-              <span className="shrink-0" key={stat}>
-                {index > 0 ? <span className={cx("mr-1.5", lumen ? "text-[#B8A07C]" : "text-white/18")}>/</span> : null}
+              <span className="inline-flex h-5 shrink-0 items-center" key={stat}>
+                {index > 0 ? <span className={cx("mr-1.5 inline-flex h-5 items-center", lumen ? "text-[#B8A07C]" : "text-white/18")}>/</span> : null}
                 {stat}
               </span>
             ))}
@@ -332,7 +332,7 @@ function SaveStateBadge(props: { state: ArtifactSaveState; agentWorking?: boolea
           ? props.copy.loading
           : props.copy.saving;
   return (
-    <span className={cx("relative top-px inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold", props.tone === "lumen" ? "text-[#8B8275]" : "text-white/42")} title={label}>
+    <span className={cx("inline-flex h-5 shrink-0 items-center gap-1.5 text-[11px] font-semibold leading-none", props.tone === "lumen" ? "text-[#8B8275]" : "text-white/42")} title={label}>
       <span className={`size-1.5 rounded-full ${tone}`} />
       {label}
     </span>
