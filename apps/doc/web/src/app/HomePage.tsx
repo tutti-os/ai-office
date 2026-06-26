@@ -84,7 +84,7 @@ export function HomePage(props: {
       <div className={homeContentClass}>
         <section className={homeHeroSectionClass}>
           <h1 className={homeTitleClass}>
-            <HomeTitleText emphasisTerms={["docs", "doc", "document", "文档"]} title={t("home.heading")} />
+            <HomeTitleText emphasisTerms={["docs", "doc", "document"]} title={t("home.heading")} />
           </h1>
 
           <HomeComposer

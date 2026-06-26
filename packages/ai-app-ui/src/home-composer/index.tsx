@@ -257,7 +257,7 @@ function FormatOption(props: {
         </span>
       ) : props.showInstall ? (
         <button
-          className="ml-auto grid size-8 shrink-0 cursor-pointer place-items-center rounded-full border border-[#B8A07C]/30 bg-[#5C6B50] text-[#F4EFE6] transition-colors hover:bg-[#4C5E42] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B8A07C]/45"
+          className="ml-auto grid size-8 shrink-0 cursor-pointer place-items-center rounded-full border border-white/15 bg-[#5C6B50] text-[#F4EFE6] transition-colors hover:border-white/15 hover:bg-[#4C5E42] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/30"
           type="button"
           title={props.downloadLabel}
           aria-label={props.downloadLabel}

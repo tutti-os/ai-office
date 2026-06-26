@@ -14,7 +14,7 @@ export const darkScrollbarClass =
 export const appShell = {
   page:
     cx(
-      "relative overflow-auto bg-[#F4EFE6] text-[#2A2620] [color-scheme:light] before:pointer-events-none before:fixed before:inset-0 before:bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] before:bg-[size:28px_28px] before:[-webkit-mask-image:linear-gradient(to_bottom,#000_0%,rgba(0,0,0,0.7)_38%,transparent_100%)] before:[mask-image:linear-gradient(to_bottom,#000_0%,rgba(0,0,0,0.7)_38%,transparent_100%)] before:content-['']",
+      "relative overflow-auto bg-[#F4EFE6] text-[#2A2620] [color-scheme:light] [scrollbar-gutter:stable_both-edges] before:pointer-events-none before:fixed before:inset-0 before:bg-[linear-gradient(90deg,rgba(42,38,32,0.045)_1px,transparent_1px),linear-gradient(180deg,rgba(42,38,32,0.04)_1px,transparent_1px)] before:bg-[size:28px_28px] before:[-webkit-mask-image:linear-gradient(to_bottom,#000_0%,rgba(0,0,0,0.7)_38%,transparent_100%)] before:[mask-image:linear-gradient(to_bottom,#000_0%,rgba(0,0,0,0.7)_38%,transparent_100%)] before:content-['']",
       scrollbarClass,
     ),
   topAction:

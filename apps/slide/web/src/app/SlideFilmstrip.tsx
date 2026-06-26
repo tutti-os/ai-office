@@ -149,7 +149,7 @@ export function SlideFilmstrip(props: SlideFilmstripProps) {
         })}
       </div>
       {scrollbar.visible ? (
-        <div className="absolute bottom-1 left-5 right-5 z-20 flex h-3 items-center opacity-0 transition-opacity group-hover/filmstrip:opacity-100 group-focus-within/filmstrip:opacity-100">
+        <div className="pointer-events-none absolute bottom-1 left-5 right-5 z-20 flex h-3 items-center opacity-0 transition-opacity group-hover/filmstrip:pointer-events-auto group-hover/filmstrip:opacity-100 group-focus-within/filmstrip:pointer-events-auto group-focus-within/filmstrip:opacity-100">
           <div
             ref={trackRef}
             className="relative h-1.5 w-full cursor-pointer rounded-full bg-[#B8A07C]/18"
