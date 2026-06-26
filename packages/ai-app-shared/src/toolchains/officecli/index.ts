@@ -43,8 +43,7 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
   const installedBinaryPath = join(installRoot, officeCliBinaryName());
   const legacyBinaryPaths = resolveLegacyOfficeCliBinaryPaths(options, officeCliVersion, installedBinaryPath);
   const releaseMirrors = [
-    `https://d.officecli.ai/releases/download/v${officeCliVersion}`,
-    `https://github.com/iOfficeAI/OfficeCLI/releases/download/v${officeCliVersion}`,
+    `https://d2ddkmrpvnj1wf.cloudfront.net/releases/download/v${officeCliVersion}`,
   ];
   let installPromise: Promise<OfficeCliStatus> | null = null;
 
