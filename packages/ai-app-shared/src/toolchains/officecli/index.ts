@@ -87,6 +87,9 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
 
   async function installOfficeCli(): Promise<OfficeCliStatus> {
     if (installPromise) return installPromise;
+    const status = await getOfficeCliStatus();
+    if (status.available) return markInstallIdle(status);
+
     installPromise = doInstallOfficeCli().finally(() => {
       installPromise = null;
     });
@@ -144,6 +147,9 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
   }
 
   async function doInstallOfficeCli(): Promise<OfficeCliStatus> {
+    const currentStatus = await getOfficeCliStatus();
+    if (currentStatus.available) return markInstallIdle(currentStatus);
+
     if (!canInstallOfficeCli()) {
       return {
         available: false,
@@ -168,7 +174,7 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
       await verifySha256(tempPath, sumsPath, asset);
       await chmod(tempPath, 0o755);
       await rename(tempPath, installedBinaryPath);
-      return getOfficeCliStatus();
+      return markInstallIdle(await getOfficeCliStatus());
     } catch (error) {
       await rm(tempPath, { force: true }).catch(() => undefined);
       return {
@@ -241,6 +247,10 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
     officeCliEnv,
     officeCliEnvSync,
   };
+}
+
+function markInstallIdle(status: OfficeCliStatus): OfficeCliStatus {
+  return { ...status, installing: false };
 }
 
 function resolveOfficeCliInstallRoot(options: OfficeCliToolchainOptions, officeCliVersion: string) {
