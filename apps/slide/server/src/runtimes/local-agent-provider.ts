@@ -2,15 +2,16 @@ import { readdir, readFile } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
 import {
   LocalAgentRuntimeProvider as SharedLocalAgentRuntimeProvider,
+  loadTuttiLocalAgentSkillContext,
   type LocalAgentSkillContext,
   type LocalAgentSkillManifestResult,
+  type SkillMaterializationFile,
+  type SkillMaterializationRecord,
 } from "@ai-app/agent/local-agent-runtime";
 import type { AiEditRequest, SlideRun } from "@ai-slide/shared";
-import type { SkillMaterializationFile, SkillMaterializationRecord } from "@tutti-os/agent-acp-kit";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { extractOoxmlTextPreview } from "../artifact/ooxml-text.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
-import { loadTuttiAgentSkillContext } from "../tutti/agent-skill-bundle.js";
 import { tuttiCliEnv } from "../tutti/tutti-cli.js";
 import { deckSystemAuthoringPrompt } from "./deck-system-prompt.js";
 import { buildSlideAppToolEnv, buildSlideAppToolMcpServers } from "../agent-tools.js";
@@ -53,14 +54,15 @@ async function buildSlideAgentSkillContext(
 ): Promise<LocalAgentSkillManifestResult> {
   const projectSkills = await buildProjectSkillManifest(context, workspaceRoot);
   try {
-    const tuttiContext = await loadTuttiAgentSkillContext({
+    const tuttiContext = await loadTuttiLocalAgentSkillContext({
       provider: context.runtimeProfile.provider,
       agentSessionId: context.run.id,
-      workspaceCwd: tuttiWorkspaceCwd(workspaceRoot),
+      cwd: tuttiWorkspaceCwd(workspaceRoot),
+      commandEnvNames: ["AI_SLIDE_TUTTI_CLI"],
     });
     return {
       skills: [...tuttiContext.skills, ...projectSkills],
-      ...(tuttiContext.systemPrompt ? { systemPrompt: tuttiContext.systemPrompt } : {}),
+      ...(tuttiContext.recommendedSystemPrompt ? { recommendedSystemPrompt: tuttiContext.recommendedSystemPrompt } : {}),
     };
   } catch (error) {
     console.warn(`[ai-slide] Unable to load Tutti agent skill bundle: ${errorMessage(error)}`);
@@ -202,7 +204,7 @@ function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, 
 }
 
 function withTuttiSkillGuidance(appSystemPrompt: string, skillContext: LocalAgentSkillContext) {
-  return joinPromptParts(appSystemPrompt, formatTuttiSkillGuidance(skillContext.systemPrompt));
+  return joinPromptParts(appSystemPrompt, formatTuttiSkillGuidance(skillContext.recommendedSystemPrompt?.content));
 }
 
 function formatTuttiSkillGuidance(systemPrompt: string | undefined) {

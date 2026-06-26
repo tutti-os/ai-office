@@ -40,9 +40,6 @@ importers:
       '@fastify/websocket':
         specifier: ^11.2.0
         version: 11.2.0
-      '@tutti-os/agent-acp-kit':
-        specifier: 0.2.3
-        version: 0.2.3
       fastify:
         specifier: ^5.6.2
         version: 5.8.5
@@ -287,9 +284,6 @@ importers:
       '@fastify/websocket':
         specifier: ^11.2.0
         version: 11.2.0
-      '@tutti-os/agent-acp-kit':
-        specifier: 0.2.3
-        version: 0.2.3
       fastify:
         specifier: ^5.8.5
         version: 5.8.5
@@ -381,8 +375,8 @@ importers:
         specifier: workspace:*
         version: link:../ai-app-shared
       '@tutti-os/agent-acp-kit':
-        specifier: 0.2.3
-        version: 0.2.3
+        specifier: 0.2.4
+        version: 0.2.4
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.7)
@@ -2396,8 +2390,8 @@ packages:
   '@tiptap/starter-kit@3.27.1':
     resolution: {integrity: sha512-vfxRsqW8rCc0k4pzo0ilU3wobVi2wqVj88VZI2SlgZlNnUAkrDGDIAph7CTa9k9fshV+O1ivpEgPC5yC046jow==}
 
-  '@tutti-os/agent-acp-kit@0.2.3':
-    resolution: {integrity: sha512-xYRyJ2ihfonR6QiK65sy14KEJ2+TIpDkkfZCoDAkBPbq5rsHjULLdixaHhSghXSIwdfWYCJQjKg0IEw0M+goRg==}
+  '@tutti-os/agent-acp-kit@0.2.4':
+    resolution: {integrity: sha512-P8eAJZ/qV5uI2RwTJyNHnNdxOzneR0HBdDVBNIq+DrWofK2Nhnwo3vWRNvAObuPmSWtMTd1PitM52JaNo/mPUw==}
 
   '@tutti-os/office-preview@0.0.0-test.20260625005644.a24bb42a8055':
     resolution: {integrity: sha512-+AzgxTMVGgdBuBtZFW341AI6re6maC6rc35vp3i/T6UCtG7xKBm1bfJKUj5k5GSyPqbRSc7e7W/oHrm+O1wAyA==}
@@ -6090,7 +6084,7 @@ snapshots:
       '@tiptap/extensions': 3.27.1(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1)
       '@tiptap/pm': 3.27.1
 
-  '@tutti-os/agent-acp-kit@0.2.3':
+  '@tutti-os/agent-acp-kit@0.2.4':
     dependencies:
       '@anthropic-ai/claude-agent-sdk': 0.2.101(zod@4.4.3)
       zod: 4.4.3

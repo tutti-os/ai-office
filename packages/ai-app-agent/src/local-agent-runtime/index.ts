@@ -9,11 +9,18 @@ import {
   type RawAgentStream,
   type SkillMaterializationRecord,
 } from "@tutti-os/agent-acp-kit";
+import {
+  loadTuttiAgentSkillContext,
+  type LoadTuttiAgentSkillContextInput,
+  type TuttiRecommendedSystemPrompt,
+} from "@tutti-os/agent-acp-kit/tutti";
 import type { BaseAiEditRequest, BaseRun, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { safePathSegment } from "@ai-app/shared/local-paths";
 import type { RuntimeEditContext, RuntimeProvider, RuntimeStreamEvent } from "@ai-app/agent/runtime";
 
 const DEFAULT_TIMEOUT_MS = 180_000;
+
+export type { SkillMaterializationFile, SkillMaterializationRecord } from "@tutti-os/agent-acp-kit";
 
 export type LocalAgentMcpServer = {
   name: string;
@@ -27,10 +34,22 @@ export type LocalAgentMcpServer = {
 
 export type LocalAgentSkillContext = {
   skills: SkillMaterializationRecord[];
-  systemPrompt?: string;
+  recommendedSystemPrompt?: TuttiRecommendedSystemPrompt;
 };
 
 export type LocalAgentSkillManifestResult = SkillMaterializationRecord[] | Partial<LocalAgentSkillContext>;
+
+export type LoadTuttiLocalAgentSkillContextInput = LoadTuttiAgentSkillContextInput;
+
+export async function loadTuttiLocalAgentSkillContext(
+  input: LoadTuttiLocalAgentSkillContextInput,
+): Promise<LocalAgentSkillContext> {
+  const context = await loadTuttiAgentSkillContext(input);
+  return {
+    skills: context.skillManifest,
+    ...(context.recommendedSystemPrompt ? { recommendedSystemPrompt: context.recommendedSystemPrompt } : {}),
+  };
+}
 
 export interface LocalAgentRuntimeProviderOptions<
   TRun extends BaseRun = BaseRun,
@@ -258,7 +277,7 @@ function normalizeSkillManifestResult(value: LocalAgentSkillManifestResult | und
   if (Array.isArray(value)) return { skills: value };
   return {
     skills: value.skills ?? [],
-    systemPrompt: typeof value.systemPrompt === "string" && value.systemPrompt.trim() ? value.systemPrompt.trim() : undefined,
+    ...(value.recommendedSystemPrompt ? { recommendedSystemPrompt: value.recommendedSystemPrompt } : {}),
   };
 }
 

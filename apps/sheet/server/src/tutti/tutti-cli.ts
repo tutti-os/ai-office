@@ -12,6 +12,11 @@ export function configuredTuttiCliPath() {
   return process.env.AI_SHEET_TUTTI_CLI?.trim() || process.env.TUTTI_CLI?.trim() || "";
 }
 
+export function tuttiCliEnv(): Record<string, string> {
+  const executablePath = configuredTuttiCliPath();
+  return executablePath ? { TUTTI_CLI: executablePath } : {};
+}
+
 export async function getTuttiCliStatus(): Promise<TuttiCliStatus> {
   const executablePath = configuredTuttiCliPath();
   if (!executablePath) {

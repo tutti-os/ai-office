@@ -2,13 +2,13 @@ import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
   LocalAgentRuntimeProvider as SharedLocalAgentRuntimeProvider,
+  loadTuttiLocalAgentSkillContext,
   type LocalAgentSkillContext,
 } from "@ai-app/agent/local-agent-runtime";
 import type { AiEditRequest, DocumentProject, DocumentRun } from "@ai-doc/shared";
 import { buildDocAppToolEnv, buildDocAppToolMcpServers } from "../agent-tools.js";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
-import { loadTuttiAgentSkillContext } from "../tutti/agent-skill-bundle.js";
 import { tuttiCliEnv } from "../tutti/tutti-cli.js";
 import type { RuntimeEditContext } from "./runtime-provider.js";
 
@@ -44,14 +44,15 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<D
 
 async function buildTuttiAgentSkillContext(context: RuntimeEditContext, workspaceRoot: string) {
   try {
-    return await loadTuttiAgentSkillContext({
+    return await loadTuttiLocalAgentSkillContext({
       provider: context.runtimeProfile.provider,
       agentSessionId: context.run.id,
-      workspaceCwd: tuttiWorkspaceCwd(workspaceRoot),
+      cwd: tuttiWorkspaceCwd(workspaceRoot),
+      commandEnvNames: ["AI_DOC_TUTTI_CLI"],
     });
   } catch (error) {
     console.warn(`[ai-doc] Unable to load Tutti agent skill bundle: ${errorMessage(error)}`);
-    return [];
+    return { skills: [] };
   }
 }
 
@@ -130,7 +131,7 @@ function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, 
 }
 
 function withTuttiSkillGuidance(appSystemPrompt: string, skillContext: LocalAgentSkillContext) {
-  return joinPromptParts(appSystemPrompt, formatTuttiSkillGuidance(skillContext.systemPrompt));
+  return joinPromptParts(appSystemPrompt, formatTuttiSkillGuidance(skillContext.recommendedSystemPrompt?.content));
 }
 
 function formatTuttiSkillGuidance(systemPrompt: string | undefined) {
