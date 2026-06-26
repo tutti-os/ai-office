@@ -1,11 +1,17 @@
 import { readdir, readFile } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
-import { LocalAgentRuntimeProvider as SharedLocalAgentRuntimeProvider } from "@ai-app/agent/local-agent-runtime";
+import {
+  LocalAgentRuntimeProvider as SharedLocalAgentRuntimeProvider,
+  type LocalAgentSkillContext,
+  type LocalAgentSkillManifestResult,
+} from "@ai-app/agent/local-agent-runtime";
 import type { AiEditRequest, SlideRun } from "@ai-slide/shared";
 import type { SkillMaterializationFile, SkillMaterializationRecord } from "@tutti-os/agent-acp-kit";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { extractOoxmlTextPreview } from "../artifact/ooxml-text.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
+import { loadTuttiAgentSkillContext } from "../tutti/agent-skill-bundle.js";
+import { tuttiCliEnv } from "../tutti/tutti-cli.js";
 import { deckSystemAuthoringPrompt } from "./deck-system-prompt.js";
 import { buildSlideAppToolEnv, buildSlideAppToolMcpServers } from "../agent-tools.js";
 import type { RuntimeEditContext, SlideRuntimeProject } from "./runtime-provider.js";
@@ -24,9 +30,10 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       workspaceRoot: (context) => projectWorkspaceRoot(context.project.id),
       buildPrompt: buildEditPrompt,
       buildSystemPrompt,
-      buildSkillManifest: buildProjectSkillManifest,
+      buildSkillManifest: buildSlideAgentSkillContext,
       buildEnv: (context, workspaceRoot) => ({
         ...officeCliEnvSync(),
+        ...tuttiCliEnv(),
         ...buildSlideAppToolEnv(context),
         AI_SLIDE_WORKSPACE: workspaceRoot,
         AI_SLIDE_PROJECT_ID: context.project.id,
@@ -38,6 +45,35 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       buildMcpServers: buildSlideAppToolMcpServers,
     });
   }
+}
+
+async function buildSlideAgentSkillContext(
+  context: RuntimeEditContext,
+  workspaceRoot: string,
+): Promise<LocalAgentSkillManifestResult> {
+  const projectSkills = await buildProjectSkillManifest(context, workspaceRoot);
+  try {
+    const tuttiContext = await loadTuttiAgentSkillContext({
+      provider: context.runtimeProfile.provider,
+      agentSessionId: context.run.id,
+      workspaceCwd: tuttiWorkspaceCwd(workspaceRoot),
+    });
+    return {
+      skills: [...tuttiContext.skills, ...projectSkills],
+      ...(tuttiContext.systemPrompt ? { systemPrompt: tuttiContext.systemPrompt } : {}),
+    };
+  } catch (error) {
+    console.warn(`[ai-slide] Unable to load Tutti agent skill bundle: ${errorMessage(error)}`);
+    return projectSkills;
+  }
+}
+
+function tuttiWorkspaceCwd(fallback: string) {
+  return process.env.TUTTI_WORKSPACE_ROOT?.trim() || process.env.AI_SLIDE_WORKSPACE_ROOT?.trim() || fallback;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function buildProjectSkillManifest(context: RuntimeEditContext, workspaceRoot: string): Promise<SkillMaterializationRecord[]> {
@@ -105,58 +141,80 @@ function isTextSkillFile(fileName: string) {
   return new Set([".md", ".mdx", ".txt", ".json", ".yaml", ".yml"]).has(extname(fileName).toLowerCase());
 }
 
-function buildSystemPrompt(context: RuntimeEditContext) {
+function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, skillContext: LocalAgentSkillContext) {
   if (context.project.artifact.type === "pptx") {
     const targetPptxPath = resolve(projectWorkspaceRoot(context.project.id), "slides.pptx");
-    return [
-      "You are an AI slide editing agent inside a local presentation app.",
-      "This project is a PowerPoint PPTX presentation.",
-      `Current focused file: ${targetPptxPath}`,
-      localFilesystemArtifactNotice,
-      "Use the officecli command-line tool to inspect, create, edit, and validate the focused PPTX file. If an office skill is available in the agent environment, follow it.",
-      "Prefer officecli L1/L2 operations such as view, get, query, add, set, remove, and validate. Do not hand-edit OOXML unless officecli high-level commands cannot solve the task.",
-      "When asked to create or edit the presentation, write the final PPTX result to the focused file.",
-      "Do not convert the presentation to Markdown or a single HTML document unless explicitly asked for a separate export.",
-      noBrowserRenderVerification,
-      "After editing files, respond with a brief task summary only. Do not include extracted PPTX content in the final response.",
-    ].join("\n\n");
+    return withTuttiSkillGuidance(
+      [
+        "You are an AI slide editing agent inside a local presentation app.",
+        "This project is a PowerPoint PPTX presentation.",
+        `Current focused file: ${targetPptxPath}`,
+        localFilesystemArtifactNotice,
+        "Use the officecli command-line tool to inspect, create, edit, and validate the focused PPTX file. If an office skill is available in the agent environment, follow it.",
+        "Prefer officecli L1/L2 operations such as view, get, query, add, set, remove, and validate. Do not hand-edit OOXML unless officecli high-level commands cannot solve the task.",
+        "When asked to create or edit the presentation, write the final PPTX result to the focused file.",
+        "Do not convert the presentation to Markdown or a single HTML document unless explicitly asked for a separate export.",
+        noBrowserRenderVerification,
+        "After editing files, respond with a brief task summary only. Do not include extracted PPTX content in the final response.",
+      ].join("\n\n"),
+      skillContext,
+    );
   }
 
-  return [
-    "You are an AI slide editing agent inside a local presentation app.",
-    "You are working in a project workspace on the local filesystem. The app refreshes the deck from workspace files after you edit them, so the primary way to change the artifact is to read and write files directly in this workspace.",
-    "The current artifact is an HTML-based slide deck, not a PowerPoint `.pptx` file and not a single HTML document.",
-    localFilesystemArtifactNotice,
-    appToolPrompt("slide"),
+  return withTuttiSkillGuidance(
     [
-      "The canonical editable deck is the `deck.slides/` directory in the current working directory.",
-      "",
-      "Deck structure:",
-      "- `deck.slides/slides/*.html` contains the editable HTML for individual slides and is the source of truth for slide content.",
-      "- Each slide HTML file must use an indexed file name such as `01-cover.html`, `02-problem.html`, or `03-plan.html`.",
-      "- Editable slide elements must be marked with `data-object=\"true\"`. Text or mixed content blocks should use `data-object-type=\"textbox\"`; standalone images should use `data-object-type=\"image\"`. Mark complete visual/chart/diagram containers as editable objects too, not only their internal labels.",
-      "- `deck.slides/manifest.json` is app-maintained deck metadata: title, canvas size, and the ordered playlist of slide files.",
-      "- `deck.slides/assets/` contains shared images, stylesheets, fonts, and other assets referenced by slide HTML.",
-      "- `deck.slides/previews/` and `deck.slides/thumbnails/` are generated preview assets and should not be treated as the primary editable source.",
-      "",
-      "Editing rules:",
-      "- Edit the deck files directly under `deck.slides/`.",
-      "- Do not collapse the deck into a single HTML file.",
-      "- Do not convert the deck to Markdown or PPTX unless the user explicitly asks for an export or conversion.",
-      "- Preserve the canvas size from `manifest.json` unless the user explicitly asks to change the deck format.",
-      "- Preserve existing relative asset paths when possible.",
-      "- When adding a new slide, create a new indexed slide HTML file under `deck.slides/slides/`.",
-      "- When deleting a slide, delete its slide HTML file and any assets that are only used by that slide.",
-      "- When starting a new deck from a user request, choose a concise human title and call `set_project_title`; do not leave the raw instruction as the project title.",
-      "- When adding, deleting, renaming, or reordering slides, call the `reorder_slides` app tool instead of manually editing the manifest slides list.",
-      "- Before finishing, review every slide you changed against the fixed canvas contract: no browser scrolling, no meaningful content outside the canvas, no clipped text, and no overlapping body content.",
-      "- If the content does not fit comfortably, split it into additional indexed slides instead of shrinking text below readable size or hiding overflow.",
-      "- To rename the project, call the `set_project_title` app tool instead of editing database or session files.",
-      "- Do not edit generated previews or thumbnails as the source of truth.",
-    ].join("\n"),
-    deckSystemAuthoringPrompt,
-    noBrowserRenderVerification,
-  ].join("\n\n");
+      "You are an AI slide editing agent inside a local presentation app.",
+      "You are working in a project workspace on the local filesystem. The app refreshes the deck from workspace files after you edit them, so the primary way to change the artifact is to read and write files directly in this workspace.",
+      "The current artifact is an HTML-based slide deck, not a PowerPoint `.pptx` file and not a single HTML document.",
+      localFilesystemArtifactNotice,
+      appToolPrompt("slide"),
+      [
+        "The canonical editable deck is the `deck.slides/` directory in the current working directory.",
+        "",
+        "Deck structure:",
+        "- `deck.slides/slides/*.html` contains the editable HTML for individual slides and is the source of truth for slide content.",
+        "- Each slide HTML file must use an indexed file name such as `01-cover.html`, `02-problem.html`, or `03-plan.html`.",
+        "- Editable slide elements must be marked with `data-object=\"true\"`. Text or mixed content blocks should use `data-object-type=\"textbox\"`; standalone images should use `data-object-type=\"image\"`. Mark complete visual/chart/diagram containers as editable objects too, not only their internal labels.",
+        "- `deck.slides/manifest.json` is app-maintained deck metadata: title, canvas size, and the ordered playlist of slide files.",
+        "- `deck.slides/assets/` contains shared images, stylesheets, fonts, and other assets referenced by slide HTML.",
+        "- `deck.slides/previews/` and `deck.slides/thumbnails/` are generated preview assets and should not be treated as the primary editable source.",
+        "",
+        "Editing rules:",
+        "- Edit the deck files directly under `deck.slides/`.",
+        "- Do not collapse the deck into a single HTML file.",
+        "- Do not convert the deck to Markdown or PPTX unless the user explicitly asks for an export or conversion.",
+        "- Preserve the canvas size from `manifest.json` unless the user explicitly asks to change the deck format.",
+        "- Preserve existing relative asset paths when possible.",
+        "- When adding a new slide, create a new indexed slide HTML file under `deck.slides/slides/`.",
+        "- When deleting a slide, delete its slide HTML file and any assets that are only used by that slide.",
+        "- When starting a new deck from a user request, choose a concise human title and call `set_project_title`; do not leave the raw instruction as the project title.",
+        "- When adding, deleting, renaming, or reordering slides, call the `reorder_slides` app tool instead of manually editing the manifest slides list.",
+        "- Before finishing, review every slide you changed against the fixed canvas contract: no browser scrolling, no meaningful content outside the canvas, no clipped text, and no overlapping body content.",
+        "- If the content does not fit comfortably, split it into additional indexed slides instead of shrinking text below readable size or hiding overflow.",
+        "- To rename the project, call the `set_project_title` app tool instead of editing database or session files.",
+        "- Do not edit generated previews or thumbnails as the source of truth.",
+      ].join("\n"),
+      deckSystemAuthoringPrompt,
+      noBrowserRenderVerification,
+    ].join("\n\n"),
+    skillContext,
+  );
+}
+
+function withTuttiSkillGuidance(appSystemPrompt: string, skillContext: LocalAgentSkillContext) {
+  return joinPromptParts(appSystemPrompt, formatTuttiSkillGuidance(skillContext.systemPrompt));
+}
+
+function formatTuttiSkillGuidance(systemPrompt: string | undefined) {
+  const trimmed = systemPrompt?.trim();
+  return trimmed ? `Additional Tutti CLI skill guidance:\n${trimmed}` : undefined;
+}
+
+function joinPromptParts(...parts: Array<string | undefined>) {
+  return parts
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function appToolPrompt(app: "doc" | "slide") {

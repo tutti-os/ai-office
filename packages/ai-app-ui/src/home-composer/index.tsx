@@ -1,7 +1,7 @@
 import { useRef, type ChangeEvent, type ReactNode } from "react";
 import { Check, ChevronDown, Download, File, FileImage, Loader2, Plus, Wand2, X } from "lucide-react";
 import { AgentSelectShell, appShell, cx, formatOptionClass, formatOptionIconClass } from "../app-shell/index.js";
-import { PromptComposer } from "../prompt-composer/index.js";
+import { PromptComposer, type PromptComposerInputRenderProps } from "../prompt-composer/index.js";
 
 export type ArtifactHomeAttachment = {
   id: string;
@@ -104,6 +104,7 @@ export function ArtifactHomeComposer<T extends string>(props: {
   selectedFormatId: T;
   selectAgentLabel: string;
   submitLabel: string;
+  renderPromptInput?: (props: PromptComposerInputRenderProps) => ReactNode;
   onAddFiles: (files: File[]) => void;
   onFormatChange: (formatId: T) => void;
   onPromptChange: (value: string) => void;
@@ -155,6 +156,7 @@ export function ArtifactHomeComposer<T extends string>(props: {
           footerClassName="flex-wrap gap-2.5 pt-1"
           leadingActionsClassName="mr-auto flex-1 basis-[204px] flex-wrap gap-2.5 md:flex-none md:basis-auto"
           placeholder={props.placeholder}
+          renderInput={props.renderPromptInput}
           textareaClassName={cx("block !h-[84px] pb-2", appShell.promptTextarea)}
           trailingActionsClassName="flex-1 md:flex-none"
           value={props.prompt}

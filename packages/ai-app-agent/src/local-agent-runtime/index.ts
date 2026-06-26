@@ -25,6 +25,13 @@ export type LocalAgentMcpServer = {
   toolTimeoutMs?: number;
 };
 
+export type LocalAgentSkillContext = {
+  skills: SkillMaterializationRecord[];
+  systemPrompt?: string;
+};
+
+export type LocalAgentSkillManifestResult = SkillMaterializationRecord[] | Partial<LocalAgentSkillContext>;
+
 export interface LocalAgentRuntimeProviderOptions<
   TRun extends BaseRun = BaseRun,
   TProject extends { id: string } = { id: string },
@@ -32,8 +39,15 @@ export interface LocalAgentRuntimeProviderOptions<
 > {
   workspaceRoot(context: RuntimeEditContext<TRun, TProject, TRequest>): string;
   buildPrompt(context: RuntimeEditContext<TRun, TProject, TRequest>): string;
-  buildSystemPrompt(context: RuntimeEditContext<TRun, TProject, TRequest>): string;
-  buildSkillManifest?: (context: RuntimeEditContext<TRun, TProject, TRequest>, workspaceRoot: string) => SkillMaterializationRecord[] | Promise<SkillMaterializationRecord[]>;
+  buildSystemPrompt(
+    context: RuntimeEditContext<TRun, TProject, TRequest>,
+    workspaceRoot: string,
+    skillContext: LocalAgentSkillContext,
+  ): string | Promise<string>;
+  buildSkillManifest?: (
+    context: RuntimeEditContext<TRun, TProject, TRequest>,
+    workspaceRoot: string,
+  ) => LocalAgentSkillManifestResult | Promise<LocalAgentSkillManifestResult>;
   buildMcpServers?: (context: RuntimeEditContext<TRun, TProject, TRequest>) => LocalAgentMcpServer[];
   buildEnv?: (context: RuntimeEditContext<TRun, TProject, TRequest>, workspaceRoot: string) => Record<string, string>;
   useProviderResume?: (context: RuntimeEditContext<TRun, TProject, TRequest>) => boolean;
@@ -171,7 +185,8 @@ export class LocalAgentRuntimeProvider<
   }) {
     const { context, controller, persistProviderSession, provider, resume, sessionStore, workspaceRoot } = input;
     let lastError: Extract<AgentEvent, { type: "error" }> | undefined;
-    const skillManifest = (await this.options.buildSkillManifest?.(context, workspaceRoot)) ?? [];
+    const skillContext = normalizeSkillManifestResult(await this.options.buildSkillManifest?.(context, workspaceRoot));
+    const systemPrompt = await this.options.buildSystemPrompt(context, workspaceRoot, skillContext);
     const conversationId = context.conversation?.conversationId ?? context.project.id;
     const sessionId = context.conversation?.sessionId ?? context.project.id;
     for await (const event of this.localAgentRuntime.run({
@@ -183,12 +198,12 @@ export class LocalAgentRuntimeProvider<
       runtimeProvider: provider,
       cwd: workspaceRoot,
       prompt: this.options.buildPrompt(context),
-      systemPrompt: this.options.buildSystemPrompt(context),
+      systemPrompt,
       history: context.history ?? [],
       model: stripProviderPrefix(context.runtimeProfile.model, provider),
       reasoning: context.request.reasoningEffort ?? undefined,
       mcpServers: this.options.buildMcpServers?.(context) ?? [],
-      skillManifest,
+      skillManifest: skillContext.skills,
       env: this.options.buildEnv?.(context, workspaceRoot) ?? {},
       timeoutMs: this.options.timeoutMs?.() ?? DEFAULT_TIMEOUT_MS,
       extraAllowedDirs: this.options.extraAllowedDirs?.(context, workspaceRoot) ?? [workspaceRoot],
@@ -236,6 +251,15 @@ export class LocalAgentRuntimeProvider<
     this.controllers.delete(runId);
     return { cancelled: true };
   }
+}
+
+function normalizeSkillManifestResult(value: LocalAgentSkillManifestResult | undefined): LocalAgentSkillContext {
+  if (!value) return { skills: [] };
+  if (Array.isArray(value)) return { skills: value };
+  return {
+    skills: value.skills ?? [],
+    systemPrompt: typeof value.systemPrompt === "string" && value.systemPrompt.trim() ? value.systemPrompt.trim() : undefined,
+  };
 }
 
 function createAiAppLocalAgentProviderPlugins(): LocalAgentProviderPlugin[] {

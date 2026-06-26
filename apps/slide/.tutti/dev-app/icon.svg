@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="AI Slide">
+  <rect width="1024" height="1024" rx="220" fill="#ea580c"/>
+  <rect x="222" y="232" width="580" height="430" rx="46" fill="#fff7ed"/>
+  <path d="M290 318h190v48H290zm0 86h270v38H290zm0 70h218v38H290z" fill="#9a3412"/>
+  <rect x="592" y="328" width="122" height="122" rx="28" fill="#fed7aa"/>
+  <path d="M354 764h316v52H354zm132-104h52v126h-52z" fill="#7c2d12"/>
+  <circle cx="306" cy="286" r="92" fill="#0f172a"/>
+  <path d="M260 324l31-82h30l31 82h-25l-6-18h-32l-6 18zm35-38h20l-10-30zm78 38v-82h25v82z" fill="#f8fafc"/>
+</svg>

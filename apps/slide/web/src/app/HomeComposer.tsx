@@ -2,6 +2,7 @@ import { ArtifactHomeComposer, CodeFilledFormatIcon, PptFilledFormatIcon, type A
 import { contextAttachmentFileAccept } from "@ai-app/shared/context-attachments";
 import type { LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-slide/shared";
 import { useI18n } from "../i18n";
+import { AgentPromptRichTextInput } from "./AgentPromptRichTextInput";
 import type { OutputType } from "../templates";
 import type { HomeAttachment } from "./useHomeAttachments";
 
@@ -54,6 +55,12 @@ export function HomeComposer(props: {
       selectedFormatId={props.outputType}
       selectAgentLabel={t("composer.selectAgent")}
       submitLabel={t("composer.create")}
+      renderPromptInput={(inputProps) => (
+        <AgentPromptRichTextInput
+          {...inputProps}
+          className={`${inputProps.className} ai-slide-home-rich-text-editor`}
+        />
+      )}
       onAddFiles={props.onAddFiles}
       onFormatChange={props.onOutputTypeChange}
       onPromptChange={props.onPromptChange}

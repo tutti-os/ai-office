@@ -1,6 +1,12 @@
 import { execFile } from "node:child_process";
 import type { TuttiAppOpenResult } from "@ai-app/shared/types";
 
+export interface RunTuttiCliOptions {
+  timeoutMs?: number;
+  cwd?: string;
+  maxBuffer?: number;
+}
+
 export interface TuttiCliStatus {
   configured: boolean;
   executablePath: string | null;
@@ -10,6 +16,11 @@ export interface TuttiCliStatus {
 
 export function configuredTuttiCliPath() {
   return process.env.AI_DOC_TUTTI_CLI?.trim() || process.env.TUTTI_CLI?.trim() || "";
+}
+
+export function tuttiCliEnv(): Record<string, string> {
+  const executablePath = configuredTuttiCliPath();
+  return executablePath ? { TUTTI_CLI: executablePath } : {};
 }
 
 export async function getTuttiCliStatus(): Promise<TuttiCliStatus> {
@@ -39,21 +50,27 @@ export async function getTuttiCliStatus(): Promise<TuttiCliStatus> {
   }
 }
 
-export function runTuttiCli(args: string[], timeoutMs = 15000) {
+export function runTuttiCli(args: string[], optionsOrTimeoutMs: RunTuttiCliOptions | number = 15000) {
   const executablePath = configuredTuttiCliPath();
   if (!executablePath) throw new Error("TUTTI_CLI is not configured");
+  const options = typeof optionsOrTimeoutMs === "number" ? { timeoutMs: optionsOrTimeoutMs } : optionsOrTimeoutMs;
   return new Promise<unknown>((resolve, reject) => {
-    execFile(executablePath, args, { timeout: timeoutMs }, (error, stdout, stderr) => {
-      if (error) {
-        reject(new Error((stderr || stdout || error.message).trim()));
-        return;
-      }
-      try {
-        resolve(JSON.parse(stdout || "{}"));
-      } catch {
-        resolve(stdout.trim());
-      }
-    });
+    execFile(
+      executablePath,
+      args,
+      { timeout: options.timeoutMs ?? 15000, cwd: options.cwd, maxBuffer: options.maxBuffer ?? 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error((stderr || stdout || error.message).trim()));
+          return;
+        }
+        try {
+          resolve(JSON.parse(stdout || "{}"));
+        } catch {
+          resolve(stdout.trim());
+        }
+      },
+    );
   });
 }
 

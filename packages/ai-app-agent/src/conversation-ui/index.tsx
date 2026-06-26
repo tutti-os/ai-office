@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowUp,
   ChevronDown,
@@ -56,6 +56,20 @@ export type AgentConversationOption = {
   disabled?: boolean;
 };
 
+export type AgentComposerInputRenderProps = {
+  className: string;
+  disabled: boolean;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+};
+
+export type AgentUserMessageTextRenderProps = {
+  className: string;
+  text: string;
+};
+
 export type AgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent extends BaseRunEvent = BaseRunEvent> = {
   activeSelectionLabel?: string;
   activeSelectionText: string;
@@ -72,6 +86,8 @@ export type AgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent e
   uiCopy?: Partial<Omit<AgentConversationUiCopy, "tool">> & { tool?: Partial<ConversationToolCopy> };
   quickPromptsVisible?: boolean;
   selectedAgentId?: string;
+  renderComposerInput?: (props: AgentComposerInputRenderProps) => ReactNode;
+  renderUserMessageText?: (props: AgentUserMessageTextRenderProps) => ReactNode;
   onBackHome: () => void;
   onAgentChange?: (agentId: string) => void;
   onCancel?: (runId: string) => Promise<void>;
@@ -187,7 +203,15 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
         {props.error ? <div className={cx.error}>{props.error}</div> : null}
 
         <div className={cx.messages}>
-          {messages.map((message) => <ConversationMessage copy={uiCopy} cx={cx} key={message.id} message={message} />)}
+          {messages.map((message) => (
+            <ConversationMessage
+              copy={uiCopy}
+              cx={cx}
+              key={message.id}
+              message={message}
+              renderUserMessageText={props.renderUserMessageText}
+            />
+          ))}
         </div>
       </div>
 
@@ -209,19 +233,31 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
           </div>
         ) : null}
         <div className={cx.composer}>
-          <textarea
-            className={cx.textarea}
-            value={draft}
-            placeholder={props.copy.placeholder}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
-              if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
-                event.preventDefault();
-                void submit();
-              }
-            }}
-          />
+          {props.renderComposerInput ? (
+            props.renderComposerInput({
+              className: cx.textarea,
+              disabled: props.sending,
+              placeholder: props.copy.placeholder,
+              value: draft,
+              onChange: setDraft,
+              onSubmit: () => void submit(),
+            })
+          ) : (
+            <textarea
+              className={cx.textarea}
+              value={draft}
+              placeholder={props.copy.placeholder}
+              disabled={props.sending}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+                if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                  event.preventDefault();
+                  void submit();
+                }
+              }}
+            />
+          )}
           <div className={cx.composerFooter}>
             {props.agentOptions?.length ? (
               <div className={cx.agentSelectWrap}>
@@ -291,7 +327,12 @@ function IntroCard(props: { copy: AgentConversationCopy; cx: ConversationClassNa
   );
 }
 
-function ConversationMessage<TRun extends BaseRun>(props: { copy: AgentConversationUiCopy; cx: ConversationClassNames; message: AgentConversationMessage<TRun> }) {
+function ConversationMessage<TRun extends BaseRun>(props: {
+  copy: AgentConversationUiCopy;
+  cx: ConversationClassNames;
+  message: AgentConversationMessage<TRun>;
+  renderUserMessageText?: (props: AgentUserMessageTextRenderProps) => ReactNode;
+}) {
   if (props.message.role === "user") {
     const userContent = splitUserAttachmentContext(props.message.text);
     return (
@@ -305,7 +346,13 @@ function ConversationMessage<TRun extends BaseRun>(props: { copy: AgentConversat
               ))}
             </div>
           ) : null}
-          <div className={props.cx.userText}>{userContent.text}</div>
+          {userContent.text ? (
+            props.renderUserMessageText ? (
+              props.renderUserMessageText({ className: props.cx.userText, text: userContent.text })
+            ) : (
+              <div className={props.cx.userText}>{userContent.text}</div>
+            )
+          ) : null}
         </div>
       </div>
     );

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="AI Doc">
+  <rect width="1024" height="1024" rx="220" fill="#2563eb"/>
+  <path d="M318 176h284l160 160v512H318z" fill="#eff6ff"/>
+  <path d="M602 176v160h160z" fill="#bfdbfe"/>
+  <path d="M382 476h318v52H382zm0 112h260v52H382zm0 112h198v52H382z" fill="#1e3a8a"/>
+  <circle cx="306" cy="320" r="92" fill="#0f172a"/>
+  <path d="M260 358l31-82h30l31 82h-25l-6-18h-32l-6 18zm35-38h20l-10-30zm78 38v-82h25v82z" fill="#f8fafc"/>
+</svg>

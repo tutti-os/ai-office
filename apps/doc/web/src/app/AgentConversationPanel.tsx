@@ -3,6 +3,8 @@ import type { ArtifactEditorKind } from "@ai-app/ui/editor-frame";
 import type { DocumentRun, DocumentRunEvent, DocumentRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
 import { agentConversationUiCopy } from "../i18n/copy";
 import { useI18n } from "../i18n";
+import { AgentPromptRichTextInput } from "./AgentPromptRichTextInput";
+import { AgentUserMessageRichText } from "./AgentUserMessageRichText";
 
 type AgentConversationPanelProps = {
   activeSelectionText: string;
@@ -35,6 +37,8 @@ export function AgentConversationPanel(props: AgentConversationPanelProps) {
       }}
       uiCopy={agentConversationUiCopy(t)}
       formatUnavailableRuntimeProfileLabel={(profile, provider) => `${profile.displayName} (${provider?.authState ?? t("agent.unknown")})`}
+      renderComposerInput={(inputProps) => <AgentPromptRichTextInput {...inputProps} />}
+      renderUserMessageText={(messageProps) => <AgentUserMessageRichText {...messageProps} />}
       selectedRuntimeProfileId={props.selectedRuntimeProfileId}
       onRuntimeProfileChange={props.onRuntimeProfileChange}
     />
