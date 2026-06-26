@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { createArtifactCliManifest, renderArtifactCommandsGuide } from "../tooling/tutti/cli-manifests.mjs";
 
 const root = process.cwd();
 const failures = [];
@@ -90,10 +91,23 @@ if (docManifest.references && !sheetManifest.references) warn("AI Sheet does not
 
 for (const [app, scope] of [["doc", "doc"], ["slide", "slide"], ["sheet", "sheet"]]) {
   const cliManifest = json(`apps/${app}/tutti.cli.json`);
+  const expectedCliManifest = createArtifactCliManifest(app);
+  if (JSON.stringify(cliManifest) !== JSON.stringify(expectedCliManifest)) {
+    fail(`apps/${app}/tutti.cli.json is out of sync with tooling/tutti/cli-manifests.mjs`);
+  }
+  if (read(`apps/${app}/COMMANDS.md`) !== renderArtifactCommandsGuide(app)) {
+    fail(`apps/${app}/COMMANDS.md is out of sync with tooling/tutti/cli-manifests.mjs`);
+  }
   if (cliManifest.scope !== scope) fail(`apps/${app}/tutti.cli.json must use scope ${scope}`);
-  for (const command of ["status", "list-projects", "create"]) {
-    if (!cliManifest.commands?.some((item) => item.path?.[0] === command)) {
-      fail(`apps/${app}/tutti.cli.json is missing ${command}`);
+  for (const commandPath of ["status", "projects/list", "projects/get", "projects/create", "open"]) {
+    if (!cliManifest.commands?.some((item) => item.path?.join("/") === commandPath)) {
+      fail(`apps/${app}/tutti.cli.json is missing ${commandPath}`);
+    }
+  }
+  for (const command of cliManifest.commands ?? []) {
+    const pathValue = command.path?.join("/");
+    if (command.handler?.path !== `/tutti/cli/${pathValue}`) {
+      fail(`apps/${app}/tutti.cli.json command ${pathValue} has a non-deterministic handler path`);
     }
   }
   expectIncludes(`apps/${app}/server/src/main.ts`, "registerTuttiCliRoutes", "Tutti CLI route registration");

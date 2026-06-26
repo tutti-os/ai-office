@@ -235,6 +235,14 @@ export class DocumentRepository {
     return this.conversations.ensureProjectSession(projectId, title);
   }
 
+  createConversationSession(projectId: string, title?: string) {
+    return this.conversations.createProjectSession(projectId, title);
+  }
+
+  listConversationSessions(projectId: string) {
+    return this.conversations.listProjectSessions(projectId);
+  }
+
   createConversationMessage(input: {
     projectId: string;
     sessionId: string;
@@ -251,6 +259,10 @@ export class DocumentRepository {
 
   conversationHistory(sessionId: string, currentPrompt: string) {
     return this.conversations.normalizedHistory({ sessionId, currentPrompt });
+  }
+
+  listConversationMessages(sessionId: string) {
+    return this.conversations.listSessionMessages(sessionId);
   }
 
   getRun(runId: string) {

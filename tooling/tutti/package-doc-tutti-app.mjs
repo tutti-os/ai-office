@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { packageTuttiApp as packageSharedTuttiApp } from "@ai-app/tutti-packager";
+import { createArtifactCliManifest, renderArtifactCommandsGuide } from "./cli-manifests.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const rootDir = path.resolve(path.dirname(scriptPath), "../..");
@@ -63,7 +64,7 @@ This package runs AI Doc as a local Tutti workspace app.
 - \`server/server.js\` is the bundled Fastify server.
 - \`dist/\` is the built React/Vite frontend.
 - \`tutti.app.json\` declares the app runtime, localized metadata, CLI surface, and references endpoints.
-- \`tutti.cli.json\` exposes \`doc status\`, \`doc list-projects\`, \`doc open\`, and \`doc create\` for other Tutti apps and agents.
+- \`tutti.cli.json\` exposes project commands such as \`doc projects list\`, \`doc projects get\`, and \`doc projects create\` for other Tutti apps and agents.
 - Durable app data is stored under \`AI_DOC_HOME\`, which defaults to \`TUTTI_APP_DATA_DIR\`.
 - Runtime scratch data is stored under \`AI_DOC_RUNTIME_ROOT\`, which defaults to \`TUTTI_APP_RUNTIME_DIR\`.
 - Backend logs, if added later, must stay under \`AI_DOC_LOG_ROOT\`, which defaults to \`TUTTI_APP_LOG_DIR\`.
@@ -79,7 +80,7 @@ I18n:
 Endpoints:
 
 - \`GET /api/health\` is the runtime healthcheck.
-- \`POST /tutti/cli/status\`, \`POST /tutti/cli/list-projects\`, \`POST /tutti/cli/open\`, and \`POST /tutti/cli/create\` implement the CLI manifest.
+- \`POST /tutti/cli/*\` implements the CLI manifest, including resource-style project commands.
 - \`POST /tutti/references/list\` and \`POST /tutti/references/search\` expose app-data-relative project files and exports.
 
 Runtime composition:
@@ -102,7 +103,8 @@ export async function packageTuttiApp() {
     webDistDir: path.join(appDir, "web", "dist"),
     serverEntry: "apps/doc/server/src/main.ts",
     cliManifestFile: "tutti.cli.json",
-    documentationFiles: ["COMMANDS.md"],
+    cliManifest: createArtifactCliManifest("doc"),
+    commandsGuide: renderArtifactCommandsGuide("doc"),
     packageAssets: [{ source: path.join(appDir, "locales"), target: "locales", required: true }],
     renderBootstrap,
     renderIcon,

@@ -247,6 +247,48 @@ export class ProjectService {
     };
   }
 
+  listRunEvents(runId: string) {
+    const run = this.repo.getRun(runId);
+    if (!run) throw new Error("Run not found");
+    return { run, events: this.repo.listRunEvents(runId) };
+  }
+
+  listConversationSessions(projectId: string) {
+    const project = this.repo.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    return { sessions: this.repo.listConversationSessions(projectId) };
+  }
+
+  createConversationSession(projectId: string, input: { title?: string }) {
+    const project = this.repo.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    return { session: this.repo.createConversationSession(projectId, input.title?.trim() || project.title) };
+  }
+
+  listConversationMessages(input: { projectId: string; sessionId: string }) {
+    this.requireProjectSession(input.projectId, input.sessionId);
+    return { messages: this.repo.listConversationMessages(input.sessionId) };
+  }
+
+  createConversationMessage(input: {
+    projectId: string;
+    sessionId: string;
+    role: "user" | "assistant";
+    content: string;
+    metadata?: Record<string, unknown> | null;
+  }) {
+    this.requireProjectSession(input.projectId, input.sessionId);
+    return {
+      message: this.repo.createConversationMessage({
+        projectId: input.projectId,
+        sessionId: input.sessionId,
+        role: input.role,
+        content: input.content,
+        metadata: input.metadata,
+      }),
+    };
+  }
+
   async startAiEdit(projectId: string, request: AiEditRequest) {
     const runtimeProject = await this.createRuntimeProject(projectId);
     if (runtimeProject.artifact.type === "pptx") await requireOfficeCli();
@@ -254,7 +296,7 @@ export class ProjectService {
     const runtimeProfile = this.repo.getRuntimeProfile(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);
-    const session = this.repo.ensureConversationSession(projectId, runtimeProject.title);
+    const session = this.resolveConversationSession(projectId, runtimeProject.title, request.sessionId);
     this.repo.createConversationMessage({
       projectId,
       sessionId: session.id,
@@ -290,6 +332,19 @@ export class ProjectService {
 
   async listLocalAgentProviders() {
     return { providers: await this.runtimes.listLocalAgentProviders() };
+  }
+
+  private resolveConversationSession(projectId: string, title: string, sessionId: string | null | undefined) {
+    if (!sessionId?.trim()) return this.repo.ensureConversationSession(projectId, title);
+    return this.requireProjectSession(projectId, sessionId);
+  }
+
+  private requireProjectSession(projectId: string, sessionId: string) {
+    const project = this.repo.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    const session = this.repo.listConversationSessions(projectId).find((item) => item.id === sessionId);
+    if (!session) throw new Error("Session not found");
+    return session;
   }
 
   async cancelRun(runId: string) {

@@ -1,42 +1,83 @@
-# AI Slide Commands
+# AI Slide CLI Commands
 
-AI Slide exposes the `slide` CLI scope to Tutti apps and agents.
+Scope: `slide`
 
-Help:
-
-- `slide --help`: show the AI Slide command list.
-- `slide open --help`: show inputs for opening an existing presentation file.
+These commands expose AI Slide to Tutti apps and agents. Command outputs use `CliCommandOutput` envelopes.
 
 ## `slide status`
 
-Returns app health, project count, runtime provider count, and whether `TUTTI_CLI` is available to the app runtime.
+Return app health, project counts, runtime provider counts, and Tutti CLI availability for AI Slide.
 
-## `slide list-projects`
+Handler: `/tutti/cli/status`
 
-Lists recent slide projects. Optional input:
+## `slide projects list --limit`
 
-- `limit`: maximum number of rows to return.
+List recent slide projects as JSON for agents and other Tutti apps.
 
-## `slide open`
+Handler: `/tutti/cli/projects/list`
 
-Imports a PPTX file into AI Slide. Inputs:
+## `slide projects get --project-id <required>`
 
-- `path`: absolute path, `~/...` path, or path relative to `AI_SLIDE_WORKSPACE_ROOT` / `TUTTI_WORKSPACE_ROOT`.
-- `title`: optional project title override.
+Return one slide project by project-id.
 
-After import, the command calls `$TUTTI_CLI --json app open --app-id "$TUTTI_APP_ID" --route /slide/<projectId>` when `TUTTI_CLI` is configured. It also returns JSON with the imported project, artifact, route, full URL, source path, focused workspace path, project `AGENTS.md` path, and the Tutti app-open result.
+Handler: `/tutti/cli/projects/get`
 
-Example:
+## `slide projects create --title --artifact-type --prompt --runtime-profile-id`
 
-```bash
-slide open --path ./deck.pptx --title "Quarterly Review"
-```
+Create a new AI Slide project directly. Use artifact-type deck or pptx; deck is used when artifact-type is omitted. When prompt is provided, the app creates the project and starts an agent run to initialize or edit the deck.
 
-## `slide create`
+Handler: `/tutti/cli/projects/create`
 
-Creates a new presentation project. Inputs:
+## `slide sessions list --project-id <required>`
 
-- `title`: optional project title.
-- `artifact-type`: `deck` or `pptx`; defaults to `deck`.
+List agent conversation sessions for a slide project.
 
-The command returns the created project and artifact as JSON.
+Handler: `/tutti/cli/sessions/list`
+
+## `slide sessions create --project-id <required> --title`
+
+Create a new agent conversation session for a slide project.
+
+Handler: `/tutti/cli/sessions/create`
+
+## `slide messages list --project-id <required> --session-id <required>`
+
+List messages in one agent conversation session.
+
+Handler: `/tutti/cli/messages/list`
+
+## `slide messages create --project-id <required> --session-id <required> --role <required> --content <required>`
+
+Append a text-only user or assistant message to one conversation session.
+
+Handler: `/tutti/cli/messages/create`
+
+## `slide agent run --project-id <required> --prompt <required> --session-id --mode --runtime-profile-id`
+
+Start an agent run for a slide project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with agent events.
+
+Handler: `/tutti/cli/agent/run`
+
+## `slide agent events --run-id <required>`
+
+Return one agent run and its persisted events by run-id.
+
+Handler: `/tutti/cli/agent/events`
+
+## `slide agent cancel --run-id <required>`
+
+Cancel an active agent run by run-id.
+
+Handler: `/tutti/cli/agent/cancel`
+
+## `slide officecli install`
+
+Install or repair the managed OfficeCLI toolchain used for PPTX import, export, and agent editing.
+
+Handler: `/tutti/cli/officecli/install`
+
+## `slide open --path <required> --title`
+
+Import a PPTX file into AI Slide, request opening its app route through Tutti CLI, and return workspace paths for agent editing.
+
+Handler: `/tutti/cli/open`

@@ -223,6 +223,7 @@ export interface AiEditRequest {
   selectionPath?: string;
   userPrompt: string;
   mode: AiEditMode;
+  sessionId?: string | null;
   runtimeProfileId?: string | null;
   reasoningEffort?: ReasoningEffort | null;
 }

@@ -1,42 +1,83 @@
-# AI Sheet Commands
+# AI Sheet CLI Commands
 
-AI Sheet exposes the `sheet` CLI scope to Tutti apps and agents.
+Scope: `sheet`
 
-Help:
-
-- `sheet --help`: show the AI Sheet command list.
-- `sheet open --help`: show inputs for opening an existing workbook file.
+These commands expose AI Sheet to Tutti apps and agents. Command outputs use `CliCommandOutput` envelopes.
 
 ## `sheet status`
 
-Returns app health, project count, runtime provider count, and whether `TUTTI_CLI` is available to the app runtime.
+Return app health, project counts, runtime provider counts, and Tutti CLI availability for AI Sheet.
 
-## `sheet list-projects`
+Handler: `/tutti/cli/status`
 
-Lists recent workbook projects. Optional input:
+## `sheet projects list --limit`
 
-- `limit`: maximum number of rows to return.
+List recent workbook projects as JSON for agents and other Tutti apps.
 
-## `sheet open`
+Handler: `/tutti/cli/projects/list`
 
-Imports an XLSX file into AI Sheet. Inputs:
+## `sheet projects get --project-id <required>`
 
-- `path`: absolute path, `~/...` path, or path relative to `AI_SHEET_WORKSPACE_ROOT` / `TUTTI_WORKSPACE_ROOT`.
-- `title`: optional project title override.
+Return one workbook project by project-id.
 
-After import, the command calls `$TUTTI_CLI --json app open --app-id "$TUTTI_APP_ID" --route /sheet/<projectId>` when `TUTTI_CLI` is configured. It also returns JSON with the imported project, artifact, route, full URL, source path, focused workbook path, project `AGENTS.md` path, and the Tutti app-open result.
+Handler: `/tutti/cli/projects/get`
 
-Example:
+## `sheet projects create --title --prompt --runtime-profile-id`
 
-```bash
-sheet open --path ./workbook.xlsx --title "Model"
-```
+Create a new AI Sheet workbook project directly, including a blank workbook.xlsx in the project workspace. When prompt is provided, the app creates the project and starts an agent run to initialize or edit the workbook.
 
-## `sheet create`
+Handler: `/tutti/cli/projects/create`
 
-Creates a new workbook project by importing an existing XLSX file. Inputs:
+## `sheet sessions list --project-id <required>`
 
-- `path`: required path to an `.xlsx` file.
-- `title`: optional project title.
+List agent conversation sessions for a workbook project.
 
-This command is kept for compatibility. New agent integrations should prefer `sheet open` because it also returns the route and workspace paths needed for follow-up edits.
+Handler: `/tutti/cli/sessions/list`
+
+## `sheet sessions create --project-id <required> --title`
+
+Create a new agent conversation session for a workbook project.
+
+Handler: `/tutti/cli/sessions/create`
+
+## `sheet messages list --project-id <required> --session-id <required>`
+
+List messages in one agent conversation session.
+
+Handler: `/tutti/cli/messages/list`
+
+## `sheet messages create --project-id <required> --session-id <required> --role <required> --content <required>`
+
+Append a text-only user or assistant message to one conversation session.
+
+Handler: `/tutti/cli/messages/create`
+
+## `sheet agent run --project-id <required> --prompt <required> --session-id --mode --runtime-profile-id`
+
+Start an agent run for a workbook project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with agent events.
+
+Handler: `/tutti/cli/agent/run`
+
+## `sheet agent events --run-id <required>`
+
+Return one agent run and its persisted events by run-id.
+
+Handler: `/tutti/cli/agent/events`
+
+## `sheet agent cancel --run-id <required>`
+
+Cancel an active agent run by run-id.
+
+Handler: `/tutti/cli/agent/cancel`
+
+## `sheet officecli install`
+
+Install or repair the managed OfficeCLI toolchain used for XLSX import, export, and agent editing.
+
+Handler: `/tutti/cli/officecli/install`
+
+## `sheet open --path <required> --title`
+
+Import an XLSX file into AI Sheet, request opening its app route through Tutti CLI, and return workspace paths for agent editing.
+
+Handler: `/tutti/cli/open`

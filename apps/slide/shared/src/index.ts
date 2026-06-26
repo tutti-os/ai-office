@@ -270,6 +270,7 @@ export interface AiEditRequest {
   selectedHtml?: string;
   selectionType?: SlideSelectionType;
   selectionPath?: string;
+  sessionId?: string | null;
   runtimeProfileId?: string | null;
   reasoningEffort?: ReasoningEffort | null;
 }

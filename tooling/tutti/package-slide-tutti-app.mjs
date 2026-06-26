@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { packageTuttiApp as packageSharedTuttiApp } from "@ai-app/tutti-packager";
+import { createArtifactCliManifest, renderArtifactCommandsGuide } from "./cli-manifests.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const rootDir = path.resolve(path.dirname(scriptPath), "../..");
@@ -64,7 +65,7 @@ This package runs AI Slide as a local Tutti workspace app.
 - \`server/server.js\` is the bundled Fastify server.
 - \`dist/\` is the built React/Vite frontend.
 - \`tutti.app.json\` declares the app runtime, localized metadata, CLI surface, and references endpoints.
-- \`tutti.cli.json\` exposes \`slide status\`, \`slide list-projects\`, \`slide open\`, and \`slide create\` for other Tutti apps and agents.
+- \`tutti.cli.json\` exposes project commands such as \`slide projects list\`, \`slide projects get\`, and \`slide projects create\` for other Tutti apps and agents.
 - Durable app data is stored under \`AI_SLIDE_HOME\`.
 - Runtime scratch data is stored under \`AI_SLIDE_RUNTIME_ROOT\`.
 - Backend logs, if added later, must stay under \`AI_SLIDE_LOG_ROOT\`.
@@ -82,7 +83,7 @@ I18n:
 Endpoints:
 
 - \`GET /api/health\` is the runtime healthcheck.
-- \`POST /tutti/cli/status\`, \`POST /tutti/cli/list-projects\`, \`POST /tutti/cli/open\`, and \`POST /tutti/cli/create\` implement the CLI manifest.
+- \`POST /tutti/cli/*\` implements the CLI manifest, including resource-style project commands.
 - \`POST /tutti/references/list\` and \`POST /tutti/references/search\` expose app-data-relative project files and exports.
 `;
 }
@@ -101,7 +102,8 @@ export async function packageTuttiApp() {
     webDistDir: path.join(appDir, "web", "dist"),
     serverEntry: "apps/slide/server/src/main.ts",
     cliManifestFile: "tutti.cli.json",
-    documentationFiles: ["COMMANDS.md"],
+    cliManifest: createArtifactCliManifest("slide"),
+    commandsGuide: renderArtifactCommandsGuide("slide"),
     packageAssets: [
       { source: path.join(appDir, "locales"), target: "locales", required: true },
       ...(packageLocalTemplates && templateSourceRoot ? [{ source: templateSourceRoot, target: "templates/source", required: true }] : []),

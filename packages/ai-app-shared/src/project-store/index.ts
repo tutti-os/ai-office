@@ -183,6 +183,10 @@ export class SqliteAgentConversationStore {
         .get(projectId),
     );
     if (existing) return rowToConversationSession(existing);
+    return this.createProjectSession(projectId, title);
+  }
+
+  createProjectSession(projectId: string, title = "Default") {
     const id = this.options.createSessionId();
     const now = new Date().toISOString();
     this.getDb()
@@ -196,6 +200,14 @@ export class SqliteAgentConversationStore {
     );
     if (!created) throw new Error("Unable to create conversation session");
     return rowToConversationSession(created);
+  }
+
+  listProjectSessions(projectId: string) {
+    return rows<ConversationSessionRow>(
+      this.getDb()
+        .prepare(`SELECT * FROM agent_conversation_sessions WHERE project_id = ? ORDER BY created_at ASC, id ASC`)
+        .all(projectId),
+    ).map(rowToConversationSession);
   }
 
   updateProjectSessionTitle(projectId: string, title: string) {

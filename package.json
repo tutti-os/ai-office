@@ -19,6 +19,7 @@
     "check:i18n": "node scripts/check-doc-i18n.mjs",
     "check:import-boundaries": "node scripts/check-import-boundaries.mjs",
     "check:parity": "node scripts/check-artifact-app-parity.mjs",
+    "generate:cli-manifests": "node tooling/tutti/generate-cli-manifests.mjs",
     "validate:tutti": "node scripts/validate-tutti-app-package.mjs build/tutti-app/package",
     "validate:doc-tutti": "node scripts/validate-tutti-app-package.mjs build/tutti-app/package ai-doc doc",
     "validate:slide-tutti": "node scripts/validate-tutti-app-package.mjs build/tutti-slide-app/package ai-slide slide",

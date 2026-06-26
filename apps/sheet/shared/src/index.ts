@@ -265,6 +265,7 @@ export interface OfficeCliStatusResponse {
 export interface AiEditRequest {
   userPrompt: string;
   mode: AiEditMode;
+  sessionId?: string | null;
   runtimeProfileId?: string | null;
   reasoningEffort?: ReasoningEffort | null;
   selectionType?: SheetSelectionType;

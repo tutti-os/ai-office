@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { packageTuttiApp as packageSharedTuttiApp } from "@ai-app/tutti-packager";
+import { createArtifactCliManifest, renderArtifactCommandsGuide } from "./cli-manifests.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const rootDir = path.resolve(path.dirname(scriptPath), "../..");
@@ -57,19 +58,20 @@ This package runs AI Sheet as a local Tutti workspace app.
 - \`server/server.js\` is the bundled Fastify server.
 - \`dist/\` is the built React/Vite frontend.
 - \`tutti.app.json\` declares the app runtime, localized metadata, CLI surface, and references endpoints.
-- \`tutti.cli.json\` exposes \`sheet status\`, \`sheet list-projects\`, \`sheet open\`, and \`sheet create\` for other Tutti apps and agents.
+- \`tutti.cli.json\` exposes project commands such as \`sheet projects list\`, \`sheet projects get\`, and \`sheet projects create\` for other Tutti apps and agents.
 - Durable app data is stored under \`AI_SHEET_HOME\`.
 - Runtime scratch data is stored under \`AI_SHEET_RUNTIME_ROOT\`.
 - Backend logs, if added later, must stay under \`AI_SHEET_LOG_ROOT\`.
 - OfficeCLI auto-install uses the shared AI Office toolchain cache, not \`AI_SHEET_HOME\`; override with \`AI_SHEET_OFFICECLI_PATH\`, \`TUTTI_APP_OFFICECLI_PATH\`, or an \`*_OFFICECLI_INSTALL_ROOT\` env var.
 - AI Sheet renders XLSX directly. The editable source file for a project is \`workbook.xlsx\` under the app-owned project workspace.
 - Use \`AI_SHEET_TUTTI_CLI\` for app-to-app calls. It is populated from \`TUTTI_CLI\` by \`bootstrap.sh\`.
-- The \`sheet open\` command imports the file, calls \`$TUTTI_CLI --json app open --app-id "$TUTTI_APP_ID" --route ...\`, and returns the focused workbook path plus project \`AGENTS.md\` path for follow-up edits.
+- The \`sheet open\` command imports a file, calls \`$TUTTI_CLI --json app open --app-id "$TUTTI_APP_ID" --route ...\`, and returns the focused workbook path plus project \`AGENTS.md\` path for follow-up edits.
+- The \`sheet projects create\` command creates a blank workbook project directly and returns the focused workbook path for follow-up edits.
 
 Endpoints:
 
 - \`GET /api/health\` is the runtime healthcheck.
-- \`POST /tutti/cli/status\`, \`POST /tutti/cli/list-projects\`, \`POST /tutti/cli/open\`, and \`POST /tutti/cli/create\` implement the CLI manifest.
+- \`POST /tutti/cli/*\` implements the CLI manifest, including resource-style project commands.
 - \`POST /tutti/references/list\` and \`POST /tutti/references/search\` expose app-data-relative workbook files and exports.
 `;
 }
@@ -86,7 +88,8 @@ export async function packageTuttiApp() {
     webDistDir: path.join(appDir, "web", "dist"),
     serverEntry: "apps/sheet/server/src/main.ts",
     cliManifestFile: "tutti.cli.json",
-    documentationFiles: ["COMMANDS.md"],
+    cliManifest: createArtifactCliManifest("sheet"),
+    commandsGuide: renderArtifactCommandsGuide("sheet"),
     packageAssets: [{ source: path.join(appDir, "locales"), target: "locales", required: true }],
     renderBootstrap,
     renderIcon,

@@ -18,6 +18,7 @@
     "./server-errors": "./src/server-errors/index.ts",
     "./server-files": "./src/server-files/index.ts",
     "./server-routes": "./src/server-routes/index.ts",
+    "./tutti-cli": "./src/tutti-cli/index.ts",
     "./toolchains/officecli": "./src/toolchains/officecli/index.ts",
     "./api-client": "./src/api-client/index.ts"
   },

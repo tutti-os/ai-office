@@ -56,10 +56,18 @@ async function validateManifest(root, manifest) {
 function validateCliManifest(manifest) {
   if (manifest.schemaVersion !== "tutti.app.cli.v1") errors.push("Invalid CLI manifest schemaVersion");
   if (manifest.scope !== expectedCliScope) errors.push(`CLI scope must be ${expectedCliScope}`);
+  if (!/^[a-z0-9-]+$/.test(manifest.scope ?? "")) errors.push("CLI scope must use lowercase letters, numbers, and hyphen only");
   if (!Array.isArray(manifest.commands) || manifest.commands.length === 0) errors.push("CLI manifest needs commands");
+  const seenCommands = new Set();
   for (const command of manifest.commands ?? []) {
     const commandPath = Array.isArray(command.path) ? command.path.join("/") : "";
     if (!commandPath) errors.push("CLI command path is required");
+    for (const segment of command.path ?? []) {
+      if (!/^[a-z0-9-]+$/.test(segment)) errors.push(`CLI command path segment ${segment} is invalid`);
+      if (segment === manifest.scope) errors.push(`CLI command ${commandPath} must not repeat the scope`);
+    }
+    if (seenCommands.has(commandPath)) errors.push(`Duplicate CLI command: ${commandPath}`);
+    seenCommands.add(commandPath);
     if (!command.summary || !command.description || command.inputSchema?.type !== "object") {
       errors.push(`CLI command ${commandPath || "<unknown>"} is missing summary, description, or inputSchema`);
     }
@@ -67,9 +75,18 @@ function validateCliManifest(manifest) {
       if (!/^[a-z0-9-]+$/.test(propertyKey)) {
         errors.push(`CLI command ${commandPath || "<unknown>"} input property ${propertyKey} must use lowercase letters, numbers, and hyphen only`);
       }
+      const propertyType = command.inputSchema?.properties?.[propertyKey]?.type;
+      if (!["string", "boolean", "integer"].includes(propertyType)) {
+        errors.push(`CLI command ${commandPath || "<unknown>"} input property ${propertyKey} has unsupported type`);
+      }
     }
-    if (command.handler?.kind !== "http" || command.handler?.method !== "POST" || !command.handler?.path?.startsWith("/tutti/cli/")) {
+    const expectedHandlerPath = `/tutti/cli/${commandPath}`;
+    if (command.handler?.kind !== "http" || command.handler?.method !== "POST" || command.handler?.path !== expectedHandlerPath) {
       errors.push(`CLI command ${commandPath || "<unknown>"} must use an HTTP POST /tutti/cli handler`);
+    }
+    const timeoutMs = command.handler?.timeoutMs;
+    if (timeoutMs !== undefined && (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 600000)) {
+      errors.push(`CLI command ${commandPath || "<unknown>"} timeoutMs is outside the supported range`);
     }
   }
 }

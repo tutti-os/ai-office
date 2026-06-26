@@ -7,9 +7,11 @@
   },
   "commands": [
     {
-      "path": ["status"],
+      "path": [
+        "status"
+      ],
       "summary": "Show AI Sheet status",
-      "description": "Return app health, project counts, runtime provider counts, and Tutti CLI availability.",
+      "description": "Return app health, project counts, runtime provider counts, and Tutti CLI availability for AI Sheet.",
       "inputSchema": {
         "type": "object",
         "properties": {}
@@ -26,9 +28,12 @@
       }
     },
     {
-      "path": ["list-projects"],
+      "path": [
+        "projects",
+        "list"
+      ],
       "summary": "List workbook projects",
-      "description": "List recent AI Sheet projects as a table for agents and other Tutti apps.",
+      "description": "List recent workbook projects as JSON for agents and other Tutti apps.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -39,30 +44,362 @@
         }
       },
       "output": {
-        "defaultMode": "table",
-        "json": true,
-        "table": {
-          "columns": [
-            { "key": "title", "label": "Title" },
-            { "key": "type", "label": "Type" },
-            { "key": "updated-at", "label": "Updated" }
-          ]
-        }
+        "defaultMode": "json",
+        "json": true
       },
       "handler": {
         "kind": "http",
         "method": "POST",
-        "path": "/tutti/cli/list-projects",
-        "timeoutMs": 10000
+        "path": "/tutti/cli/projects/list",
+        "timeoutMs": 30000
       }
     },
     {
-      "path": ["open"],
-      "summary": "Open a workbook file",
-      "description": "Import an XLSX file into AI Sheet, open its app route through Tutti CLI, and return workspace paths for agent editing.",
+      "path": [
+        "projects",
+        "get"
+      ],
+      "summary": "Get a workbook project",
+      "description": "Return one workbook project by project-id.",
       "inputSchema": {
         "type": "object",
-        "required": ["path"],
+        "properties": {
+          "project-id": {
+            "type": "string",
+            "description": "Project id to load."
+          }
+        },
+        "required": [
+          "project-id"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/projects/get",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "path": [
+        "projects",
+        "create"
+      ],
+      "summary": "Create a workbook project",
+      "description": "Create a new AI Sheet workbook project directly, including a blank workbook.xlsx in the project workspace. When prompt is provided, the app creates the project and starts an agent run to initialize or edit the workbook.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Project title."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Optional prompt for an agent run after project creation."
+          },
+          "runtime-profile-id": {
+            "type": "string",
+            "description": "Optional runtime profile id for prompt-based initialization."
+          }
+        }
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/projects/create",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "path": [
+        "sessions",
+        "list"
+      ],
+      "summary": "List conversation sessions",
+      "description": "List agent conversation sessions for a workbook project.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project-id": {
+            "type": "string",
+            "description": "Project id whose sessions should be listed."
+          }
+        },
+        "required": [
+          "project-id"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/sessions/list",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "path": [
+        "sessions",
+        "create"
+      ],
+      "summary": "Create a conversation session",
+      "description": "Create a new agent conversation session for a workbook project.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project-id": {
+            "type": "string",
+            "description": "Project id for the new session."
+          },
+          "title": {
+            "type": "string",
+            "description": "Optional session title."
+          }
+        },
+        "required": [
+          "project-id"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/sessions/create",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "path": [
+        "messages",
+        "list"
+      ],
+      "summary": "List conversation messages",
+      "description": "List messages in one agent conversation session.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project-id": {
+            "type": "string",
+            "description": "Project id that owns the session."
+          },
+          "session-id": {
+            "type": "string",
+            "description": "Conversation session id."
+          }
+        },
+        "required": [
+          "project-id",
+          "session-id"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/messages/list",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "path": [
+        "messages",
+        "create"
+      ],
+      "summary": "Create a conversation message",
+      "description": "Append a text-only user or assistant message to one conversation session.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project-id": {
+            "type": "string",
+            "description": "Project id that owns the session."
+          },
+          "session-id": {
+            "type": "string",
+            "description": "Conversation session id."
+          },
+          "role": {
+            "type": "string",
+            "description": "Message role: user or assistant."
+          },
+          "content": {
+            "type": "string",
+            "description": "Message text content."
+          }
+        },
+        "required": [
+          "project-id",
+          "session-id",
+          "role",
+          "content"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/messages/create",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "path": [
+        "agent",
+        "run"
+      ],
+      "summary": "Start an agent run",
+      "description": "Start an agent run for a workbook project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with agent events.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project-id": {
+            "type": "string",
+            "description": "Project id to edit."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "User prompt for the agent."
+          },
+          "session-id": {
+            "type": "string",
+            "description": "Optional conversation session id."
+          },
+          "mode": {
+            "type": "string",
+            "description": "Optional edit mode: write or rewrite."
+          },
+          "runtime-profile-id": {
+            "type": "string",
+            "description": "Optional runtime profile id."
+          }
+        },
+        "required": [
+          "project-id",
+          "prompt"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/agent/run",
+        "timeoutMs": 60000
+      }
+    },
+    {
+      "path": [
+        "agent",
+        "events"
+      ],
+      "summary": "Poll agent events",
+      "description": "Return one agent run and its persisted events by run-id.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "run-id": {
+            "type": "string",
+            "description": "Agent run id."
+          }
+        },
+        "required": [
+          "run-id"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/agent/events",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "path": [
+        "agent",
+        "cancel"
+      ],
+      "summary": "Cancel an agent run",
+      "description": "Cancel an active agent run by run-id.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "run-id": {
+            "type": "string",
+            "description": "Agent run id."
+          }
+        },
+        "required": [
+          "run-id"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/agent/cancel",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "path": [
+        "officecli",
+        "install"
+      ],
+      "summary": "Install OfficeCLI",
+      "description": "Install or repair the managed OfficeCLI toolchain used for XLSX import, export, and agent editing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/officecli/install",
+        "timeoutMs": 120000
+      }
+    },
+    {
+      "path": [
+        "open"
+      ],
+      "summary": "Open a workbook file",
+      "description": "Import an XLSX file into AI Sheet, request opening its app route through Tutti CLI, and return workspace paths for agent editing.",
+      "inputSchema": {
+        "type": "object",
         "properties": {
           "path": {
             "type": "string",
@@ -72,7 +409,10 @@
             "type": "string",
             "description": "Optional project title override."
           }
-        }
+        },
+        "required": [
+          "path"
+        ]
       },
       "output": {
         "defaultMode": "json",
@@ -82,35 +422,6 @@
         "kind": "http",
         "method": "POST",
         "path": "/tutti/cli/open",
-        "timeoutMs": 30000
-      }
-    },
-    {
-      "path": ["create"],
-      "summary": "Create a workbook project",
-      "description": "Create a new workbook project by importing an existing XLSX file.",
-      "inputSchema": {
-        "type": "object",
-        "required": ["path"],
-        "properties": {
-          "path": {
-            "type": "string",
-            "description": "Absolute or workspace-visible path to an .xlsx file."
-          },
-          "title": {
-            "type": "string",
-            "description": "Optional project title."
-          }
-        }
-      },
-      "output": {
-        "defaultMode": "json",
-        "json": true
-      },
-      "handler": {
-        "kind": "http",
-        "method": "POST",
-        "path": "/tutti/cli/create",
         "timeoutMs": 30000
       }
     }

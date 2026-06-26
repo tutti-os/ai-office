@@ -1,43 +1,83 @@
-# AI Doc Commands
+# AI Doc CLI Commands
 
-AI Doc exposes the `doc` CLI scope to Tutti apps and agents.
+Scope: `doc`
 
-Help:
-
-- `doc --help`: show the AI Doc command list.
-- `doc open --help`: show inputs for opening an existing document file.
+These commands expose AI Doc to Tutti apps and agents. Command outputs use `CliCommandOutput` envelopes.
 
 ## `doc status`
 
-Returns app health, project count, runtime provider count, and whether `TUTTI_CLI` is available to the app runtime.
+Return app health, project counts, runtime provider counts, and Tutti CLI availability for AI Doc.
 
-## `doc list-projects`
+Handler: `/tutti/cli/status`
 
-Lists recent document projects. Optional input:
+## `doc projects list --limit`
 
-- `limit`: maximum number of rows to return.
+List recent document projects as JSON for agents and other Tutti apps.
 
-## `doc open`
+Handler: `/tutti/cli/projects/list`
 
-Imports an HTML, Markdown, or DOCX file into AI Doc. Inputs:
+## `doc projects get --project-id <required>`
 
-- `path`: absolute path, `~/...` path, or path relative to `AI_DOC_WORKSPACE_ROOT` / `TUTTI_WORKSPACE_ROOT`.
-- `title`: optional project title override.
+Return one document project by project-id.
 
-After import, the command calls `$TUTTI_CLI --json app open --app-id "$TUTTI_APP_ID" --route /doc/<projectId>` when `TUTTI_CLI` is configured. It also returns JSON with the imported project, route, full URL, source path, focused workspace file path, project `AGENTS.md` path, and the Tutti app-open result.
+Handler: `/tutti/cli/projects/get`
 
-Example:
+## `doc projects create --title --type --content --prompt --runtime-profile-id`
 
-```bash
-doc open --path ./brief.md --title "Brief"
-```
+Create a new AI Doc project directly. Use type html, markdown, or docx; html is used when type is omitted. When prompt is provided, the app creates the project and starts an agent run to initialize or edit the document.
 
-## `doc create`
+Handler: `/tutti/cli/projects/create`
 
-Creates a new document project. Inputs:
+## `doc sessions list --project-id <required>`
 
-- `title`: optional project title.
-- `type`: `html` or `markdown`; defaults to `html`.
-- `content`: optional initial document content.
+List agent conversation sessions for a document project.
 
-The command returns the created project as JSON.
+Handler: `/tutti/cli/sessions/list`
+
+## `doc sessions create --project-id <required> --title`
+
+Create a new agent conversation session for a document project.
+
+Handler: `/tutti/cli/sessions/create`
+
+## `doc messages list --project-id <required> --session-id <required>`
+
+List messages in one agent conversation session.
+
+Handler: `/tutti/cli/messages/list`
+
+## `doc messages create --project-id <required> --session-id <required> --role <required> --content <required>`
+
+Append a text-only user or assistant message to one conversation session.
+
+Handler: `/tutti/cli/messages/create`
+
+## `doc agent run --project-id <required> --prompt <required> --session-id --mode --runtime-profile-id`
+
+Start an agent run for a document project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with agent events.
+
+Handler: `/tutti/cli/agent/run`
+
+## `doc agent events --run-id <required>`
+
+Return one agent run and its persisted events by run-id.
+
+Handler: `/tutti/cli/agent/events`
+
+## `doc agent cancel --run-id <required>`
+
+Cancel an active agent run by run-id.
+
+Handler: `/tutti/cli/agent/cancel`
+
+## `doc officecli install`
+
+Install or repair the managed OfficeCLI toolchain used for DOCX import, export, and agent editing.
+
+Handler: `/tutti/cli/officecli/install`
+
+## `doc open --path <required> --title`
+
+Import an HTML, Markdown, or DOCX file into AI Doc, request opening its app route through Tutti CLI, and return workspace paths for agent editing.
+
+Handler: `/tutti/cli/open`
