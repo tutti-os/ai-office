@@ -148,6 +148,9 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
 }
 
 async function createProjectCliResponse(reply: FastifyReply, documents: DocumentService, input: Record<string, unknown>) {
+  if (Object.hasOwn(input, "content")) {
+    return sendCliError(reply, 400, "invalid_input", "content is not supported; pass prompt to run the AI Doc app agent");
+  }
   const type = normalizeDocumentType(input.type);
   if (!type) return sendCliError(reply, 400, "invalid_input", "type must be html, markdown, or docx");
   const prompt = optionalString(input, "prompt");
@@ -157,7 +160,6 @@ async function createProjectCliResponse(reply: FastifyReply, documents: Document
     const result = await documents.createProject({
       title: typeof input.title === "string" ? input.title : undefined,
       type,
-      content: typeof input.content === "string" ? input.content : undefined,
     });
     const run = prompt
       ? (await documents.startAiEdit(result.project.id, {

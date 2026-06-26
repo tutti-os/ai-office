@@ -22,9 +22,9 @@ Return one document project by project-id.
 
 Handler: `/tutti/cli/projects/get`
 
-## `doc projects create --title --type --content --prompt --runtime-profile-id`
+## `doc projects create --title --type --prompt --runtime-profile-id`
 
-Create a new AI Doc project directly. Use type html, markdown, or docx; html is used when type is omitted. When prompt is provided, the app creates the project and starts an agent run to initialize or edit the document.
+Create a new AI Doc project and optionally start the app's agent with prompt. Use prompt for generated document content; direct content input is not supported. For user requests to write a document, draft, article, report, or manuscript without an explicit file format, set type to html. If the user explicitly asks for DOCX or traditional Office Word format, set type to docx. Use markdown only when the user explicitly asks for Markdown.
 
 Handler: `/tutti/cli/projects/create`
 

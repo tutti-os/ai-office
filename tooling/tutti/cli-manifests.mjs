@@ -15,7 +15,7 @@ export const artifactCliConfigs = {
         path: ["projects", "create"],
         summary: "Create a document project",
         description:
-          "Create a new AI Doc project directly. Use type html, markdown, or docx; html is used when type is omitted. When prompt is provided, the app creates the project and starts an agent run to initialize or edit the document.",
+          "Create a new AI Doc project and optionally start the app's agent with prompt. Use prompt for generated document content; direct content input is not supported. For user requests to write a document, draft, article, report, or manuscript without an explicit file format, set type to html. If the user explicitly asks for DOCX or traditional Office Word format, set type to docx. Use markdown only when the user explicitly asks for Markdown.",
         properties: docCreateProperties(),
       },
       ...conversationCommands("document"),
@@ -47,7 +47,7 @@ export const artifactCliConfigs = {
         path: ["projects", "create"],
         summary: "Create a slide project",
         description:
-          "Create a new AI Slide project directly. Use artifact-type deck or pptx; deck is used when artifact-type is omitted. When prompt is provided, the app creates the project and starts an agent run to initialize or edit the deck.",
+          "Create a new AI Slide project and optionally start the app's agent with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx.",
         properties: slideCreateProperties(),
       },
       ...conversationCommands("slide"),
@@ -148,9 +148,12 @@ function projectsGetCommand(domain) {
 function docCreateProperties() {
   return {
     title: { type: "string", description: "Project title." },
-    type: { type: "string", description: "Document type: html, markdown, or docx." },
-    content: { type: "string", description: "Initial document content." },
-    prompt: { type: "string", description: "Optional prompt for an agent run after project creation." },
+    type: {
+      type: "string",
+      description:
+        "Document type: html, markdown, or docx. Default intent mapping: document/draft/article/report/manuscript => html; explicit DOCX or traditional Office Word => docx; explicit Markdown => markdown.",
+    },
+    prompt: { type: "string", description: "Optional prompt for the AI Doc app agent to generate or edit the document after project creation." },
     "runtime-profile-id": { type: "string", description: "Optional runtime profile id for prompt-based initialization." },
   };
 }
@@ -158,8 +161,12 @@ function docCreateProperties() {
 function slideCreateProperties() {
   return {
     title: { type: "string", description: "Project title." },
-    "artifact-type": { type: "string", description: "Artifact type: deck or pptx." },
-    prompt: { type: "string", description: "Optional prompt for an agent run after project creation." },
+    "artifact-type": {
+      type: "string",
+      description:
+        "Artifact type: deck or pptx. Default intent mapping: PPT/slides/slide deck/presentation => deck; explicit PPTX or traditional Office PowerPoint => pptx.",
+    },
+    prompt: { type: "string", description: "Optional prompt for the AI Slide app agent to generate or edit the deck after project creation." },
     "runtime-profile-id": { type: "string", description: "Optional runtime profile id for prompt-based initialization." },
   };
 }

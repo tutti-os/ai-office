@@ -24,7 +24,7 @@ Handler: `/tutti/cli/projects/get`
 
 ## `slide projects create --title --artifact-type --prompt --runtime-profile-id`
 
-Create a new AI Slide project directly. Use artifact-type deck or pptx; deck is used when artifact-type is omitted. When prompt is provided, the app creates the project and starts an agent run to initialize or edit the deck.
+Create a new AI Slide project and optionally start the app's agent with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx.
 
 Handler: `/tutti/cli/projects/create`
 

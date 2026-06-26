@@ -90,7 +90,7 @@
         "create"
       ],
       "summary": "Create a slide project",
-      "description": "Create a new AI Slide project directly. Use artifact-type deck or pptx; deck is used when artifact-type is omitted. When prompt is provided, the app creates the project and starts an agent run to initialize or edit the deck.",
+      "description": "Create a new AI Slide project and optionally start the app's agent with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -100,11 +100,11 @@
           },
           "artifact-type": {
             "type": "string",
-            "description": "Artifact type: deck or pptx."
+            "description": "Artifact type: deck or pptx. Default intent mapping: PPT/slides/slide deck/presentation => deck; explicit PPTX or traditional Office PowerPoint => pptx."
           },
           "prompt": {
             "type": "string",
-            "description": "Optional prompt for an agent run after project creation."
+            "description": "Optional prompt for the AI Slide app agent to generate or edit the deck after project creation."
           },
           "runtime-profile-id": {
             "type": "string",
