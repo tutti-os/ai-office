@@ -24,7 +24,7 @@ Handler: `/tutti/cli/projects/get`
 
 ## `slide projects create --title --artifact-type --prompt --runtime-profile-id`
 
-Create a new AI Slide project and optionally start the app's agent with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx.
+Create a new AI Slide project, request opening its app route through Tutti CLI, and optionally start the app's agent with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs as the final open target; use the app open result/route.
 
 Handler: `/tutti/cli/projects/create`
 
@@ -78,6 +78,6 @@ Handler: `/tutti/cli/officecli/install`
 
 ## `slide open --path <required> --title`
 
-Import a PPTX file into AI Slide, request opening its app route through Tutti CLI, and return workspace paths for agent editing.
+Import a PPTX file into AI Slide, request opening its app route through Tutti CLI, and return workspace paths for agent editing. Do not present localhost URLs as the final open target; use the app open result/route.
 
 Handler: `/tutti/cli/open`

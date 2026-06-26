@@ -90,7 +90,7 @@
         "create"
       ],
       "summary": "Create a slide project",
-      "description": "Create a new AI Slide project and optionally start the app's agent with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx.",
+      "description": "Create a new AI Slide project, request opening its app route through Tutti CLI, and optionally start the app's agent with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs as the final open target; use the app open result/route.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -401,7 +401,7 @@
         "open"
       ],
       "summary": "Open a presentation file",
-      "description": "Import a PPTX file into AI Slide, request opening its app route through Tutti CLI, and return workspace paths for agent editing.",
+      "description": "Import a PPTX file into AI Slide, request opening its app route through Tutti CLI, and return workspace paths for agent editing. Do not present localhost URLs as the final open target; use the app open result/route.",
       "inputSchema": {
         "type": "object",
         "properties": {

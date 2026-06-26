@@ -171,14 +171,17 @@ async function createProjectCliResponse(reply: FastifyReply, projects: ProjectSe
         })).run
       : null;
     const route = projectRoute(result.project.id);
+    const appOpen = await openTuttiAppRoute(appId(), route);
     return reply.send(cliJsonOutput({
       ok: true,
       project: result.project,
       artifact: result.artifact,
       run,
+      openRequested: appOpen.attempted && !appOpen.error,
+      appRoute: { appId: appId(), route },
       route,
-      url: `${appBaseUrl()}${route}`,
       workspace: projects.projectWorkspaceContext(result.project.id, result.artifact),
+      tuttiAppOpen: appOpen,
     }));
   } catch (error) {
     return sendCliError(reply, cliErrorStatus(error), "project_create_failed", errorMessage(error));
@@ -240,16 +243,18 @@ async function openSlideCliOutput(
   input: { sourcePath: string; project: SlideProject; artifact: SlideArtifact },
 ): Promise<OpenSlideCliResponse> {
   const route = projectRoute(input.project.id);
+  const appOpen = await openTuttiAppRoute(appId(), route);
   return {
     ok: true,
     action: "imported",
     sourcePath: input.sourcePath,
     project: input.project,
     artifact: input.artifact,
+    openRequested: appOpen.attempted && !appOpen.error,
+    appRoute: { appId: appId(), route },
     route,
-    url: `${appBaseUrl()}${route}`,
     workspace: projects.projectWorkspaceContext(input.project.id, input.artifact),
-    tuttiAppOpen: await openTuttiAppRoute(appId(), route),
+    tuttiAppOpen: appOpen,
   };
 }
 
@@ -270,14 +275,6 @@ function projectRoute(projectId: string) {
 
 function appId() {
   return process.env.TUTTI_APP_ID?.trim() || "ai-slide";
-}
-
-function appBaseUrl() {
-  const configured = process.env.AI_SLIDE_SERVER_URL?.trim();
-  if (configured) return configured.replace(/\/+$/g, "");
-  const host = process.env.HOST?.trim() || "127.0.0.1";
-  const port = process.env.PORT?.trim() || "8791";
-  return `http://${host}:${port}`;
 }
 
 function cliErrorStatus(error: unknown) {

@@ -192,9 +192,10 @@ export class DocumentService {
     };
   }
 
-  listRunEvents(runId: string) {
+  async listRunEvents(runId: string) {
     const run = this.repo.getRun(runId);
     if (!run) throw new Error("Run not found");
+    await this.refreshProjectFromWorkspace(run.projectId, runId);
     return { run, events: this.repo.listRunEvents(runId) };
   }
 

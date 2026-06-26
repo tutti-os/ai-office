@@ -24,7 +24,7 @@ Handler: `/tutti/cli/projects/get`
 
 ## `doc projects create --title --type --prompt --runtime-profile-id`
 
-Create a new AI Doc project and optionally start the app's agent with prompt. Use prompt for generated document content; direct content input is not supported. For user requests to write a document, draft, article, report, or manuscript without an explicit file format, set type to html. If the user explicitly asks for DOCX or traditional Office Word format, set type to docx. Use markdown only when the user explicitly asks for Markdown.
+Create a new AI Doc project, request opening its app route through Tutti CLI, and optionally start the app's agent with prompt. Use prompt for generated document content; direct content input is not supported. For user requests to write a document, draft, article, report, or manuscript without an explicit file format, set type to html. If the user explicitly asks for DOCX or traditional Office Word format, set type to docx. Use markdown only when the user explicitly asks for Markdown. Do not present localhost URLs as the final open target; use the app open result/route.
 
 Handler: `/tutti/cli/projects/create`
 
@@ -78,6 +78,6 @@ Handler: `/tutti/cli/officecli/install`
 
 ## `doc open --path <required> --title`
 
-Import an HTML, Markdown, or DOCX file into AI Doc, request opening its app route through Tutti CLI, and return workspace paths for agent editing.
+Import an HTML, Markdown, or DOCX file into AI Doc, request opening its app route through Tutti CLI, and return workspace paths for agent editing. Do not present localhost URLs as the final open target; use the app open result/route.
 
 Handler: `/tutti/cli/open`

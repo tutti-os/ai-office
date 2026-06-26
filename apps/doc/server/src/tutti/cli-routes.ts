@@ -103,7 +103,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
     const runId = requiredString(input, "run-id");
     if (!runId) return sendCliError(reply, 400, "invalid_input", "run-id is required");
     try {
-      return reply.send(cliJsonOutput(documents.listRunEvents(runId)));
+      return reply.send(cliJsonOutput(await documents.listRunEvents(runId)));
     } catch (error) {
       return sendCliError(reply, cliErrorStatus(error), "agent_events_failed", errorMessage(error));
     }
@@ -174,13 +174,16 @@ async function createProjectCliResponse(reply: FastifyReply, documents: Document
         })).run
       : null;
     const route = projectRoute(result.project.id);
+    const appOpen = await openTuttiAppRoute(appId(), route);
     return reply.send(cliJsonOutput({
       ok: true,
       project: result.project,
       run,
+      openRequested: appOpen.attempted && !appOpen.error,
+      appRoute: { appId: appId(), route },
       route,
-      url: `${appBaseUrl()}${route}`,
       workspace: documents.projectWorkspaceContext(result.project),
+      tuttiAppOpen: appOpen,
     }));
   } catch (error) {
     return sendCliError(reply, cliErrorStatus(error), "project_create_failed", errorMessage(error));
@@ -242,15 +245,17 @@ async function openDocumentCliOutput(
   input: { sourcePath: string; project: DocumentProject },
 ): Promise<OpenDocumentCliResponse> {
   const route = projectRoute(input.project.id);
+  const appOpen = await openTuttiAppRoute(appId(), route);
   return {
     ok: true,
     action: "imported",
     sourcePath: input.sourcePath,
     project: input.project,
+    openRequested: appOpen.attempted && !appOpen.error,
+    appRoute: { appId: appId(), route },
     route,
-    url: `${appBaseUrl()}${route}`,
     workspace: documents.projectWorkspaceContext(input.project),
-    tuttiAppOpen: await openTuttiAppRoute(appId(), route),
+    tuttiAppOpen: appOpen,
   };
 }
 
@@ -271,14 +276,6 @@ function projectRoute(projectId: string) {
 
 function appId() {
   return process.env.TUTTI_APP_ID?.trim() || "ai-doc";
-}
-
-function appBaseUrl() {
-  const configured = process.env.AI_DOC_SERVER_URL?.trim();
-  if (configured) return configured.replace(/\/+$/g, "");
-  const host = process.env.HOST?.trim() || "127.0.0.1";
-  const port = process.env.PORT?.trim() || "8790";
-  return `http://${host}:${port}`;
 }
 
 function cliErrorStatus(error: unknown) {

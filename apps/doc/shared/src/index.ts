@@ -196,8 +196,12 @@ export interface OpenDocumentCliResponse {
   action: "imported";
   sourcePath: string;
   project: DocumentProject;
+  openRequested: boolean;
+  appRoute: {
+    appId: string;
+    route: string;
+  };
   route: string;
-  url: string;
   workspace: DocumentWorkspaceContext;
   tuttiAppOpen: TuttiAppOpenResult;
 }

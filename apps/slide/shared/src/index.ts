@@ -233,8 +233,12 @@ export interface OpenSlideCliResponse {
   sourcePath: string;
   project: SlideProject;
   artifact: SlideArtifact;
+  openRequested: boolean;
+  appRoute: {
+    appId: string;
+    route: string;
+  };
   route: string;
-  url: string;
   workspace: SlideWorkspaceContext;
   tuttiAppOpen: TuttiAppOpenResult;
 }
