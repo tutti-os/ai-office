@@ -218,8 +218,8 @@ function matchesTimeRange(mtimeMs: number, timeRange: ReferenceListRequest["time
 }
 
 function isReferenceFile(pathValue: string) {
-  if (pathValue === "AGENTS.md" || pathValue.startsWith("snapshots/")) return false;
-  return true;
+  if (!pathValue.startsWith("exports/")) return false;
+  return extname(pathValue).toLowerCase() === ".xlsx";
 }
 
 function scoreFileName(fileName: string, query: string) {
