@@ -486,7 +486,7 @@ export function App() {
       <div className={homeContentClass}>
         <section className={homeHeroSectionClass}>
           <h1 className={cn("m-0", homeTitleClass)}>
-            <HomeTitleText emphasisTerms={["presentation", "演示文稿"]} title={t("home.heading")} />
+            <HomeTitleText emphasisTerms={["presentation"]} title={t("home.heading")} />
           </h1>
           <HomeComposer
             attachments={homeAttachments.attachments}
