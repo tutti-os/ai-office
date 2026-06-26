@@ -2,6 +2,7 @@ import { readdir, stat } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { xlsxMimeType } from "@ai-sheet/shared";
+import { getDb, rows } from "../db/database.js";
 import { appPaths } from "../local/paths.js";
 
 type ReferenceListRequest = {
@@ -87,16 +88,18 @@ export function registerTuttiReferenceRoutes(server: FastifyInstance) {
 
 async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]) {
   const entries = await safeReaddir(appPaths.projectsDir);
+  const projectTitles = loadProjectTitles();
   const groups: GroupItem[] = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const projectId = entry.name;
-    const references = await listReferencesForProject(projectId, timeRange);
+    const displayName = projectDisplayName(projectId, projectTitles);
+    const references = await listReferencesForProject(projectId, timeRange, displayName);
     if (references.length === 0) continue;
     groups.push({
       type: "group",
       id: projectId,
-      displayName: projectId,
+      displayName,
       description: `${references.length} files`,
       referenceCount: references.length,
     });
@@ -106,18 +109,20 @@ async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]) {
 
 async function listAllReferences(timeRange: ReferenceSearchRequest["timeRange"]) {
   const groups = await safeReaddir(appPaths.projectsDir);
+  const projectTitles = loadProjectTitles();
   const nested = await Promise.all(
     groups
       .filter((entry) => entry.isDirectory())
-      .map((entry) => listReferencesForProject(entry.name, timeRange)),
+      .map((entry) => listReferencesForProject(entry.name, timeRange, projectDisplayName(entry.name, projectTitles))),
   );
   return nested.flat();
 }
 
-async function listReferencesForProject(projectId: string, timeRange: ReferenceListRequest["timeRange"]) {
+async function listReferencesForProject(projectId: string, timeRange: ReferenceListRequest["timeRange"], projectDisplayNameValue?: string) {
   const root = join(appPaths.projectsDir, projectId);
   const files = await collectFiles(root);
   const items: ReferenceItem[] = [];
+  const parentGroupLabel = projectDisplayNameValue ?? projectDisplayName(projectId, loadProjectTitles());
   for (const file of files) {
     const relativeToProject = relative(root, file).split("\\").join("/");
     if (!isReferenceFile(relativeToProject)) continue;
@@ -138,7 +143,7 @@ async function listReferencesForProject(projectId: string, timeRange: ReferenceL
         sizeBytes: info.size,
         mtimeMs,
         mimeType: mimeTypeForFileName(file),
-        parentGroupLabel: projectId,
+        parentGroupLabel,
       },
     });
   }
@@ -193,6 +198,16 @@ function paged<T>(items: T[], offset: number, limit: number) {
 
 function normalizeSearchText(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function loadProjectTitles() {
+  return new Map(
+    rows<{ id: string; title: string }>(getDb().prepare(`SELECT id, title FROM projects`).all()).map((project) => [project.id, project.title] as const),
+  );
+}
+
+function projectDisplayName(projectId: string, projectTitles: Map<string, string>) {
+  return projectTitles.get(projectId)?.trim() || projectId;
 }
 
 function matchesTimeRange(mtimeMs: number, timeRange: ReferenceListRequest["timeRange"]) {

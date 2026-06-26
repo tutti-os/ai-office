@@ -7,6 +7,7 @@ const now = new Date("2026-01-01T00:00:00.000Z").toISOString();
 
 await testDocReferencesUseProjectTitle();
 await testSlideReferencesUseProjectTitle();
+await testSheetReferencesUseProjectTitle();
 
 async function testDocReferencesUseProjectTitle() {
   const home = mkdtempSync(join(tmpdir(), "ai-doc-references-"));
@@ -30,6 +31,7 @@ async function testDocReferencesUseProjectTitle() {
       registerTuttiReferenceRoutes,
       projectId: "doc-project-id",
       projectTitle: "Quarterly Strategy Memo",
+      searchQuery: "pdf",
     });
   } finally {
     rmSync(home, { force: true, recursive: true });
@@ -58,6 +60,36 @@ async function testSlideReferencesUseProjectTitle() {
       registerTuttiReferenceRoutes,
       projectId: "slide-project-id",
       projectTitle: "Board Readout Deck",
+      searchQuery: "pdf",
+    });
+  } finally {
+    rmSync(home, { force: true, recursive: true });
+  }
+}
+
+async function testSheetReferencesUseProjectTitle() {
+  const home = mkdtempSync(join(tmpdir(), "ai-sheet-references-"));
+  process.env.AI_SHEET_HOME = home;
+  try {
+    const [{ getDb }, { appPaths }, { registerTuttiReferenceRoutes }] = await Promise.all([
+      import("../apps/sheet/server/src/db/database.ts"),
+      import("../apps/sheet/server/src/local/paths.ts"),
+      import("../apps/sheet/server/src/tutti/reference-routes.ts"),
+    ]);
+    getDb()
+      .prepare(
+        `INSERT INTO projects (id, title, active_artifact_id, template_id, template_name, updated_by, created_at, updated_at)
+         VALUES (?, ?, 'artifact-id', NULL, NULL, 'system', ?, ?)`,
+      )
+      .run("sheet-project-id", "Revenue Forecast Workbook", now, now);
+    mkdirSync(join(appPaths.projectsDir, "sheet-project-id", "exports"), { recursive: true });
+    writeFileSync(join(appPaths.projectsDir, "sheet-project-id", "exports", "forecast.xlsx"), "xlsx");
+
+    await assertReferenceRoutes({
+      registerTuttiReferenceRoutes,
+      projectId: "sheet-project-id",
+      projectTitle: "Revenue Forecast Workbook",
+      searchQuery: "forecast",
     });
   } finally {
     rmSync(home, { force: true, recursive: true });
@@ -79,7 +111,7 @@ async function assertReferenceRoutes(input) {
   const projectFilesBody = await callRoute(routes, "/tutti/references/list", { parentGroupId: input.projectId });
   assert.equal(projectFilesBody.items[0].reference.parentGroupLabel, input.projectTitle);
 
-  const searchBody = await callRoute(routes, "/tutti/references/search", { query: "pdf" });
+  const searchBody = await callRoute(routes, "/tutti/references/search", { query: input.searchQuery });
   assert.equal(searchBody.items[0].reference.parentGroupLabel, input.projectTitle);
 }
 
