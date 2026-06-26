@@ -15,7 +15,7 @@ export const artifactCliConfigs = {
         path: ["projects", "create"],
         summary: "Create a document project",
         description:
-          "Create a new AI Doc project and optionally start the app's agent with prompt. Use prompt for generated document content; direct content input is not supported. For user requests to write a document, draft, article, report, or manuscript without an explicit file format, set type to html. If the user explicitly asks for DOCX or traditional Office Word format, set type to docx. Use markdown only when the user explicitly asks for Markdown.",
+          "Create a new AI Doc project, request opening its app route through Tutti CLI, and optionally start the app's agent with prompt. Use prompt for generated document content; direct content input is not supported. For user requests to write a document, draft, article, report, or manuscript without an explicit file format, set type to html. If the user explicitly asks for DOCX or traditional Office Word format, set type to docx. Use markdown only when the user explicitly asks for Markdown. Do not present localhost URLs as the final open target; use the app open result/route.",
         properties: docCreateProperties(),
       },
       ...conversationCommands("document"),
@@ -25,7 +25,7 @@ export const artifactCliConfigs = {
         path: ["open"],
         summary: "Open a document file",
         description:
-          "Import an HTML, Markdown, or DOCX file into AI Doc, request opening its app route through Tutti CLI, and return workspace paths for agent editing.",
+          "Import an HTML, Markdown, or DOCX file into AI Doc, request opening its app route through Tutti CLI, and return workspace paths for agent editing. Do not present localhost URLs as the final open target; use the app open result/route.",
         properties: pathAndTitleProperties(
           "Absolute path, home-relative path, or path relative to the Tutti workspace root.",
         ),
@@ -47,7 +47,7 @@ export const artifactCliConfigs = {
         path: ["projects", "create"],
         summary: "Create a slide project",
         description:
-          "Create a new AI Slide project and optionally start the app's agent with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx.",
+          "Create a new AI Slide project, request opening its app route through Tutti CLI, and optionally start the app-owned async agent with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs as the final open target; use the app open result/route. When a prompt starts an agent run, treat the returned run as the only writer for that project until it reaches a terminal status. Poll slide agent events by run-id until run.status is completed, failed, or cancelled; accepted/running means the app is still working. Do not inspect deck.slides and write fallback slide files while the app run is accepted or running. If it is still running after several polls, report that generation is still in progress instead of creating content yourself.",
         properties: slideCreateProperties(),
       },
       ...conversationCommands("slide"),
@@ -57,7 +57,7 @@ export const artifactCliConfigs = {
         path: ["open"],
         summary: "Open a presentation file",
         description:
-          "Import a PPTX file into AI Slide, request opening its app route through Tutti CLI, and return workspace paths for agent editing.",
+          "Import a PPTX file into AI Slide, request opening its app route through Tutti CLI, and return workspace paths for agent editing. Do not present localhost URLs as the final open target; use the app open result/route.",
         properties: pathAndTitleProperties(
           "Absolute path, home-relative path, or path relative to the Tutti workspace root.",
         ),
@@ -166,7 +166,11 @@ function slideCreateProperties() {
       description:
         "Artifact type: deck or pptx. Default intent mapping: PPT/slides/slide deck/presentation => deck; explicit PPTX or traditional Office PowerPoint => pptx.",
     },
-    prompt: { type: "string", description: "Optional prompt for the AI Slide app agent to generate or edit the deck after project creation." },
+    prompt: {
+      type: "string",
+      description:
+        "Optional prompt for the AI Slide app agent to generate or edit the deck after project creation. If supplied, poll the returned run with slide agent events and do not write fallback deck files while the run is accepted or running.",
+    },
     "runtime-profile-id": { type: "string", description: "Optional runtime profile id for prompt-based initialization." },
   };
 }
@@ -233,11 +237,14 @@ function conversationCommands(domain) {
 }
 
 function agentCommands(domain) {
+  const isSlide = domain === "slide";
   return [
     {
       path: ["agent", "run"],
       summary: "Start an agent run",
-      description: `Start an agent run for a ${domain} project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with agent events.`,
+      description: isSlide
+        ? "Start an app-owned async agent run for a slide project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with slide agent events until run.status is completed, failed, or cancelled. accepted/running means the app is still working, including when events are temporarily empty or contain reconnect/request-timeout status messages. Do not inspect deck.slides and write fallback slide files while this run is accepted or running; report that generation is still in progress if it has not reached a terminal status."
+        : `Start an agent run for a ${domain} project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with agent events.`,
       properties: {
         "project-id": { type: "string", description: "Project id to edit." },
         prompt: { type: "string", description: "User prompt for the agent." },
@@ -251,7 +258,9 @@ function agentCommands(domain) {
     {
       path: ["agent", "events"],
       summary: "Poll agent events",
-      description: "Return one agent run and its persisted events by run-id.",
+      description: isSlide
+        ? "Return one agent run and its persisted events by run-id. Use run.status as the source of truth: accepted/running are in-progress states, completed is success, and failed/cancelled are terminal failures. Empty event lists or reconnect/request-timeout status events are not failures by themselves. While a run is accepted or running, callers must not mutate the project workspace as a fallback writer."
+        : "Return one agent run and its persisted events by run-id.",
       properties: {
         "run-id": { type: "string", description: "Agent run id." },
       },

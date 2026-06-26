@@ -24,7 +24,7 @@ Handler: `/tutti/cli/projects/get`
 
 ## `slide projects create --title --artifact-type --prompt --runtime-profile-id`
 
-Create a new AI Slide project, request opening its app route through Tutti CLI, and optionally start the app's agent with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs as the final open target; use the app open result/route.
+Create a new AI Slide project, request opening its app route through Tutti CLI, and optionally start the app-owned async agent with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs as the final open target; use the app open result/route. When a prompt starts an agent run, treat the returned run as the only writer for that project until it reaches a terminal status. Poll slide agent events by run-id until run.status is completed, failed, or cancelled; accepted/running means the app is still working. Do not inspect deck.slides and write fallback slide files while the app run is accepted or running. If it is still running after several polls, report that generation is still in progress instead of creating content yourself.
 
 Handler: `/tutti/cli/projects/create`
 
@@ -54,13 +54,13 @@ Handler: `/tutti/cli/messages/create`
 
 ## `slide agent run --project-id <required> --prompt <required> --session-id --mode --runtime-profile-id`
 
-Start an agent run for a slide project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with agent events.
+Start an app-owned async agent run for a slide project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with slide agent events until run.status is completed, failed, or cancelled. accepted/running means the app is still working, including when events are temporarily empty or contain reconnect/request-timeout status messages. Do not inspect deck.slides and write fallback slide files while this run is accepted or running; report that generation is still in progress if it has not reached a terminal status.
 
 Handler: `/tutti/cli/agent/run`
 
 ## `slide agent events --run-id <required>`
 
-Return one agent run and its persisted events by run-id.
+Return one agent run and its persisted events by run-id. Use run.status as the source of truth: accepted/running are in-progress states, completed is success, and failed/cancelled are terminal failures. Empty event lists or reconnect/request-timeout status events are not failures by themselves. While a run is accepted or running, callers must not mutate the project workspace as a fallback writer.
 
 Handler: `/tutti/cli/agent/events`
 
