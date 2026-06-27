@@ -152,7 +152,7 @@ export function App() {
         setRuntimeProfiles(enabledProfiles);
         setSelectedAgent((current) => {
           if (enabledProfiles.some((profile) => profile.id === current)) return current;
-          return enabledProfiles[0]?.id ?? "";
+          return "";
         });
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
@@ -163,11 +163,8 @@ export function App() {
       .then((response) => {
         setLocalAgentProviders(response.providers);
         setSelectedAgent((current) => {
-          const currentProfile = runtimeProfiles.find((profile) => profile.id === current);
-          const currentStatus = currentProfile ? response.providers.find((provider) => provider.provider === currentProfile.provider) : null;
-          if (currentStatus?.available) return current;
-          const firstAvailable = runtimeProfiles.find((profile) => response.providers.find((provider) => provider.provider === profile.provider)?.available);
-          return firstAvailable?.id ?? current;
+          if (!current) return "";
+          return runtimeProfiles.some((profile) => profile.id === current) ? current : "";
         });
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));

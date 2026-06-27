@@ -13,6 +13,7 @@ import {
   type DocumentProject,
   type DocumentRun,
   type DocumentRunEvent,
+  type LocalAgentProviderStatus,
   type ProjectAssetUploadResponse,
   parseDocxDocumentManifest,
   type RuntimeProfile,
@@ -30,6 +31,7 @@ import { mimeTypeForImportFileName, resolveImportSourcePath } from "./import-sou
 import { assistantConversationContent, previewText } from "./run-preview.js";
 import { documentTemplates, getTemplate } from "./templates.js";
 import { loadTemplateProjectSeed, materializeTemplateAssetsToProject } from "../templates/template-service.js";
+import { getDefaultAgentProvider } from "../tutti/tutti-cli.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
 import { EventHub } from "../ws/event-hub.js";
@@ -315,7 +317,7 @@ export class DocumentService {
     if (!project) throw new Error("Project not found");
     if (project.type === "docx") await requireOfficeCli();
     this.repo.syncProjectAgentInstructions(projectId);
-    const runtimeProfile = this.repo.getRuntimeProfile(request.runtimeProfileId);
+    const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);
     const session = this.resolveConversationSession(projectId, project.title, request.sessionId);
@@ -365,6 +367,25 @@ export class DocumentService {
   private resolveConversationSession(projectId: string, title: string, sessionId: string | null | undefined) {
     if (!sessionId?.trim()) return this.repo.ensureConversationSession(projectId, title);
     return this.requireProjectSession(projectId, sessionId);
+  }
+
+  private async resolveRuntimeProfile(runtimeProfileId: string | null | undefined) {
+    if (runtimeProfileId) return this.repo.getRuntimeProfile(runtimeProfileId);
+    const statuses = await this.runtimes.listLocalAgentProviders().catch(() => null);
+    const defaultProvider = normalizeTuttiAgentProvider(await getDefaultAgentProvider().catch(() => undefined));
+    const defaultProfile = defaultProvider ? this.repo.getLocalAgentRuntimeProfileByProvider(defaultProvider) : null;
+    if (defaultProfile) return defaultProfile;
+    return (
+      this.availableRuntimeProfile("codex", statuses) ??
+      this.availableRuntimeProfile("claude", statuses) ??
+      this.repo.getRuntimeProfile(undefined)
+    );
+  }
+
+  private availableRuntimeProfile(provider: string | undefined, statuses: LocalAgentProviderStatus[] | null) {
+    if (!provider) return null;
+    if (statuses && !statuses.some((item) => normalizeTuttiAgentProvider(item.provider) === provider && item.available)) return null;
+    return this.repo.getLocalAgentRuntimeProfileByProvider(provider);
   }
 
   private requireProjectSession(projectId: string, sessionId: string) {
@@ -569,6 +590,14 @@ function extractMarkdownDocument(raw: string) {
   if (!trimmed) return "";
   const fence = trimmed.match(/```(?:markdown|md)?\s*([\s\S]*?)```/i);
   return (fence?.[1] ?? trimmed).trim();
+}
+
+function normalizeTuttiAgentProvider(provider: string | undefined) {
+  const normalized = provider?.trim().toLowerCase().replace(/[\s_]+/g, "-");
+  if (!normalized) return undefined;
+  if (normalized === "claude-code" || normalized === "claude") return "claude";
+  if (normalized === "codex") return "codex";
+  return normalized;
 }
 
 function defaultProjectContent(type: DocumentProject["type"], template: DocumentTemplate) {

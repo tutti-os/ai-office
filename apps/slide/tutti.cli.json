@@ -138,7 +138,7 @@
           },
           "provider": {
             "type": "string",
-            "description": "Optional app-agent provider for prompt-based creation: codex or claude-code."
+            "description": "Optional app-agent provider for prompt-based creation: codex or claude-code. If omitted, AI Slide reads the Tutti global default from `tutti agent providers --json` defaultProvider, then falls back to Codex or Claude Code if available."
           }
         }
       },
@@ -458,7 +458,7 @@
           },
           "provider": {
             "type": "string",
-            "description": "Optional app-agent provider: codex or claude-code."
+            "description": "Optional app-agent provider: codex or claude-code. If omitted, AI Slide reads the Tutti global default from `tutti agent providers --json` defaultProvider, then falls back to Codex or Claude Code if available."
           }
         },
         "required": [

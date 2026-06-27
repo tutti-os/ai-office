@@ -3,7 +3,7 @@ import { extname, join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { cliErrorOutput, cliJsonOutput, readCliInputBody } from "@ai-app/shared/tutti-cli";
 import type { AiEditMode, DeckManifestSlide, OpenSlideCliResponse, SlideArtifact, SlideArtifactType, SlideProject } from "@ai-slide/shared";
-import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
+import { getDefaultAgentProvider, getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { ProjectService } from "../artifact/project-service.js";
 import { installOfficeCli } from "../toolchains/officecli.js";
 
@@ -322,7 +322,7 @@ async function createProjectCliResponse(reply: FastifyReply, projects: ProjectSe
   const prompt = optionalString(input, "prompt");
   const mode = normalizeAiMode(input.mode);
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
-  const runtimeProfileId = runtimeProfileIdFromCliInput(input);
+  const runtimeProfileId = await runtimeProfileIdFromCliInput(input);
   if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
   try {
     const result = await projects.createProject({
@@ -362,7 +362,7 @@ async function agentRunCliResponse(reply: FastifyReply, projects: ProjectService
   if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
   if (!prompt) return sendCliError(reply, 400, "invalid_input", "prompt is required");
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
-  const runtimeProfileId = runtimeProfileIdFromCliInput(input);
+  const runtimeProfileId = await runtimeProfileIdFromCliInput(input);
   if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
   try {
     const { artifact } = await projects.getProject(projectId);
@@ -401,9 +401,22 @@ function optionalString(input: Record<string, unknown>, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function runtimeProfileIdFromCliInput(input: Record<string, unknown>): { value?: string; error?: string } {
+async function runtimeProfileIdFromCliInput(input: Record<string, unknown>): Promise<{ value?: string; error?: string }> {
   const provider = optionalString(input, "provider");
-  if (!provider) return { value: optionalString(input, "runtime-profile-id") };
+  if (!provider) {
+    const runtimeProfileId = optionalString(input, "runtime-profile-id");
+    if (runtimeProfileId) return { value: runtimeProfileId };
+    return { value: await defaultRuntimeProfileIdFromTuttiCli() };
+  }
+  return runtimeProfileIdFromProvider(provider);
+}
+
+async function defaultRuntimeProfileIdFromTuttiCli() {
+  const provider = await getDefaultAgentProvider().catch(() => undefined);
+  return provider ? runtimeProfileIdFromProvider(provider).value : undefined;
+}
+
+function runtimeProfileIdFromProvider(provider: string): { value?: string; error?: string } {
   const normalized = provider.toLowerCase().replace(/[\s_]+/g, "-");
   if (normalized === "codex") return { value: "local-agent:codex" };
   if (normalized === "claude" || normalized === "claude-code") return { value: "local-agent:claude" };

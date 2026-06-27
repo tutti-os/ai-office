@@ -53,7 +53,7 @@ export function useDocumentWorkbenchBootstrap(input: DocumentWorkbenchBootstrapI
         setOfficeCliStatus(officeCli.officecli);
         setSelectedRuntimeProfileId((current) => {
           if (enabledProfiles.some((profile) => profile.id === current)) return current;
-          return enabledProfiles.find((profile) => profile.kind === "local-agent")?.id ?? enabledProfiles[0]?.id ?? "";
+          return "";
         });
       })
       .catch((err) => {

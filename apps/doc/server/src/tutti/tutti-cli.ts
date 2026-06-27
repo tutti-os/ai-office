@@ -50,6 +50,11 @@ export async function getTuttiCliStatus(): Promise<TuttiCliStatus> {
   }
 }
 
+export async function getDefaultAgentProvider(timeoutMs = 5000): Promise<string | undefined> {
+  const output = await runTuttiCli(["--json", "agent", "providers"], timeoutMs);
+  return readDefaultProvider(output);
+}
+
 export function runTuttiCli(args: string[], optionsOrTimeoutMs: RunTuttiCliOptions | number = 15000) {
   const executablePath = configuredTuttiCliPath();
   if (!executablePath) throw new Error("TUTTI_CLI is not configured");
@@ -72,6 +77,25 @@ export function runTuttiCli(args: string[], optionsOrTimeoutMs: RunTuttiCliOptio
       },
     );
   });
+}
+
+function readDefaultProvider(output: unknown): string | undefined {
+  const direct = readStringProperty(output, "defaultProvider");
+  if (direct) return direct;
+  if (isRecord(output)) {
+    return readStringProperty(output.value, "defaultProvider");
+  }
+  return undefined;
+}
+
+function readStringProperty(value: unknown, key: string) {
+  if (!isRecord(value)) return undefined;
+  const property = value[key];
+  return typeof property === "string" && property.trim() ? property.trim() : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 export async function openTuttiAppRoute(appId: string, route: string, timeoutMs = 10000): Promise<TuttiAppOpenResult> {

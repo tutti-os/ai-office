@@ -92,6 +92,15 @@ export class RuntimeProfileStore {
     return fallback ? rowToRuntimeProfile(fallback) : this.getDefault();
   }
 
+  getLocalAgentByProvider(provider: string) {
+    const row = rowOrNull<RuntimeProfileRow>(
+      this.getDb()
+        .prepare(`SELECT * FROM ${this.tableName} WHERE kind = 'local-agent' AND provider = ? AND enabled = 1 ORDER BY created_at ASC LIMIT 1`)
+        .get(provider),
+    );
+    return row ? rowToRuntimeProfile(row) : null;
+  }
+
   getDefault() {
     const row = rowOrNull<RuntimeProfileRow>(
       this.getDb()

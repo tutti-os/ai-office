@@ -229,7 +229,11 @@ function docCreateProperties() {
         "Document type: html, markdown, or docx. Default intent mapping: document/draft/article/report/manuscript => html; explicit DOCX or traditional Office Word => docx; explicit Markdown => markdown.",
     },
     prompt: { type: "string", description: "Optional prompt for the AI Doc app agent to generate or edit the document after project creation." },
-    provider: { type: "string", description: "Optional app-agent provider for prompt-based creation: codex or claude-code." },
+    provider: {
+      type: "string",
+      description:
+        "Optional app-agent provider for prompt-based creation: codex or claude-code. If omitted, AI Doc reads the Tutti global default from `tutti agent providers --json` defaultProvider, then falls back to Codex or Claude Code if available.",
+    },
   };
 }
 
@@ -246,7 +250,11 @@ function slideCreateProperties() {
       description:
         "Optional prompt for the AI Slide app agent to generate or edit the deck after project creation. If supplied, poll the returned run with slide agent events and do not write fallback deck files while the run is accepted or running.",
     },
-    provider: { type: "string", description: "Optional app-agent provider for prompt-based creation: codex or claude-code." },
+    provider: {
+      type: "string",
+      description:
+        "Optional app-agent provider for prompt-based creation: codex or claude-code. If omitted, AI Slide reads the Tutti global default from `tutti agent providers --json` defaultProvider, then falls back to Codex or Claude Code if available.",
+    },
   };
 }
 
@@ -332,7 +340,7 @@ function agentCommands(domain, options = {}) {
       description: isSlide
         ? "Start an app-owned async agent edit for a slide project and return an internal openTarget command. External agents and other Tutti apps must use this command to modify slide content, then poll slide agent events until run.status is completed, failed, or cancelled. This command must not open the app automatically. After completion, tell the user they can view the result in AI Slide and ask whether they want you to open it directly; if they confirm, call slide projects open."
         : `Start an app-owned agent edit for a ${domain} project and return an internal openTarget command. External agents and other Tutti apps must use this command to modify ${domain} content, then poll agent events until the run reaches a terminal status. This command must not open the app automatically. After completion, tell the user they can view the result in ${appName} and ask whether they want you to open it directly; if they confirm, call ${options.scope} projects open.`,
-      properties: agentEditProperties("User prompt for the app-owned agent.", { includeProvider: true }),
+      properties: agentEditProperties("User prompt for the app-owned agent.", { includeProvider: true, appName }),
       required: ["project-id", "prompt"],
       timeoutMs: 60000,
     });
@@ -375,7 +383,10 @@ function agentEditProperties(promptDescription, options = {}) {
     mode: { type: "string", description: "Optional edit mode: write or rewrite." },
   };
   if (options.includeProvider) {
-    properties.provider = { type: "string", description: "Optional app-agent provider: codex or claude-code." };
+    properties.provider = {
+      type: "string",
+      description: `Optional app-agent provider: codex or claude-code. If omitted, ${options.appName ?? "the app"} reads the Tutti global default from \`tutti agent providers --json\` defaultProvider, then falls back to Codex or Claude Code if available.`,
+    };
   }
   if (options.includeRuntimeProfileId) {
     properties["runtime-profile-id"] = { type: "string", description: "Optional runtime profile id." };

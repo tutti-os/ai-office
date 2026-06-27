@@ -7,6 +7,7 @@ import {
   type AiEditRequest,
   type CreateProjectRequest,
   type DeckAssetUploadResponse,
+  type LocalAgentProviderStatus,
   type RuntimeProfile,
   type SlideArtifact,
   type SlideRun,
@@ -24,6 +25,7 @@ import { projectWorkspaceRoot } from "../local/paths.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
 import type { SlideRuntimeProject } from "../runtimes/runtime-provider.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
+import { getDefaultAgentProvider } from "../tutti/tutti-cli.js";
 import { EventHub } from "../ws/event-hub.js";
 import { ProjectRepository } from "./project-repository.js";
 
@@ -293,7 +295,7 @@ export class ProjectService {
     const runtimeProject = await this.createRuntimeProject(projectId);
     if (runtimeProject.artifact.type === "pptx") await requireOfficeCli();
     this.repo.syncProjectAgentInstructions(projectId);
-    const runtimeProfile = this.repo.getRuntimeProfile(request.runtimeProfileId);
+    const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);
     const session = this.resolveConversationSession(projectId, runtimeProject.title, request.sessionId);
@@ -337,6 +339,25 @@ export class ProjectService {
   private resolveConversationSession(projectId: string, title: string, sessionId: string | null | undefined) {
     if (!sessionId?.trim()) return this.repo.ensureConversationSession(projectId, title);
     return this.requireProjectSession(projectId, sessionId);
+  }
+
+  private async resolveRuntimeProfile(runtimeProfileId: string | null | undefined) {
+    if (runtimeProfileId) return this.repo.getRuntimeProfile(runtimeProfileId);
+    const statuses = await this.runtimes.listLocalAgentProviders().catch(() => null);
+    const defaultProvider = normalizeTuttiAgentProvider(await getDefaultAgentProvider().catch(() => undefined));
+    const defaultProfile = defaultProvider ? this.repo.getLocalAgentRuntimeProfileByProvider(defaultProvider) : null;
+    if (defaultProfile) return defaultProfile;
+    return (
+      this.availableRuntimeProfile("codex", statuses) ??
+      this.availableRuntimeProfile("claude", statuses) ??
+      this.repo.getRuntimeProfile(undefined)
+    );
+  }
+
+  private availableRuntimeProfile(provider: string | undefined, statuses: LocalAgentProviderStatus[] | null) {
+    if (!provider) return null;
+    if (statuses && !statuses.some((item) => normalizeTuttiAgentProvider(item.provider) === provider && item.available)) return null;
+    return this.repo.getLocalAgentRuntimeProfileByProvider(provider);
   }
 
   private requireProjectSession(projectId: string, sessionId: string) {
@@ -517,6 +538,14 @@ function isSupportedExportMimeType(mimeType: string) {
 
 function isSupportedPptxImport(fileName: string, mimeType: string) {
   return fileName.toLowerCase().endsWith(".pptx") || mimeType.toLowerCase() === pptxMimeType;
+}
+
+function normalizeTuttiAgentProvider(provider: string | undefined) {
+  const normalized = provider?.trim().toLowerCase().replace(/[\s_]+/g, "-");
+  if (!normalized) return undefined;
+  if (normalized === "claude-code" || normalized === "claude") return "claude";
+  if (normalized === "codex") return "codex";
+  return normalized;
 }
 
 function isSupportedImageMimeType(mimeType: string) {

@@ -297,6 +297,10 @@ export class DocumentRepository {
     return this.runtimeProfiles.get(profileId);
   }
 
+  getLocalAgentRuntimeProfileByProvider(provider: string) {
+    return this.runtimeProfiles.getLocalAgentByProvider(provider);
+  }
+
   getRuntimeProfileForRun(run: Pick<DocumentRun, "runtime" | "provider" | "model">) {
     return this.runtimeProfiles.getForRun(run);
   }

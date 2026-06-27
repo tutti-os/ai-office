@@ -114,6 +114,11 @@ export class ProjectRepository {
     return this.runtimeProfiles.get(profileId);
   }
 
+  getLocalAgentRuntimeProfileByProvider(provider: string) {
+    this.ensureSeedData();
+    return this.runtimeProfiles.getLocalAgentByProvider(provider);
+  }
+
   getRuntimeProfileForRun(run: Pick<SlideRun, "runtime" | "provider" | "model">) {
     this.ensureSeedData();
     return this.runtimeProfiles.getForRun(run);
