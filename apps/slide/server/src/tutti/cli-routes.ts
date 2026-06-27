@@ -3,7 +3,7 @@ import { extname, join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { cliErrorOutput, cliJsonOutput, readCliInputBody } from "@ai-app/shared/tutti-cli";
 import type { AiEditMode, DeckManifestSlide, OpenSlideCliResponse, SlideArtifact, SlideArtifactType, SlideProject } from "@ai-slide/shared";
-import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
+import { getTuttiCliStatus } from "./tutti-cli.js";
 import type { ProjectService } from "../artifact/project-service.js";
 import { installOfficeCli } from "../toolchains/officecli.js";
 
@@ -165,7 +165,12 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
     const runId = requiredString(input, "run-id");
     if (!runId) return sendCliError(reply, 400, "invalid_input", "run-id is required");
     try {
-      return reply.send(cliJsonOutput(projects.listRunEvents(runId)));
+      const result = projects.listRunEvents(runId);
+      return reply.send(cliJsonOutput({
+        ...result,
+        openTarget: result.run?.projectId ? projectOpenTarget(result.run.projectId) : null,
+        guidance: finalOpenGuidance("AI Slide"),
+      }));
     } catch (error) {
       return sendCliError(reply, cliErrorStatus(error), "agent_events_failed", errorMessage(error));
     }
@@ -305,6 +310,8 @@ async function createProjectCliResponse(reply: FastifyReply, projects: ProjectSe
   const prompt = optionalString(input, "prompt");
   const mode = normalizeAiMode(input.mode);
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
+  const runtimeProfileId = runtimeProfileIdFromCliInput(input);
+  if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
   try {
     const result = await projects.createProject({
       title: typeof input.title === "string" ? input.title : undefined,
@@ -319,21 +326,18 @@ async function createProjectCliResponse(reply: FastifyReply, projects: ProjectSe
           selectedHtml: "",
           selectionType: "write",
           selectionPath: "",
-          runtimeProfileId: optionalString(input, "runtime-profile-id"),
+          runtimeProfileId: runtimeProfileId.value,
         })).run
       : null;
-    const route = projectRoute(result.project.id);
-    const appOpen = await openTuttiAppRoute(appId(), route);
     return reply.send(cliJsonOutput({
       ok: true,
       project: result.project,
       artifact: result.artifact,
       run,
-      openRequested: appOpen.attempted && !appOpen.error,
-      appRoute: { appId: appId(), route },
-      route,
+      openTarget: projectOpenTarget(result.project.id),
+      route: projectRoute(result.project.id),
       workspace: projects.projectWorkspaceContext(result.project.id, result.artifact),
-      tuttiAppOpen: appOpen,
+      guidance: finalOpenGuidance("AI Slide"),
     }));
   } catch (error) {
     return sendCliError(reply, cliErrorStatus(error), "project_create_failed", errorMessage(error));
@@ -347,9 +351,11 @@ async function agentRunCliResponse(reply: FastifyReply, projects: ProjectService
   if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
   if (!prompt) return sendCliError(reply, 400, "invalid_input", "prompt is required");
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
+  const runtimeProfileId = runtimeProfileIdFromCliInput(input);
+  if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
   try {
     const { artifact } = await projects.getProject(projectId);
-    return reply.send(cliJsonOutput(await projects.startAiEdit(projectId, {
+    const result = await projects.startAiEdit(projectId, {
       userPrompt: prompt,
       mode,
       artifactType: artifact.type,
@@ -358,8 +364,13 @@ async function agentRunCliResponse(reply: FastifyReply, projects: ProjectService
       selectionType: "write",
       selectionPath: "",
       sessionId: optionalString(input, "session-id"),
-      runtimeProfileId: optionalString(input, "runtime-profile-id"),
-    })));
+      runtimeProfileId: runtimeProfileId.value,
+    });
+    return reply.send(cliJsonOutput({
+      ...result,
+      openTarget: projectOpenTarget(projectId),
+      guidance: finalOpenGuidance("AI Slide"),
+    }));
   } catch (error) {
     return sendCliError(reply, cliErrorStatus(error), "agent_run_failed", errorMessage(error));
   }
@@ -377,6 +388,15 @@ function requiredString(input: Record<string, unknown>, key: string) {
 function optionalString(input: Record<string, unknown>, key: string) {
   const value = input[key];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function runtimeProfileIdFromCliInput(input: Record<string, unknown>): { value?: string; error?: string } {
+  const provider = optionalString(input, "provider");
+  if (!provider) return { value: optionalString(input, "runtime-profile-id") };
+  const normalized = provider.toLowerCase().replace(/[\s_]+/g, "-");
+  if (normalized === "codex") return { value: "local-agent:codex" };
+  if (normalized === "claude" || normalized === "claude-code") return { value: "local-agent:claude" };
+  return { error: "provider must be codex or claude-code" };
 }
 
 function optionalBoolean(input: Record<string, unknown>, key: string) {
@@ -402,20 +422,29 @@ async function openSlideCliOutput(
   projects: ProjectService,
   input: { sourcePath: string; project: SlideProject; artifact: SlideArtifact },
 ): Promise<OpenSlideCliResponse> {
-  const route = projectRoute(input.project.id);
-  const appOpen = await openTuttiAppRoute(appId(), route);
   return {
     ok: true,
     action: "imported",
     sourcePath: input.sourcePath,
     project: input.project,
     artifact: input.artifact,
-    openRequested: appOpen.attempted && !appOpen.error,
-    appRoute: { appId: appId(), route },
-    route,
+    openTarget: projectOpenTarget(input.project.id),
+    route: projectRoute(input.project.id),
     workspace: projects.projectWorkspaceContext(input.project.id, input.artifact),
-    tuttiAppOpen: appOpen,
   };
+}
+
+function projectOpenTarget(projectId: string) {
+  return {
+    kind: "tutti-app-route" as const,
+    appId: appId(),
+    route: projectRoute(projectId),
+    label: "Open in AI Slide",
+  };
+}
+
+function finalOpenGuidance(appName: string) {
+  return `Do not open the app automatically. When the task is complete, include openTarget as the final user-facing link/action so the user can open ${appName} themselves.`;
 }
 
 function projectSummary(project: SlideProject) {

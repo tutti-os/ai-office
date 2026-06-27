@@ -87,7 +87,7 @@ Runtime composition:
 
 - Use \`AI_DOC_TUTTI_CLI\` for app-to-app calls. It is populated from \`TUTTI_CLI\` by \`bootstrap.sh\`.
 - CLI integrations must be optional and fail softly so AI Doc still works in a normal browser or development shell.
-- The \`doc open\` command imports the file, calls \`$TUTTI_CLI --json app open --app-id "$TUTTI_APP_ID" --route ...\`, and returns the focused workspace file path plus project \`AGENTS.md\` path for follow-up edits.
+- The \`doc open\` command imports the file and returns the focused workspace file path, project \`AGENTS.md\` path, and structured \`openTarget\` for the user-facing app route. It does not open the app automatically.
 `;
 }
 

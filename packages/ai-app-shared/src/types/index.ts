@@ -115,6 +115,13 @@ export interface TuttiAppOpenResult {
   error: string | null;
 }
 
+export interface TuttiAppOpenTarget {
+  kind: "tutti-app-route";
+  appId: string;
+  route: string;
+  label: string;
+}
+
 export interface StreamEvent<TType extends string = string> {
   id: Id;
   seq: number;

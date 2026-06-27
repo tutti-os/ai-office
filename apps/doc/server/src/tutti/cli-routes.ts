@@ -3,7 +3,7 @@ import { extname, join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { cliErrorOutput, cliJsonOutput, readCliInputBody } from "@ai-app/shared/tutti-cli";
 import { parseDocxDocumentManifest, type AiEditMode, type DocumentProject, type DocumentType, type OpenDocumentCliResponse } from "@ai-doc/shared";
-import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
+import { getTuttiCliStatus } from "./tutti-cli.js";
 import type { DocumentService } from "../artifact/document-service.js";
 import { installOfficeCli } from "../toolchains/officecli.js";
 
@@ -138,7 +138,12 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
     const runId = requiredString(input, "run-id");
     if (!runId) return sendCliError(reply, 400, "invalid_input", "run-id is required");
     try {
-      return reply.send(cliJsonOutput(await documents.listRunEvents(runId)));
+      const result = await documents.listRunEvents(runId);
+      return reply.send(cliJsonOutput({
+        ...result,
+        openTarget: result.run?.projectId ? projectOpenTarget(result.run.projectId) : null,
+        guidance: finalOpenGuidance("AI Doc"),
+      }));
     } catch (error) {
       return sendCliError(reply, cliErrorStatus(error), "agent_events_failed", errorMessage(error));
     }
@@ -224,6 +229,8 @@ async function createProjectCliResponse(reply: FastifyReply, documents: Document
   const prompt = optionalString(input, "prompt");
   const mode = normalizeAiMode(input.mode);
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
+  const runtimeProfileId = runtimeProfileIdFromCliInput(input);
+  if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
   try {
     const result = await documents.createProject({
       title: typeof input.title === "string" ? input.title : undefined,
@@ -238,20 +245,17 @@ async function createProjectCliResponse(reply: FastifyReply, documents: Document
           selectionPath: "",
           userPrompt: prompt,
           mode,
-          runtimeProfileId: optionalString(input, "runtime-profile-id"),
+          runtimeProfileId: runtimeProfileId.value,
         })).run
       : null;
-    const route = projectRoute(result.project.id);
-    const appOpen = await openTuttiAppRoute(appId(), route);
     return reply.send(cliJsonOutput({
       ok: true,
       project: result.project,
       run,
-      openRequested: appOpen.attempted && !appOpen.error,
-      appRoute: { appId: appId(), route },
-      route,
+      openTarget: projectOpenTarget(result.project.id),
+      route: projectRoute(result.project.id),
       workspace: documents.projectWorkspaceContext(result.project),
-      tuttiAppOpen: appOpen,
+      guidance: finalOpenGuidance("AI Doc"),
     }));
   } catch (error) {
     return sendCliError(reply, cliErrorStatus(error), "project_create_failed", errorMessage(error));
@@ -265,9 +269,11 @@ async function agentRunCliResponse(reply: FastifyReply, documents: DocumentServi
   if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
   if (!prompt) return sendCliError(reply, 400, "invalid_input", "prompt is required");
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
+  const runtimeProfileId = runtimeProfileIdFromCliInput(input);
+  if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
   try {
     const { project } = documents.getProject(projectId);
-    return reply.send(cliJsonOutput(await documents.startAiEdit(projectId, {
+    const result = await documents.startAiEdit(projectId, {
       htmlContent: project.content,
       selectedText: "",
       selectedHtml: "",
@@ -276,8 +282,13 @@ async function agentRunCliResponse(reply: FastifyReply, documents: DocumentServi
       userPrompt: prompt,
       mode,
       sessionId: optionalString(input, "session-id"),
-      runtimeProfileId: optionalString(input, "runtime-profile-id"),
-    })));
+      runtimeProfileId: runtimeProfileId.value,
+    });
+    return reply.send(cliJsonOutput({
+      ...result,
+      openTarget: projectOpenTarget(projectId),
+      guidance: finalOpenGuidance("AI Doc"),
+    }));
   } catch (error) {
     return sendCliError(reply, cliErrorStatus(error), "agent_run_failed", errorMessage(error));
   }
@@ -297,6 +308,15 @@ function optionalString(input: Record<string, unknown>, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function runtimeProfileIdFromCliInput(input: Record<string, unknown>): { value?: string; error?: string } {
+  const provider = optionalString(input, "provider");
+  if (!provider) return { value: optionalString(input, "runtime-profile-id") };
+  const normalized = provider.toLowerCase().replace(/[\s_]+/g, "-");
+  if (normalized === "codex") return { value: "local-agent:codex" };
+  if (normalized === "claude" || normalized === "claude-code") return { value: "local-agent:claude" };
+  return { error: "provider must be codex or claude-code" };
+}
+
 function normalizeMessageRole(value: unknown): "user" | "assistant" | null {
   if (value === "user" || value === "assistant") return value;
   return null;
@@ -312,19 +332,28 @@ async function openDocumentCliOutput(
   documents: DocumentService,
   input: { sourcePath: string; project: DocumentProject },
 ): Promise<OpenDocumentCliResponse> {
-  const route = projectRoute(input.project.id);
-  const appOpen = await openTuttiAppRoute(appId(), route);
   return {
     ok: true,
     action: "imported",
     sourcePath: input.sourcePath,
     project: input.project,
-    openRequested: appOpen.attempted && !appOpen.error,
-    appRoute: { appId: appId(), route },
-    route,
+    openTarget: projectOpenTarget(input.project.id),
+    route: projectRoute(input.project.id),
     workspace: documents.projectWorkspaceContext(input.project),
-    tuttiAppOpen: appOpen,
   };
+}
+
+function projectOpenTarget(projectId: string) {
+  return {
+    kind: "tutti-app-route" as const,
+    appId: appId(),
+    route: projectRoute(projectId),
+    label: "Open in AI Doc",
+  };
+}
+
+function finalOpenGuidance(appName: string) {
+  return `Do not open the app automatically. When the task is complete, include openTarget as the final user-facing link/action so the user can open ${appName} themselves.`;
 }
 
 function projectSummary(project: DocumentProject) {

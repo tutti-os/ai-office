@@ -7,7 +7,7 @@ import type {
   RunStatus,
   RuntimeProfile,
   StreamEvent as BaseStreamEvent,
-  TuttiAppOpenResult,
+  TuttiAppOpenTarget,
   WsServerMessage as BaseWsServerMessage,
 } from "@ai-app/shared/types";
 import type { AgentArtifactContextBase, ArtifactSelectionBase } from "@ai-app/shared/artifact-runtime";
@@ -22,7 +22,7 @@ export type {
   RunStatus,
   RuntimeKind,
   RuntimeProfile,
-  TuttiAppOpenResult,
+  TuttiAppOpenTarget,
   WsClientMessage,
 } from "@ai-app/shared/types";
 
@@ -196,14 +196,9 @@ export interface OpenDocumentCliResponse {
   action: "imported";
   sourcePath: string;
   project: DocumentProject;
-  openRequested: boolean;
-  appRoute: {
-    appId: string;
-    route: string;
-  };
+  openTarget: TuttiAppOpenTarget;
   route: string;
   workspace: DocumentWorkspaceContext;
-  tuttiAppOpen: TuttiAppOpenResult;
 }
 
 export interface UpdateProjectRequest {

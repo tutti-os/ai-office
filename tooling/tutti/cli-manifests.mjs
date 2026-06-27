@@ -15,7 +15,7 @@ export const artifactCliConfigs = {
         path: ["projects", "create"],
         summary: "Create a document project",
         description:
-          "Create a new AI Doc project, request opening its app route through Tutti CLI, and optionally start the app's agent with prompt. Use prompt for generated document content; direct content input is not supported. For user requests to write a document, draft, article, report, or manuscript without an explicit file format, set type to html. If the user explicitly asks for DOCX or traditional Office Word format, set type to docx. Use markdown only when the user explicitly asks for Markdown. Do not present localhost URLs as the final open target; use the app open result/route. When a prompt starts app-owned editing, treat the returned run-id as the app-owned writer for that project and poll doc agent events until it reaches a terminal status.",
+          "Create a new AI Doc project, return an openTarget for the app route, and optionally start the app's agent with prompt. This command must not open the app automatically. Use prompt for generated document content; direct content input is not supported. For user requests to write a document, draft, article, report, or manuscript without an explicit file format, set type to html. If the user explicitly asks for DOCX or traditional Office Word format, set type to docx. Use markdown only when the user explicitly asks for Markdown. Do not present localhost URLs as the final open target; when the task is complete, include the returned openTarget as the final user-facing link/action. When a prompt starts app-owned editing, treat the returned run-id as the app-owned writer for that project and poll doc agent events until it reaches a terminal status.",
         properties: docCreateProperties(),
       },
       {
@@ -32,9 +32,9 @@ export const artifactCliConfigs = {
       officeCliInstallCommand("DOCX"),
       {
         path: ["open"],
-        summary: "Open a document file",
+        summary: "Import a document file",
         description:
-          "Import an HTML, Markdown, or DOCX file into AI Doc, request opening its app route through Tutti CLI, and return workspace paths for agent editing. Do not present localhost URLs as the final open target; use the app open result/route.",
+          "Import an HTML, Markdown, or DOCX file into AI Doc and return workspace paths plus openTarget for the imported project. This command must not open the app automatically. Do not present localhost URLs as the final open target; include openTarget as the final user-facing link/action when the user should open the project.",
         properties: pathAndTitleProperties(
           "Absolute path, home-relative path, or path relative to the Tutti workspace root.",
         ),
@@ -56,7 +56,7 @@ export const artifactCliConfigs = {
         path: ["projects", "create"],
         summary: "Create a slide project",
         description:
-          "Create a new AI Slide project, request opening its app route through Tutti CLI, and optionally start app-owned async editing with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs as the final open target; use the app open result/route. When a prompt starts app-owned editing, treat the returned run-id as the only writer for that project until it reaches a terminal status. Poll slide agent events by run-id until run.status is completed, failed, or cancelled; accepted/running means the app is still working. Do not inspect deck.slides and write fallback slide files while app-owned editing is accepted or running. If it is still running after several polls, report that generation is still in progress instead of creating content yourself.",
+          "Create a new AI Slide project, return an openTarget for the app route, and optionally start app-owned async editing with prompt. This command must not open the app automatically. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs as the final open target; when the task is complete, include the returned openTarget as the final user-facing link/action. When a prompt starts app-owned editing, treat the returned run-id as the only writer for that project until it reaches a terminal status. Poll slide agent events by run-id until run.status is completed, failed, or cancelled; accepted/running means the app is still working. Do not inspect deck.slides and write fallback slide files while app-owned editing is accepted or running. If it is still running after several polls, report that generation is still in progress instead of creating content yourself.",
         properties: slideCreateProperties(),
       },
       {
@@ -89,9 +89,9 @@ export const artifactCliConfigs = {
       officeCliInstallCommand("PPTX"),
       {
         path: ["open"],
-        summary: "Open a presentation file",
+        summary: "Import a presentation file",
         description:
-          "Import a PPTX file into AI Slide, request opening its app route through Tutti CLI, and return workspace paths for agent editing. Do not present localhost URLs as the final open target; use the app open result/route.",
+          "Import a PPTX file into AI Slide and return workspace paths plus openTarget for the imported project. This command must not open the app automatically. Do not present localhost URLs as the final open target; include openTarget as the final user-facing link/action when the user should open the project.",
         properties: pathAndTitleProperties(
           "Absolute path, home-relative path, or path relative to the Tutti workspace root.",
         ),
@@ -214,6 +214,7 @@ function docCreateProperties() {
         "Document type: html, markdown, or docx. Default intent mapping: document/draft/article/report/manuscript => html; explicit DOCX or traditional Office Word => docx; explicit Markdown => markdown.",
     },
     prompt: { type: "string", description: "Optional prompt for the AI Doc app agent to generate or edit the document after project creation." },
+    provider: { type: "string", description: "Optional app-agent provider for prompt-based creation: codex or claude-code." },
   };
 }
 
@@ -230,6 +231,7 @@ function slideCreateProperties() {
       description:
         "Optional prompt for the AI Slide app agent to generate or edit the deck after project creation. If supplied, poll the returned run with slide agent events and do not write fallback deck files while the run is accepted or running.",
     },
+    provider: { type: "string", description: "Optional app-agent provider for prompt-based creation: codex or claude-code." },
   };
 }
 
@@ -312,20 +314,25 @@ function agentCommands(domain, options = {}) {
       path: ["agent", "edit"],
       summary: "Ask the app agent to edit content",
       description: isSlide
-        ? "Start an app-owned async agent edit for a slide project. External agents and other Tutti apps must use this command to modify slide content, then poll slide agent events until run.status is completed, failed, or cancelled."
-        : `Start an app-owned agent edit for a ${domain} project. External agents and other Tutti apps must use this command to modify ${domain} content, then poll agent events until the run reaches a terminal status.`,
-      properties: agentEditProperties("User prompt for the app-owned agent."),
+        ? "Start an app-owned async agent edit for a slide project and return openTarget for the project. External agents and other Tutti apps must use this command to modify slide content, then poll slide agent events until run.status is completed, failed, or cancelled. This command must not open the app automatically; include openTarget as the final user-facing link/action only after the task is complete."
+        : `Start an app-owned agent edit for a ${domain} project and return openTarget for the project. External agents and other Tutti apps must use this command to modify ${domain} content, then poll agent events until the run reaches a terminal status. This command must not open the app automatically; include openTarget as the final user-facing link/action only after the task is complete.`,
+      properties: agentEditProperties("User prompt for the app-owned agent.", { includeProvider: true }),
       required: ["project-id", "prompt"],
       timeoutMs: 60000,
     });
   }
+  const eventDescription = options.contentModificationPath
+    ? (isSlide
+        ? "Return one agent run, its persisted events, and the project openTarget by run-id. Use run.status as the source of truth: accepted/running are in-progress states, completed is success, and failed/cancelled are terminal failures. Empty event lists or reconnect/request-timeout status events are not failures by themselves. While a run is accepted or running, callers must not mutate the project workspace as a fallback writer. When run.status is completed, include openTarget as the final user-facing link/action."
+        : "Return one agent run, its persisted events, and the project openTarget by run-id. When the run reaches completed, include openTarget as the final user-facing link/action.")
+    : (isSlide
+        ? "Return one agent run and its persisted events by run-id. Use run.status as the source of truth: accepted/running are in-progress states, completed is success, and failed/cancelled are terminal failures. Empty event lists or reconnect/request-timeout status events are not failures by themselves. While a run is accepted or running, callers must not mutate the project workspace as a fallback writer."
+        : "Return one agent run and its persisted events by run-id.");
   commands.push(
     {
       path: ["agent", "events"],
       summary: "Poll agent events",
-      description: isSlide
-        ? "Return one agent run and its persisted events by run-id. Use run.status as the source of truth: accepted/running are in-progress states, completed is success, and failed/cancelled are terminal failures. Empty event lists or reconnect/request-timeout status events are not failures by themselves. While a run is accepted or running, callers must not mutate the project workspace as a fallback writer."
-        : "Return one agent run and its persisted events by run-id.",
+      description: eventDescription,
       properties: {
         "run-id": { type: "string", description: "Agent run id." },
       },
@@ -351,6 +358,9 @@ function agentEditProperties(promptDescription, options = {}) {
     "session-id": { type: "string", description: "Optional conversation session id." },
     mode: { type: "string", description: "Optional edit mode: write or rewrite." },
   };
+  if (options.includeProvider) {
+    properties.provider = { type: "string", description: "Optional app-agent provider: codex or claude-code." };
+  }
   if (options.includeRuntimeProfileId) {
     properties["runtime-profile-id"] = { type: "string", description: "Optional runtime profile id." };
   }
