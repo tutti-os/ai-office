@@ -67,7 +67,11 @@ export class DocumentService {
   }
 
   async listLocalAgentProviders() {
-    return { providers: await this.runtimes.listLocalAgentProviders() };
+    const [providers, defaultProvider] = await Promise.all([
+      this.runtimes.listLocalAgentProviders(),
+      getDefaultAgentProvider().catch(() => undefined),
+    ]);
+    return { providers, defaultProvider: defaultProvider ?? null };
   }
 
   listProjects() {

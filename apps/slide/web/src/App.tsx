@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hasActiveAgentRun } from "@ai-app/agent/conversation";
+import { resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
 import {
   History,
   Upload,
@@ -163,8 +164,12 @@ export function App() {
       .then((response) => {
         setLocalAgentProviders(response.providers);
         setSelectedAgent((current) => {
-          if (!current) return "";
-          return runtimeProfiles.some((profile) => profile.id === current) ? current : "";
+          if (runtimeProfiles.some((profile) => profile.id === current)) return current;
+          return resolvePreferredLocalAgentRuntimeProfileId({
+            profiles: runtimeProfiles,
+            providers: response.providers,
+            defaultProvider: response.defaultProvider,
+          });
         });
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));

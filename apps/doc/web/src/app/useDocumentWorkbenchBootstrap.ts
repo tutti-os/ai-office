@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
 import type { LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
 import { fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, fetchTemplates } from "../api/runtime";
 import { normalizeTemplates, type TuttiTemplate } from "../templates/tuttiTemplates";
@@ -53,7 +54,11 @@ export function useDocumentWorkbenchBootstrap(input: DocumentWorkbenchBootstrapI
         setOfficeCliStatus(officeCli.officecli);
         setSelectedRuntimeProfileId((current) => {
           if (enabledProfiles.some((profile) => profile.id === current)) return current;
-          return "";
+          return resolvePreferredLocalAgentRuntimeProfileId({
+            profiles: enabledProfiles,
+            providers: providerStatus.providers,
+            defaultProvider: providerStatus.defaultProvider,
+          });
         });
       })
       .catch((err) => {

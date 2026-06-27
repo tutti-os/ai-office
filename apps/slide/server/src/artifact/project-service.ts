@@ -333,7 +333,11 @@ export class ProjectService {
   }
 
   async listLocalAgentProviders() {
-    return { providers: await this.runtimes.listLocalAgentProviders() };
+    const [providers, defaultProvider] = await Promise.all([
+      this.runtimes.listLocalAgentProviders(),
+      getDefaultAgentProvider().catch(() => undefined),
+    ]);
+    return { providers, defaultProvider: defaultProvider ?? null };
   }
 
   private resolveConversationSession(projectId: string, title: string, sessionId: string | null | undefined) {
