@@ -54,7 +54,7 @@ export function registerTuttiReferenceRoutes(server: FastifyInstance) {
 
     if (!parentGroupId) {
       const groups = await listProjectGroups(timeRange);
-      const filtered = filter ? groups.filter((group) => group.displayName.toLowerCase().includes(filter)) : groups;
+      const filtered = filter ? groups.filter((group) => matchesGroupSearch(group, filter)) : groups;
       return paged(filtered, offset, limit);
     }
 
@@ -72,7 +72,7 @@ export function registerTuttiReferenceRoutes(server: FastifyInstance) {
     const references = await listAllReferences(body.timeRange);
     const filtered = references
       .filter((item) => matchesFilter(item.reference.displayName, filters))
-      .filter((item) => !query || item.reference.displayName.toLowerCase().includes(query))
+      .filter((item) => !query || matchesReferenceSearch(item, query))
       .map((item) => ({
         ...item,
         reference: {
@@ -87,12 +87,12 @@ export function registerTuttiReferenceRoutes(server: FastifyInstance) {
 
 async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]) {
   const entries = await safeReaddir(appPaths.projectsDir);
-  const projectTitles = loadProjectTitles();
-  const groups: GroupItem[] = [];
+  const projectMetadata = loadProjectMetadata();
+  const groups: Array<GroupItem & { updatedAt: string }> = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const projectId = entry.name;
-    const displayName = projectDisplayName(projectId, projectTitles);
+    const displayName = projectDisplayName(projectId, projectMetadata);
     const references = await listReferencesForProject(projectId, timeRange, displayName);
     if (references.length === 0) continue;
     groups.push({
@@ -101,18 +101,21 @@ async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]) {
       displayName,
       description: `${references.length} files`,
       referenceCount: references.length,
+      updatedAt: projectUpdatedAt(projectId, projectMetadata),
     });
   }
-  return groups.sort((left, right) => left.displayName.localeCompare(right.displayName));
+  return groups
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id))
+    .map(({ updatedAt: _updatedAt, ...group }) => group);
 }
 
 async function listAllReferences(timeRange: ReferenceSearchRequest["timeRange"]) {
   const groups = await safeReaddir(appPaths.projectsDir);
-  const projectTitles = loadProjectTitles();
+  const projectMetadata = loadProjectMetadata();
   const nested = await Promise.all(
     groups
       .filter((entry) => entry.isDirectory())
-      .map((entry) => listReferencesForProject(entry.name, timeRange, projectDisplayName(entry.name, projectTitles))),
+      .map((entry) => listReferencesForProject(entry.name, timeRange, projectDisplayName(entry.name, projectMetadata))),
   );
   return nested.flat();
 }
@@ -121,7 +124,7 @@ async function listReferencesForProject(projectId: string, timeRange: ReferenceL
   const root = join(appPaths.projectsDir, projectId);
   const files = await collectFiles(root);
   const items: ReferenceItem[] = [];
-  const parentGroupLabel = projectDisplayNameValue ?? projectDisplayName(projectId, loadProjectTitles());
+  const parentGroupLabel = projectDisplayNameValue ?? projectDisplayName(projectId, loadProjectMetadata());
   for (const file of files) {
     const relativeToProject = relative(root, file).split("\\").join("/");
     if (!isReferenceFile(relativeToProject)) continue;
@@ -199,14 +202,35 @@ function normalizeSearchText(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
-function loadProjectTitles() {
+function loadProjectMetadata() {
   return new Map(
-    rows<{ id: string; title: string }>(getDb().prepare(`SELECT id, title FROM projects`).all()).map((project) => [project.id, project.title] as const),
+    rows<{ id: string; title: string; updated_at: string }>(getDb().prepare(`SELECT id, title, updated_at FROM projects`).all()).map((project) => [
+      project.id,
+      { title: project.title, updatedAt: project.updated_at },
+    ] as const),
   );
 }
 
-function projectDisplayName(projectId: string, projectTitles: Map<string, string>) {
-  return projectTitles.get(projectId)?.trim() || projectId;
+function projectDisplayName(projectId: string, projectMetadata: Map<string, { title: string; updatedAt: string }>) {
+  return projectMetadata.get(projectId)?.title.trim() || projectId;
+}
+
+function projectUpdatedAt(projectId: string, projectMetadata: Map<string, { title: string; updatedAt: string }>) {
+  return projectMetadata.get(projectId)?.updatedAt ?? "";
+}
+
+function matchesGroupSearch(group: GroupItem, query: string) {
+  return [group.id, group.displayName].some((value) => value.toLowerCase().includes(query));
+}
+
+function matchesReferenceSearch(item: ReferenceItem, query: string) {
+  const projectId = projectIdFromReferencePath(item.reference.location.path);
+  return [item.reference.displayName, item.reference.parentGroupLabel ?? "", projectId].some((value) => value.toLowerCase().includes(query));
+}
+
+function projectIdFromReferencePath(pathValue: string) {
+  const match = /^projects\/([^/]+)\//.exec(pathValue);
+  return match?.[1] ?? "";
 }
 
 function matchesTimeRange(mtimeMs: number, timeRange: ReferenceListRequest["timeRange"]) {
