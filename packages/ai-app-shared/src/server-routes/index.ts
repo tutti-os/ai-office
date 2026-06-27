@@ -6,7 +6,7 @@ export type ArtifactAppRouteService<
   TAiEditInput = unknown,
 > = {
   bootstrap(): unknown | Promise<unknown>;
-  listLocalAgentProviders(): unknown | Promise<unknown>;
+  listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>): unknown | Promise<unknown>;
   listProjects(): unknown | Promise<unknown>;
   createProject(input: TCreateProjectInput): unknown | Promise<unknown>;
   clearProjectHistory(): unknown | Promise<unknown>;
@@ -14,7 +14,7 @@ export type ArtifactAppRouteService<
   getProject(projectId: string): unknown | Promise<unknown>;
   updateProject(projectId: string, input: TUpdateProjectInput): unknown | Promise<unknown>;
   listProjectRuns(projectId: string): unknown | Promise<unknown>;
-  startAiEdit(projectId: string, input: TAiEditInput): unknown | Promise<unknown>;
+  startAiEdit(projectId: string, input: TAiEditInput, headers?: Record<string, string | string[] | undefined>): unknown | Promise<unknown>;
   cancelRun(runId: string): unknown | Promise<unknown>;
 };
 
@@ -57,6 +57,7 @@ type ArtifactRouteReply = {
 type ArtifactRouteRequest<TParams = Record<string, string>, TBody = unknown> = {
   params: TParams;
   body?: TBody;
+  headers?: Record<string, string | string[] | undefined>;
 };
 
 type ArtifactWebSocket = {
@@ -93,7 +94,7 @@ export class ArtifactAppHttpRoutes<
     server.get("/api/health", async () => ({ ok: true, app: this.input.appId }));
     server.get("/api/bootstrap", async () => this.input.service.bootstrap());
     server.get("/api/templates", async () => ({ templates: await this.input.listTemplates() }));
-    server.get("/api/local-agent/providers", async () => this.input.service.listLocalAgentProviders());
+    server.get("/api/local-agent/providers", async (request: ArtifactRouteRequest) => this.input.service.listLocalAgentProviders(request.headers));
   }
 
   private registerToolchainRoutes(server: ArtifactRouteServer) {
@@ -164,7 +165,7 @@ export class ArtifactAppHttpRoutes<
     server.post("/api/projects/:projectId/ai-edit", async (request: ArtifactRouteRequest<{ projectId: string }, TAiEditInput & { userPrompt?: string }>, reply: ArtifactRouteReply) => {
       try {
         if (this.input.requireAiPrompt && !request.body?.userPrompt?.trim()) return reply.code(400).send({ error: "userPrompt is required" });
-        return await this.input.service.startAiEdit(request.params.projectId, request.body ?? this.input.defaultAiEditInput);
+        return await this.input.service.startAiEdit(request.params.projectId, request.body ?? this.input.defaultAiEditInput, request.headers);
       } catch (error) {
         return sendError(reply, error, "Unable to start AI edit", notFoundOrBadRequest(error));
       }

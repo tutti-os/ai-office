@@ -1,5 +1,6 @@
 import type { BaseAiEditRequest, BaseRun, BaseRunEvent, RuntimeProfile } from "@ai-app/shared/types";
 import type { RuntimeConversationMessage, RuntimeProviderRegistry, RuntimeStreamEvent } from "@ai-app/agent/runtime";
+import { createManagedAgentRunContextFromHeaders, type ManagedAgentInvocationCredentialHeaders } from "@tutti-os/agent-acp-kit";
 
 export type RunEventInput<TEvent extends BaseRunEvent> = {
   runId: string;
@@ -45,6 +46,7 @@ export type RuntimeRunExecutorInput<
   beforeRun?: () => Promise<void> | void;
   history?: RuntimeConversationMessage[];
   onWorkspaceEvent?: (event: RuntimeStreamEvent, runId: string) => Promise<void> | void;
+  managedAgentHeaders?: ManagedAgentInvocationCredentialHeaders;
   complete: (input: { generatedText: string; run: TRun }) => Promise<void> | void;
   onFailure?: (input: { error: string; run: TRun }) => Promise<void> | void;
   onFinally?: () => void;
@@ -81,17 +83,20 @@ export class RuntimeRunExecutor<
         payload: { run: this.input.repo.getRun(input.runId) },
       });
 
-      const readiness = await provider.detect(input.runtimeProfile);
-      if (!readiness.available) throw new Error(readiness.reason ?? "Runtime provider is unavailable");
-
-      for await (const rawEvent of provider.streamEdit({
+      const managedAgent = await this.createManagedAgentRunContext(input);
+      const runtimeContext = {
         run,
         project: input.project,
         runtimeProfile: input.runtimeProfile,
         request: input.request,
         conversation: input.conversation,
         history: input.history,
-      })) {
+        ...(managedAgent ? { managedAgent } : {}),
+      };
+      const readiness = await provider.detect(input.runtimeProfile, runtimeContext);
+      if (!readiness.available) throw new Error(readiness.reason ?? "Runtime provider is unavailable");
+
+      for await (const rawEvent of provider.streamEdit(runtimeContext)) {
         if (input.isCancelled()) {
           await this.finalizeCancellation(input, "Cancelled by user");
           return;
@@ -132,6 +137,22 @@ export class RuntimeRunExecutor<
     } catch {
       return null;
     }
+  }
+
+  private async createManagedAgentRunContext(input: RuntimeRunExecutorInput<TRun, TEvent, TProject, TRequest>) {
+    if (!input.managedAgentHeaders || input.runtimeProfile.kind !== "local-agent") return undefined;
+    const providerId = managedAgentProviderId(input.runtimeProfile.provider);
+    if (!providerId) return undefined;
+    const context = await createManagedAgentRunContextFromHeaders(input.managedAgentHeaders, {
+      providerId,
+      runId: input.runId,
+    });
+    return context
+      ? {
+          cwd: context.cwd,
+          managedAgentInvocation: context.managedAgentInvocation,
+        }
+      : undefined;
   }
 
   private safeUpdateRun(runId: string, input: Partial<Pick<TRun, "status" | "error" | "resultPreview">>) {
@@ -175,6 +196,13 @@ export class RuntimeRunExecutor<
       // Failure callbacks should not turn an already-failed run into an unhandled background rejection.
     }
   }
+}
+
+function managedAgentProviderId(provider: string) {
+  const normalized = provider.trim().toLowerCase().replace(/[\s_]+/g, "-");
+  if (normalized === "claude-code" || normalized === "claude") return "claude";
+  if (normalized === "codex" || normalized === "nexight") return normalized;
+  return "";
 }
 
 class RuntimeRunRecorder<TRun extends BaseRun, TEvent extends BaseRunEvent> {

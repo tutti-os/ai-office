@@ -66,9 +66,9 @@ export class DocumentService {
     return this.repo.interruptActiveRuns(reason);
   }
 
-  async listLocalAgentProviders() {
+  async listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>) {
     const [providers, defaultProvider] = await Promise.all([
-      this.runtimes.listLocalAgentProviders(),
+      this.runtimes.listLocalAgentProviders(headers),
       getDefaultAgentProvider().catch(() => undefined),
     ]);
     return { providers, defaultProvider: defaultProvider ?? null };
@@ -316,7 +316,7 @@ export class DocumentService {
     return this.startAiEdit(projectId, request);
   }
 
-  async startAiEdit(projectId: string, request: AiEditRequest) {
+  async startAiEdit(projectId: string, request: AiEditRequest, headers?: Record<string, string | string[] | undefined>) {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
     if (project.type === "docx") await requireOfficeCli();
@@ -354,7 +354,7 @@ export class DocumentService {
     this.runAssistantMessageIds.set(run.id, assistantMessage.id);
     this.repo.updateConversationMessage(assistantMessage.id, { metadata: { status: "accepted", runId: run.id } });
     this.events.emit({ type: "run.accepted", projectId, runId: run.id, payload: { run } });
-    void this.executeRun(project, runtimeProfile, request, run.id, { assistantMessageId: assistantMessage.id, sessionId: session.id });
+    void this.executeRun(project, runtimeProfile, request, run.id, { assistantMessageId: assistantMessage.id, sessionId: session.id }, headers);
     return { run };
   }
 
@@ -406,6 +406,7 @@ export class DocumentService {
     request: AiEditRequest,
     runId: string,
     conversation: { assistantMessageId: string; sessionId: string },
+    headers?: Record<string, string | string[] | undefined>,
   ) {
     let refreshedFromWorkspace = false;
 
@@ -416,6 +417,7 @@ export class DocumentService {
       runId,
       conversation: { conversationId: initialProject.id, sessionId: conversation.sessionId },
       history: this.repo.conversationHistory(conversation.sessionId, request.userPrompt),
+      managedAgentHeaders: headers,
       isCancelled: () => this.cancelledRunIds.has(runId),
       finalizeCancellation: (id, reason) => this.finalizeCancellation(id, reason),
       onWorkspaceEvent: async () => {

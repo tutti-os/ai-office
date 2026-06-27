@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   createDefaultLocalAgentProviderPlugins,
+  createManagedAgentDetectContextFromHeaders,
   createLocalAgentRuntime,
   type AgentEvent,
   type LocalAgentProviderPlugin,
@@ -100,12 +101,15 @@ export class LocalAgentRuntimeProvider<
     return { runtime: profile.kind, provider: profile.provider, model: profile.model };
   }
 
-  async detect(profile: RuntimeProfile) {
+  async detect(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>) {
     const providerId = this.resolveProviderId(profile.provider);
     if (!providerId) {
       return { available: false, reason: `local-agent provider is not registered: ${profile.provider}` };
     }
-    const detection = (await this.localAgentRuntime.detect()).find((item: any) => localAgentProviderIdsMatch(item.provider, providerId));
+    const detectionContext = context?.managedAgent
+      ? { cwd: context.managedAgent.cwd, managedAgentInvocation: context.managedAgent.managedAgentInvocation }
+      : undefined;
+    const detection = (await this.localAgentRuntime.detect(detectionContext)).find((item: any) => localAgentProviderIdsMatch(item.provider, providerId));
     if (!detection) return { available: true };
     if (detection.result?.supported === false) {
       return {
@@ -119,8 +123,8 @@ export class LocalAgentRuntimeProvider<
     return { available: true };
   }
 
-  async listLocalAgentProviders(): Promise<LocalAgentProviderStatus[]> {
-    const detections = await this.localAgentRuntime.detect();
+  async listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>): Promise<LocalAgentProviderStatus[]> {
+    const detections = await this.localAgentRuntime.detect(createManagedAgentDetectContextFromHeaders(headers));
     return detections.map((item: any) => {
       const available = Boolean(item.result && item.result.supported !== false);
       return {
@@ -205,6 +209,7 @@ export class LocalAgentRuntimeProvider<
   }) {
     const { context, controller, persistProviderSession, provider, resume, sessionStore, workspaceRoot } = input;
     let lastError: Extract<AgentEvent, { type: "error" }> | undefined;
+    const agentCwd = context.managedAgent?.cwd ?? workspaceRoot;
     const skillContext = normalizeSkillManifestResult(await this.options.buildSkillManifest?.(context, workspaceRoot));
     const systemPrompt = await this.options.buildSystemPrompt(context, workspaceRoot, skillContext);
     const conversationId = context.conversation?.conversationId ?? context.project.id;
@@ -216,15 +221,16 @@ export class LocalAgentRuntimeProvider<
       provider,
       runtimeKind: "local-agent",
       runtimeProvider: provider,
-      cwd: workspaceRoot,
+      cwd: agentCwd,
       prompt: this.options.buildPrompt(context),
       systemPrompt,
       history: context.history ?? [],
       model: stripProviderPrefix(context.runtimeProfile.model, provider),
       reasoning: context.request.reasoningEffort ?? undefined,
-      mcpServers: this.options.buildMcpServers?.(context) ?? [],
+      mcpServers: context.managedAgent ? [] : (this.options.buildMcpServers?.(context) ?? []),
       skillManifest: skillContext.skills,
       env: this.options.buildEnv?.(context, workspaceRoot) ?? {},
+      ...(context.managedAgent ? { managedAgentInvocation: context.managedAgent.managedAgentInvocation } : {}),
       timeoutMs: this.options.timeoutMs?.() ?? DEFAULT_TIMEOUT_MS,
       extraAllowedDirs: this.options.extraAllowedDirs?.(context, workspaceRoot) ?? [workspaceRoot],
       resume,

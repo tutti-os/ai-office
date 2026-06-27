@@ -291,7 +291,7 @@ export class ProjectService {
     };
   }
 
-  async startAiEdit(projectId: string, request: AiEditRequest) {
+  async startAiEdit(projectId: string, request: AiEditRequest, headers?: Record<string, string | string[] | undefined>) {
     const runtimeProject = await this.createRuntimeProject(projectId);
     if (runtimeProject.artifact.type === "pptx") await requireOfficeCli();
     this.repo.syncProjectAgentInstructions(projectId);
@@ -328,13 +328,13 @@ export class ProjectService {
     this.runAssistantMessageIds.set(run.id, assistantMessage.id);
     this.repo.updateConversationMessage(assistantMessage.id, { metadata: { status: "accepted", runId: run.id } });
     this.events.emit({ type: "run.accepted", projectId, runId: run.id, payload: { run } });
-    void this.executeRun(runtimeProject, runtimeProfile, request, run.id, { assistantMessageId: assistantMessage.id, sessionId: session.id });
+    void this.executeRun(runtimeProject, runtimeProfile, request, run.id, { assistantMessageId: assistantMessage.id, sessionId: session.id }, headers);
     return { run };
   }
 
-  async listLocalAgentProviders() {
+  async listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>) {
     const [providers, defaultProvider] = await Promise.all([
-      this.runtimes.listLocalAgentProviders(),
+      this.runtimes.listLocalAgentProviders(headers),
       getDefaultAgentProvider().catch(() => undefined),
     ]);
     return { providers, defaultProvider: defaultProvider ?? null };
@@ -387,6 +387,7 @@ export class ProjectService {
     request: AiEditRequest,
     runId: string,
     conversation: { assistantMessageId: string; sessionId: string },
+    headers?: Record<string, string | string[] | undefined>,
   ) {
     let refreshedArtifact = false;
     let workspaceFingerprint = "";
@@ -398,6 +399,7 @@ export class ProjectService {
       runId,
       conversation: { conversationId: runtimeProject.id, sessionId: conversation.sessionId },
       history: this.repo.conversationHistory(conversation.sessionId, request.userPrompt),
+      managedAgentHeaders: headers,
       isCancelled: () => this.cancelledRunIds.has(runId),
       finalizeCancellation: (id, reason) => this.finalizeCancellation(id, reason),
       beforeRun: async () => {

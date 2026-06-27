@@ -1,4 +1,5 @@
 import type { BaseAiEditRequest, BaseRun, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
+import type { ManagedAgentInvocation } from "@tutti-os/agent-acp-kit";
 
 export type RuntimeConversationMessage = {
   role: "user" | "assistant" | "system";
@@ -23,6 +24,10 @@ export interface RuntimeEditContext<
     token: string;
     expiresAt: string;
   };
+  managedAgent?: {
+    cwd: string;
+    managedAgentInvocation: ManagedAgentInvocation;
+  };
 }
 
 export type RuntimeStreamEvent =
@@ -42,8 +47,8 @@ export interface RuntimeProvider<
   id: string;
   canHandle(profile: RuntimeProfile): boolean;
   describeRun(profile: RuntimeProfile): { runtime: string; provider: string; model: string };
-  detect(profile: RuntimeProfile): Promise<{ available: boolean; reason?: string }>;
-  listLocalAgentProviders?(): Promise<LocalAgentProviderStatus[]>;
+  detect(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>): Promise<{ available: boolean; reason?: string }>;
+  listLocalAgentProviders?(headers?: Record<string, string | string[] | undefined>): Promise<LocalAgentProviderStatus[]>;
   streamEdit(context: RuntimeEditContext<TRun, TProject, TRequest>): AsyncIterable<string | RuntimeStreamEvent>;
   cancel(runId: string): Promise<{ cancelled: boolean; reason?: string }>;
 }
@@ -63,9 +68,9 @@ export class RuntimeProviderRegistry<
     return this.providers.find((provider) => provider.canHandle(profile)) ?? this.providers[0]!;
   }
 
-  async listLocalAgentProviders(): Promise<LocalAgentProviderStatus[]> {
+  async listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>): Promise<LocalAgentProviderStatus[]> {
     const provider = this.providers.find((item) => typeof item.listLocalAgentProviders === "function");
-    return provider?.listLocalAgentProviders?.() ?? [];
+    return provider?.listLocalAgentProviders?.(headers) ?? [];
   }
 }
 
