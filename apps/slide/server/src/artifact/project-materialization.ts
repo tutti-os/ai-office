@@ -168,7 +168,9 @@ function projectAgentInstructions(artifact: SlideArtifact) {
       "",
       "You are editing a slide presentation with the local AI Slide app.",
       `Current focused file: ${targetPptxPath}`,
-      "When asked to create or edit the presentation as PPTX, write the final file to the focused file with filesystem tools.",
+      artifactIntentInstructions("presentation"),
+      progressiveSlideAuthoringInstructions("presentation"),
+      "When the current request calls for creating or editing this PPTX presentation, write the final file to the focused file with filesystem tools.",
       projectAssets,
     ].join("\n");
   }
@@ -178,6 +180,8 @@ function projectAgentInstructions(artifact: SlideArtifact) {
     "",
     "You are editing a slide deck with the local AI Slide app.",
     `Current focused directory: ${targetDeckPath}`,
+    artifactIntentInstructions("deck"),
+    progressiveSlideAuthoringInstructions("deck"),
     "Use `slides/*.html` as the editable source for individual slides. Slide files must use indexed names such as `01-cover.html`.",
     "Mark editable slide elements with `data-object=\"true\"`. Text or mixed content blocks should use `data-object-type=\"textbox\"`; standalone images should use `data-object-type=\"image\"`.",
     "Use `manifest.json` for app-maintained title, canvas, and the current playlist; do not manually edit `manifest.slides` for ordering.",
@@ -188,6 +192,28 @@ function projectAgentInstructions(artifact: SlideArtifact) {
     "If MCP app tools are not visible, call the run-scoped HTTP fallback with `$AI_APP_TOOL_GATEWAY_URL` and `$AI_APP_TOOL_TOKEN` instead of editing app databases or importing server repositories directly.",
     "Do not collapse the deck into a single HTML file.",
     projectAssets,
+  ].join("\n");
+}
+
+function artifactIntentInstructions(artifactLabel: string) {
+  return [
+    `Treat the focused ${artifactLabel} as a workspace resource, not as an obligation to produce placeholder content.`,
+    `Create or modify it only when the user's current request asks this app to produce, edit, convert, import into, export from, or otherwise update that artifact.`,
+    "If the request is mainly to coordinate with tools or other apps, inspect context, answer a question, or continue work elsewhere, complete that request without changing the focused artifact just to leave something behind.",
+  ].join("\n");
+}
+
+function progressiveSlideAuthoringInstructions(artifactLabel: "deck" | "presentation") {
+  const saveGuidance =
+    artifactLabel === "presentation"
+      ? "Because PPTX is a single package, each saved intermediate version must still be a valid presentation file that can be opened and previewed."
+      : "For HTML decks, save completed slide HTML files and synchronize ordering as you add slides so the app can refresh the visible deck.";
+  return [
+    "For multi-slide creation or broad redesigns, work in visible increments instead of waiting until the entire presentation is finished.",
+    "Start from a compact outline, then complete and save the first useful slide before continuing.",
+    "Continue one slide at a time, or in the smallest coherent batch when slides strongly depend on each other.",
+    saveGuidance,
+    "Avoid leaving half-written slides, broken layouts, or invalid intermediate files merely to show progress; each saved increment should be reviewable.",
   ].join("\n");
 }
 

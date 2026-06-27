@@ -340,7 +340,8 @@ function htmlProjectAgentInstructions(project: DocumentProject) {
     "",
     "You are editing a rich HTML doc with the local AI Doc app.",
     `Current focused file: ${targetHtmlPath}`,
-    "Read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
+    artifactIntentInstructions("document"),
+    "When the current request calls for document changes, read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
     stagedProjectWriteInstructions("HTML"),
     projectAssetInstructions(project.id),
   ].join("\n");
@@ -354,7 +355,8 @@ function markdownProjectAgentInstructions(project: DocumentProject) {
     "You are editing a Markdown doc with the local AI Doc app.",
     `Current focused file: ${targetMarkdownPath}`,
     `Place local image assets under ${join(projectWorkspaceRoot(project.id), "assets")} and reference them from Markdown as ./assets/<file-name>.`,
-    "Read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
+    artifactIntentInstructions("document"),
+    "When the current request calls for document changes, read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
     stagedProjectWriteInstructions("Markdown"),
     projectAssetInstructions(project.id),
   ].join("\n");
@@ -367,9 +369,18 @@ function docxProjectAgentInstructions(project: DocumentProject) {
     "",
     "You are editing a Word doc project with the local AI Doc app.",
     `Current focused file: ${targetDocxPath}`,
-    "When you create or edit the Word doc, write the final result to the focused file with filesystem tools.",
+    artifactIntentInstructions("document"),
+    "When the current request calls for creating or editing this Word doc, write the final result to the focused file with filesystem tools.",
     "The app watches that file and refreshes the preview when its content changes.",
     projectAssetInstructions(project.id),
+  ].join("\n");
+}
+
+function artifactIntentInstructions(artifactLabel: string) {
+  return [
+    `Treat the focused ${artifactLabel} as a workspace resource, not as an obligation to produce placeholder content.`,
+    `Create or modify it only when the user's current request asks this app to produce, edit, convert, import into, export from, or otherwise update that artifact.`,
+    "If the request is mainly to coordinate with tools or other apps, inspect context, answer a question, or continue work elsewhere, complete that request without changing the focused artifact just to leave something behind.",
   ].join("\n");
 }
 

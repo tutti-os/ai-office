@@ -153,9 +153,11 @@ function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, 
         "This project is a PowerPoint PPTX presentation.",
         `Current focused file: ${targetPptxPath}`,
         localFilesystemArtifactNotice,
+        artifactIntentPrompt("presentation"),
+        progressiveSlideAuthoringPrompt("presentation"),
         "Use the officecli command-line tool to inspect, create, edit, and validate the focused PPTX file. If an office skill is available in the agent environment, follow it.",
         "Prefer officecli L1/L2 operations such as view, get, query, add, set, remove, and validate. Do not hand-edit OOXML unless officecli high-level commands cannot solve the task.",
-        "When asked to create or edit the presentation, write the final PPTX result to the focused file.",
+        "When the current request calls for creating or editing this presentation, write the final PPTX result to the focused file.",
         "Do not convert the presentation to Markdown or a single HTML document unless explicitly asked for a separate export.",
         noBrowserRenderVerification,
         "After editing files, respond with a brief task summary only. Do not include extracted PPTX content in the final response.",
@@ -167,10 +169,12 @@ function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, 
   return withTuttiSkillGuidance(
     [
       "You are an AI slide editing agent inside a local presentation app.",
-      "You are working in a project workspace on the local filesystem. The app refreshes the deck from workspace files after you edit them, so the primary way to change the artifact is to read and write files directly in this workspace.",
+      "You are working in a project workspace on the local filesystem. The app refreshes the deck from workspace files after you edit them.",
       "The current artifact is an HTML-based slide deck, not a PowerPoint `.pptx` file and not a single HTML document.",
       localFilesystemArtifactNotice,
       appToolPrompt("slide"),
+      artifactIntentPrompt("deck"),
+      progressiveSlideAuthoringPrompt("deck"),
       [
         "The canonical editable deck is the `deck.slides/` directory in the current working directory.",
         "",
@@ -183,7 +187,7 @@ function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, 
         "- `deck.slides/previews/` and `deck.slides/thumbnails/` are generated preview assets and should not be treated as the primary editable source.",
         "",
         "Editing rules:",
-        "- Edit the deck files directly under `deck.slides/`.",
+        "- When the current request calls for deck changes, edit the deck files directly under `deck.slides/`.",
         "- Do not collapse the deck into a single HTML file.",
         "- Do not convert the deck to Markdown or PPTX unless the user explicitly asks for an export or conversion.",
         "- Preserve the canvas size from `manifest.json` unless the user explicitly asks to change the deck format.",
@@ -239,6 +243,31 @@ function appToolPrompt(app: "doc" | "slide") {
   ].join("\n");
 }
 
+function artifactIntentPrompt(artifactLabel: string) {
+  return [
+    "Artifact intent:",
+    `- Treat the focused ${artifactLabel} as a workspace resource, not as an obligation to produce placeholder content.`,
+    `- Create or modify the focused ${artifactLabel} only when the user's current request asks this app to produce, edit, convert, import into, export from, or otherwise update that artifact.`,
+    "- If the request is mainly to coordinate with tools or other apps, inspect context, answer a question, or continue work elsewhere, complete that request without changing the focused artifact just to leave something behind.",
+    `- If the user later asks to bring external results into this ${artifactLabel}, then update the focused artifact at that point.`,
+  ].join("\n");
+}
+
+function progressiveSlideAuthoringPrompt(artifactLabel: "deck" | "presentation") {
+  const saveGuidance =
+    artifactLabel === "presentation"
+      ? "Because PPTX is a single package, each saved intermediate version must still be a valid presentation file that can be opened and previewed."
+      : "For HTML decks, save completed slide HTML files and synchronize ordering as you add slides so the app can refresh the visible deck.";
+  return [
+    "Progressive slide authoring:",
+    "- For multi-slide creation or broad redesigns, work in visible increments instead of waiting until the entire presentation is finished.",
+    "- Start from a compact outline, then complete and save the first useful slide before continuing.",
+    "- Continue one slide at a time, or in the smallest coherent batch when slides strongly depend on each other.",
+    `- ${saveGuidance}`,
+    "- Avoid leaving half-written slides, broken layouts, or invalid intermediate files merely to show progress; each saved increment should be reviewable.",
+  ].join("\n");
+}
+
 function buildEditPrompt(context: RuntimeEditContext) {
   const selection = [
     `selection_type: ${context.request.selectionType ?? "write"}`,
@@ -273,7 +302,7 @@ ${extractOoxmlTextPreview(resolve(projectWorkspaceRoot(context.project.id), "sli
 ${context.request.userPrompt}
 </user_instruction>
 
-Use officecli to inspect and edit the focused PPTX when possible. Create or edit the PPTX file at slides.pptx.`;
+Use officecli to inspect and edit the focused PPTX when the request calls for presentation changes. Do not create or rewrite slides.pptx solely to leave a placeholder artifact behind.`;
   }
 
   return `<slide_agent_context>
@@ -297,5 +326,5 @@ ${JSON.stringify(context.project.deckSlides ?? [], null, 2)}
 ${context.request.userPrompt}
 </user_instruction>
 
-Edit the deck files in deck.slides directly.`;
+When the request calls for deck changes, edit the deck files in deck.slides directly. Otherwise complete the requested coordination or answer without changing deck.slides.`;
 }
