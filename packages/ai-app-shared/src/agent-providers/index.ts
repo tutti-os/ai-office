@@ -1,3 +1,5 @@
+import type { LocalAgentProviderStatus } from "../types/index.js";
+
 export function normalizeLocalAgentProviderId(provider: string | null | undefined) {
   const normalized = provider?.trim().toLowerCase().replace(/[\s_]+/g, "-");
   if (!normalized) return "";
@@ -21,6 +23,38 @@ export type LocalAgentProviderStatusLike = {
   provider: string;
   available?: boolean;
 };
+
+export type TuttiAgentProviderStatusLike = {
+  provider?: string | null;
+  status?: string | null;
+  detail?: string | null;
+};
+
+export function mergeTuttiAgentProviderStatuses(
+  providers: LocalAgentProviderStatus[],
+  tuttiProviders: readonly TuttiAgentProviderStatusLike[] | null | undefined,
+) {
+  if (!tuttiProviders?.length) return providers;
+  return providers.map((provider) => {
+    const tuttiProvider = tuttiProviders.find((item) => localAgentProviderIdsMatch(item.provider, provider.provider));
+    if (!tuttiProvider) return provider;
+    const status = tuttiProvider.status?.trim().toLowerCase();
+    if (status === "available") {
+      const detail = tuttiProvider.detail?.trim();
+      return {
+        ...provider,
+        available: true,
+        authState: provider.authState === "missing" ? "ok" : provider.authState,
+        executablePath: detail || provider.executablePath,
+        version: provider.version === "not-installed" ? "available via Tutti" : provider.version,
+        reason: undefined,
+      };
+    }
+    if (provider.available) return provider;
+    const detail = tuttiProvider.detail?.trim();
+    return detail ? { ...provider, reason: detail } : provider;
+  });
+}
 
 export function resolvePreferredLocalAgentRuntimeProfileId(input: {
   profiles: LocalAgentRuntimeProfileLike[];

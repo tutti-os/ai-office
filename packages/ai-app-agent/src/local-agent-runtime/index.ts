@@ -70,7 +70,7 @@ export interface LocalAgentRuntimeProviderOptions<
     workspaceRoot: string,
   ) => LocalAgentSkillManifestResult | Promise<LocalAgentSkillManifestResult>;
   buildMcpServers?: (context: RuntimeEditContext<TRun, TProject, TRequest>) => LocalAgentMcpServer[];
-  buildEnv?: (context: RuntimeEditContext<TRun, TProject, TRequest>, workspaceRoot: string) => Record<string, string>;
+  buildEnv?: (context: RuntimeEditContext<TRun, TProject, TRequest>, workspaceRoot: string) => Record<string, string> | Promise<Record<string, string>>;
   useProviderResume?: (context: RuntimeEditContext<TRun, TProject, TRequest>) => boolean;
   timeoutMs?: () => number;
   sessionDirName?: string;
@@ -106,9 +106,13 @@ export class LocalAgentRuntimeProvider<
     if (!providerId) {
       return { available: false, reason: `local-agent provider is not registered: ${profile.provider}` };
     }
+    const workspaceRoot = context ? this.options.workspaceRoot(context) : undefined;
+    const env = context && workspaceRoot ? await this.options.buildEnv?.(context, workspaceRoot) : undefined;
     const detectionContext = context?.managedAgent
-      ? { cwd: context.managedAgent.cwd, managedAgentInvocation: context.managedAgent.managedAgentInvocation }
-      : undefined;
+      ? { cwd: context.managedAgent.cwd, ...(env ? { env } : {}), managedAgentInvocation: context.managedAgent.managedAgentInvocation }
+      : env
+        ? { env }
+        : undefined;
     const detection = (await this.localAgentRuntime.detect(detectionContext)).find((item: any) => localAgentProviderIdsMatch(item.provider, providerId));
     if (!detection) return { available: true };
     if (detection.result?.supported === false) {
@@ -229,7 +233,7 @@ export class LocalAgentRuntimeProvider<
       reasoning: context.request.reasoningEffort ?? undefined,
       mcpServers: context.managedAgent ? [] : (this.options.buildMcpServers?.(context) ?? []),
       skillManifest: skillContext.skills,
-      env: this.options.buildEnv?.(context, workspaceRoot) ?? {},
+      env: (await this.options.buildEnv?.(context, workspaceRoot)) ?? {},
       ...(context.managedAgent ? { managedAgentInvocation: context.managedAgent.managedAgentInvocation } : {}),
       timeoutMs: this.options.timeoutMs?.() ?? DEFAULT_TIMEOUT_MS,
       extraAllowedDirs: this.options.extraAllowedDirs?.(context, workspaceRoot) ?? [workspaceRoot],

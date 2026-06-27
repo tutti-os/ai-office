@@ -9,7 +9,7 @@ import type { AiEditRequest, DocumentProject, DocumentRun } from "@ai-doc/shared
 import { buildDocAppToolEnv, buildDocAppToolMcpServers } from "../agent-tools.js";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
-import { tuttiCliEnv } from "../tutti/tutti-cli.js";
+import { tuttiAgentProviderEnv, tuttiCliEnv } from "../tutti/tutti-cli.js";
 import type { RuntimeEditContext } from "./runtime-provider.js";
 
 const noBrowserRenderVerification =
@@ -28,9 +28,10 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<D
       buildSystemPrompt,
       buildSkillManifest: buildTuttiAgentSkillContext,
       buildMcpServers: buildDocAppToolMcpServers,
-      buildEnv: (context, workspaceRoot) => ({
+      buildEnv: async (context, workspaceRoot) => ({
         ...officeCliEnvSync(),
         ...tuttiCliEnv(),
+        ...(await tuttiAgentProviderEnv(context.runtimeProfile.provider).catch(() => ({}))),
         ...buildDocAppToolEnv(context),
         AI_DOC_WORKSPACE: workspaceRoot,
         AI_DOC_PROJECT_ID: context.project.id,
