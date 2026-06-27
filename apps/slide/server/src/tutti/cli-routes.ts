@@ -3,7 +3,7 @@ import { extname, join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { cliErrorOutput, cliJsonOutput, readCliInputBody } from "@ai-app/shared/tutti-cli";
 import type { AiEditMode, DeckManifestSlide, OpenSlideCliResponse, SlideArtifact, SlideArtifactType, SlideProject } from "@ai-slide/shared";
-import { getTuttiCliStatus } from "./tutti-cli.js";
+import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { ProjectService } from "../artifact/project-service.js";
 import { installOfficeCli } from "../toolchains/officecli.js";
 
@@ -42,6 +42,18 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
 
   server.post<{ Body: unknown }>("/tutti/cli/projects/create", async (request, reply) => {
     return createProjectCliResponse(reply, projects, readCliInputBody(request.body));
+  });
+
+  server.post<{ Body: unknown }>("/tutti/cli/projects/open", async (request, reply) => {
+    const input = readCliInputBody(request.body);
+    const projectId = requiredString(input, "project-id");
+    if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
+    try {
+      const { project } = await projects.getProject(projectId);
+      return reply.send(cliJsonOutput(await openProjectCliOutput(project)));
+    } catch (error) {
+      return sendCliError(reply, cliErrorStatus(error), "project_open_failed", errorMessage(error));
+    }
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/deck/get", async (request, reply) => {
@@ -335,7 +347,6 @@ async function createProjectCliResponse(reply: FastifyReply, projects: ProjectSe
       artifact: result.artifact,
       run,
       openTarget: projectOpenTarget(result.project.id),
-      route: projectRoute(result.project.id),
       workspace: projects.projectWorkspaceContext(result.project.id, result.artifact),
       guidance: finalOpenGuidance("AI Slide"),
     }));
@@ -429,22 +440,44 @@ async function openSlideCliOutput(
     project: input.project,
     artifact: input.artifact,
     openTarget: projectOpenTarget(input.project.id),
-    route: projectRoute(input.project.id),
     workspace: projects.projectWorkspaceContext(input.project.id, input.artifact),
+  };
+}
+
+async function openProjectCliOutput(project: SlideProject) {
+  const route = projectRoute(project.id);
+  const appOpen = await openTuttiAppRoute(appId(), route);
+  if (appOpen.error) {
+    throw new Error(appOpen.error);
+  }
+  return {
+    ok: true,
+    project: projectSummary(project),
+    openRequested: true,
+    openTarget: projectOpenTarget(project.id),
+    tuttiAppOpen: appOpen,
   };
 }
 
 function projectOpenTarget(projectId: string) {
   return {
-    kind: "tutti-app-route" as const,
+    kind: "tutti-cli-command" as const,
     appId: appId(),
-    route: projectRoute(projectId),
+    directOpenSupported: true as const,
     label: "Open in AI Slide",
+    projectId,
+    userFacing: false as const,
+    command: {
+      scope: "slide",
+      path: ["projects", "open"],
+      input: { "project-id": projectId },
+      display: `slide projects open --project-id ${projectId}`,
+    },
   };
 }
 
 function finalOpenGuidance(appName: string) {
-  return `Do not open the app automatically. When the task is complete, include openTarget as the final user-facing link/action so the user can open ${appName} themselves.`;
+  return `Do not display openTarget internals or any raw app route as a user-facing link. When the task is complete, tell the user they can view the result in ${appName} and ask whether they want you to open it directly. If they confirm, call the returned openTarget command.`;
 }
 
 function projectSummary(project: SlideProject) {
@@ -504,6 +537,7 @@ function appId() {
 
 function cliErrorStatus(error: unknown) {
   const message = errorMessage(error).toLowerCase();
+  if (message.includes("tutti_cli")) return 503;
   if (message.includes("officecli")) return 503;
   if (message.includes("no such file") || message.includes("enoent")) return 404;
   return 400;

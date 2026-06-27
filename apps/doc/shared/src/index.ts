@@ -197,7 +197,6 @@ export interface OpenDocumentCliResponse {
   sourcePath: string;
   project: DocumentProject;
   openTarget: TuttiAppOpenTarget;
-  route: string;
   workspace: DocumentWorkspaceContext;
 }
 

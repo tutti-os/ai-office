@@ -72,7 +72,7 @@ This package runs AI Slide as a local Tutti workspace app.
 - Templates load from CloudFront by default at \`/office-templates/slide/template.json\`; set \`AI_SLIDE_TEMPLATE_PROVIDER=local\` to use \`AI_SLIDE_TEMPLATE_ROOT\` and \`AI_SLIDE_TEMPLATE_ASSET_ROOT\`.
 - OfficeCLI auto-install uses the shared AI Office toolchain cache, not \`AI_SLIDE_HOME\`; override with \`AI_SLIDE_OFFICECLI_PATH\`, \`TUTTI_APP_OFFICECLI_PATH\`, or an \`*_OFFICECLI_INSTALL_ROOT\` env var.
 - Use \`AI_SLIDE_TUTTI_CLI\` for app-to-app calls. It is populated from \`TUTTI_CLI\` by \`bootstrap.sh\`.
-- The \`slide open\` command imports the file and returns the focused workspace path, project \`AGENTS.md\` path, and structured \`openTarget\` for the user-facing app route. It does not open the app automatically.
+- The \`slide open\` command imports the file and returns the focused workspace path, project \`AGENTS.md\` path, and an internal \`openTarget\` command. It does not open the app automatically; use \`slide projects open\` only after the user confirms they want AI Slide opened directly.
 
 I18n:
 

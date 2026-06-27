@@ -22,9 +22,15 @@ Return one document project by project-id.
 
 Handler: `/tutti/cli/projects/get`
 
+## `doc projects open --project-id <required>`
+
+Explicitly request Tutti to open one document project in AI Doc. Use this only after the user confirms they want you to open the app directly; create, import, and agent-edit commands must not call it automatically.
+
+Handler: `/tutti/cli/projects/open`
+
 ## `doc projects create --title --type --prompt --provider`
 
-Create a new AI Doc project, return an openTarget for the app route, and optionally start the app's agent with prompt. This command must not open the app automatically. Use prompt for generated document content; direct content input is not supported. For user requests to write a document, draft, article, report, or manuscript without an explicit file format, set type to html. If the user explicitly asks for DOCX or traditional Office Word format, set type to docx. Use markdown only when the user explicitly asks for Markdown. Do not present localhost URLs as the final open target; when the task is complete, include the returned openTarget as the final user-facing link/action. When a prompt starts app-owned editing, treat the returned run-id as the app-owned writer for that project and poll doc agent events until it reaches a terminal status.
+Create a new AI Doc project, return an internal openTarget command, and optionally start the app's agent with prompt. This command must not open the app automatically. Use prompt for generated document content; direct content input is not supported. For user requests to write a document, draft, article, report, or manuscript without an explicit file format, set type to html. If the user explicitly asks for DOCX or traditional Office Word format, set type to docx. Use markdown only when the user explicitly asks for Markdown. Do not present localhost URLs or raw routes as final links. When the task is complete, tell the user they can view the result in AI Doc and ask whether they want you to open it directly; if they confirm, call doc projects open with the project-id.
 
 Handler: `/tutti/cli/projects/create`
 
@@ -66,13 +72,13 @@ Handler: `/tutti/cli/messages/create`
 
 ## `doc agent edit --project-id <required> --prompt <required> --session-id --mode --provider`
 
-Start an app-owned agent edit for a document project and return openTarget for the project. External agents and other Tutti apps must use this command to modify document content, then poll agent events until the run reaches a terminal status. This command must not open the app automatically; include openTarget as the final user-facing link/action only after the task is complete.
+Start an app-owned agent edit for a document project and return an internal openTarget command. External agents and other Tutti apps must use this command to modify document content, then poll agent events until the run reaches a terminal status. This command must not open the app automatically. After completion, tell the user they can view the result in AI Doc and ask whether they want you to open it directly; if they confirm, call doc projects open.
 
 Handler: `/tutti/cli/agent/edit`
 
 ## `doc agent events --run-id <required>`
 
-Return one agent run, its persisted events, and the project openTarget by run-id. When the run reaches completed, include openTarget as the final user-facing link/action.
+Return one agent run, its persisted events, and the internal project openTarget command by run-id. When the run reaches completed, ask whether the user wants you to open the project directly; if they confirm, call doc projects open.
 
 Handler: `/tutti/cli/agent/events`
 
@@ -90,6 +96,6 @@ Handler: `/tutti/cli/officecli/install`
 
 ## `doc open --path <required> --title`
 
-Import an HTML, Markdown, or DOCX file into AI Doc and return workspace paths plus openTarget for the imported project. This command must not open the app automatically. Do not present localhost URLs as the final open target; include openTarget as the final user-facing link/action when the user should open the project.
+Import an HTML, Markdown, or DOCX file into AI Doc and return workspace paths plus an internal openTarget command for the imported project. This command must not open the app automatically. Do not present localhost URLs or raw routes as final links. Ask whether the user wants you to open the project directly; if they confirm, call doc projects open with the project-id.
 
 Handler: `/tutti/cli/open`

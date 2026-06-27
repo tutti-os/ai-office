@@ -234,7 +234,6 @@ export interface OpenSlideCliResponse {
   project: SlideProject;
   artifact: SlideArtifact;
   openTarget: TuttiAppOpenTarget;
-  route: string;
   workspace: SlideWorkspaceContext;
 }
 

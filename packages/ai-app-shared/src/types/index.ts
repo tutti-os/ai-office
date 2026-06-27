@@ -116,10 +116,18 @@ export interface TuttiAppOpenResult {
 }
 
 export interface TuttiAppOpenTarget {
-  kind: "tutti-app-route";
+  kind: "tutti-cli-command";
   appId: string;
-  route: string;
+  directOpenSupported: true;
+  command: {
+    display: string;
+    input: Record<string, string>;
+    path: string[];
+    scope: string;
+  };
   label: string;
+  projectId: string;
+  userFacing: false;
 }
 
 export interface StreamEvent<TType extends string = string> {
