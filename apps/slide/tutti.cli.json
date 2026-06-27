@@ -90,7 +90,7 @@
         "create"
       ],
       "summary": "Create a slide project",
-      "description": "Create a new AI Slide project, request opening its app route through Tutti CLI, and optionally start the app-owned async agent with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs as the final open target; use the app open result/route. When a prompt starts an agent run, treat the returned run as the only writer for that project until it reaches a terminal status. Poll slide agent events by run-id until run.status is completed, failed, or cancelled; accepted/running means the app is still working. Do not inspect deck.slides and write fallback slide files while the app run is accepted or running. If it is still running after several polls, report that generation is still in progress instead of creating content yourself.",
+      "description": "Create a new AI Slide project, request opening its app route through Tutti CLI, and optionally start app-owned async editing with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs as the final open target; use the app open result/route. When a prompt starts app-owned editing, treat the returned run-id as the only writer for that project until it reaches a terminal status. Poll slide agent events by run-id until run.status is completed, failed, or cancelled; accepted/running means the app is still working. Do not inspect deck.slides and write fallback slide files while app-owned editing is accepted or running. If it is still running after several polls, report that generation is still in progress instead of creating content yourself.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -105,10 +105,6 @@
           "prompt": {
             "type": "string",
             "description": "Optional prompt for the AI Slide app agent to generate or edit the deck after project creation. If supplied, poll the returned run with slide agent events and do not write fallback deck files while the run is accepted or running."
-          },
-          "runtime-profile-id": {
-            "type": "string",
-            "description": "Optional runtime profile id for prompt-based initialization."
           }
         }
       },
@@ -120,6 +116,139 @@
         "kind": "http",
         "method": "POST",
         "path": "/tutti/cli/projects/create",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "path": [
+        "deck",
+        "get"
+      ],
+      "summary": "Get deck structure",
+      "description": "Return the active deck manifest, slide ids, and local slide HTML paths. Pass slide-id to narrow to one slide, and include-html true to include slide HTML inline. PPTX artifacts return focused file metadata and guidance instead of deck HTML. To modify project content through CLI, start an app-owned edit with slide agent edit.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project-id": {
+            "type": "string",
+            "description": "Slide project id to inspect."
+          },
+          "slide-id": {
+            "type": "string",
+            "description": "Optional slide id to inspect."
+          },
+          "include-html": {
+            "type": "boolean",
+            "description": "When true, include slide HTML inline in the response."
+          }
+        },
+        "required": [
+          "project-id"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/deck/get",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "path": [
+        "slides",
+        "get"
+      ],
+      "summary": "Get one slide",
+      "description": "Return one deck slide's HTML, metadata, and local path by slide-id. This is a read-only command. To modify project content through CLI, start an app-owned edit with slide agent edit.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project-id": {
+            "type": "string",
+            "description": "Slide project id to inspect."
+          },
+          "slide-id": {
+            "type": "string",
+            "description": "Slide id to read."
+          }
+        },
+        "required": [
+          "project-id",
+          "slide-id"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/slides/get",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "path": [
+        "workspace",
+        "get"
+      ],
+      "summary": "Get slide workspace",
+      "description": "Return local workspace paths, focused artifact paths, assets, exports, and guidance for one slide project in AI Slide. Local paths are for inspection; content modifications through CLI must trigger the app-owned agent run.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project-id": {
+            "type": "string",
+            "description": "Slide project id to inspect."
+          }
+        },
+        "required": [
+          "project-id"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/workspace/get",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "path": [
+        "exports",
+        "list"
+      ],
+      "summary": "List slide exports",
+      "description": "List files already exported from one slide project, including local paths, MIME types, sizes, and modification times.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project-id": {
+            "type": "string",
+            "description": "Slide project id whose exports should be listed."
+          }
+        },
+        "required": [
+          "project-id"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/exports/list",
         "timeoutMs": 30000
       }
     },
@@ -270,10 +399,10 @@
     {
       "path": [
         "agent",
-        "run"
+        "edit"
       ],
-      "summary": "Start an agent run",
-      "description": "Start an app-owned async agent run for a slide project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with slide agent events until run.status is completed, failed, or cancelled. accepted/running means the app is still working, including when events are temporarily empty or contain reconnect/request-timeout status messages. Do not inspect deck.slides and write fallback slide files while this run is accepted or running; report that generation is still in progress if it has not reached a terminal status.",
+      "summary": "Ask the app agent to edit content",
+      "description": "Start an app-owned async agent edit for a slide project. External agents and other Tutti apps must use this command to modify slide content, then poll slide agent events until run.status is completed, failed, or cancelled.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -283,7 +412,7 @@
           },
           "prompt": {
             "type": "string",
-            "description": "User prompt for the agent."
+            "description": "User prompt for the app-owned agent."
           },
           "session-id": {
             "type": "string",
@@ -292,10 +421,6 @@
           "mode": {
             "type": "string",
             "description": "Optional edit mode: write or rewrite."
-          },
-          "runtime-profile-id": {
-            "type": "string",
-            "description": "Optional runtime profile id."
           }
         },
         "required": [
@@ -310,7 +435,7 @@
       "handler": {
         "kind": "http",
         "method": "POST",
-        "path": "/tutti/cli/agent/run",
+        "path": "/tutti/cli/agent/edit",
         "timeoutMs": 60000
       }
     },

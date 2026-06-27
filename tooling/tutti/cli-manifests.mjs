@@ -15,11 +15,20 @@ export const artifactCliConfigs = {
         path: ["projects", "create"],
         summary: "Create a document project",
         description:
-          "Create a new AI Doc project, request opening its app route through Tutti CLI, and optionally start the app's agent with prompt. Use prompt for generated document content; direct content input is not supported. For user requests to write a document, draft, article, report, or manuscript without an explicit file format, set type to html. If the user explicitly asks for DOCX or traditional Office Word format, set type to docx. Use markdown only when the user explicitly asks for Markdown. Do not present localhost URLs as the final open target; use the app open result/route.",
+          "Create a new AI Doc project, request opening its app route through Tutti CLI, and optionally start the app's agent with prompt. Use prompt for generated document content; direct content input is not supported. For user requests to write a document, draft, article, report, or manuscript without an explicit file format, set type to html. If the user explicitly asks for DOCX or traditional Office Word format, set type to docx. Use markdown only when the user explicitly asks for Markdown. Do not present localhost URLs as the final open target; use the app open result/route. When a prompt starts app-owned editing, treat the returned run-id as the app-owned writer for that project and poll doc agent events until it reaches a terminal status.",
         properties: docCreateProperties(),
       },
+      {
+        path: ["content", "get"],
+        summary: "Get document content",
+        description:
+          "Return one document project's current content and local workspace context. HTML and Markdown projects return inline content. DOCX projects return the focused local file path and manifest instead of inline document text. The response also includes focused paths, assets, exports, and guidance. To modify project content through CLI, start an app-owned agent edit.",
+        properties: projectIdProperties("Document project id to inspect."),
+        required: ["project-id"],
+      },
+      exportsListCommand("document"),
       ...conversationCommands("document"),
-      ...agentCommands("document"),
+      ...agentCommands("document", { scope: "doc", contentModificationPath: true }),
       officeCliInstallCommand("DOCX"),
       {
         path: ["open"],
@@ -47,11 +56,36 @@ export const artifactCliConfigs = {
         path: ["projects", "create"],
         summary: "Create a slide project",
         description:
-          "Create a new AI Slide project, request opening its app route through Tutti CLI, and optionally start the app-owned async agent with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs as the final open target; use the app open result/route. When a prompt starts an agent run, treat the returned run as the only writer for that project until it reaches a terminal status. Poll slide agent events by run-id until run.status is completed, failed, or cancelled; accepted/running means the app is still working. Do not inspect deck.slides and write fallback slide files while the app run is accepted or running. If it is still running after several polls, report that generation is still in progress instead of creating content yourself.",
+          "Create a new AI Slide project, request opening its app route through Tutti CLI, and optionally start app-owned async editing with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs as the final open target; use the app open result/route. When a prompt starts app-owned editing, treat the returned run-id as the only writer for that project until it reaches a terminal status. Poll slide agent events by run-id until run.status is completed, failed, or cancelled; accepted/running means the app is still working. Do not inspect deck.slides and write fallback slide files while app-owned editing is accepted or running. If it is still running after several polls, report that generation is still in progress instead of creating content yourself.",
         properties: slideCreateProperties(),
       },
+      {
+        path: ["deck", "get"],
+        summary: "Get deck structure",
+        description:
+          "Return the active deck manifest, slide ids, and local slide HTML paths. Pass slide-id to narrow to one slide, and include-html true to include slide HTML inline. PPTX artifacts return focused file metadata and guidance instead of deck HTML. To modify project content through CLI, start an app-owned edit with slide agent edit.",
+        properties: {
+          ...projectIdProperties("Slide project id to inspect."),
+          "slide-id": { type: "string", description: "Optional slide id to inspect." },
+          "include-html": { type: "boolean", description: "When true, include slide HTML inline in the response." },
+        },
+        required: ["project-id"],
+      },
+      {
+        path: ["slides", "get"],
+        summary: "Get one slide",
+        description:
+          "Return one deck slide's HTML, metadata, and local path by slide-id. This is a read-only command. To modify project content through CLI, start an app-owned edit with slide agent edit.",
+        properties: {
+          ...projectIdProperties("Slide project id to inspect."),
+          "slide-id": { type: "string", description: "Slide id to read." },
+        },
+        required: ["project-id", "slide-id"],
+      },
+      workspaceGetCommand("slide", "AI Slide"),
+      exportsListCommand("slide"),
       ...conversationCommands("slide"),
-      ...agentCommands("slide"),
+      ...agentCommands("slide", { scope: "slide", contentModificationPath: true }),
       officeCliInstallCommand("PPTX"),
       {
         path: ["open"],
@@ -145,6 +179,32 @@ function projectsGetCommand(domain) {
   };
 }
 
+function projectIdProperties(description = "Project id.") {
+  return {
+    "project-id": { type: "string", description },
+  };
+}
+
+function workspaceGetCommand(domain, appName) {
+  return {
+    path: ["workspace", "get"],
+    summary: `Get ${domain} workspace`,
+    description: `Return local workspace paths, focused artifact paths, assets, exports, and guidance for one ${domain} project in ${appName}. Local paths are for inspection; content modifications through CLI must trigger the app-owned agent run.`,
+    properties: projectIdProperties(`${domain[0].toUpperCase()}${domain.slice(1)} project id to inspect.`),
+    required: ["project-id"],
+  };
+}
+
+function exportsListCommand(domain) {
+  return {
+    path: ["exports", "list"],
+    summary: `List ${domain} exports`,
+    description: `List files already exported from one ${domain} project, including local paths, MIME types, sizes, and modification times.`,
+    properties: projectIdProperties(`${domain[0].toUpperCase()}${domain.slice(1)} project id whose exports should be listed.`),
+    required: ["project-id"],
+  };
+}
+
 function docCreateProperties() {
   return {
     title: { type: "string", description: "Project title." },
@@ -154,7 +214,6 @@ function docCreateProperties() {
         "Document type: html, markdown, or docx. Default intent mapping: document/draft/article/report/manuscript => html; explicit DOCX or traditional Office Word => docx; explicit Markdown => markdown.",
     },
     prompt: { type: "string", description: "Optional prompt for the AI Doc app agent to generate or edit the document after project creation." },
-    "runtime-profile-id": { type: "string", description: "Optional runtime profile id for prompt-based initialization." },
   };
 }
 
@@ -171,7 +230,6 @@ function slideCreateProperties() {
       description:
         "Optional prompt for the AI Slide app agent to generate or edit the deck after project creation. If supplied, poll the returned run with slide agent events and do not write fallback deck files while the run is accepted or running.",
     },
-    "runtime-profile-id": { type: "string", description: "Optional runtime profile id for prompt-based initialization." },
   };
 }
 
@@ -236,25 +294,32 @@ function conversationCommands(domain) {
   ];
 }
 
-function agentCommands(domain) {
+function agentCommands(domain, options = {}) {
   const isSlide = domain === "slide";
-  return [
-    {
+  const commands = [];
+  if (!options.contentModificationPath) {
+    commands.push({
       path: ["agent", "run"],
       summary: "Start an agent run",
-      description: isSlide
-        ? "Start an app-owned async agent run for a slide project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with slide agent events until run.status is completed, failed, or cancelled. accepted/running means the app is still working, including when events are temporarily empty or contain reconnect/request-timeout status messages. Do not inspect deck.slides and write fallback slide files while this run is accepted or running; report that generation is still in progress if it has not reached a terminal status."
-        : `Start an agent run for a ${domain} project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with agent events.`,
-      properties: {
-        "project-id": { type: "string", description: "Project id to edit." },
-        prompt: { type: "string", description: "User prompt for the agent." },
-        "session-id": { type: "string", description: "Optional conversation session id." },
-        mode: { type: "string", description: "Optional edit mode: write or rewrite." },
-        "runtime-profile-id": { type: "string", description: "Optional runtime profile id." },
-      },
+      description: agentRunDescription(domain, options),
+      properties: agentEditProperties("User prompt for the agent.", { includeRuntimeProfileId: true }),
       required: ["project-id", "prompt"],
       timeoutMs: 60000,
-    },
+    });
+  }
+  if (options.contentModificationPath) {
+    commands.push({
+      path: ["agent", "edit"],
+      summary: "Ask the app agent to edit content",
+      description: isSlide
+        ? "Start an app-owned async agent edit for a slide project. External agents and other Tutti apps must use this command to modify slide content, then poll slide agent events until run.status is completed, failed, or cancelled."
+        : `Start an app-owned agent edit for a ${domain} project. External agents and other Tutti apps must use this command to modify ${domain} content, then poll agent events until the run reaches a terminal status.`,
+      properties: agentEditProperties("User prompt for the app-owned agent."),
+      required: ["project-id", "prompt"],
+      timeoutMs: 60000,
+    });
+  }
+  commands.push(
     {
       path: ["agent", "events"],
       summary: "Poll agent events",
@@ -275,7 +340,33 @@ function agentCommands(domain) {
       },
       required: ["run-id"],
     },
-  ];
+  );
+  return commands;
+}
+
+function agentEditProperties(promptDescription, options = {}) {
+  const properties = {
+    "project-id": { type: "string", description: "Project id to edit." },
+    prompt: { type: "string", description: promptDescription },
+    "session-id": { type: "string", description: "Optional conversation session id." },
+    mode: { type: "string", description: "Optional edit mode: write or rewrite." },
+  };
+  if (options.includeRuntimeProfileId) {
+    properties["runtime-profile-id"] = { type: "string", description: "Optional runtime profile id." };
+  }
+  return properties;
+}
+
+function agentRunDescription(domain, options) {
+  const isSlide = domain === "slide";
+  if (!options.contentModificationPath) {
+    return isSlide
+      ? "Start an app-owned async agent run for a slide project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with slide agent events until run.status is completed, failed, or cancelled. accepted/running means the app is still working, including when events are temporarily empty or contain reconnect/request-timeout status messages. Do not inspect deck.slides and write fallback slide files while this run is accepted or running; report that generation is still in progress if it has not reached a terminal status."
+      : `Start an agent run for a ${domain} project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with agent events.`;
+  }
+  return isSlide
+    ? "Start an app-owned async agent run for a slide project. This is the CLI modification path for slide content; external agents and other Tutti apps must use this instead of writing raw deck or PPTX updates through CLI. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with slide agent events until run.status is completed, failed, or cancelled. accepted/running means the app is still working, including when events are temporarily empty or contain reconnect/request-timeout status messages. Do not inspect deck.slides and write fallback slide files while this run is accepted or running; report that generation is still in progress if it has not reached a terminal status."
+    : `Start an app-owned agent run for a ${domain} project. This is the CLI modification path for ${domain} content; external agents and other Tutti apps must use this instead of writing raw content updates through CLI. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with agent events until the run reaches a terminal status.`;
 }
 
 function officeCliInstallCommand(domainFormat) {

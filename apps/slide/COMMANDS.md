@@ -22,11 +22,35 @@ Return one slide project by project-id.
 
 Handler: `/tutti/cli/projects/get`
 
-## `slide projects create --title --artifact-type --prompt --runtime-profile-id`
+## `slide projects create --title --artifact-type --prompt`
 
-Create a new AI Slide project, request opening its app route through Tutti CLI, and optionally start the app-owned async agent with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs as the final open target; use the app open result/route. When a prompt starts an agent run, treat the returned run as the only writer for that project until it reaches a terminal status. Poll slide agent events by run-id until run.status is completed, failed, or cancelled; accepted/running means the app is still working. Do not inspect deck.slides and write fallback slide files while the app run is accepted or running. If it is still running after several polls, report that generation is still in progress instead of creating content yourself.
+Create a new AI Slide project, request opening its app route through Tutti CLI, and optionally start app-owned async editing with prompt. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs as the final open target; use the app open result/route. When a prompt starts app-owned editing, treat the returned run-id as the only writer for that project until it reaches a terminal status. Poll slide agent events by run-id until run.status is completed, failed, or cancelled; accepted/running means the app is still working. Do not inspect deck.slides and write fallback slide files while app-owned editing is accepted or running. If it is still running after several polls, report that generation is still in progress instead of creating content yourself.
 
 Handler: `/tutti/cli/projects/create`
+
+## `slide deck get --project-id <required> --slide-id --include-html`
+
+Return the active deck manifest, slide ids, and local slide HTML paths. Pass slide-id to narrow to one slide, and include-html true to include slide HTML inline. PPTX artifacts return focused file metadata and guidance instead of deck HTML. To modify project content through CLI, start an app-owned edit with slide agent edit.
+
+Handler: `/tutti/cli/deck/get`
+
+## `slide slides get --project-id <required> --slide-id <required>`
+
+Return one deck slide's HTML, metadata, and local path by slide-id. This is a read-only command. To modify project content through CLI, start an app-owned edit with slide agent edit.
+
+Handler: `/tutti/cli/slides/get`
+
+## `slide workspace get --project-id <required>`
+
+Return local workspace paths, focused artifact paths, assets, exports, and guidance for one slide project in AI Slide. Local paths are for inspection; content modifications through CLI must trigger the app-owned agent run.
+
+Handler: `/tutti/cli/workspace/get`
+
+## `slide exports list --project-id <required>`
+
+List files already exported from one slide project, including local paths, MIME types, sizes, and modification times.
+
+Handler: `/tutti/cli/exports/list`
 
 ## `slide sessions list --project-id <required>`
 
@@ -52,11 +76,11 @@ Append a text-only user or assistant message to one conversation session.
 
 Handler: `/tutti/cli/messages/create`
 
-## `slide agent run --project-id <required> --prompt <required> --session-id --mode --runtime-profile-id`
+## `slide agent edit --project-id <required> --prompt <required> --session-id --mode`
 
-Start an app-owned async agent run for a slide project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with slide agent events until run.status is completed, failed, or cancelled. accepted/running means the app is still working, including when events are temporarily empty or contain reconnect/request-timeout status messages. Do not inspect deck.slides and write fallback slide files while this run is accepted or running; report that generation is still in progress if it has not reached a terminal status.
+Start an app-owned async agent edit for a slide project. External agents and other Tutti apps must use this command to modify slide content, then poll slide agent events until run.status is completed, failed, or cancelled.
 
-Handler: `/tutti/cli/agent/run`
+Handler: `/tutti/cli/agent/edit`
 
 ## `slide agent events --run-id <required>`
 

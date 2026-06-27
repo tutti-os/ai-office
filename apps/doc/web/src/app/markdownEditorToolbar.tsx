@@ -514,7 +514,7 @@ function markdownImageTitleTokens(title: string | undefined) {
 }
 
 export function PlainMarkdownCodeBlockEditor(props: CodeBlockEditorProps) {
-  const { setCode } = useCodeBlockEditorContext();
+  const { parentEditor, setCode } = useCodeBlockEditorContext();
   const toolbarContext = useContext(MarkdownToolbarContext);
   const codeCompositionActiveRef = useRef(false);
   const [draftCode, setDraftCode] = useState(props.code);
@@ -544,6 +544,19 @@ export function PlainMarkdownCodeBlockEditor(props: CodeBlockEditorProps) {
         readOnly={toolbarContext.readOnly}
         value={draftCode}
         spellCheck={false}
+        onFocus={() => {
+          parentEditor.update(() => {
+            lexical.$setSelection(null);
+          });
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+        onKeyUp={(event) => event.stopPropagation()}
+        onBeforeInput={(event) => event.stopPropagation()}
+        onInput={(event) => event.stopPropagation()}
+        onPaste={(event) => event.stopPropagation()}
+        onCut={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
+        onMouseUp={(event) => event.stopPropagation()}
         onCompositionStart={() => {
           codeCompositionActiveRef.current = true;
         }}
@@ -551,12 +564,12 @@ export function PlainMarkdownCodeBlockEditor(props: CodeBlockEditorProps) {
           codeCompositionActiveRef.current = false;
           const nextCode = event.currentTarget.value;
           setDraftCode(nextCode);
-          if (!toolbarContext.readOnly) setCode(nextCode);
+          if (!toolbarContext.readOnly) toolbarContext.runProgrammaticChange(() => setCode(nextCode));
         }}
         onChange={(event) => {
           const nextCode = event.target.value;
           setDraftCode(nextCode);
-          if (!codeCompositionActiveRef.current && !toolbarContext.readOnly) setCode(nextCode);
+          if (!codeCompositionActiveRef.current && !toolbarContext.readOnly) toolbarContext.runProgrammaticChange(() => setCode(nextCode));
         }}
       />
     </figure>

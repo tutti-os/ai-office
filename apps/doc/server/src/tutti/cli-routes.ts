@@ -1,6 +1,8 @@
+import { readdir, stat } from "node:fs/promises";
+import { extname, join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { cliErrorOutput, cliJsonOutput, readCliInputBody } from "@ai-app/shared/tutti-cli";
-import type { AiEditMode, DocumentProject, DocumentType, OpenDocumentCliResponse } from "@ai-doc/shared";
+import { parseDocxDocumentManifest, type AiEditMode, type DocumentProject, type DocumentType, type OpenDocumentCliResponse } from "@ai-doc/shared";
 import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { DocumentService } from "../artifact/document-service.js";
 import { installOfficeCli } from "../toolchains/officecli.js";
@@ -40,6 +42,35 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
 
   server.post<{ Body: unknown }>("/tutti/cli/projects/create", async (request, reply) => {
     return createProjectCliResponse(reply, documents, readCliInputBody(request.body));
+  });
+
+  server.post<{ Body: unknown }>("/tutti/cli/content/get", async (request, reply) => {
+    const input = readCliInputBody(request.body);
+    const projectId = requiredString(input, "project-id");
+    if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
+    try {
+      const { project } = documents.getProject(projectId);
+      return reply.send(cliJsonOutput(await documentContentOutput(documents, project)));
+    } catch (error) {
+      return sendCliError(reply, cliErrorStatus(error), "content_get_failed", errorMessage(error));
+    }
+  });
+
+  server.post<{ Body: unknown }>("/tutti/cli/exports/list", async (request, reply) => {
+    const input = readCliInputBody(request.body);
+    const projectId = requiredString(input, "project-id");
+    if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
+    try {
+      const { project } = documents.getProject(projectId);
+      const workspace = documents.projectWorkspaceContext(project);
+      return reply.send(cliJsonOutput({
+        project: projectSummary(project),
+        workspace,
+        exports: await listWorkspaceFiles(workspace.workspaceRoot, "exports"),
+      }));
+    } catch (error) {
+      return sendCliError(reply, cliErrorStatus(error), "exports_list_failed", errorMessage(error));
+    }
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/sessions/list", async (request, reply) => {
@@ -98,6 +129,10 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
     return agentRunCliResponse(reply, documents, readCliInputBody(request.body));
   });
 
+  server.post<{ Body: unknown }>("/tutti/cli/agent/edit", async (request, reply) => {
+    return agentRunCliResponse(reply, documents, readCliInputBody(request.body));
+  });
+
   server.post<{ Body: unknown }>("/tutti/cli/agent/events", async (request, reply) => {
     const input = readCliInputBody(request.body);
     const runId = requiredString(input, "run-id");
@@ -145,6 +180,39 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
       return sendCliError(reply, cliErrorStatus(error), "open_failed", errorMessage(error));
     }
   });
+}
+
+async function documentContentOutput(documents: DocumentService, project: DocumentProject) {
+  const workspace = documents.projectWorkspaceContext(project);
+  const workspaceFiles = {
+    assets: await listWorkspaceFiles(workspace.workspaceRoot, "assets"),
+    exports: await listWorkspaceFiles(workspace.workspaceRoot, "exports"),
+  };
+  if (project.type === "html" || project.type === "markdown") {
+    return {
+      project: projectSummary(project),
+      type: project.type,
+      contentMode: "inline",
+      content: project.content,
+      workspace,
+      ...workspaceFiles,
+      guidance: modificationGuidance("doc"),
+    };
+  }
+  return {
+    project: projectSummary(project),
+    type: project.type,
+    contentMode: "local-file",
+    content: null,
+    docxManifest: parseDocxDocumentManifest(project.content),
+    workspace,
+    ...workspaceFiles,
+    guidance: [
+      "DOCX content is stored in the focused local file instead of being returned inline.",
+      "Inspect the focusedPath with OfficeCLI or another local DOCX-aware tool.",
+      modificationGuidance("doc"),
+    ],
+  };
 }
 
 async function createProjectCliResponse(reply: FastifyReply, documents: DocumentService, input: Record<string, unknown>) {
@@ -268,6 +336,43 @@ function projectSummary(project: DocumentProject) {
     updatedAt: project.updatedAt,
     "updated-at": project.updatedAt,
   };
+}
+
+function modificationGuidance(scope: "doc") {
+  return `To modify project content through CLI, start an app-owned agent edit with ${scope} agent edit. Do not write raw content updates through external CLI commands.`;
+}
+
+async function listWorkspaceFiles(workspaceRoot: string, relativeDir: string) {
+  const root = join(workspaceRoot, relativeDir);
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const files = await Promise.all(entries
+    .filter((entry) => entry.isFile())
+    .map(async (entry) => {
+      const absolutePath = join(root, entry.name);
+      const info = await stat(absolutePath).catch(() => null);
+      return {
+        fileName: entry.name,
+        path: absolutePath,
+        relativePath: `${relativeDir}/${entry.name}`,
+        sizeBytes: info?.size ?? null,
+        mtimeMs: info ? Math.trunc(info.mtimeMs) : null,
+        mimeType: mimeTypeForFileName(entry.name),
+      };
+    }));
+  return files.sort((left, right) => String(left.fileName).localeCompare(String(right.fileName)));
+}
+
+function mimeTypeForFileName(fileName: string) {
+  const extension = extname(fileName).slice(1).toLowerCase();
+  if (extension === "html" || extension === "htm") return "text/html";
+  if (extension === "md" || extension === "markdown") return "text/markdown";
+  if (extension === "docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (extension === "pdf") return "application/pdf";
+  if (extension === "png") return "image/png";
+  if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
+  if (extension === "svg") return "image/svg+xml";
+  if (extension === "webp") return "image/webp";
+  return "application/octet-stream";
 }
 
 function projectRoute(projectId: string) {

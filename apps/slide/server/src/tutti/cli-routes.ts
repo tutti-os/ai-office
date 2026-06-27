@@ -1,6 +1,8 @@
+import { readdir, stat } from "node:fs/promises";
+import { extname, join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { cliErrorOutput, cliJsonOutput, readCliInputBody } from "@ai-app/shared/tutti-cli";
-import type { AiEditMode, OpenSlideCliResponse, SlideArtifact, SlideArtifactType, SlideProject } from "@ai-slide/shared";
+import type { AiEditMode, DeckManifestSlide, OpenSlideCliResponse, SlideArtifact, SlideArtifactType, SlideProject } from "@ai-slide/shared";
 import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { ProjectService } from "../artifact/project-service.js";
 import { installOfficeCli } from "../toolchains/officecli.js";
@@ -40,6 +42,62 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
 
   server.post<{ Body: unknown }>("/tutti/cli/projects/create", async (request, reply) => {
     return createProjectCliResponse(reply, projects, readCliInputBody(request.body));
+  });
+
+  server.post<{ Body: unknown }>("/tutti/cli/deck/get", async (request, reply) => {
+    const input = readCliInputBody(request.body);
+    const projectId = requiredString(input, "project-id");
+    if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
+    try {
+      return reply.send(cliJsonOutput(await deckCliOutput(projects, projectId, {
+        slideId: optionalString(input, "slide-id"),
+        includeHtml: optionalBoolean(input, "include-html") ?? false,
+      })));
+    } catch (error) {
+      return sendCliError(reply, cliErrorStatus(error), "deck_get_failed", errorMessage(error));
+    }
+  });
+
+  server.post<{ Body: unknown }>("/tutti/cli/slides/get", async (request, reply) => {
+    const input = readCliInputBody(request.body);
+    const projectId = requiredString(input, "project-id");
+    const slideId = requiredString(input, "slide-id");
+    if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
+    if (!slideId) return sendCliError(reply, 400, "invalid_input", "slide-id is required");
+    try {
+      return reply.send(cliJsonOutput(await slideCliOutput(projects, projectId, slideId)));
+    } catch (error) {
+      return sendCliError(reply, cliErrorStatus(error), "slide_get_failed", errorMessage(error));
+    }
+  });
+
+  server.post<{ Body: unknown }>("/tutti/cli/workspace/get", async (request, reply) => {
+    const input = readCliInputBody(request.body);
+    const projectId = requiredString(input, "project-id");
+    if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
+    try {
+      return reply.send(cliJsonOutput(await slideWorkspaceOutput(projects, projectId)));
+    } catch (error) {
+      return sendCliError(reply, cliErrorStatus(error), "workspace_get_failed", errorMessage(error));
+    }
+  });
+
+  server.post<{ Body: unknown }>("/tutti/cli/exports/list", async (request, reply) => {
+    const input = readCliInputBody(request.body);
+    const projectId = requiredString(input, "project-id");
+    if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
+    try {
+      const { project, artifact } = await projects.getProject(projectId);
+      const workspace = projects.projectWorkspaceContext(project.id, artifact);
+      return reply.send(cliJsonOutput({
+        project: projectSummary(project),
+        artifact,
+        workspace,
+        exports: await listWorkspaceFiles(workspace.workspaceRoot, "exports"),
+      }));
+    } catch (error) {
+      return sendCliError(reply, cliErrorStatus(error), "exports_list_failed", errorMessage(error));
+    }
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/sessions/list", async (request, reply) => {
@@ -98,6 +156,10 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
     return agentRunCliResponse(reply, projects, readCliInputBody(request.body));
   });
 
+  server.post<{ Body: unknown }>("/tutti/cli/agent/edit", async (request, reply) => {
+    return agentRunCliResponse(reply, projects, readCliInputBody(request.body));
+  });
+
   server.post<{ Body: unknown }>("/tutti/cli/agent/events", async (request, reply) => {
     const input = readCliInputBody(request.body);
     const runId = requiredString(input, "run-id");
@@ -145,6 +207,96 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
       return sendCliError(reply, cliErrorStatus(error), "open_failed", errorMessage(error));
     }
   });
+}
+
+async function deckCliOutput(projects: ProjectService, projectId: string, options: { slideId?: string; includeHtml: boolean }) {
+  const detail = await projects.getProject(projectId);
+  const workspace = projects.projectWorkspaceContext(detail.project.id, detail.artifact);
+  if (detail.artifact.type !== "deck") {
+    return {
+      project: projectSummary(detail.project),
+      artifact: detail.artifact,
+      contentMode: "local-file",
+      deckManifest: null,
+      pptxManifest: detail.pptxManifest,
+      workspace,
+      guidance: [
+        "The active artifact is PPTX, so deck slide HTML is not available.",
+        "Inspect the focusedPath with OfficeCLI or another local PPTX-aware tool.",
+        modificationGuidance("slide"),
+      ],
+    };
+  }
+  const manifestSlides = detail.deckManifest?.slides ?? [];
+  const selectedSlides = options.slideId ? manifestSlides.filter((slide) => slide.id === options.slideId) : manifestSlides;
+  if (options.slideId && selectedSlides.length === 0) throw new Error("Slide not found");
+  return {
+    project: projectSummary(detail.project),
+    artifact: detail.artifact,
+    contentMode: options.includeHtml ? "inline-html" : "paths",
+    deckManifest: detail.deckManifest,
+    workspace,
+    slides: await Promise.all(selectedSlides.map((slide) => slideOutput(projects, projectId, detail.artifact, workspace.workspaceRoot, slide, options.includeHtml))),
+    guidance: [
+      "Use slide paths for local inspection when inline HTML is not requested.",
+      modificationGuidance("slide"),
+    ],
+  };
+}
+
+async function slideCliOutput(projects: ProjectService, projectId: string, slideId: string) {
+  const detail = await projects.getProject(projectId);
+  const workspace = projects.projectWorkspaceContext(detail.project.id, detail.artifact);
+  if (detail.artifact.type !== "deck") throw new Error("The active artifact is not a deck");
+  const result = await projects.readDeckSlideHtml(projectId, slideId);
+  return {
+    project: projectSummary(detail.project),
+    artifact: result.artifact,
+    workspace,
+    slide: {
+      ...result.slide,
+      path: join(workspace.workspaceRoot, result.artifact.fileRef, result.slide.file),
+      html: result.html,
+    },
+    guidance: modificationGuidance("slide"),
+  };
+}
+
+async function slideWorkspaceOutput(projects: ProjectService, projectId: string) {
+  const detail = await projects.getProject(projectId);
+  const workspace = projects.projectWorkspaceContext(detail.project.id, detail.artifact);
+  return {
+    project: projectSummary(detail.project),
+    artifact: detail.artifact,
+    deckManifest: detail.deckManifest,
+    pptxManifest: detail.pptxManifest,
+    workspace,
+    assets: await listWorkspaceFiles(workspace.workspaceRoot, "assets"),
+    deckAssets: detail.artifact.type === "deck" ? await listWorkspaceFiles(workspace.workspaceRoot, join(detail.artifact.fileRef, "assets")) : [],
+    exports: await listWorkspaceFiles(workspace.workspaceRoot, "exports"),
+    guidance: [
+      "Use focusedPath for local inspection when content is too large, directory-backed, or binary for inline CLI output.",
+      modificationGuidance("slide"),
+    ],
+  };
+}
+
+async function slideOutput(
+  projects: ProjectService,
+  projectId: string,
+  artifact: SlideArtifact,
+  workspaceRoot: string,
+  slide: DeckManifestSlide,
+  includeHtml: boolean,
+) {
+  const output: DeckManifestSlide & { path: string; html?: string } = {
+    ...slide,
+    path: join(workspaceRoot, artifact.fileRef, slide.file),
+  };
+  if (includeHtml) {
+    output.html = (await projects.readDeckSlideHtml(projectId, slide.id)).html;
+  }
+  return output;
 }
 
 async function createProjectCliResponse(reply: FastifyReply, projects: ProjectService, input: Record<string, unknown>) {
@@ -227,6 +379,14 @@ function optionalString(input: Record<string, unknown>, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function optionalBoolean(input: Record<string, unknown>, key: string) {
+  const value = input[key];
+  if (value === true || value === false) return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return undefined;
+}
+
 function normalizeMessageRole(value: unknown): "user" | "assistant" | null {
   if (value === "user" || value === "assistant") return value;
   return null;
@@ -267,6 +427,42 @@ function projectSummary(project: SlideProject) {
     updatedAt: project.updatedAt,
     "updated-at": project.updatedAt,
   };
+}
+
+function modificationGuidance(scope: "slide") {
+  return `To modify project content through CLI, start an app-owned agent edit with ${scope} agent edit. Do not write raw content updates through external CLI commands.`;
+}
+
+async function listWorkspaceFiles(workspaceRoot: string, relativeDir: string) {
+  const root = join(workspaceRoot, relativeDir);
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const files = await Promise.all(entries
+    .filter((entry) => entry.isFile())
+    .map(async (entry) => {
+      const absolutePath = join(root, entry.name);
+      const info = await stat(absolutePath).catch(() => null);
+      return {
+        fileName: entry.name,
+        path: absolutePath,
+        relativePath: `${relativeDir}/${entry.name}`.split("\\").join("/"),
+        sizeBytes: info?.size ?? null,
+        mtimeMs: info ? Math.trunc(info.mtimeMs) : null,
+        mimeType: mimeTypeForFileName(entry.name),
+      };
+    }));
+  return files.sort((left, right) => String(left.fileName).localeCompare(String(right.fileName)));
+}
+
+function mimeTypeForFileName(fileName: string) {
+  const extension = extname(fileName).slice(1).toLowerCase();
+  if (extension === "html" || extension === "htm") return "text/html";
+  if (extension === "pptx") return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+  if (extension === "pdf") return "application/pdf";
+  if (extension === "png") return "image/png";
+  if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
+  if (extension === "svg") return "image/svg+xml";
+  if (extension === "webp") return "image/webp";
+  return "application/octet-stream";
 }
 
 function projectRoute(projectId: string) {

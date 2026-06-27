@@ -22,11 +22,23 @@ Return one document project by project-id.
 
 Handler: `/tutti/cli/projects/get`
 
-## `doc projects create --title --type --prompt --runtime-profile-id`
+## `doc projects create --title --type --prompt`
 
-Create a new AI Doc project, request opening its app route through Tutti CLI, and optionally start the app's agent with prompt. Use prompt for generated document content; direct content input is not supported. For user requests to write a document, draft, article, report, or manuscript without an explicit file format, set type to html. If the user explicitly asks for DOCX or traditional Office Word format, set type to docx. Use markdown only when the user explicitly asks for Markdown. Do not present localhost URLs as the final open target; use the app open result/route.
+Create a new AI Doc project, request opening its app route through Tutti CLI, and optionally start the app's agent with prompt. Use prompt for generated document content; direct content input is not supported. For user requests to write a document, draft, article, report, or manuscript without an explicit file format, set type to html. If the user explicitly asks for DOCX or traditional Office Word format, set type to docx. Use markdown only when the user explicitly asks for Markdown. Do not present localhost URLs as the final open target; use the app open result/route. When a prompt starts app-owned editing, treat the returned run-id as the app-owned writer for that project and poll doc agent events until it reaches a terminal status.
 
 Handler: `/tutti/cli/projects/create`
+
+## `doc content get --project-id <required>`
+
+Return one document project's current content and local workspace context. HTML and Markdown projects return inline content. DOCX projects return the focused local file path and manifest instead of inline document text. The response also includes focused paths, assets, exports, and guidance. To modify project content through CLI, start an app-owned agent edit.
+
+Handler: `/tutti/cli/content/get`
+
+## `doc exports list --project-id <required>`
+
+List files already exported from one document project, including local paths, MIME types, sizes, and modification times.
+
+Handler: `/tutti/cli/exports/list`
 
 ## `doc sessions list --project-id <required>`
 
@@ -52,11 +64,11 @@ Append a text-only user or assistant message to one conversation session.
 
 Handler: `/tutti/cli/messages/create`
 
-## `doc agent run --project-id <required> --prompt <required> --session-id --mode --runtime-profile-id`
+## `doc agent edit --project-id <required> --prompt <required> --session-id --mode`
 
-Start an agent run for a document project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with agent events.
+Start an app-owned agent edit for a document project. External agents and other Tutti apps must use this command to modify document content, then poll agent events until the run reaches a terminal status.
 
-Handler: `/tutti/cli/agent/run`
+Handler: `/tutti/cli/agent/edit`
 
 ## `doc agent events --run-id <required>`
 
