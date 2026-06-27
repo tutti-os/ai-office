@@ -1,4 +1,5 @@
 import { useRef, type ChangeEvent, type ReactNode } from "react";
+import { localAgentProviderIdsMatch } from "@ai-app/shared/agent-providers";
 import { Check, ChevronDown, Download, File, FileImage, Loader2, Plus, Wand2, X } from "lucide-react";
 import { AgentSelectShell, appShell, cx, formatOptionClass, formatOptionIconClass } from "../app-shell/index.js";
 import { PromptComposer, type PromptComposerInputRenderProps } from "../prompt-composer/index.js";
@@ -303,7 +304,7 @@ function AgentMenu(props: {
           {props.selectAgentLabel}
         </option>
         {props.agentProfiles.map((profile) => {
-          const status = profile.kind === "local-agent" ? props.agentProviders.find((provider) => provider.provider === profile.provider) : null;
+          const status = profile.kind === "local-agent" ? props.agentProviders.find((provider) => localAgentProviderIdsMatch(provider.provider, profile.provider)) : null;
           const available = status?.available ?? props.agentProviders.length === 0;
           return (
             <option disabled={!available} key={profile.id} value={profile.id}>

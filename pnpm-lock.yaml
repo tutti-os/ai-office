@@ -407,6 +407,9 @@ importers:
 
   packages/ai-app-ui:
     dependencies:
+      '@ai-app/shared':
+        specifier: workspace:*
+        version: link:../ai-app-shared
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.7)

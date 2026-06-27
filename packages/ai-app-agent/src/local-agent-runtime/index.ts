@@ -14,6 +14,7 @@ import {
   type LoadTuttiAgentSkillContextInput,
   type TuttiRecommendedSystemPrompt,
 } from "@tutti-os/agent-acp-kit/tutti";
+import { localAgentProviderIdsMatch } from "@ai-app/shared/agent-providers";
 import type { BaseAiEditRequest, BaseRun, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { safePathSegment } from "@ai-app/shared/local-paths";
 import type { RuntimeEditContext, RuntimeProvider, RuntimeStreamEvent } from "@ai-app/agent/runtime";
@@ -100,11 +101,11 @@ export class LocalAgentRuntimeProvider<
   }
 
   async detect(profile: RuntimeProfile) {
-    const registered = this.localAgentRuntime.listProviders().some((item: any) => item.id === profile.provider);
-    if (!registered) {
+    const providerId = this.resolveProviderId(profile.provider);
+    if (!providerId) {
       return { available: false, reason: `local-agent provider is not registered: ${profile.provider}` };
     }
-    const detection = (await this.localAgentRuntime.detect()).find((item: any) => item.provider === profile.provider);
+    const detection = (await this.localAgentRuntime.detect()).find((item: any) => localAgentProviderIdsMatch(item.provider, providerId));
     if (!detection) return { available: true };
     if (detection.result?.supported === false) {
       return {
@@ -137,7 +138,7 @@ export class LocalAgentRuntimeProvider<
   }
 
   async *streamEdit(context: RuntimeEditContext<TRun, TProject, TRequest>) {
-    const provider = context.runtimeProfile.provider;
+    const provider = this.resolveProviderId(context.runtimeProfile.provider) ?? context.runtimeProfile.provider;
     const workspaceRoot = this.options.workspaceRoot(context);
     const controller = new AbortController();
     this.controllers.set(context.run.id, controller);
@@ -262,6 +263,11 @@ export class LocalAgentRuntimeProvider<
     }
   }
 
+  private resolveProviderId(provider: string) {
+    const registered = this.localAgentRuntime.listProviders().find((item: any) => localAgentProviderIdsMatch(item.id, provider));
+    return registered?.id;
+  }
+
   async cancel(runId: string) {
     const controller = this.controllers.get(runId);
     if (!controller) return { cancelled: false, reason: "local-agent run is not active" };
@@ -283,7 +289,7 @@ function normalizeSkillManifestResult(value: LocalAgentSkillManifestResult | und
 
 function createAiAppLocalAgentProviderPlugins(): LocalAgentProviderPlugin[] {
   return createDefaultLocalAgentProviderPlugins().map((provider) =>
-    provider.id === "claude" ? withClaudeStreamCompatibility(provider) : provider,
+    localAgentProviderIdsMatch(provider.id, "claude") ? withClaudeStreamCompatibility(provider) : provider,
   );
 }
 
