@@ -521,14 +521,37 @@ export class ProjectService {
     } else {
       const fingerprint = await this.workspaceFingerprintFromDetail(detail);
       if (fingerprint === previousFingerprint) return { changed: false, fingerprint };
-      this.repo.bumpArtifactRevision(detail.artifact.id, "ai");
+      const syncedManifest = await this.syncDeckManifestSlideFiles(detail);
+      if (!syncedManifest) this.repo.bumpArtifactRevision(detail.artifact.id, "ai");
       const updated = await this.getProject(projectId);
       this.events.emit({ type: "project.updated", projectId, runId, payload: updated });
-      return { changed: true, fingerprint };
+      return { changed: true, fingerprint: await this.workspaceFingerprint(projectId) };
     }
     const updated = await this.getProject(projectId);
     this.events.emit({ type: "project.updated", projectId, runId, payload: updated });
     return { changed: true, fingerprint: await this.workspaceFingerprint(projectId) };
+  }
+
+  private async syncDeckManifestSlideFiles(detail: Awaited<ReturnType<ProjectService["getProject"]>>) {
+    if (detail.artifact.type !== "deck" || !detail.deckManifest) return false;
+    const slidesDir = join(projectWorkspaceRoot(detail.project.id), detail.artifact.fileRef, "slides");
+    let slideFiles: string[];
+    try {
+      const entries = await readdir(slidesDir, { withFileTypes: true });
+      slideFiles = entries
+        .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".html"))
+        .map((entry) => entry.name);
+    } catch {
+      return false;
+    }
+    const manifestFiles = new Set(detail.deckManifest.slides.map((slide) => slide.file.replace(/^slides\//, "")));
+    if (slideFiles.length === manifestFiles.size && slideFiles.every((file) => manifestFiles.has(file))) return false;
+    try {
+      await this.repo.reorderDeckSlides(detail.project.id, {}, "ai");
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private async workspaceFingerprint(projectId: string) {
