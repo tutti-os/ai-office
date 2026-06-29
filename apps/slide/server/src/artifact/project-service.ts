@@ -399,6 +399,38 @@ export class ProjectService {
   ) {
     let refreshedArtifact = false;
     let workspaceFingerprint = "";
+    let refreshInFlight: Promise<void> | null = null;
+    let lastWorkspaceRefreshAt = 0;
+    let trailingTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const doRefresh = async () => {
+      const refresh = await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
+      workspaceFingerprint = refresh.fingerprint;
+      refreshedArtifact = refresh.changed || refreshedArtifact;
+    };
+
+    const refreshWorkspace = async (input: { force?: boolean } = {}) => {
+      if (input.force) {
+        if (trailingTimer) { clearTimeout(trailingTimer); trailingTimer = null; }
+        if (refreshInFlight) await refreshInFlight;
+        refreshInFlight = doRefresh().finally(() => { refreshInFlight = null; });
+        await refreshInFlight;
+        return;
+      }
+      const now = Date.now();
+      if (lastWorkspaceRefreshAt > 0 && now - lastWorkspaceRefreshAt < workspaceRefreshThrottleMs) {
+        if (!trailingTimer) {
+          const delay = workspaceRefreshThrottleMs - (now - lastWorkspaceRefreshAt);
+          trailingTimer = setTimeout(() => { trailingTimer = null; refreshWorkspace(); }, delay);
+        }
+        if (refreshInFlight) await refreshInFlight;
+        return;
+      }
+      if (refreshInFlight) { await refreshInFlight; return; }
+      lastWorkspaceRefreshAt = Date.now();
+      refreshInFlight = doRefresh().finally(() => { refreshInFlight = null; });
+      await refreshInFlight;
+    };
 
     await this.runExecutor.execute({
       project: runtimeProject,
@@ -414,12 +446,10 @@ export class ProjectService {
         workspaceFingerprint = await this.workspaceFingerprint(runtimeProject.id);
       },
       onWorkspaceEvent: async () => {
-        const refresh = await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
-        workspaceFingerprint = refresh.fingerprint;
-        refreshedArtifact = refresh.changed || refreshedArtifact;
+        await refreshWorkspace();
       },
       complete: async ({ generatedText }) => {
-        if (!refreshedArtifact) await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
+        await refreshWorkspace({ force: true });
         const detail = await this.getProject(runtimeProject.id);
         const currentRun = this.repo.getRun(runId);
         if (currentRun && !["accepted", "running"].includes(currentRun.status)) return;
@@ -542,6 +572,7 @@ const maxContextAttachmentBytes = 30 * 1024 * 1024;
 const maxProjectAssetBytes = 30 * 1024 * 1024;
 const maxDeckExportBytes = 50 * 1024 * 1024;
 const maxPptxImportBytes = 50 * 1024 * 1024;
+const workspaceRefreshThrottleMs = 1500;
 const pdfMimeType = "application/pdf";
 const supportedProjectAssetMimeTypes = new Set<string>(projectAssetMimeTypes);
 const supportedProjectAssetExtensions = new Set<string>(projectAssetFileExtensions);
