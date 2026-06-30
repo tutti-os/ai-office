@@ -26,7 +26,7 @@ export async function savePptxPdfExport(input: {
     flushSync(() => {
       reactRoot.render(<PptxRenderer presentation={input.presentation} />);
     });
-    await waitForImages(renderRoot);
+    await waitForRenderStable(renderRoot);
     const bytes = await printHtmlToPdfWithTutti({
       baseUrl: `${window.location.origin}/`,
       html: pptxPdfPrintHtml({
@@ -87,6 +87,22 @@ function pptxPdfPrintHtml(input: {
       background: #fff;
     }
 
+    html,
+    body,
+    *,
+    *::before,
+    *::after {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    .ai-pptx-pdf-raster-layer {
+      display: block;
+      filter: opacity(0.999999);
+      transform: translateZ(0);
+      transform-origin: 0 0;
+    }
+
     .ai-pptx-print-root,
     .ai-pptx-print-root .tsh-pptx-document {
       display: block;
@@ -114,7 +130,7 @@ function pptxPdfPrintHtml(input: {
   </style>
 </head>
 <body>
-  <main class="ai-pptx-print-root">${input.bodyHtml}</main>
+  <main class="ai-pptx-print-root ai-pptx-pdf-raster-layer">${input.bodyHtml}</main>
 </body>
 </html>`;
 }
@@ -140,15 +156,31 @@ function collectDocumentStyles(doc: Document) {
     .join("\n");
 }
 
-function waitForImages(root: HTMLElement) {
-  const images = Array.from(root.querySelectorAll("img"));
-  return Promise.all(images.map((image) => {
-    if (image.complete) return Promise.resolve();
-    return new Promise<void>((resolve) => {
-      image.addEventListener("load", () => resolve(), { once: true });
-      image.addEventListener("error", () => resolve(), { once: true });
-    });
-  }));
+async function waitForRenderStable(root: HTMLElement) {
+  await Promise.race([
+    (async () => {
+      await document.fonts?.ready.catch(() => undefined);
+      await Promise.all(Array.from(root.querySelectorAll("img")).map((image) => waitForImageReady(image)));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    })(),
+    new Promise<void>((resolve) => window.setTimeout(resolve, 15_000)),
+  ]);
+}
+
+function waitForImageReady(image: HTMLImageElement) {
+  if (image.complete) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    const cleanup = () => {
+      image.removeEventListener("load", handleDone);
+      image.removeEventListener("error", handleDone);
+    };
+    const handleDone = () => {
+      cleanup();
+      resolve();
+    };
+    image.addEventListener("load", handleDone, { once: true });
+    image.addEventListener("error", handleDone, { once: true });
+  });
 }
 
 function safeExportFileName(value: string) {

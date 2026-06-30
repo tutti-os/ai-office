@@ -1,13 +1,24 @@
+export type TuttiPdfPageSize =
+  | "A4"
+  | "Letter"
+  | {
+      height: number;
+      width: number;
+    };
+
+export type TuttiPdfPrintMargins = {
+  bottom?: string;
+  left?: string;
+  right?: string;
+  top?: string;
+};
+
 export type TuttiPdfPrintHtmlInput = {
   baseUrl?: string;
   html: string;
-  margin?: {
-    bottom?: string;
-    left?: string;
-    right?: string;
-    top?: string;
-  };
-  pageSize?: "A4" | "Letter";
+  margin?: TuttiPdfPrintMargins;
+  pageSize?: TuttiPdfPageSize;
+  preferCSSPageSize?: boolean;
   printBackground?: boolean;
   title?: string;
 };

@@ -87,6 +87,7 @@ async function createExportFrame(input: {
   frame.src = projectAssetUrl(input.projectId, input.artifact.fileRef, input.slide.file, input.artifact.revision);
   document.body.append(frame);
   await loaded;
+  await waitForFrameStable(frame);
   return frame;
 }
 
@@ -111,6 +112,36 @@ function waitForFrameLoad(frame: HTMLIFrameElement) {
     };
     frame.addEventListener("load", handleLoad);
     frame.addEventListener("error", handleError);
+  });
+}
+
+async function waitForFrameStable(frame: HTMLIFrameElement) {
+  const win = frame.contentWindow;
+  const doc = frame.contentDocument;
+  if (!win || !doc) return;
+  await Promise.race([
+    (async () => {
+      await doc.fonts?.ready.catch(() => undefined);
+      await Promise.all(Array.from(doc.images).map((image) => waitForImageReady(image)));
+      await new Promise<void>((resolve) => win.requestAnimationFrame(() => win.requestAnimationFrame(() => resolve())));
+    })(),
+    new Promise<void>((resolve) => window.setTimeout(resolve, hiddenFrameTimeoutMs)),
+  ]);
+}
+
+function waitForImageReady(image: HTMLImageElement) {
+  if (image.complete) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    const cleanup = () => {
+      image.removeEventListener("load", handleDone);
+      image.removeEventListener("error", handleDone);
+    };
+    const handleDone = () => {
+      cleanup();
+      resolve();
+    };
+    image.addEventListener("load", handleDone, { once: true });
+    image.addEventListener("error", handleDone, { once: true });
   });
 }
 
@@ -155,6 +186,15 @@ function deckPdfPrintHtml(input: {
       background: #fff;
     }
 
+    html,
+    body,
+    *,
+    *::before,
+    *::after {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
     .ai-slide-pdf-page {
       width: ${slidePdfPageSize.width}in;
       height: ${slidePdfPageSize.height}in;
@@ -169,6 +209,13 @@ function deckPdfPrintHtml(input: {
     .ai-slide-pdf-page:last-child {
       break-after: auto;
       page-break-after: auto;
+    }
+
+    .ai-slide-pdf-raster-layer {
+      display: block;
+      filter: opacity(0.999999);
+      transform: translateZ(0);
+      transform-origin: 0 0;
     }
 
     .ai-slide-pdf-canvas {
@@ -210,9 +257,11 @@ function deckPdfPageHtml(input: {
   const bodyClass = body?.getAttribute("class") ?? "";
   const canvasStyle = [body?.getAttribute("style") ?? "", pdfCanvasInheritedStyle(sourceDocument)].filter(Boolean).join("; ");
   return `<section class="ai-slide-pdf-page" aria-label="${escapeHtml(deckSlideDisplayName(input.slide, input.index))}">
-  <div class="ai-slide-pdf-canvas ${escapeHtml(bodyClass)}" style="${escapeHtml(canvasStyle)}">
+  <div class="ai-slide-pdf-raster-layer">
+    <div class="ai-slide-pdf-canvas ${escapeHtml(bodyClass)}" style="${escapeHtml(canvasStyle)}">
 ${headAssets}
 ${body?.innerHTML ?? ""}
+    </div>
   </div>
 </section>`;
 }
