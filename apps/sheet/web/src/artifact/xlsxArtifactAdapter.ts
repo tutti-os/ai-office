@@ -1,6 +1,6 @@
 import type { AiEditRequest, SheetArtifactSelection, XlsxManifest } from "@ai-sheet/shared";
 import type { AgentEditRequestInputBase, ArtifactRuntimeAdapterBase } from "@ai-app/shared/artifact-runtime";
-import { createSpreadsheetEditor, type OoxmlXlsxPreview, type SpreadsheetEditorService, type XlsxRenderWorkbook } from "@tutti-os/office-preview/xlsx";
+import { createSpreadsheetEditor, type OoxmlXlsxPreview, type SpreadsheetEditorService, type SpreadsheetRenderWorkbook } from "@tutti-os/office-preview/xlsx";
 
 export type XlsxSelection = {
   sheetId: string | null;
@@ -15,7 +15,7 @@ export type XlsxRuntimeState = {
   manifest: XlsxManifest;
   preview: OoxmlXlsxPreview | null;
   editor: SpreadsheetEditorService | null;
-  renderWorkbook: XlsxRenderWorkbook | null;
+  renderWorkbook: SpreadsheetRenderWorkbook | null;
   revision: number;
   dirty: boolean;
   selection: XlsxSelection;
@@ -61,7 +61,7 @@ export class XlsxArtifactRuntimeAdapter
     const editor = preview
       ? createSpreadsheetEditor({
           renderWorkbook: preview.renderWorkbook,
-          workbookSnapshot: preview.editorWorkbook,
+          workbookSnapshot: preview.workbookSnapshot,
         })
       : null;
     const renderWorkbook = editor ? editor.renderWorkbook() : (preview?.renderWorkbook ?? null);

@@ -2,11 +2,11 @@ import { useEffect, useRef } from "react";
 import { scrollbarClass } from "@ai-app/ui/app-shell";
 import { XlsxRenderer } from "@tutti-os/office-preview/xlsx";
 import "@tutti-os/office-preview/styles/xlsx.css";
-import type { XlsxRenderWorkbook } from "@tutti-os/office-preview/xlsx";
+import type { SpreadsheetRenderWorkbook } from "@tutti-os/office-preview/xlsx";
 import { useI18n } from "../i18n";
 
 export function XlsxPreview(props: {
-  workbook: XlsxRenderWorkbook | null;
+  workbook: SpreadsheetRenderWorkbook | null;
   loading: boolean;
   error: string;
 }) {

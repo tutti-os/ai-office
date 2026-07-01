@@ -130,8 +130,8 @@ importers:
         specifier: ^3.27.1
         version: 3.27.1
       '@tutti-os/office-preview':
-        specifier: 0.0.0-test.20260701125058.1cf343f15db3
-        version: 0.0.0-test.20260701125058.1cf343f15db3(react@19.2.7)
+        specifier: 0.0.0-test.20260701183658.9f33c82dabeb
+        version: 0.0.0-test.20260701183658.9f33c82dabeb(react@19.2.7)
       '@tutti-os/ui-rich-text':
         specifier: 0.0.32
         version: 0.0.32(@floating-ui/dom@1.7.6)(@tiptap/pm@3.27.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -231,8 +231,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@tutti-os/office-preview':
-        specifier: 0.0.0-test.20260701125058.1cf343f15db3
-        version: 0.0.0-test.20260701125058.1cf343f15db3(react@19.2.7)
+        specifier: 0.0.0-test.20260701183658.9f33c82dabeb
+        version: 0.0.0-test.20260701183658.9f33c82dabeb(react@19.2.7)
       '@vitejs/plugin-react':
         specifier: ^5.1.1
         version: 5.2.0(vite@7.3.5(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))
@@ -326,8 +326,8 @@ importers:
         specifier: ^1.7.6
         version: 1.7.6
       '@tutti-os/office-preview':
-        specifier: 0.0.0-test.20260701125058.1cf343f15db3
-        version: 0.0.0-test.20260701125058.1cf343f15db3(react@19.2.7)
+        specifier: 0.0.0-test.20260701183658.9f33c82dabeb
+        version: 0.0.0-test.20260701183658.9f33c82dabeb(react@19.2.7)
       '@tutti-os/ui-rich-text':
         specifier: 0.0.32
         version: 0.0.32(@floating-ui/dom@1.7.6)(@tiptap/pm@3.27.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -2396,8 +2396,8 @@ packages:
   '@tutti-os/agent-acp-kit@0.2.4':
     resolution: {integrity: sha512-P8eAJZ/qV5uI2RwTJyNHnNdxOzneR0HBdDVBNIq+DrWofK2Nhnwo3vWRNvAObuPmSWtMTd1PitM52JaNo/mPUw==}
 
-  '@tutti-os/office-preview@0.0.0-test.20260701125058.1cf343f15db3':
-    resolution: {integrity: sha512-YHv8OPdIfqzOyLWdNqrLzUY1aUht2GBEdaGePwupXFRodD+pVG3XA/cjuJ1mGTCLWmLxOVroo3CC8rvy11DRKA==}
+  '@tutti-os/office-preview@0.0.0-test.20260701183658.9f33c82dabeb':
+    resolution: {integrity: sha512-o/giOHPco8ATsZxz2XLtpHjgsKFv/VadDsQvJS4QMWbkQoQyW/yhiMBo64proDQXbKBKn2ZXPlTUqVG9ECd57Q==}
     peerDependencies:
       react: ^19.2.0
 
@@ -6095,7 +6095,7 @@ snapshots:
       - '@cfworker/json-schema'
       - supports-color
 
-  '@tutti-os/office-preview@0.0.0-test.20260701125058.1cf343f15db3(react@19.2.7)':
+  '@tutti-os/office-preview@0.0.0-test.20260701183658.9f33c82dabeb(react@19.2.7)':
     dependencies:
       react: 19.2.7
 
