@@ -33,7 +33,7 @@
     "@tiptap/extension-underline": "^3.27.1",
     "@tiptap/react": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
-    "@tutti-os/office-preview": "0.0.0-test.20260625005644.a24bb42a8055",
+    "@tutti-os/office-preview": "0.0.0-test.20260701125058.1cf343f15db3",
     "@tutti-os/ui-rich-text": "0.0.32",
     "@tutti-os/ui-system": "0.0.32",
     "@tutti-os/workspace-external-core": "0.0.32",
