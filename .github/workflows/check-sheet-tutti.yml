@@ -1,0 +1,59 @@
+name: AI Sheet / Check Tutti App
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/check-sheet-tutti.yml"
+      - "apps/sheet/**"
+      - "packages/**"
+      - "scripts/check-doc-i18n.mjs"
+      - "scripts/validate-tutti-app-package.mjs"
+      - "tooling/tutti/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/check-sheet-tutti.yml"
+      - "apps/sheet/**"
+      - "packages/**"
+      - "scripts/check-doc-i18n.mjs"
+      - "scripts/validate-tutti-app-package.mjs"
+      - "tooling/tutti/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check shared packages and AI Sheet
+        run: pnpm -r --filter "./packages/*" --if-present check && pnpm --filter @ai-sheet/app check
+
+      - name: Check AI Sheet i18n
+        run: pnpm --filter @ai-sheet/app check:i18n
+
+      - name: Package AI Sheet Tutti app
+        run: pnpm package:sheet-tutti
+
+      - name: Validate AI Sheet Tutti package
+        run: pnpm validate:sheet-tutti
