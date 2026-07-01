@@ -87,10 +87,40 @@
     {
       "path": [
         "projects",
+        "open"
+      ],
+      "summary": "Open a workbook project",
+      "description": "Explicitly request Tutti to open one workbook project in AI Sheet. Use this only after the user confirms they want you to open the app directly; create, import, and agent-edit commands must not call it automatically.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project-id": {
+            "type": "string",
+            "description": "Workbook project id to open."
+          }
+        },
+        "required": [
+          "project-id"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/projects/open",
+        "timeoutMs": 10000
+      }
+    },
+    {
+      "path": [
+        "projects",
         "create"
       ],
       "summary": "Create a workbook project",
-      "description": "Create a new AI Sheet workbook project directly, including a blank workbook.xlsx in the project workspace. When prompt is provided, the app creates the project and starts an agent run to initialize or edit the workbook.",
+      "description": "Create a new AI Sheet workbook project, return an internal openTarget command, and optionally start app-owned async editing with prompt. This command must not open the app automatically. Do not present localhost URLs or raw routes as final links. When the task is complete, tell the user they can view the result in AI Sheet and ask whether they want you to open it directly; if they confirm, call sheet projects open with the project-id.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -100,11 +130,11 @@
           },
           "prompt": {
             "type": "string",
-            "description": "Optional prompt for an agent run after project creation."
+            "description": "Optional prompt for the AI Sheet app agent to initialize or edit the workbook after project creation."
           },
-          "runtime-profile-id": {
+          "provider": {
             "type": "string",
-            "description": "Optional runtime profile id for prompt-based initialization."
+            "description": "Optional app-agent provider: codex or claude-code. If omitted, AI Sheet reads the Tutti global default from `tutti agent providers --json` defaultProvider, then falls back to Codex or Claude Code if available."
           }
         }
       },
@@ -116,6 +146,96 @@
         "kind": "http",
         "method": "POST",
         "path": "/tutti/cli/projects/create",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "path": [
+        "workbook",
+        "get"
+      ],
+      "summary": "Get workbook context",
+      "description": "Return one workbook project's current XLSX manifest and local workspace context. XLSX content is returned as a focused local file path instead of inline workbook data. To modify workbook content through CLI, start an app-owned edit with sheet agent edit.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project-id": {
+            "type": "string",
+            "description": "Workbook project id to inspect."
+          }
+        },
+        "required": [
+          "project-id"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/workbook/get",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "path": [
+        "workspace",
+        "get"
+      ],
+      "summary": "Get workbook workspace",
+      "description": "Return local workspace paths, focused artifact paths, assets, exports, and guidance for one workbook project in AI Sheet. Local paths are for inspection; content modifications through CLI must trigger the app-owned agent run.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project-id": {
+            "type": "string",
+            "description": "Workbook project id to inspect."
+          }
+        },
+        "required": [
+          "project-id"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/workspace/get",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "path": [
+        "exports",
+        "list"
+      ],
+      "summary": "List workbook exports",
+      "description": "List files already exported from one workbook project, including local paths, MIME types, sizes, and modification times.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project-id": {
+            "type": "string",
+            "description": "Workbook project id whose exports should be listed."
+          }
+        },
+        "required": [
+          "project-id"
+        ]
+      },
+      "output": {
+        "defaultMode": "json",
+        "json": true
+      },
+      "handler": {
+        "kind": "http",
+        "method": "POST",
+        "path": "/tutti/cli/exports/list",
         "timeoutMs": 30000
       }
     },
@@ -266,10 +386,10 @@
     {
       "path": [
         "agent",
-        "run"
+        "edit"
       ],
-      "summary": "Start an agent run",
-      "description": "Start an agent run for a workbook project. Pass session-id to attach messages to an existing session; otherwise the project default session is used. Poll events with agent events.",
+      "summary": "Ask the app agent to edit content",
+      "description": "Start an app-owned agent edit for a workbook project and return an internal openTarget command. External agents and other Tutti apps must use this command to modify workbook content, then poll agent events until the run reaches a terminal status. This command must not open the app automatically. After completion, tell the user they can view the result in AI Sheet and ask whether they want you to open it directly; if they confirm, call sheet projects open.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -279,7 +399,7 @@
           },
           "prompt": {
             "type": "string",
-            "description": "User prompt for the agent."
+            "description": "User prompt for the app-owned agent."
           },
           "session-id": {
             "type": "string",
@@ -289,9 +409,9 @@
             "type": "string",
             "description": "Optional edit mode: write or rewrite."
           },
-          "runtime-profile-id": {
+          "provider": {
             "type": "string",
-            "description": "Optional runtime profile id."
+            "description": "Optional app-agent provider: codex or claude-code. If omitted, AI Sheet reads the Tutti global default from `tutti agent providers --json` defaultProvider, then falls back to Codex or Claude Code if available."
           }
         },
         "required": [
@@ -306,7 +426,7 @@
       "handler": {
         "kind": "http",
         "method": "POST",
-        "path": "/tutti/cli/agent/run",
+        "path": "/tutti/cli/agent/edit",
         "timeoutMs": 60000
       }
     },
@@ -316,7 +436,7 @@
         "events"
       ],
       "summary": "Poll agent events",
-      "description": "Return one agent run and its persisted events by run-id.",
+      "description": "Return one agent run, its persisted events, and the internal project openTarget command by run-id. When the run reaches completed, ask whether the user wants you to open the project directly; if they confirm, call sheet projects open.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -397,7 +517,7 @@
         "open"
       ],
       "summary": "Open a workbook file",
-      "description": "Import an XLSX file into AI Sheet, request opening its app route through Tutti CLI, and return workspace paths for agent editing.",
+      "description": "Import an XLSX file into AI Sheet and return workspace paths plus an internal openTarget command for the imported project. This command must not open the app automatically. Do not present localhost URLs or raw routes as final links. Ask whether the user wants you to open the project directly; if they confirm, call sheet projects open with the project-id.",
       "inputSchema": {
         "type": "object",
         "properties": {

@@ -111,21 +111,32 @@ export const artifactCliConfigs = {
       statusCommand("AI Sheet"),
       projectsListCommand("workbook"),
       projectsGetCommand("workbook"),
+      projectOpenCommand("workbook", "AI Sheet"),
       {
         path: ["projects", "create"],
         summary: "Create a workbook project",
         description:
-          "Create a new AI Sheet workbook project directly, including a blank workbook.xlsx in the project workspace. When prompt is provided, the app creates the project and starts an agent run to initialize or edit the workbook.",
+          "Create a new AI Sheet workbook project, return an internal openTarget command, and optionally start app-owned async editing with prompt. This command must not open the app automatically. Do not present localhost URLs or raw routes as final links. When the task is complete, tell the user they can view the result in AI Sheet and ask whether they want you to open it directly; if they confirm, call sheet projects open with the project-id.",
         properties: sheetCreateProperties(),
       },
+      {
+        path: ["workbook", "get"],
+        summary: "Get workbook context",
+        description:
+          "Return one workbook project's current XLSX manifest and local workspace context. XLSX content is returned as a focused local file path instead of inline workbook data. To modify workbook content through CLI, start an app-owned edit with sheet agent edit.",
+        properties: projectIdProperties("Workbook project id to inspect."),
+        required: ["project-id"],
+      },
+      workspaceGetCommand("workbook", "AI Sheet"),
+      exportsListCommand("workbook"),
       ...conversationCommands("workbook"),
-      ...agentCommands("workbook"),
+      ...agentCommands("workbook", { scope: "sheet", appName: "AI Sheet", contentModificationPath: true }),
       officeCliInstallCommand("XLSX"),
       {
         path: ["open"],
         summary: "Open a workbook file",
         description:
-          "Import an XLSX file into AI Sheet, request opening its app route through Tutti CLI, and return workspace paths for agent editing.",
+          "Import an XLSX file into AI Sheet and return workspace paths plus an internal openTarget command for the imported project. This command must not open the app automatically. Do not present localhost URLs or raw routes as final links. Ask whether the user wants you to open the project directly; if they confirm, call sheet projects open with the project-id.",
         properties: pathAndTitleProperties(
           "Absolute path, home-relative path, or path relative to the Tutti workspace root.",
         ),
@@ -261,8 +272,12 @@ function slideCreateProperties() {
 function sheetCreateProperties() {
   return {
     title: { type: "string", description: "Project title." },
-    prompt: { type: "string", description: "Optional prompt for an agent run after project creation." },
-    "runtime-profile-id": { type: "string", description: "Optional runtime profile id for prompt-based initialization." },
+    prompt: { type: "string", description: "Optional prompt for the AI Sheet app agent to initialize or edit the workbook after project creation." },
+    provider: {
+      type: "string",
+      description:
+        "Optional app-agent provider: codex or claude-code. If omitted, AI Sheet reads the Tutti global default from `tutti agent providers --json` defaultProvider, then falls back to Codex or Claude Code if available.",
+    },
   };
 }
 

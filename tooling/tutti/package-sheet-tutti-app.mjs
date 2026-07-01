@@ -65,8 +65,9 @@ This package runs AI Sheet as a local Tutti workspace app.
 - OfficeCLI auto-install uses the shared AI Office toolchain cache, not \`AI_SHEET_HOME\`; override with \`AI_SHEET_OFFICECLI_PATH\`, \`TUTTI_APP_OFFICECLI_PATH\`, or an \`*_OFFICECLI_INSTALL_ROOT\` env var.
 - AI Sheet renders XLSX directly. The editable source file for a project is \`workbook.xlsx\` under the app-owned project workspace.
 - Use \`AI_SHEET_TUTTI_CLI\` for app-to-app calls. It is populated from \`TUTTI_CLI\` by \`bootstrap.sh\`.
-- The \`sheet open\` command imports a file, calls \`$TUTTI_CLI --json app open --app-id "$TUTTI_APP_ID" --route ...\`, and returns the focused workbook path plus project \`AGENTS.md\` path for follow-up edits.
-- The \`sheet projects create\` command creates a blank workbook project directly and returns the focused workbook path for follow-up edits.
+- The \`sheet open\` command imports a file and returns the focused workbook path, project \`AGENTS.md\` path, and an internal \`openTarget\` command. It does not open the app automatically; use \`sheet projects open\` only after the user confirms they want AI Sheet opened directly.
+- The \`sheet projects create\` command creates a blank workbook project directly and returns the focused workbook path, project \`AGENTS.md\` path, and an internal \`openTarget\` command for follow-up edits.
+- The \`sheet agent edit\` command is the app-owned workbook modification path for external agents and other Tutti apps.
 
 Endpoints:
 

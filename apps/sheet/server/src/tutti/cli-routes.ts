@@ -1,7 +1,9 @@
+import { readdir, stat } from "node:fs/promises";
+import { extname, join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { cliErrorOutput, cliJsonOutput, readCliInputBody } from "@ai-app/shared/tutti-cli";
 import type { AiEditMode, OpenSheetCliResponse, SheetArtifact, SheetProject } from "@ai-sheet/shared";
-import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
+import { getDefaultAgentProvider, getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { SheetService } from "../artifact/sheet-service.js";
 import { installOfficeCli } from "../toolchains/officecli.js";
 
@@ -40,6 +42,58 @@ export function registerTuttiCliRoutes(server: FastifyInstance, sheets: SheetSer
 
   server.post<{ Body: unknown }>("/tutti/cli/projects/create", async (request, reply) => {
     return createProjectCliResponse(reply, sheets, readCliInputBody(request.body));
+  });
+
+  server.post<{ Body: unknown }>("/tutti/cli/projects/open", async (request, reply) => {
+    const input = readCliInputBody(request.body);
+    const projectId = requiredString(input, "project-id");
+    if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
+    try {
+      const { project } = await sheets.getProject(projectId);
+      return reply.send(cliJsonOutput(await openProjectCliOutput(project)));
+    } catch (error) {
+      return sendCliError(reply, cliErrorStatus(error), "project_open_failed", errorMessage(error));
+    }
+  });
+
+  server.post<{ Body: unknown }>("/tutti/cli/workbook/get", async (request, reply) => {
+    const input = readCliInputBody(request.body);
+    const projectId = requiredString(input, "project-id");
+    if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
+    try {
+      return reply.send(cliJsonOutput(await workbookCliOutput(sheets, projectId)));
+    } catch (error) {
+      return sendCliError(reply, cliErrorStatus(error), "workbook_get_failed", errorMessage(error));
+    }
+  });
+
+  server.post<{ Body: unknown }>("/tutti/cli/workspace/get", async (request, reply) => {
+    const input = readCliInputBody(request.body);
+    const projectId = requiredString(input, "project-id");
+    if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
+    try {
+      return reply.send(cliJsonOutput(await workbookWorkspaceOutput(sheets, projectId)));
+    } catch (error) {
+      return sendCliError(reply, cliErrorStatus(error), "workspace_get_failed", errorMessage(error));
+    }
+  });
+
+  server.post<{ Body: unknown }>("/tutti/cli/exports/list", async (request, reply) => {
+    const input = readCliInputBody(request.body);
+    const projectId = requiredString(input, "project-id");
+    if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
+    try {
+      const { project, artifact } = await sheets.getProject(projectId);
+      const workspace = sheets.projectWorkspaceContext(project.id, artifact);
+      return reply.send(cliJsonOutput({
+        project: projectSummary(project),
+        artifact,
+        workspace,
+        exports: await listWorkspaceFiles(workspace.workspaceRoot, "exports"),
+      }));
+    } catch (error) {
+      return sendCliError(reply, cliErrorStatus(error), "exports_list_failed", errorMessage(error));
+    }
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/sessions/list", async (request, reply) => {
@@ -98,12 +152,21 @@ export function registerTuttiCliRoutes(server: FastifyInstance, sheets: SheetSer
     return agentRunCliResponse(reply, sheets, readCliInputBody(request.body));
   });
 
+  server.post<{ Body: unknown }>("/tutti/cli/agent/edit", async (request, reply) => {
+    return agentRunCliResponse(reply, sheets, readCliInputBody(request.body));
+  });
+
   server.post<{ Body: unknown }>("/tutti/cli/agent/events", async (request, reply) => {
     const input = readCliInputBody(request.body);
     const runId = requiredString(input, "run-id");
     if (!runId) return sendCliError(reply, 400, "invalid_input", "run-id is required");
     try {
-      return reply.send(cliJsonOutput(sheets.listRunEvents(runId)));
+      const result = sheets.listRunEvents(runId);
+      return reply.send(cliJsonOutput({
+        ...result,
+        openTarget: result.run?.projectId ? projectOpenTarget(result.run.projectId) : null,
+        guidance: finalOpenGuidance("AI Sheet"),
+      }));
     } catch (error) {
       return sendCliError(reply, cliErrorStatus(error), "agent_events_failed", errorMessage(error));
     }
@@ -140,17 +203,54 @@ export function registerTuttiCliRoutes(server: FastifyInstance, sheets: SheetSer
         path: input.path,
         title: typeof input.title === "string" ? input.title : undefined,
       });
-      return reply.send(cliJsonOutput(await openSheetCliOutput(sheets, result)));
+      return reply.send(cliJsonOutput(openSheetCliOutput(sheets, result)));
     } catch (error) {
       return sendCliError(reply, cliErrorStatus(error), "open_failed", errorMessage(error));
     }
   });
 }
 
+async function workbookCliOutput(sheets: SheetService, projectId: string) {
+  const detail = await sheets.getProject(projectId);
+  const workspace = sheets.projectWorkspaceContext(detail.project.id, detail.artifact);
+  return {
+    project: projectSummary(detail.project),
+    artifact: detail.artifact,
+    contentMode: "local-file",
+    xlsxManifest: detail.xlsxManifest,
+    workspace,
+    exports: await listWorkspaceFiles(workspace.workspaceRoot, "exports"),
+    guidance: [
+      "XLSX content is stored in the focused local file instead of being returned inline.",
+      "Inspect the focusedPath with OfficeCLI or another local XLSX-aware tool.",
+      modificationGuidance("sheet"),
+    ],
+  };
+}
+
+async function workbookWorkspaceOutput(sheets: SheetService, projectId: string) {
+  const detail = await sheets.getProject(projectId);
+  const workspace = sheets.projectWorkspaceContext(detail.project.id, detail.artifact);
+  return {
+    project: projectSummary(detail.project),
+    artifact: detail.artifact,
+    xlsxManifest: detail.xlsxManifest,
+    workspace,
+    assets: await listWorkspaceFiles(workspace.workspaceRoot, "assets"),
+    exports: await listWorkspaceFiles(workspace.workspaceRoot, "exports"),
+    guidance: [
+      "Use focusedPath for local inspection when content is too large or binary for inline CLI output.",
+      modificationGuidance("sheet"),
+    ],
+  };
+}
+
 async function createProjectCliResponse(reply: FastifyReply, sheets: SheetService, input: Record<string, unknown>) {
   const prompt = optionalString(input, "prompt");
   const mode = normalizeAiMode(input.mode);
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
+  const runtimeProfileId = await runtimeProfileIdFromCliInput(input);
+  if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
   try {
     const result = await sheets.createProject({
       title: typeof input.title === "string" ? input.title : undefined,
@@ -163,19 +263,18 @@ async function createProjectCliResponse(reply: FastifyReply, sheets: SheetServic
           selectedHtml: "",
           selectionType: "write",
           selectionPath: "",
-          runtimeProfileId: optionalString(input, "runtime-profile-id"),
+          runtimeProfileId: runtimeProfileId.value,
         })).run
       : null;
-    const route = projectRoute(result.project.id);
     return reply.send(cliJsonOutput({
       ok: true,
       project: result.project,
       artifact: result.artifact,
       xlsxManifest: result.xlsxManifest,
       run,
-      route,
-      url: `${appBaseUrl()}${route}`,
+      openTarget: projectOpenTarget(result.project.id),
       workspace: sheets.projectWorkspaceContext(result.project.id, result.artifact),
+      guidance: finalOpenGuidance("AI Sheet"),
     }));
   } catch (error) {
     return sendCliError(reply, cliErrorStatus(error), "project_create_failed", errorMessage(error));
@@ -189,9 +288,11 @@ async function agentRunCliResponse(reply: FastifyReply, sheets: SheetService, in
   if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
   if (!prompt) return sendCliError(reply, 400, "invalid_input", "prompt is required");
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
+  const runtimeProfileId = await runtimeProfileIdFromCliInput(input);
+  if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
   try {
     await sheets.getProject(projectId);
-    return reply.send(cliJsonOutput(await sheets.startAiEdit(projectId, {
+    const result = await sheets.startAiEdit(projectId, {
       userPrompt: prompt,
       mode,
       selectedText: "",
@@ -199,8 +300,13 @@ async function agentRunCliResponse(reply: FastifyReply, sheets: SheetService, in
       selectionType: "write",
       selectionPath: "",
       sessionId: optionalString(input, "session-id"),
-      runtimeProfileId: optionalString(input, "runtime-profile-id"),
-    })));
+      runtimeProfileId: runtimeProfileId.value,
+    });
+    return reply.send(cliJsonOutput({
+      ...result,
+      openTarget: projectOpenTarget(projectId),
+      guidance: finalOpenGuidance("AI Sheet"),
+    }));
   } catch (error) {
     return sendCliError(reply, cliErrorStatus(error), "agent_run_failed", errorMessage(error));
   }
@@ -220,6 +326,28 @@ function optionalString(input: Record<string, unknown>, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+async function runtimeProfileIdFromCliInput(input: Record<string, unknown>): Promise<{ value?: string; error?: string }> {
+  const provider = optionalString(input, "provider");
+  if (!provider) {
+    const runtimeProfileId = optionalString(input, "runtime-profile-id");
+    if (runtimeProfileId) return { value: runtimeProfileId };
+    return { value: await defaultRuntimeProfileIdFromTuttiCli() };
+  }
+  return runtimeProfileIdFromProvider(provider);
+}
+
+async function defaultRuntimeProfileIdFromTuttiCli() {
+  const provider = await getDefaultAgentProvider().catch(() => undefined);
+  return provider ? runtimeProfileIdFromProvider(provider).value : undefined;
+}
+
+function runtimeProfileIdFromProvider(provider: string): { value?: string; error?: string } {
+  const normalized = provider.toLowerCase().replace(/[\s_]+/g, "-");
+  if (normalized === "codex") return { value: "local-agent:codex" };
+  if (normalized === "claude" || normalized === "claude-code") return { value: "local-agent:claude" };
+  return { error: "provider must be codex or claude-code" };
+}
+
 function normalizeMessageRole(value: unknown): "user" | "assistant" | null {
   if (value === "user" || value === "assistant") return value;
   return null;
@@ -231,22 +359,55 @@ function normalizeAiMode(value: unknown): AiEditMode | null {
   return null;
 }
 
-async function openSheetCliOutput(
+function openSheetCliOutput(
   sheets: SheetService,
   input: { sourcePath: string; project: SheetProject; artifact: SheetArtifact },
-): Promise<OpenSheetCliResponse> {
-  const route = projectRoute(input.project.id);
+): OpenSheetCliResponse {
   return {
     ok: true,
     action: "imported",
     sourcePath: input.sourcePath,
     project: input.project,
     artifact: input.artifact,
-    route,
-    url: `${appBaseUrl()}${route}`,
+    openTarget: projectOpenTarget(input.project.id),
     workspace: sheets.projectWorkspaceContext(input.project.id, input.artifact),
-    tuttiAppOpen: await openTuttiAppRoute(appId(), route),
   };
+}
+
+async function openProjectCliOutput(project: SheetProject) {
+  const route = projectRoute(project.id);
+  const appOpen = await openTuttiAppRoute(appId(), route);
+  if (appOpen.error) {
+    throw new Error(appOpen.error);
+  }
+  return {
+    ok: true,
+    project: projectSummary(project),
+    openRequested: true,
+    openTarget: projectOpenTarget(project.id),
+    tuttiAppOpen: appOpen,
+  };
+}
+
+function projectOpenTarget(projectId: string) {
+  return {
+    kind: "tutti-cli-command" as const,
+    appId: appId(),
+    directOpenSupported: true as const,
+    label: "Open in AI Sheet",
+    projectId,
+    userFacing: false as const,
+    command: {
+      scope: "sheet",
+      path: ["projects", "open"],
+      input: { "project-id": projectId },
+      display: `sheet projects open --project-id ${projectId}`,
+    },
+  };
+}
+
+function finalOpenGuidance(appName: string) {
+  return `Do not display openTarget internals or any raw app route as a user-facing link. When the task is complete, tell the user they can view the result in ${appName} and ask whether they want you to open it directly. If they confirm, call the returned openTarget command.`;
 }
 
 function projectSummary(project: SheetProject) {
@@ -260,20 +421,49 @@ function projectSummary(project: SheetProject) {
   };
 }
 
+function modificationGuidance(scope: "sheet") {
+  return `To modify project content through CLI, start an app-owned agent edit with ${scope} agent edit. Do not write raw content updates through external CLI commands.`;
+}
+
+async function listWorkspaceFiles(workspaceRoot: string, relativeDir: string) {
+  const root = join(workspaceRoot, relativeDir);
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const files = await Promise.all(entries
+    .filter((entry) => entry.isFile())
+    .map(async (entry) => {
+      const absolutePath = join(root, entry.name);
+      const info = await stat(absolutePath).catch(() => null);
+      return {
+        fileName: entry.name,
+        path: absolutePath,
+        relativePath: `${relativeDir}/${entry.name}`.split("\\").join("/"),
+        sizeBytes: info?.size ?? null,
+        mtimeMs: info ? Math.trunc(info.mtimeMs) : null,
+        mimeType: mimeTypeForFileName(entry.name),
+      };
+    }));
+  return files.sort((left, right) => String(left.fileName).localeCompare(String(right.fileName)));
+}
+
+function mimeTypeForFileName(fileName: string) {
+  const extension = extname(fileName).slice(1).toLowerCase();
+  if (extension === "xlsx") return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (extension === "csv") return "text/csv";
+  if (extension === "tsv") return "text/tab-separated-values";
+  if (extension === "pdf") return "application/pdf";
+  if (extension === "png") return "image/png";
+  if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
+  if (extension === "svg") return "image/svg+xml";
+  if (extension === "webp") return "image/webp";
+  return "application/octet-stream";
+}
+
 function projectRoute(projectId: string) {
   return `/sheet/${encodeURIComponent(projectId)}`;
 }
 
 function appId() {
   return process.env.TUTTI_APP_ID?.trim() || "ai-sheet";
-}
-
-function appBaseUrl() {
-  const configured = process.env.AI_SHEET_SERVER_URL?.trim();
-  if (configured) return configured.replace(/\/+$/g, "");
-  const host = process.env.HOST?.trim() || "127.0.0.1";
-  const port = process.env.PORT?.trim() || "8792";
-  return `http://${host}:${port}`;
 }
 
 function cliErrorStatus(error: unknown) {
