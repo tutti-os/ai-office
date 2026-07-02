@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -12,6 +13,13 @@ const packageRoot = path.join(buildRoot, "package");
 const serverRequire = createRequire(path.join(appDir, "server", "package.json"));
 const formulaCalcAssetDir = path.dirname(serverRequire.resolve("@tutti-os/office-formula-calc/ooxml-calc/tsh_ooxml_calc.js"));
 const formulaCalcWorkerEntry = path.join(formulaCalcAssetDir, "..", "worker.js");
+const colorfulSheetIconPath = path.join(
+  rootDir,
+  "tooling",
+  "tutti",
+  "assets",
+  "ai-sheet-sheet-colorful.png",
+);
 
 const APP_ID = "ai-sheet";
 
@@ -45,13 +53,10 @@ exec "$node_bin" "$package_dir/server/server.js"
 }
 
 export function renderIcon() {
+  const colorfulSheetIcon = readFileSync(colorfulSheetIconPath).toString("base64");
+
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="AI Sheet">
-  <rect width="1024" height="1024" rx="208" fill="#E8F4EE"/>
-  <rect x="190" y="206" width="644" height="612" rx="48" fill="#FFFFFF" stroke="#1F2933" stroke-width="36"/>
-  <path d="M190 344h644M190 484h644M190 624h644M350 206v612M512 206v612M674 206v612" stroke="#1F2933" stroke-width="24"/>
-  <rect x="218" y="236" width="588" height="108" rx="26" fill="#5C6B50"/>
-  <path d="M276 290h168M560 290h184" stroke="#F4EFE6" stroke-width="34" stroke-linecap="round"/>
-  <path d="M718 674l44 22-44 22-22 44-22-44-44-22 44-22 22-44z" fill="#F4A261"/>
+  <image href="data:image/png;base64,${colorfulSheetIcon}" width="1024" height="1024" preserveAspectRatio="xMidYMid meet"/>
 </svg>
 `;
 }
