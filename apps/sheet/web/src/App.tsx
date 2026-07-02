@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hasActiveAgentRun } from "@ai-app/agent/conversation";
 import type { LocalAgentProviderStatus, OfficeCliStatus, ProjectDetailResponse, RuntimeProfile, SheetProject } from "@ai-sheet/shared";
 import {
+  applyProjectCommands,
   cancelRun,
   clearProjectHistory,
   createProject,
@@ -23,6 +24,7 @@ import { SheetViewerScreen } from "./app/SheetViewerScreen";
 import { useAgentConversation } from "./app/useAgentConversation";
 import { useHomeAttachments } from "./app/useHomeAttachments";
 import { XlsxArtifactRuntimeAdapter } from "./artifact/xlsxArtifactAdapter";
+import type { XlsxSelection } from "./artifact/xlsxArtifactAdapter";
 import { useXlsxArtifactRuntime } from "./artifact/useXlsxArtifactRuntime";
 import { useI18n } from "./i18n";
 
@@ -72,8 +74,11 @@ export function App() {
     loading: xlsxLoading,
     error: xlsxError,
     saveState: xlsxSaveState,
+    setSaveState: setXlsxSaveState,
     loadArtifact: loadXlsxArtifact,
     clearArtifact: clearXlsxArtifact,
+    updateSelection: updateXlsxSelection,
+    applyCommand: applyXlsxCommand,
   } = useXlsxArtifactRuntime(xlsxArtifactAdapter);
   const currentProjectId = route.name === "sheet" ? route.projectId : null;
   const agentConversation = useAgentConversation({
@@ -244,6 +249,45 @@ export function App() {
     }
   }, [agentConversation, currentProjectId, selectedAgent, t, xlsxArtifactAdapter, xlsxRuntime]);
 
+  const commitCellValue = useCallback(async (input: { address: string; input: string; sheetId: string; sheetName: string }) => {
+    if (!currentProjectId || !projectDetail) throw new Error(t("error.projectNotOpen"));
+    if (!xlsxRuntime?.editor) throw new Error(t("error.runtimeNotReady"));
+    const command = {
+      type: "set-cell-value" as const,
+      address: input.address,
+      input: input.input,
+      sheetId: input.sheetId,
+      sheetName: input.sheetName,
+    };
+    setError("");
+    setXlsxSaveState("saving");
+    try {
+      applyXlsxCommand(command);
+      const detail = await applyProjectCommands(currentProjectId, {
+        baseRevision: projectDetail.artifact.revision,
+        baseSha256: projectDetail.xlsxManifest?.sha256 ?? null,
+        commands: [command],
+      });
+      setProjectDetail(detail);
+      setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
+      if (detail.xlsxManifest) {
+        await loadXlsxArtifact(detail.project.id, {
+          title: detail.project.title,
+          manifest: detail.xlsxManifest,
+        });
+      }
+      setXlsxSaveState("saved");
+    } catch (err) {
+      setXlsxSaveState("error");
+      setError(err instanceof Error ? err.message : String(err));
+      throw err;
+    }
+  }, [applyXlsxCommand, currentProjectId, loadXlsxArtifact, projectDetail, setXlsxSaveState, t, xlsxRuntime?.editor]);
+
+  const selectXlsxCell = useCallback((selection: XlsxSelection) => {
+    updateXlsxSelection(selection);
+  }, [updateXlsxSelection]);
+
   const cancelAgentRun = useCallback(async (runId: string) => {
     setError("");
     try {
@@ -345,12 +389,14 @@ export function App() {
         runtimeProfiles={runtimeProfiles}
         selectedRuntimeProfileId={selectedAgent}
         sending={agentBusy}
+        onCommitCellValue={commitCellValue}
         onBackHome={() => setRoute(pushHomeRoute())}
         onCancelAgentRun={cancelAgentRun}
         onDismissExport={() => setExportMessage("")}
         onExportXlsx={exportXlsx}
         onOpenExportLocation={openExports}
         onRuntimeProfileChange={setSelectedAgent}
+        onSelectionChange={selectXlsxCell}
         onSendPrompt={sendAgentPrompt}
       />
     );

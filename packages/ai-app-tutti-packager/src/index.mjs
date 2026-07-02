@@ -15,6 +15,7 @@ export async function packageTuttiApp(options) {
     webDistDir,
     serverEntry,
     serverBundleOutfile = path.join(path.relative(rootDir, packageRoot), "server", "server.js"),
+    serverExtraEntries = [],
     manifestFile = "tutti.app.json",
     manifestSchemaVersion = "tutti.app.manifest.v1",
     cliManifestFile = null,
@@ -50,6 +51,13 @@ export async function packageTuttiApp(options) {
     packageAssets,
   });
   await bundleServer({ rootDir, serverEntry, serverBundleOutfile });
+  for (const entry of serverExtraEntries) {
+    await bundleServer({
+      rootDir,
+      serverEntry: entry.entry,
+      serverBundleOutfile: entry.outfile,
+    });
+  }
   await validatePackageRoot(packageRoot, {
     appId,
     manifestFile,

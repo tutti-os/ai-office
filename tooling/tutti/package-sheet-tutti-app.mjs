@@ -1,4 +1,5 @@
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { packageTuttiApp as packageSharedTuttiApp } from "@ai-app/tutti-packager";
 import { createArtifactCliManifest, renderArtifactCommandsGuide } from "./cli-manifests.mjs";
@@ -6,6 +7,11 @@ import { createArtifactCliManifest, renderArtifactCommandsGuide } from "./cli-ma
 const scriptPath = fileURLToPath(import.meta.url);
 const rootDir = path.resolve(path.dirname(scriptPath), "../..");
 const appDir = path.join(rootDir, "apps", "sheet");
+const buildRoot = path.join(rootDir, "build", "tutti-sheet-app");
+const packageRoot = path.join(buildRoot, "package");
+const serverRequire = createRequire(path.join(appDir, "server", "package.json"));
+const formulaCalcAssetDir = path.dirname(serverRequire.resolve("@tutti-os/office-formula-calc/ooxml-calc/tsh_ooxml_calc.js"));
+const formulaCalcWorkerEntry = path.join(formulaCalcAssetDir, "..", "worker.js");
 
 const APP_ID = "ai-sheet";
 
@@ -26,6 +32,7 @@ export AI_SHEET_RUNTIME_ROOT="\${TUTTI_APP_RUNTIME_DIR:-$AI_SHEET_HOME/.runtime}
 export AI_SHEET_LOG_ROOT="\${TUTTI_APP_LOG_DIR:-$AI_SHEET_RUNTIME_ROOT/logs}"
 export AI_SHEET_WORKSPACE_ROOT="\${TUTTI_WORKSPACE_ROOT:-$AI_SHEET_HOME}"
 export AI_SHEET_TUTTI_CLI="\${TUTTI_CLI:-}"
+export TSH_OOXML_CALC_WASM_JS="\${TSH_OOXML_CALC_WASM_JS:-$package_dir/assets/office-formula-calc/tsh_ooxml_calc.js}"
 
 base_url="\${TUTTI_APP_BASE_URL:-http://$HOST:$PORT}"
 export AI_SHEET_SERVER_URL="$base_url"
@@ -63,6 +70,7 @@ This package runs AI Sheet as a local Tutti workspace app.
 - Runtime scratch data is stored under \`AI_SHEET_RUNTIME_ROOT\`.
 - Backend logs, if added later, must stay under \`AI_SHEET_LOG_ROOT\`.
 - OfficeCLI auto-install uses the shared AI Office toolchain cache, not \`AI_SHEET_HOME\`; override with \`AI_SHEET_OFFICECLI_PATH\`, \`TUTTI_APP_OFFICECLI_PATH\`, or an \`*_OFFICECLI_INSTALL_ROOT\` env var.
+- Formula recalculation runs through \`@tutti-os/office-formula-calc\`, the packaged \`server/worker.js\`, and the packaged \`assets/office-formula-calc/tsh_ooxml_calc.js\` wasm module; override with \`TSH_OOXML_CALC_WASM_JS\` for development.
 - AI Sheet renders XLSX directly. The editable source file for a project is \`workbook.xlsx\` under the app-owned project workspace.
 - Use \`AI_SHEET_TUTTI_CLI\` for app-to-app calls. It is populated from \`TUTTI_CLI\` by \`bootstrap.sh\`.
 - The \`sheet open\` command imports a file and returns the focused workbook path, project \`AGENTS.md\` path, and an internal \`openTarget\` command. It does not open the app automatically; use \`sheet projects open\` only after the user confirms they want AI Sheet opened directly.
@@ -82,16 +90,29 @@ export async function packageTuttiApp() {
     appId: APP_ID,
     rootDir,
     appDir,
-    buildRoot: path.join(rootDir, "build", "tutti-sheet-app"),
-    packageRoot: path.join(rootDir, "build", "tutti-sheet-app", "package"),
+    buildRoot,
+    packageRoot,
     versionEnvVar: "AI_SHEET_TUTTI_APP_VERSION",
     webBuildFilter: "@ai-sheet/web",
     webDistDir: path.join(appDir, "web", "dist"),
     serverEntry: "apps/sheet/server/src/main.ts",
+    serverExtraEntries: [
+      {
+        entry: formulaCalcWorkerEntry,
+        outfile: path.join(path.relative(rootDir, packageRoot), "server", "worker.js"),
+      },
+    ],
     cliManifestFile: "tutti.cli.json",
     cliManifest: createArtifactCliManifest("sheet"),
     commandsGuide: renderArtifactCommandsGuide("sheet"),
-    packageAssets: [{ source: path.join(appDir, "locales"), target: "locales", required: true }],
+    packageAssets: [
+      { source: path.join(appDir, "locales"), target: "locales", required: true },
+      {
+        source: process.env.AI_SHEET_CALC_WASM_ASSET_DIR || formulaCalcAssetDir,
+        target: "assets/office-formula-calc",
+        required: true,
+      },
+    ],
     renderBootstrap,
     renderIcon,
     renderPackageGuide,

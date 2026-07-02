@@ -42,7 +42,10 @@ export function useXlsxArtifactRuntime(adapter: XlsxArtifactRuntimeAdapter) {
           case "set-cell-value": {
             const point = pointFromCellAddress(command.address);
             if (!point) throw new Error(`Invalid cell address: ${command.address}`);
-            const patch = current.editor.setCellValue(point.row, point.col, command.input, command.sheetId);
+            const formula = formulaInput(command.input);
+            const patch = formula
+              ? current.editor.setCellFormula(point.row, point.col, formula, command.sheetId)
+              : current.editor.setCellValue(point.row, point.col, command.input, command.sheetId);
             applied = true;
             return {
               ...current,
@@ -59,12 +62,16 @@ export function useXlsxArtifactRuntime(adapter: XlsxArtifactRuntimeAdapter) {
           }
         }
       });
-      if (!applied) throw new Error("XLSX runtime is not ready.");
     },
     [runtime],
   );
 
   return { ...runtime, applyCommand };
+}
+
+function formulaInput(input: string) {
+  const value = input.trimStart();
+  return value.startsWith("=") ? value.slice(1) : "";
 }
 
 function pointFromCellAddress(address: string) {

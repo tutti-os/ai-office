@@ -5,7 +5,7 @@ import { AgentConversationPanel } from "./AgentConversationPanel";
 import { XlsxPreview } from "./XlsxPreview";
 import { artifactEditorCopy } from "../i18n/copy";
 import { useI18n } from "../i18n";
-import type { XlsxRuntimeState } from "../artifact/xlsxArtifactAdapter";
+import type { XlsxRuntimeState, XlsxSelection } from "../artifact/xlsxArtifactAdapter";
 
 export function SheetViewerScreen(props: {
   detail: ProjectDetailResponse;
@@ -22,10 +22,12 @@ export function SheetViewerScreen(props: {
   runtimeProfiles: RuntimeProfile[];
   selectedRuntimeProfileId: string;
   sending: boolean;
+  onCommitCellValue: (input: { address: string; input: string; sheetId: string; sheetName: string }) => Promise<void>;
   onBackHome: () => void;
   onCancelAgentRun: (runId: string) => Promise<void>;
   onExportXlsx: () => void | Promise<void>;
   onOpenExportLocation: () => void;
+  onSelectionChange: (selection: XlsxSelection) => void;
   onRuntimeProfileChange: (profileId: string) => void;
   onDismissExport: () => void;
   onSendPrompt: (prompt: string) => Promise<void>;
@@ -68,7 +70,7 @@ export function SheetViewerScreen(props: {
         <AgentConversationPanel
           activeSelectionLabel={t("agent.activeSelection")}
           activeSelectionText={activeSelectionText}
-          activeSelectionVisible={false}
+          activeSelectionVisible={Boolean(activeSelectionText)}
           artifactLabel="xlsx"
           dirty={false}
           error={props.conversationError || props.error}
@@ -85,7 +87,16 @@ export function SheetViewerScreen(props: {
         />
       }
     >
-      <XlsxPreview workbook={props.runtime?.renderWorkbook ?? null} loading={props.loading} error={props.error} />
+      <XlsxPreview
+        workbook={props.runtime?.renderWorkbook ?? null}
+        selection={props.runtime?.selection ?? null}
+        editingReady={Boolean(props.runtime?.editor)}
+        loading={props.loading}
+        error={props.error}
+        saving={props.saveState === "saving"}
+        onCommitCellValue={props.onCommitCellValue}
+        onSelectionChange={props.onSelectionChange}
+      />
     </ArtifactEditorWorkspace>
   );
 }

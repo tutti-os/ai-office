@@ -12,6 +12,7 @@ import { EventHub } from "../ws/event-hub.js";
 import { SheetRepository } from "./sheet-repository.js";
 import { XlsxStorageAdapter } from "./xlsx-storage-adapter.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
+import type { XlsxDirtyCell, XlsxFormulaCalcResult } from "./xlsx-formula-calculator.js";
 
 export class SheetService {
   private readonly runtimes = createRuntimeProviderRegistry();
@@ -58,11 +59,13 @@ export class SheetService {
       await this.storage.createBlankWorkbook({
         workbookPath: this.repo.xlsxFilePath(result.project.id),
       });
+      const calc = await this.recalculateProjectWorkbook(result.project.id, { forceFullRecalc: true });
       const refresh = await this.repo.refreshXlsxArtifactFromFile(result.project.id, "system");
       const detail = {
         ...result,
         artifact: refresh.artifact,
         xlsxManifest: refresh.manifest,
+        calc,
       };
       this.events.emit({ type: "project.created", projectId: result.project.id, payload: detail });
       return detail;
@@ -82,18 +85,28 @@ export class SheetService {
       sourcePath,
       title: input.title,
     });
-    this.events.emit({ type: "project.created", projectId: result.project.id, payload: result });
-    return { ...result, sourcePath };
+    const calc = await this.recalculateProjectWorkbook(result.project.id, { forceFullRecalc: true });
+    await this.repo.refreshXlsxArtifactFromFile(result.project.id, "system");
+    const refreshed = await this.getProject(result.project.id, { recalculate: false });
+    const payload = { ...refreshed, sourcePath, calc };
+    this.events.emit({ type: "project.created", projectId: result.project.id, payload });
+    return payload;
   }
 
   async importXlsxProjectFile(input: { fileName: string; bytes: Buffer; title?: string }) {
     await requireOfficeCli();
     const result = await this.repo.importXlsxProjectFromBytes(input);
-    this.events.emit({ type: "project.created", projectId: result.project.id, payload: result });
-    return result;
+    const calc = await this.recalculateProjectWorkbook(result.project.id, { forceFullRecalc: true });
+    await this.repo.refreshXlsxArtifactFromFile(result.project.id, "system");
+    const refreshed = await this.getProject(result.project.id, { recalculate: false });
+    const payload = { ...refreshed, calc };
+    this.events.emit({ type: "project.created", projectId: result.project.id, payload });
+    return payload;
   }
 
-  async getProject(projectId: string) {
+  async getProject(projectId: string, options: { recalculate?: boolean } = {}) {
+    const calc = options.recalculate === false ? null : await this.recalculateProjectWorkbook(projectId, { forceFullRecalc: true });
+    if (calc?.changed) await this.repo.refreshXlsxArtifactFromFile(projectId, "system");
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
     const artifact = this.repo.getArtifact(project.activeArtifactId);
@@ -101,6 +114,7 @@ export class SheetService {
     return {
       project,
       artifact,
+      ...(calc ? { calc } : {}),
       xlsxManifest: await this.repo.readXlsxManifest(projectId),
     };
   }
@@ -276,7 +290,7 @@ export class SheetService {
 
   async applyCommands(projectId: string, input: ApplySheetCommandsRequest) {
     if (!Array.isArray(input.commands) || input.commands.length === 0) throw new Error("At least one sheet command is required");
-    const detail = await this.getProject(projectId);
+    const detail = await this.getProject(projectId, { recalculate: false });
     if (input.baseRevision !== detail.artifact.revision) throw new Error("Stale workbook revision. Refresh and try again.");
     if (input.baseSha256 && detail.xlsxManifest?.sha256 && input.baseSha256 !== detail.xlsxManifest.sha256) {
       throw new Error("Stale workbook file. Refresh and try again.");
@@ -286,12 +300,16 @@ export class SheetService {
       commands: input.commands,
       workbookPath: this.repo.xlsxFilePath(projectId),
     });
+    const calc = await this.recalculateProjectWorkbook(projectId, {
+      dirtyCells: dirtyCellsFromCommands(input.commands),
+    });
     const refresh = await this.repo.refreshXlsxArtifactFromFile(projectId, "human");
-    const updated = await this.getProject(projectId);
+    const updated = await this.getProject(projectId, { recalculate: false });
     const result = {
       ...updated,
       applied: input.commands.length,
       xlsxManifest: refresh.manifest,
+      calc,
     };
     this.events.emit({ type: "project.updated", projectId, payload: result });
     return result;
@@ -326,7 +344,7 @@ export class SheetService {
       },
       complete: async ({ generatedText }) => {
         if (!refreshedArtifact) await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
-        const detail = await this.getProject(runtimeProject.id);
+        const detail = await this.getProject(runtimeProject.id, { recalculate: false });
         const currentRun = this.repo.getRun(runId);
         if (currentRun && !["accepted", "running"].includes(currentRun.status)) return;
         const finalRun = this.repo.updateRun(runId, {
@@ -362,12 +380,23 @@ export class SheetService {
   }
 
   private async refreshArtifactFromWorkspace(projectId: string, runId: string | undefined, previousFingerprint: string) {
+    const calc = await this.recalculateProjectWorkbook(projectId, { forceFullRecalc: true });
     const refresh = await this.repo.refreshXlsxArtifactFromFile(projectId, "ai");
     const fingerprint = await this.workspaceFingerprint(projectId);
     if (!refresh.changed && fingerprint === previousFingerprint) return { changed: false, fingerprint };
-    const updated = await this.getProject(projectId);
-    this.events.emit({ type: "project.updated", projectId, runId, payload: updated });
+    const updated = await this.getProject(projectId, { recalculate: false });
+    this.events.emit({ type: "project.updated", projectId, runId, payload: { ...updated, calc } });
     return { changed: true, fingerprint };
+  }
+
+  private async recalculateProjectWorkbook(projectId: string, options: { dirtyCells?: XlsxDirtyCell[]; forceFullRecalc?: boolean }) {
+    const calc = await this.storage.recalculateWorkbook({
+      workbookPath: this.repo.xlsxFilePath(projectId),
+      dirtyCells: options.dirtyCells,
+      forceFullRecalc: options.forceFullRecalc,
+    });
+    if (calc.status === "error") throw new Error(`XLSX formula calculation failed: ${JSON.stringify(calc.diagnostics ?? [])}`);
+    return calc;
   }
 
   private async workspaceFingerprint(projectId: string) {
@@ -403,6 +432,19 @@ function conversationMessageMetadata(request: AiEditRequest) {
     selectionType: request.selectionType ?? "write",
     selectedText: request.selectedText ?? "",
   };
+}
+
+function dirtyCellsFromCommands(commands: ApplySheetCommandsRequest["commands"]) {
+  const dirtyCells: XlsxDirtyCell[] = [];
+  for (const command of commands) {
+    if (command.type === "set-cell-value") {
+      dirtyCells.push({
+        sheetName: command.sheetName || command.sheetId,
+        address: command.address,
+      });
+    }
+  }
+  return dirtyCells;
 }
 
 function assistantConversationContent(runtimeProfile: RuntimeProfile, generatedText: string, resultPreview: string) {

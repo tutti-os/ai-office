@@ -2,10 +2,13 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { SheetCommand } from "@ai-sheet/shared";
 import { officeCliEnv, requireOfficeCli } from "../toolchains/officecli.js";
+import { XlsxFormulaCalculator, type XlsxDirtyCell, type XlsxFormulaCalcResult } from "./xlsx-formula-calculator.js";
 
 const execFileAsync = promisify(execFile);
 
 export class XlsxStorageAdapter {
+  constructor(private readonly calculator = new XlsxFormulaCalculator({ useWorker: true })) {}
+
   async createBlankWorkbook(input: { workbookPath: string }) {
     const status = await requireOfficeCli();
     if (!status.executablePath) throw new Error("OfficeCLI executable path is missing.");
@@ -23,13 +26,27 @@ export class XlsxStorageAdapter {
         case "set-cell-value":
           await execFileAsync(
             status.executablePath,
-            ["set", input.workbookPath, cellPath(command), "--prop", `value=${command.input}`, "--json"],
+            ["set", input.workbookPath, cellPath(command), "--prop", cellInputProp(command.input), "--json"],
             { env, timeout: 30_000 },
           );
           break;
       }
     }
   }
+
+  async recalculateWorkbook(input: {
+    workbookPath: string;
+    dirtyCells?: XlsxDirtyCell[];
+    forceFullRecalc?: boolean;
+  }): Promise<XlsxFormulaCalcResult> {
+    return this.calculator.calculateFile(input);
+  }
+}
+
+function cellInputProp(input: string) {
+  const value = input.trimStart();
+  if (value.startsWith("=")) return `formula=${value.slice(1)}`;
+  return `value=${input}`;
 }
 
 function cellPath(command: Extract<SheetCommand, { type: "set-cell-value" }>) {
