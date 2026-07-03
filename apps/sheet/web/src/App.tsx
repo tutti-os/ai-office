@@ -66,6 +66,7 @@ export function App() {
   const [error, setError] = useState("");
   const [exportMessage, setExportMessage] = useState("");
   const [xlsxExporting, setXlsxExporting] = useState(false);
+  const [xlsxSelectionRestoreKey, setXlsxSelectionRestoreKey] = useState(0);
   const routeRef = useRef(route);
   const xlsxSelectionRef = useRef<XlsxSelection | null>(null);
   const homeAttachments = useHomeAttachments();
@@ -85,11 +86,15 @@ export function App() {
   const loadProjectXlsxArtifact = useCallback(
     async (detail: ProjectDetailResponse, options: { preserveSelection?: boolean } = {}) => {
       if (!detail.xlsxManifest) return null;
-      return loadXlsxArtifact(detail.project.id, {
+      const runtime = await loadXlsxArtifact(detail.project.id, {
         title: detail.project.title,
         manifest: detail.xlsxManifest,
         selection: options.preserveSelection ? xlsxSelectionRef.current : null,
       });
+      if (options.preserveSelection) {
+        setXlsxSelectionRestoreKey((key) => key + 1);
+      }
+      return runtime;
     },
     [loadXlsxArtifact],
   );
@@ -400,6 +405,7 @@ export function App() {
         localAgentProviders={localAgentProviders}
         runtimeProfiles={runtimeProfiles}
         selectedRuntimeProfileId={selectedAgent}
+        selectionRestoreKey={xlsxSelectionRestoreKey}
         sending={agentBusy}
         onCommitCellValue={commitCellValue}
         onBackHome={() => setRoute(pushHomeRoute())}

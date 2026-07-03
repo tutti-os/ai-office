@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { scrollbarClass } from "@ai-app/ui/app-shell";
-import { cellAddressFromPoint, XlsxRenderer, type XlsxRendererActiveSheet, type XlsxRendererGeometry, type XlsxRendererSelection } from "@tutti-os/office-preview/xlsx";
+import {
+  cellAddressFromPoint,
+  XlsxRenderer,
+  type XlsxRendererActiveSheet,
+  type XlsxRendererFocusSelection,
+  type XlsxRendererGeometry,
+  type XlsxRendererSelection,
+} from "@tutti-os/office-preview/xlsx";
 import "@tutti-os/office-preview/styles/xlsx.css";
 import type { SpreadsheetRenderWorkbook } from "@tutti-os/office-preview/xlsx";
 import { useI18n } from "../i18n";
@@ -31,6 +38,7 @@ type FormulaRangeDrag = {
 export function XlsxPreview(props: {
   workbook: SpreadsheetRenderWorkbook | null;
   selection: XlsxSelection | null;
+  selectionRestoreKey: number;
   editingReady: boolean;
   loading: boolean;
   error: string;
@@ -41,10 +49,6 @@ export function XlsxPreview(props: {
   const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const restoreTargetRef = useRef<{
-    point: { col: number; row: number };
-    sheet: SpreadsheetRenderWorkbook["sheets"][number];
-  } | null>(null);
   const formulaDragRef = useRef<FormulaRangeDrag | null>(null);
   const suppressFormulaSelectionRef = useRef(false);
   const [draft, setDraft] = useState("");
@@ -97,6 +101,17 @@ export function XlsxPreview(props: {
       sheet,
     };
   }, [props.selection?.address, props.selection?.sheetId, props.selection?.sheetName, props.workbook]);
+  const focusSelection = useMemo<XlsxRendererFocusSelection | null>(() => {
+    if (props.selectionRestoreKey <= 0 || !restoreTarget) return null;
+    return {
+      col: restoreTarget.point.col,
+      key: props.selectionRestoreKey,
+      row: restoreTarget.point.row,
+      scrollIntoView: true,
+      sheetId: restoreTarget.sheet.id,
+      sheetName: restoreTarget.sheet.name,
+    };
+  }, [props.selectionRestoreKey, restoreTarget]);
 
   useEffect(() => {
     if (editing) return;
@@ -108,28 +123,8 @@ export function XlsxPreview(props: {
   }, [draft.length, editing]);
 
   useEffect(() => {
-    restoreTargetRef.current = restoreTarget;
-  }, [restoreTarget]);
-
-  useEffect(() => {
     formulaDragRef.current = formulaDrag;
   }, [formulaDrag]);
-
-  useEffect(() => {
-    const root = rootRef.current;
-    const target = restoreTargetRef.current;
-    if (!root || !target) return;
-    let nextFrame = 0;
-    const frame = window.requestAnimationFrame(() => {
-      nextFrame = window.requestAnimationFrame(() => {
-        restoreRendererSelection(root, target);
-      });
-    });
-    return () => {
-      window.cancelAnimationFrame(frame);
-      if (nextFrame) window.cancelAnimationFrame(nextFrame);
-    };
-  }, [props.workbook]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -374,6 +369,7 @@ export function XlsxPreview(props: {
         }}
       >
         <XlsxRenderer
+          focusSelection={focusSelection}
           workbook={props.workbook}
           onActiveSheetChange={updateActiveSheet}
           onGeometryChange={setRendererGeometry}
@@ -659,103 +655,6 @@ function columnNameToIndex(name: string) {
     index = index * 26 + char.charCodeAt(0) - 64;
   }
   return index - 1;
-}
-
-function restoreRendererSelection(
-  root: HTMLElement,
-  target: {
-    point: { col: number; row: number };
-    sheet: SpreadsheetRenderWorkbook["sheets"][number];
-  },
-) {
-  const scroll = root.querySelector<HTMLElement>(".tsh-xlsx-canvas-scroll");
-  const canvas = root.querySelector<HTMLCanvasElement>(".tsh-xlsx-interaction-canvas");
-  if (!scroll || !canvas) return;
-  const column = columnAt(target.sheet, target.point.col);
-  const row = rowAt(target.sheet, target.point.row);
-  if (!column || !row) return;
-
-  const frozenWidth = spanColumnWidth(target.sheet, 0, target.sheet.freeze?.colCount ?? 0);
-  const frozenHeight = spanRowHeight(target.sheet, 0, target.sheet.freeze?.rowCount ?? 0);
-  const rowHeaderWidth = target.sheet.showHeaders ? ROW_HEADER_WIDTH_PX : 0;
-  const columnHeaderHeight = target.sheet.showHeaders ? COLUMN_HEADER_HEIGHT_PX : 0;
-  const rect = canvas.getBoundingClientRect();
-  if (!cellCenterIsVisible({
-    column,
-    columnHeaderHeight,
-    frozenHeight,
-    frozenWidth,
-    rect,
-    row,
-    rowHeaderWidth,
-    scroll,
-  })) {
-    const left = Math.max(0, column.xPx - frozenWidth);
-    const top = Math.max(0, row.yPx - frozenHeight);
-    scroll.scrollTo({ left, top });
-  }
-
-  window.requestAnimationFrame(() => {
-    const gridX = column.xPx < frozenWidth ? column.xPx : column.xPx - scroll.scrollLeft;
-    const gridY = row.yPx < frozenHeight ? row.yPx : row.yPx - scroll.scrollTop;
-    const x = rowHeaderWidth + gridX + Math.max(1, column.widthPx / 2);
-    const y = columnHeaderHeight + gridY + Math.max(1, row.heightPx / 2);
-    const nextRect = canvas.getBoundingClientRect();
-    if (x < rowHeaderWidth || y < columnHeaderHeight || x > nextRect.width || y > nextRect.height) return;
-    canvas.dispatchEvent(new MouseEvent("click", {
-      bubbles: true,
-      cancelable: true,
-      clientX: nextRect.left + x,
-      clientY: nextRect.top + y,
-      view: window,
-    }));
-  });
-}
-
-function cellCenterIsVisible(input: {
-  column: { widthPx: number; xPx: number };
-  columnHeaderHeight: number;
-  frozenHeight: number;
-  frozenWidth: number;
-  rect: DOMRect;
-  row: { heightPx: number; yPx: number };
-  rowHeaderWidth: number;
-  scroll: HTMLElement;
-}) {
-  const gridX = input.column.xPx < input.frozenWidth
-    ? input.column.xPx
-    : input.column.xPx - input.scroll.scrollLeft;
-  const gridY = input.row.yPx < input.frozenHeight
-    ? input.row.yPx
-    : input.row.yPx - input.scroll.scrollTop;
-  const centerX = input.rowHeaderWidth + gridX + Math.max(1, input.column.widthPx / 2);
-  const centerY = input.columnHeaderHeight + gridY + Math.max(1, input.row.heightPx / 2);
-  return centerX >= input.rowHeaderWidth
-    && centerY >= input.columnHeaderHeight
-    && centerX <= input.rect.width
-    && centerY <= input.rect.height;
-}
-
-function columnAt(sheet: SpreadsheetRenderWorkbook["sheets"][number], index: number) {
-  return sheet.columns[index]
-    ?? { index, widthPx: sheet.defaultColumnWidthPx, xPx: sheet.defaultColumnWidthPx * index };
-}
-
-function rowAt(sheet: SpreadsheetRenderWorkbook["sheets"][number], index: number) {
-  return sheet.rows[index]
-    ?? { index, heightPx: sheet.defaultRowHeightPx, yPx: sheet.defaultRowHeightPx * index };
-}
-
-function spanColumnWidth(sheet: SpreadsheetRenderWorkbook["sheets"][number], start: number, count: number) {
-  let width = 0;
-  for (let index = start; index < start + count; index += 1) width += columnAt(sheet, index)?.widthPx ?? 0;
-  return width;
-}
-
-function spanRowHeight(sheet: SpreadsheetRenderWorkbook["sheets"][number], start: number, count: number) {
-  let height = 0;
-  for (let index = start; index < start + count; index += 1) height += rowAt(sheet, index)?.heightPx ?? 0;
-  return height;
 }
 
 function normalizeWheelDeltaX(event: WheelEvent, pageWidth: number) {

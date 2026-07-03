@@ -21,6 +21,7 @@ export function SheetViewerScreen(props: {
   localAgentProviders: LocalAgentProviderStatus[];
   runtimeProfiles: RuntimeProfile[];
   selectedRuntimeProfileId: string;
+  selectionRestoreKey: number;
   sending: boolean;
   onCommitCellValue: (input: { address: string; input: string; sheetId: string; sheetName: string }) => Promise<void>;
   onBackHome: () => void;
@@ -90,6 +91,7 @@ export function SheetViewerScreen(props: {
       <XlsxPreview
         workbook={props.runtime?.renderWorkbook ?? null}
         selection={props.runtime?.selection ?? null}
+        selectionRestoreKey={props.selectionRestoreKey}
         editingReady={Boolean(props.runtime?.editor)}
         loading={props.loading}
         error={props.error}
