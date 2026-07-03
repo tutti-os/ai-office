@@ -234,8 +234,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@tutti-os/office-preview':
-        specifier: 0.0.0-test.20260703080907.62401e60c8d2
-        version: 0.0.0-test.20260703080907.62401e60c8d2(react@19.2.7)
+        specifier: 0.0.0-test.20260703082335.62401e60c8d2
+        version: 0.0.0-test.20260703082335.62401e60c8d2(react@19.2.7)
       '@vitejs/plugin-react':
         specifier: ^5.1.1
         version: 5.2.0(vite@7.3.5(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))
@@ -2407,8 +2407,8 @@ packages:
     peerDependencies:
       react: ^19.2.0
 
-  '@tutti-os/office-preview@0.0.0-test.20260703080907.62401e60c8d2':
-    resolution: {integrity: sha512-ybD4n4smsdFZHGJ8IuQAgjw+NFEj5P/7Ut980wuxypCARrf15iMVt88+AaTfmH7+hlJpNrMuJh2SV7d6wQdO+g==}
+  '@tutti-os/office-preview@0.0.0-test.20260703082335.62401e60c8d2':
+    resolution: {integrity: sha512-pXc6EIs97xju+hiCkWuO2EMjM8twCDSKtTLEHIE3lu2Uk0sysobyY/l9UVO+bTueGJ3DLMTnGd6UY3MJusYd8A==}
     peerDependencies:
       react: ^19.2.0
 
@@ -6112,7 +6112,7 @@ snapshots:
     dependencies:
       react: 19.2.7
 
-  '@tutti-os/office-preview@0.0.0-test.20260703080907.62401e60c8d2(react@19.2.7)':
+  '@tutti-os/office-preview@0.0.0-test.20260703082335.62401e60c8d2(react@19.2.7)':
     dependencies:
       react: 19.2.7
 
