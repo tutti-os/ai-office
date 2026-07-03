@@ -67,6 +67,7 @@ export function App() {
   const [exportMessage, setExportMessage] = useState("");
   const [xlsxExporting, setXlsxExporting] = useState(false);
   const routeRef = useRef(route);
+  const xlsxSelectionRef = useRef<XlsxSelection | null>(null);
   const homeAttachments = useHomeAttachments();
   const xlsxArtifactAdapter = useMemo(() => new XlsxArtifactRuntimeAdapter(), []);
   const {
@@ -81,24 +82,34 @@ export function App() {
     applyCommand: applyXlsxCommand,
   } = useXlsxArtifactRuntime(xlsxArtifactAdapter);
   const currentProjectId = route.name === "sheet" ? route.projectId : null;
+  const loadProjectXlsxArtifact = useCallback(
+    async (detail: ProjectDetailResponse, options: { preserveSelection?: boolean } = {}) => {
+      if (!detail.xlsxManifest) return null;
+      return loadXlsxArtifact(detail.project.id, {
+        title: detail.project.title,
+        manifest: detail.xlsxManifest,
+        selection: options.preserveSelection ? xlsxSelectionRef.current : null,
+      });
+    },
+    [loadXlsxArtifact],
+  );
   const agentConversation = useAgentConversation({
     projectId: currentProjectId,
     onProjectUpdated: (detail) => {
       if (detail.project.id !== currentProjectId) return;
       setProjectDetail(detail);
       setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
-      if (detail.xlsxManifest) {
-        void loadXlsxArtifact(detail.project.id, {
-          title: detail.project.title,
-          manifest: detail.xlsxManifest,
-        }).catch(() => undefined);
-      }
+      void loadProjectXlsxArtifact(detail, { preserveSelection: true }).catch(() => undefined);
     },
   });
 
   useEffect(() => {
     routeRef.current = route;
   }, [route]);
+
+  useEffect(() => {
+    xlsxSelectionRef.current = xlsxRuntime?.selection ?? null;
+  }, [xlsxRuntime?.selection]);
 
   useEffect(() => {
     const onPopState = () => setRoute(readCurrentRoute());
@@ -164,16 +175,11 @@ export function App() {
       .then((detail) => {
         setProjectDetail(detail);
         setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
-        if (detail.xlsxManifest) {
-          void loadXlsxArtifact(detail.project.id, {
-            title: detail.project.title,
-            manifest: detail.xlsxManifest,
-          }).catch(() => undefined);
-        }
+        void loadProjectXlsxArtifact(detail).catch(() => undefined);
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false));
-  }, [clearXlsxArtifact, loadXlsxArtifact, route]);
+  }, [clearXlsxArtifact, loadProjectXlsxArtifact, route]);
 
   const importFile = useCallback(async (file: File) => {
     setLoading(true);
@@ -270,12 +276,7 @@ export function App() {
       });
       setProjectDetail(detail);
       setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
-      if (detail.xlsxManifest) {
-        await loadXlsxArtifact(detail.project.id, {
-          title: detail.project.title,
-          manifest: detail.xlsxManifest,
-        });
-      }
+      if (detail.calc?.changed) await loadProjectXlsxArtifact(detail, { preserveSelection: true });
       setXlsxSaveState("saved");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -286,19 +287,14 @@ export function App() {
           const detail = await getProject(currentProjectId);
           setProjectDetail(detail);
           setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
-          if (detail.xlsxManifest) {
-            await loadXlsxArtifact(detail.project.id, {
-              title: detail.project.title,
-              manifest: detail.xlsxManifest,
-            });
-          }
+          await loadProjectXlsxArtifact(detail, { preserveSelection: true });
         } catch {
           // Keep the original stale-save error visible.
         }
       }
       throw err;
     }
-  }, [applyXlsxCommand, currentProjectId, loadXlsxArtifact, projectDetail, setXlsxSaveState, t, xlsxRuntime?.editor]);
+  }, [applyXlsxCommand, currentProjectId, loadProjectXlsxArtifact, projectDetail, setXlsxSaveState, t, xlsxRuntime?.editor]);
 
   const selectXlsxCell = useCallback((selection: XlsxSelection) => {
     updateXlsxSelection(selection);

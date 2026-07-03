@@ -24,6 +24,7 @@ export type XlsxRuntimeState = {
 export type XlsxRuntimeParseInput = {
   title: string;
   manifest: XlsxManifest;
+  selection?: XlsxSelection | null;
 };
 
 export type XlsxAgentEditRequestInput = AgentEditRequestInputBase<XlsxRuntimeState>;
@@ -53,7 +54,7 @@ export class XlsxArtifactRuntimeAdapter
       renderWorkbook: null,
       revision: 0,
       dirty: false,
-      selection: { sheetId: null, sheetName: null, address: "", selectedText: "" },
+      selection: input.selection ?? { sheetId: null, sheetName: null, address: "", selectedText: "" },
     };
   }
 
@@ -64,17 +65,24 @@ export class XlsxArtifactRuntimeAdapter
           workbookSnapshot: preview.workbookSnapshot,
         })
       : null;
-    const renderWorkbook = editor ? editor.renderWorkbook() : (preview?.renderWorkbook ?? null);
-    const activeSheet = renderWorkbook?.sheets[renderWorkbook.activeSheetIndex] ?? renderWorkbook?.sheets[0] ?? null;
+    let renderWorkbook = editor ? editor.renderWorkbook() : (preview?.renderWorkbook ?? null);
+    const selection = renderWorkbook ? selectionForWorkbook(renderWorkbook, runtime.selection) : runtime.selection;
+    const point = pointFromCellAddress(selection.address);
+    if (editor && point && selection.sheetId) {
+      editor.setSelection({
+        activeCell: point,
+        ranges: [{ col: point.col, colSpan: 1, row: point.row, rowSpan: 1 }],
+        sheetId: selection.sheetId,
+      });
+      renderWorkbook = editor.renderWorkbook();
+    }
     return {
       ...runtime,
       editor,
       preview,
       renderWorkbook,
       revision: runtime.revision + 1,
-      selection: activeSheet
-        ? { sheetId: activeSheet.id, sheetName: activeSheet.name, address: "A1", selectedText: "" }
-        : runtime.selection,
+      selection,
     };
   }
 
@@ -116,4 +124,33 @@ export class XlsxArtifactRuntimeAdapter
       selectedHtml: "",
     };
   }
+}
+
+function selectionForWorkbook(renderWorkbook: SpreadsheetRenderWorkbook, selection: XlsxSelection): XlsxSelection {
+  const fallbackSheet = renderWorkbook.sheets[renderWorkbook.activeSheetIndex] ?? renderWorkbook.sheets[0] ?? null;
+  if (!fallbackSheet) return selection;
+  const sheet = renderWorkbook.sheets.find((item) => item.id === selection.sheetId || item.name === selection.sheetName) ?? fallbackSheet;
+  const address = selection.address || "A1";
+  const point = pointFromCellAddress(address);
+  const cell = point ? sheet.cellMap[`${point.row}:${point.col}`] : null;
+  return {
+    sheetId: sheet.id,
+    sheetName: sheet.name,
+    address: point ? address.toUpperCase() : "A1",
+    selectedText: cell?.formula ? `=${cell.formula}` : cell?.clipboardText || cell?.formattedText || selection.selectedText || "",
+  };
+}
+
+function pointFromCellAddress(address: string) {
+  const match = address.trim().match(/^\$?([A-Za-z]+)\$?([1-9]\d*)$/);
+  if (!match) return null;
+  return { col: columnNameToIndex(match[1]), row: Number(match[2]) - 1 };
+}
+
+function columnNameToIndex(name: string) {
+  let index = 0;
+  for (const char of name.trim().toUpperCase()) {
+    index = index * 26 + char.charCodeAt(0) - 64;
+  }
+  return index - 1;
 }

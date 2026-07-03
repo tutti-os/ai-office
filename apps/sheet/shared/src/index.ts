@@ -155,7 +155,13 @@ export interface SheetProjectRecord {
   artifact: SheetArtifact;
 }
 
+export interface XlsxCalculationSummary {
+  changed?: boolean;
+  status?: string;
+}
+
 export interface SheetProjectDetail extends SheetProjectRecord {
+  calc?: XlsxCalculationSummary | null;
   xlsxManifest: XlsxManifest | null;
 }
 
