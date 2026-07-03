@@ -23,6 +23,7 @@ export function SheetViewerScreen(props: {
   selectedRuntimeProfileId: string;
   selectionRestoreKey: number;
   sending: boolean;
+  readOnly: boolean;
   onCommitCellValue: (input: { address: string; input: string; sheetId: string; sheetName: string }) => Promise<void>;
   onBackHome: () => void;
   onCancelAgentRun: (runId: string) => Promise<void>;
@@ -99,6 +100,7 @@ export function SheetViewerScreen(props: {
         selection={props.runtime?.selection ?? null}
         selectionRestoreKey={props.selectionRestoreKey}
         editingReady={Boolean(props.runtime?.editor)}
+        readOnly={props.readOnly}
         loading={props.loading}
         error={props.error}
         saving={props.saveState === "saving"}

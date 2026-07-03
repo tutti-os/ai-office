@@ -48,6 +48,7 @@ export function XlsxPreview(props: {
   selection: XlsxSelection | null;
   selectionRestoreKey: number;
   editingReady: boolean;
+  readOnly: boolean;
   loading: boolean;
   error: string;
   saving: boolean;
@@ -139,6 +140,14 @@ export function XlsxPreview(props: {
     if (editing) return;
     setDraft(activeSelection?.displayText ?? "");
   }, [activeSelection?.activeAddress, activeSelection?.address, activeSelection?.displayText, editing]);
+
+  // While the agent is running the editing surface is read-only: exit any in-progress
+  // cell edit and drop the formula range drag so nothing can be committed.
+  useEffect(() => {
+    if (!props.readOnly) return;
+    setEditing(false);
+    setFormulaDrag(null);
+  }, [props.readOnly]);
 
   useEffect(() => {
     if (!editing) setInputSelection({ end: draft.length, start: draft.length });
@@ -298,7 +307,7 @@ export function XlsxPreview(props: {
   };
 
   const commitDraft = async () => {
-    if (!activeSelection || !props.editingReady || props.saving) return;
+    if (!activeSelection || !props.editingReady || props.saving || props.readOnly) return;
     const nextValue = draft;
     setEditing(false);
     await props.onCommitCellValue({
@@ -328,7 +337,7 @@ export function XlsxPreview(props: {
             className={`relative z-10 h-8 w-full rounded-md border border-[#C9B89D] px-2 text-[13px] outline-none transition focus:border-[#5C6B50] disabled:bg-[#EEE8DC] ${
               formulaMode ? "bg-transparent font-mono text-transparent caret-[#2A2620]" : "bg-white text-[#2A2620]"
             }`}
-            disabled={!activeSelection || !props.editingReady || props.saving}
+            disabled={!activeSelection || !props.editingReady || props.saving || props.readOnly}
             value={draft}
             onBlur={() => {
               if (editing) void commitDraft().catch(() => undefined);

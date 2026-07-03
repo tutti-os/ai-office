@@ -459,6 +459,7 @@ export function App() {
         selectedRuntimeProfileId={selectedAgent}
         selectionRestoreKey={xlsxSelectionRestoreKey}
         sending={agentBusy}
+        readOnly={agentBusy}
         onCommitCellValue={commitCellValue}
         onBackHome={() => setRoute(pushHomeRoute())}
         onCancelAgentRun={cancelAgentRun}
