@@ -11,7 +11,10 @@ jobs:
     name: Production publishing is disabled
     runs-on: ubuntu-latest
     steps:
-      - run: echo "AI Sheet production publishing is disabled. Use the staging workflow instead."
+      - name: Fail production publish
+        run: |
+          echo "::error title=AI Sheet production disabled::AI Sheet production is not supported yet. Please use the staging workflow instead."
+          exit 1
 
 # Production publish is temporarily disabled until AI Sheet is ready.
 #
