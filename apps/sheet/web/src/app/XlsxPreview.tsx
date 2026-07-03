@@ -41,6 +41,10 @@ export function XlsxPreview(props: {
   const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const restoreTargetRef = useRef<{
+    point: { col: number; row: number };
+    sheet: SpreadsheetRenderWorkbook["sheets"][number];
+  } | null>(null);
   const formulaDragRef = useRef<FormulaRangeDrag | null>(null);
   const suppressFormulaSelectionRef = useRef(false);
   const [draft, setDraft] = useState("");
@@ -102,23 +106,28 @@ export function XlsxPreview(props: {
   }, [draft.length, editing]);
 
   useEffect(() => {
+    restoreTargetRef.current = restoreTarget;
+  }, [restoreTarget]);
+
+  useEffect(() => {
     formulaDragRef.current = formulaDrag;
   }, [formulaDrag]);
 
   useEffect(() => {
     const root = rootRef.current;
-    if (!root || !restoreTarget) return;
+    const target = restoreTargetRef.current;
+    if (!root || !target) return;
     let nextFrame = 0;
     const frame = window.requestAnimationFrame(() => {
       nextFrame = window.requestAnimationFrame(() => {
-        restoreRendererSelection(root, restoreTarget);
+        restoreRendererSelection(root, target);
       });
     });
     return () => {
       window.cancelAnimationFrame(frame);
       if (nextFrame) window.cancelAnimationFrame(nextFrame);
     };
-  }, [props.workbook, restoreTarget?.key]);
+  }, [props.workbook]);
 
   useEffect(() => {
     const root = rootRef.current;
