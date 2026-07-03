@@ -110,23 +110,47 @@
 }
 
 .tutti-rich-text-at-menu {
-  max-height: 256px;
   width: min(28rem, calc(100vw - 24px));
-  overflow-y: auto;
   border: 1px solid rgba(216, 205, 185, 0.9);
   border-radius: 8px;
   background: #f4efe6;
   color: #2a2620;
-  padding: 4px;
   box-shadow: 0 16px 48px rgba(42, 38, 32, 0.18);
   scrollbar-width: none;
+}
+
+.tutti-rich-text-at-menu:not(:has(.rich-text-at-mention-palette)) {
+  max-height: 256px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.tutti-rich-text-at-menu:has(.rich-text-at-mention-palette) {
+  width: min(32rem, calc(100vw - 24px));
+  max-height: none;
+  overflow: hidden;
+  padding: 0;
+}
+
+.tutti-rich-text-at-menu .rich-text-at-mention-palette {
+  --background-fronted: #f4efe6;
+  --background-panel: #f4efe6;
+  --line-1: rgba(216, 205, 185, 0.9);
+  --line-2: rgba(216, 205, 185, 0.7);
+  --text-primary: #2a2620;
+  --text-secondary: #8b8275;
+  --text-tertiary: rgba(139, 130, 117, 0.78);
+  --transparency-block: rgba(184, 160, 124, 0.16);
+  --transparency-hover: rgba(184, 160, 124, 0.22);
+  --transparency-active: rgba(184, 160, 124, 0.28);
+  --tutti-purple: #5c6b50;
 }
 
 .tutti-rich-text-at-menu::-webkit-scrollbar {
   display: none;
 }
 
-.tutti-rich-text-at-menu button {
+.tutti-rich-text-at-menu:not(:has(.rich-text-at-mention-palette)) button {
   display: flex;
   width: 100%;
   cursor: pointer;
@@ -142,8 +166,8 @@
   outline: 0;
 }
 
-.tutti-rich-text-at-menu button:hover,
-.tutti-rich-text-at-menu button[aria-selected="true"] {
+.tutti-rich-text-at-menu:not(:has(.rich-text-at-mention-palette)) button:hover,
+.tutti-rich-text-at-menu:not(:has(.rich-text-at-mention-palette)) button[aria-selected="true"] {
   background: rgba(184, 160, 124, 0.22);
 }
 

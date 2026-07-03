@@ -1,15 +1,44 @@
 import { useMemo, type KeyboardEvent } from "react";
-import { RichTextTriggerEditor } from "@tutti-os/ui-rich-text/editor";
+import { RichTextTriggerEditor, type RichTextTriggerEditorProps } from "@tutti-os/ui-rich-text/editor";
 import type { AgentComposerInputRenderProps } from "@ai-app/agent/conversation-ui";
 import type { RichTextTriggerProvider } from "@tutti-os/ui-rich-text/types";
 import { useI18n } from "../i18n";
 import { createTuttiExternalAgentContextMentionProviders } from "./tuttiAtMentions";
+
+const appMentionProviderIds = ["workspace-app"] as const;
+const agentMentionProviderIds = ["agent-target"] as const;
 
 export function AgentPromptRichTextInput(props: AgentComposerInputRenderProps) {
   const { t } = useI18n();
   const triggerProviders = useMemo<readonly RichTextTriggerProvider<any>[]>(
     () => createTuttiExternalAgentContextMentionProviders(),
     [],
+  );
+  const palette = useMemo<NonNullable<RichTextTriggerEditorProps["palette"]>>(
+    () => ({
+      categories: [
+        {
+          id: "apps",
+          label: t("agent.mentionTabApps"),
+          providerIds: appMentionProviderIds,
+        },
+        {
+          id: "agents",
+          label: t("agent.mentionTabAgents"),
+          providerIds: agentMentionProviderIds,
+        },
+      ],
+      defaultCategoryId: "agents",
+      labels: {
+        tabHint: t("agent.mentionPalette"),
+        cycleFilter: t("agent.mentionCycleFilter"),
+        moveSelection: t("agent.mentionMoveSelection"),
+        empty: t("agent.mentionEmpty"),
+        listbox: t("agent.mentionPalette"),
+      },
+      maxHeightPx: 320,
+    }),
+    [t],
   );
 
   const handleKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -29,6 +58,7 @@ export function AgentPromptRichTextInput(props: AgentComposerInputRenderProps) {
         maxResults={30}
         menuZIndex={70}
         minQueryLength={0}
+        palette={palette}
         placeholder={props.value.trim() ? "" : props.placeholder}
         placeholderClassName={`${props.className} ai-doc-agent-rich-text-placeholder`}
         textareaClassName={`${props.className} ai-doc-agent-rich-text-editor`}

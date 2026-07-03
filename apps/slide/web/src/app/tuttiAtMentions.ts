@@ -4,25 +4,33 @@ import type {
   TuttiExternalAtProviderId,
   TuttiExternalAtQueryResult,
 } from "@tutti-os/workspace-external-core/contracts";
-import {
-  createTuttiExternalAtRichTextTriggerProviders,
-  type TuttiExternalAtRichTextBridge,
-} from "@tutti-os/workspace-external-core/rich-text";
+import type { TuttiExternalAtRichTextBridge } from "@tutti-os/workspace-external-core/rich-text";
 import type { RichTextMentionIdentity, RichTextMentionResolved, RichTextTriggerProvider } from "@tutti-os/ui-rich-text/types";
 
-const atProviderIds = ["workspace-app"] as const satisfies readonly TuttiExternalAtProviderId[];
+const atProviderIds = [
+  "workspace-app",
+  "agent-target",
+] as const satisfies readonly TuttiExternalAtProviderId[];
 
 function getTuttiExternalBridge(): TuttiExternalAtRichTextBridge | undefined {
   return (window as unknown as { tuttiExternal?: TuttiExternalAtRichTextBridge }).tuttiExternal;
 }
 
-const tuttiExternalBridgeProxy: TuttiExternalAtRichTextBridge = {
-  at: {
-    query(input) {
-      return getTuttiExternalBridge()?.at?.query(input) ?? [];
-    },
-  },
-};
+async function queryAtProvider(
+  providerId: TuttiExternalAtProviderId,
+  input: { keyword: string; maxResults?: number },
+): Promise<readonly TuttiExternalAtQueryResult[]> {
+  const bridge = getTuttiExternalBridge()?.at;
+  if (!bridge) return [];
+
+  const maxResults = input.maxResults ?? 30;
+  const results = await bridge.query({
+    keyword: input.keyword,
+    maxResults,
+    providers: [providerId],
+  });
+  return results.filter((item) => item.providerId === providerId);
+}
 
 function normalizeMentionPresentation(
   item: TuttiExternalAtQueryResult,
@@ -74,7 +82,7 @@ async function resolveAtMention(
     const items = await bridge.query({
       keyword: "",
       maxResults: 100,
-      providers: [providerId],
+      providers: atProviderIds,
     });
     const item = items.find((candidate) => isMatchingMention(candidate, providerId, identity));
     if (!item) return null;
@@ -115,16 +123,22 @@ function sameMentionScope(
 }
 
 export function createTuttiExternalAgentContextMentionProviders(): readonly RichTextTriggerProvider<TuttiExternalAtQueryResult>[] {
-  return createTuttiExternalAtRichTextTriggerProviders({
-    bridge: tuttiExternalBridgeProxy,
-    providerIds: atProviderIds,
-  }).map((provider): RichTextTriggerProvider<TuttiExternalAtQueryResult> => ({
-    ...provider,
+  return atProviderIds.map((providerId): RichTextTriggerProvider<TuttiExternalAtQueryResult> => ({
+    id: providerId,
+    trigger: "@",
+    async query(input) {
+      return queryAtProvider(providerId, {
+        keyword: input.keyword,
+        maxResults: input.maxResults,
+      });
+    },
     getItemKey: (item) => `${item.providerId}:${item.itemId}`,
+    getItemLabel: (item) => item.label,
+    getItemSubtitle: (item) => item.subtitle,
     getItemIconUrl: (item) =>
       normalizeMentionPresentation(item, item.insert.kind === "mention" ? item.insert.mention.presentation : undefined)?.iconUrl ??
       item.thumbnailUrl,
     toInsertResult: (item) => normalizeAtInsertResult(item),
-    resolveMention: (identity) => resolveAtMention(provider.id as TuttiExternalAtProviderId, identity),
+    resolveMention: (identity) => resolveAtMention(providerId, identity),
   }));
 }
