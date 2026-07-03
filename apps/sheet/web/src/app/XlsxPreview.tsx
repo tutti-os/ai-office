@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { scrollbarClass } from "@ai-app/ui/app-shell";
-import { cellAddressFromPoint, XlsxRenderer, type XlsxRendererActiveSheet, type XlsxRendererSelection } from "@tutti-os/office-preview/xlsx";
+import { cellAddressFromPoint, XlsxRenderer, type XlsxRendererActiveSheet, type XlsxRendererGeometry, type XlsxRendererSelection } from "@tutti-os/office-preview/xlsx";
 import "@tutti-os/office-preview/styles/xlsx.css";
 import type { SpreadsheetRenderWorkbook } from "@tutti-os/office-preview/xlsx";
 import { useI18n } from "../i18n";
@@ -50,6 +50,7 @@ export function XlsxPreview(props: {
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
   const [formulaDrag, setFormulaDrag] = useState<FormulaRangeDrag | null>(null);
+  const [rendererGeometry, setRendererGeometry] = useState<XlsxRendererGeometry | null>(null);
   const [inputSelection, setInputSelection] = useState({ end: 0, start: 0 });
   const [viewport, setViewport] = useState({ height: 0, left: 0, top: 0, width: 0 });
   const activeSelection = useMemo(() => {
@@ -74,6 +75,7 @@ export function XlsxPreview(props: {
     () => parseFormulaReferences(draft, props.workbook, activeSelection),
     [activeSelection, draft, props.workbook],
   );
+  const overlaySheet = rendererGeometry?.sheet ?? null;
   const formulaReferencePreview = useMemo(() => {
     if (!formulaDrag) return formulaReferences;
     const preview = formulaPreviewReferenceForDrag(formulaDrag, activeSelection, inputSelection, formulaReferences);
@@ -179,9 +181,8 @@ export function XlsxPreview(props: {
       const root = rootRef.current;
       const currentDrag = formulaDragRef.current;
       if (!root || !currentDrag) return;
-      const sheet = props.workbook?.sheets.find((item) => item.id === currentDrag.sheetId) ?? null;
-      if (!sheet) return;
-      const point = pointFromFormulaMouseEvent(event, root, sheet);
+      if (rendererGeometry?.sheetId !== currentDrag.sheetId) return;
+      const point = pointFromFormulaMouseEvent(event, root, rendererGeometry);
       autoScrollFormulaViewport(event, root);
       if (!point) return;
       setFormulaDrag({ ...currentDrag, focus: point });
@@ -192,8 +193,7 @@ export function XlsxPreview(props: {
       const root = rootRef.current;
       const currentDrag = formulaDragRef.current;
       if (!root || !currentDrag) return;
-      const sheet = props.workbook?.sheets.find((item) => item.id === currentDrag.sheetId) ?? null;
-      const point = sheet ? pointFromFormulaMouseEvent(event, root, sheet) : null;
+      const point = rendererGeometry?.sheetId === currentDrag.sheetId ? pointFromFormulaMouseEvent(event, root, rendererGeometry) : null;
       const finalDrag = point ? { ...currentDrag, focus: point } : currentDrag;
       const reference = formulaReferenceForRangeDrag(finalDrag, activeSelection);
       const nextDraft = replaceFormulaReferenceAtCursor(draft, inputSelection, formulaReferences, reference);
@@ -215,7 +215,7 @@ export function XlsxPreview(props: {
       window.removeEventListener("mousemove", handleMouseMove, { capture: true });
       window.removeEventListener("mouseup", handleMouseUp, { capture: true });
     };
-  }, [activeSelection, draft, editing, formulaDrag, formulaMode, formulaReferences, inputSelection, props.workbook]);
+  }, [activeSelection, draft, editing, formulaDrag, formulaMode, formulaReferences, inputSelection, props.workbook, rendererGeometry]);
 
   if (props.loading) {
     return <PreviewState title={t("preview.loadingTitle")} body={t("preview.loadingBody")} />;
@@ -352,17 +352,17 @@ export function XlsxPreview(props: {
           if (!formulaMode || !editing) return;
           const target = event.target instanceof Element ? event.target.closest(".tsh-xlsx-interaction-canvas") : null;
           if (!target) return;
-          const sheet = activeSheetForWorkbook(props.workbook);
-          const point = sheet ? pointFromFormulaMouseEvent(event.nativeEvent, event.currentTarget, sheet) : null;
-          if (!sheet || !point) return;
+          const targetGeometry = rendererGeometry;
+          const point = targetGeometry ? pointFromFormulaMouseEvent(event.nativeEvent, event.currentTarget, targetGeometry) : null;
+          if (!targetGeometry || !point) return;
           event.preventDefault();
           event.stopPropagation();
           suppressFormulaSelectionRef.current = true;
           setFormulaDrag({
             anchor: point,
             focus: point,
-            sheetId: sheet.id,
-            sheetName: sheet.name,
+            sheetId: targetGeometry.sheetId,
+            sheetName: targetGeometry.sheetName,
           });
         }}
         onClickCapture={(event) => {
@@ -373,8 +373,15 @@ export function XlsxPreview(props: {
           event.stopPropagation();
         }}
       >
-        <XlsxRenderer workbook={props.workbook} onActiveSheetChange={updateActiveSheet} onSelectionChange={updateSelection} />
-        {formulaMode ? <FormulaReferenceLayer references={formulaReferencePreview} viewport={viewport} workbook={props.workbook} /> : null}
+        <XlsxRenderer
+          workbook={props.workbook}
+          onActiveSheetChange={updateActiveSheet}
+          onGeometryChange={setRendererGeometry}
+          onSelectionChange={updateSelection}
+        />
+        {formulaMode && overlaySheet ? (
+          <FormulaReferenceLayer geometry={rendererGeometry} references={formulaReferencePreview} sheet={overlaySheet} viewport={viewport} />
+        ) : null}
       </div>
     </div>
   );
@@ -404,64 +411,66 @@ function FormulaInputOverlay(props: { references: FormulaReference[]; value: str
 }
 
 function FormulaReferenceLayer(props: {
+  geometry: XlsxRendererGeometry | null;
   references: FormulaReference[];
+  sheet: SpreadsheetRenderWorkbook["sheets"][number];
   viewport: { height: number; left: number; top: number; width: number };
-  workbook: SpreadsheetRenderWorkbook;
 }) {
   if (!props.references.length || props.viewport.width <= 0 || props.viewport.height <= 0) return null;
-  const activeSheet = props.workbook.sheets[props.workbook.activeSheetIndex] ?? props.workbook.sheets[0] ?? null;
-  if (!activeSheet) return null;
-  const frozenWidth = spanColumnWidth(activeSheet, 0, activeSheet.freeze?.colCount ?? 0);
-  const frozenHeight = spanRowHeight(activeSheet, 0, activeSheet.freeze?.rowCount ?? 0);
+  const activeSheet = props.sheet;
+  const geometry = props.geometry;
+  if (!geometry || geometry.sheetId !== activeSheet.id) return null;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
       {props.references.flatMap((reference, index) => {
         const sheetId = reference.sheetId ?? activeSheet.id;
         if (sheetId !== activeSheet.id) return [];
-        const startCol = Math.min(reference.range.start.col, reference.range.end.col);
-        const endCol = Math.max(reference.range.start.col, reference.range.end.col);
-        const startRow = Math.min(reference.range.start.row, reference.range.end.row);
-        const endRow = Math.max(reference.range.start.row, reference.range.end.row);
-        const startColumn = columnAt(activeSheet, startCol);
-        const endColumn = columnAt(activeSheet, endCol);
-        const startRowLayout = rowAt(activeSheet, startRow);
-        const endRowLayout = rowAt(activeSheet, endRow);
-        if (!startColumn || !endColumn || !startRowLayout || !endRowLayout) return [];
 
-        const gridLeft = startColumn.xPx < frozenWidth ? startColumn.xPx : startColumn.xPx - props.viewport.left;
-        const gridTop = startRowLayout.yPx < frozenHeight ? startRowLayout.yPx : startRowLayout.yPx - props.viewport.top;
-        const gridRight = endColumn.xPx + endColumn.widthPx < frozenWidth
-          ? endColumn.xPx + endColumn.widthPx
-          : endColumn.xPx + endColumn.widthPx - props.viewport.left;
-        const gridBottom = endRowLayout.yPx + endRowLayout.heightPx < frozenHeight
-          ? endRowLayout.yPx + endRowLayout.heightPx
-          : endRowLayout.yPx + endRowLayout.heightPx - props.viewport.top;
-        const left = (activeSheet.showHeaders ? ROW_HEADER_WIDTH_PX : 0) + gridLeft;
-        const top = (activeSheet.showHeaders ? COLUMN_HEADER_HEIGHT_PX : 0) + gridTop;
-        const width = Math.max(2, gridRight - gridLeft);
-        const height = Math.max(2, gridBottom - gridTop);
-        if (left > props.viewport.width + ROW_HEADER_WIDTH_PX || top > props.viewport.height + COLUMN_HEADER_HEIGHT_PX || left + width < 0 || top + height < 0) {
-          return [];
-        }
-        return (
-          <div
-            key={`${reference.start}:${reference.token}:${index}`}
-            className="absolute rounded-[3px]"
-            style={{
-              backgroundColor: alphaColor(reference.color, 0.14),
-              border: `2px solid ${reference.color}`,
-              boxShadow: `0 0 0 1px ${alphaColor(reference.color, 0.18)}`,
-              height,
-              left,
-              top,
-              width,
-            }}
-          />
-        );
+        const rects = formulaReferenceRectsFromGeometry(reference, geometry);
+
+        return rects.flatMap(({ height, left, top, width }, rectIndex) => {
+          if (left > props.viewport.width + ROW_HEADER_WIDTH_PX || top > props.viewport.height + COLUMN_HEADER_HEIGHT_PX || left + width < 0 || top + height < 0) {
+            return [];
+          }
+          return (
+            <div
+              key={`${reference.start}:${reference.token}:${index}:${rectIndex}`}
+              className="absolute rounded-[3px]"
+              style={{
+                backgroundColor: alphaColor(reference.color, 0.14),
+                border: `2px solid ${reference.color}`,
+                boxShadow: `0 0 0 1px ${alphaColor(reference.color, 0.18)}`,
+                height,
+                left,
+                top,
+                width,
+              }}
+            />
+          );
+        });
       })}
     </div>
   );
+}
+
+function formulaReferenceRectsFromGeometry(reference: FormulaReference, geometry: XlsxRendererGeometry) {
+  const startCol = Math.min(reference.range.start.col, reference.range.end.col);
+  const endCol = Math.max(reference.range.start.col, reference.range.end.col);
+  const startRow = Math.min(reference.range.start.row, reference.range.end.row);
+  const endRow = Math.max(reference.range.start.row, reference.range.end.row);
+  const rects = geometry.cellRangeRects?.({
+    col: startCol,
+    colSpan: endCol - startCol + 1,
+    row: startRow,
+    rowSpan: endRow - startRow + 1,
+  }) ?? [];
+  return rects.map((rect) => ({
+    height: Math.max(2, rect.height),
+    left: rect.x,
+    top: rect.y,
+    width: Math.max(2, rect.width),
+  }));
 }
 
 function isFormulaDraft(value: string) {
@@ -578,54 +587,18 @@ function rangeAddressFromPoints(start: { col: number; row: number }, end: { col:
   return startAddress === endAddress ? startAddress : `${startAddress}:${endAddress}`;
 }
 
-function activeSheetForWorkbook(workbook: SpreadsheetRenderWorkbook | null) {
-  return workbook?.sheets[workbook.activeSheetIndex] ?? workbook?.sheets[0] ?? null;
-}
-
 function pointFromFormulaMouseEvent(
   event: Pick<MouseEvent, "clientX" | "clientY">,
   root: HTMLElement,
-  sheet: SpreadsheetRenderWorkbook["sheets"][number],
+  geometry: XlsxRendererGeometry,
 ) {
   const canvas = root.querySelector<HTMLCanvasElement>(".tsh-xlsx-interaction-canvas");
-  const scroll = root.querySelector<HTMLElement>(".tsh-xlsx-canvas-scroll");
-  if (!canvas || !scroll) return null;
+  if (!canvas) return null;
   const rect = canvas.getBoundingClientRect();
-  const headerWidth = sheet.showHeaders ? ROW_HEADER_WIDTH_PX : 0;
-  const headerHeight = sheet.showHeaders ? COLUMN_HEADER_HEIGHT_PX : 0;
-  const gridX = event.clientX - rect.left - headerWidth;
-  const gridY = event.clientY - rect.top - headerHeight;
-  if (gridX < 0 || gridY < 0) return null;
-
-  const frozenWidth = spanColumnWidth(sheet, 0, sheet.freeze?.colCount ?? 0);
-  const frozenHeight = spanRowHeight(sheet, 0, sheet.freeze?.rowCount ?? 0);
-  const sheetX = gridX < frozenWidth ? gridX : gridX + scroll.scrollLeft;
-  const sheetY = gridY < frozenHeight ? gridY : gridY + scroll.scrollTop;
-  const col = dimensionIndexAt(sheet, "column", sheetX);
-  const row = dimensionIndexAt(sheet, "row", sheetY);
-  if (col === null || row === null) return null;
-  return { col, row };
-}
-
-function dimensionIndexAt(sheet: SpreadsheetRenderWorkbook["sheets"][number], axis: "column" | "row", positionPx: number) {
-  const count = axis === "column" ? sheet.columnCount : sheet.rowCount;
-  if (count <= 0 || positionPx < 0) return null;
-  let low = 0;
-  let high = count - 1;
-  while (low <= high) {
-    const middle = Math.floor((low + high) / 2);
-    const start = axis === "column" ? columnAt(sheet, middle).xPx : rowAt(sheet, middle).yPx;
-    const size = axis === "column" ? columnAt(sheet, middle).widthPx : rowAt(sheet, middle).heightPx;
-    if (positionPx < start) {
-      high = middle - 1;
-    } else if (positionPx >= start + Math.max(1, size)) {
-      low = middle + 1;
-    } else {
-      return middle;
-    }
-  }
-  const fallbackSize = axis === "column" ? sheet.defaultColumnWidthPx : sheet.defaultRowHeightPx;
-  return Math.max(0, Math.min(count - 1, Math.floor(positionPx / Math.max(1, fallbackSize))));
+  return geometry.pointToCell({
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  }) ?? null;
 }
 
 function autoScrollFormulaViewport(event: MouseEvent, root: HTMLElement) {

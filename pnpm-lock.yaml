@@ -234,8 +234,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@tutti-os/office-preview':
-        specifier: 0.0.0-test.20260702080759.dd0112bf59c8
-        version: 0.0.0-test.20260702080759.dd0112bf59c8(react@19.2.7)
+        specifier: 0.0.0-test.20260703071759.cbfa790c425b
+        version: 0.0.0-test.20260703071759.cbfa790c425b(react@19.2.7)
       '@vitejs/plugin-react':
         specifier: ^5.1.1
         version: 5.2.0(vite@7.3.5(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))
@@ -2404,6 +2404,11 @@ packages:
 
   '@tutti-os/office-preview@0.0.0-test.20260702080759.dd0112bf59c8':
     resolution: {integrity: sha512-+opDKK1OGpJvSx4nQJEQsHaH8atrJtnIfwG1//45jiH6prN+i3fOjjx+gp4q3KSVLwwhAd3VAWwQqvWgPDs5XA==}
+    peerDependencies:
+      react: ^19.2.0
+
+  '@tutti-os/office-preview@0.0.0-test.20260703071759.cbfa790c425b':
+    resolution: {integrity: sha512-cRpHderMbR+87N1IjGy7LZkdTyFnVbyNImOA6dpOyUzhqjLWc5zKYrlBbtsQeavEpjQ2FUk7MkA/cLrzJX0Esw==}
     peerDependencies:
       react: ^19.2.0
 
@@ -6104,6 +6109,10 @@ snapshots:
   '@tutti-os/office-formula-calc@0.0.0-test.20260702080759.dd0112bf59c8': {}
 
   '@tutti-os/office-preview@0.0.0-test.20260702080759.dd0112bf59c8(react@19.2.7)':
+    dependencies:
+      react: 19.2.7
+
+  '@tutti-os/office-preview@0.0.0-test.20260703071759.cbfa790c425b(react@19.2.7)':
     dependencies:
       react: 19.2.7
 
