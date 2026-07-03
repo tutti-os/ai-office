@@ -213,20 +213,22 @@ export class SheetRepository {
     return readXlsxManifestFromFile(projectId);
   }
 
-  async refreshXlsxArtifactFromFile(projectId: string, updatedBy: SheetProject["updatedBy"]) {
+  async refreshXlsxArtifactFromFile(
+    projectId: string,
+    updatedBy: SheetProject["updatedBy"],
+    options: { previousManifest?: Pick<XlsxManifest, "exists" | "sha256" | "sizeBytes">; forceRevision?: boolean } = {},
+  ) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
     const manifest = await readXlsxManifestFromFile(projectId);
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact) throw new Error("Active artifact not found");
-    if (!manifest.exists) return { changed: false, manifest, artifact };
-    const currentManifest = await readXlsxManifestFromFile(projectId);
-    const changed = currentManifest.sha256 !== manifest.sha256 || currentManifest.sizeBytes !== manifest.sizeBytes;
-    this.bumpArtifactRevision(artifact.id, updatedBy);
+    const changed = options.forceRevision ?? (options.previousManifest ? xlsxManifestChanged(options.previousManifest, manifest) : manifest.exists);
+    const refreshedArtifact = changed ? this.bumpArtifactRevision(artifact.id, updatedBy) : artifact;
     return {
       changed,
       manifest,
-      artifact: this.getArtifact(artifact.id) ?? artifact,
+      artifact: refreshedArtifact ?? artifact,
     };
   }
 
@@ -386,6 +388,13 @@ function rowToArtifact(row: ArtifactRow): SheetArtifact {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function xlsxManifestChanged(
+  previous: Pick<XlsxManifest, "exists" | "sha256" | "sizeBytes">,
+  next: Pick<XlsxManifest, "exists" | "sha256" | "sizeBytes">,
+) {
+  return previous.exists !== next.exists || previous.sha256 !== next.sha256 || previous.sizeBytes !== next.sizeBytes;
 }
 
 async function readXlsxManifestFromFile(projectId: string): Promise<XlsxManifest> {

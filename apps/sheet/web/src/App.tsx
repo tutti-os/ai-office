@@ -278,8 +278,24 @@ export function App() {
       }
       setXlsxSaveState("saved");
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       setXlsxSaveState("error");
-      setError(err instanceof Error ? err.message : String(err));
+      setError(message);
+      if (isStaleWorkbookError(message)) {
+        try {
+          const detail = await getProject(currentProjectId);
+          setProjectDetail(detail);
+          setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
+          if (detail.xlsxManifest) {
+            await loadXlsxArtifact(detail.project.id, {
+              title: detail.project.title,
+              manifest: detail.xlsxManifest,
+            });
+          }
+        } catch {
+          // Keep the original stale-save error visible.
+        }
+      }
       throw err;
     }
   }, [applyXlsxCommand, currentProjectId, loadXlsxArtifact, projectDetail, setXlsxSaveState, t, xlsxRuntime?.editor]);
@@ -426,4 +442,8 @@ export function App() {
       onRuntimeProfileChange={setSelectedAgent}
     />
   );
+}
+
+function isStaleWorkbookError(message: string) {
+  return message.toLowerCase().includes("stale");
 }

@@ -3,7 +3,17 @@ import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
 import { resolveWorkspaceImportSourcePath } from "@ai-app/shared/import-source";
 import type { RuntimeProfile } from "@ai-app/shared/types";
-import type { AiEditRequest, ApplySheetCommandsRequest, CreateProjectRequest, SheetArtifact, SheetRun, SheetRunEvent, SheetWorkspaceContext, UpdateProjectRequest } from "@ai-sheet/shared";
+import type {
+  AiEditRequest,
+  ApplySheetCommandsRequest,
+  CreateProjectRequest,
+  SheetArtifact,
+  SheetRun,
+  SheetRunEvent,
+  SheetWorkspaceContext,
+  UpdateProjectRequest,
+  XlsxManifest,
+} from "@ai-sheet/shared";
 import { join } from "node:path";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
@@ -381,7 +391,9 @@ export class SheetService {
 
   private async refreshArtifactFromWorkspace(projectId: string, runId: string | undefined, previousFingerprint: string) {
     const calc = await this.recalculateProjectWorkbook(projectId, { forceFullRecalc: true });
-    const refresh = await this.repo.refreshXlsxArtifactFromFile(projectId, "ai");
+    const refresh = await this.repo.refreshXlsxArtifactFromFile(projectId, "ai", {
+      previousManifest: xlsxManifestFromFingerprint(previousFingerprint),
+    });
     const fingerprint = await this.workspaceFingerprint(projectId);
     if (!refresh.changed && fingerprint === previousFingerprint) return { changed: false, fingerprint };
     const updated = await this.getProject(projectId, { recalculate: false });
@@ -445,6 +457,21 @@ function dirtyCellsFromCommands(commands: ApplySheetCommandsRequest["commands"])
     }
   }
   return dirtyCells;
+}
+
+function xlsxManifestFromFingerprint(value: string): Pick<XlsxManifest, "exists" | "sha256" | "sizeBytes"> | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value) as Partial<Pick<XlsxManifest, "exists" | "sha256" | "sizeBytes">>;
+    if (typeof parsed.exists !== "boolean") return undefined;
+    return {
+      exists: parsed.exists,
+      sha256: typeof parsed.sha256 === "string" ? parsed.sha256 : null,
+      sizeBytes: typeof parsed.sizeBytes === "number" && Number.isFinite(parsed.sizeBytes) ? parsed.sizeBytes : 0,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 function assistantConversationContent(runtimeProfile: RuntimeProfile, generatedText: string, resultPreview: string) {
