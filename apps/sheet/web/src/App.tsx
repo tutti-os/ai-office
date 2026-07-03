@@ -18,6 +18,7 @@ import {
   openProjectExportsDir,
   startAiEdit,
 } from "./api/projects";
+import { SheetBootScreen } from "./app/SheetBootScreen";
 import { SheetHome } from "./app/SheetHome";
 import { initialPromptWithAttachmentContext, uploadHomeContextAttachments } from "./app/homeAttachmentPrompt";
 import { SheetViewerScreen } from "./app/SheetViewerScreen";
@@ -62,6 +63,7 @@ export function App() {
   const [officeCliStatus, setOfficeCliStatus] = useState<OfficeCliStatus | null>(null);
   const [officeCliInstalling, setOfficeCliInstalling] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [bootedProjectId, setBootedProjectId] = useState<string | null>(null);
   const [agentSending, setAgentSending] = useState(false);
   const [error, setError] = useState("");
   const [exportMessage, setExportMessage] = useState("");
@@ -169,6 +171,7 @@ export function App() {
   }, [route.name]);
 
   useEffect(() => {
+    setBootedProjectId(null);
     if (route.name !== "sheet") {
       setProjectDetail(null);
       clearXlsxArtifact();
@@ -388,7 +391,39 @@ export function App() {
     }
   }, [projectDetail]);
 
-  if (route.name === "sheet" && projectDetail) {
+  const sheetActive = route.name === "sheet";
+  const currentSheetProjectId = route.name === "sheet" ? route.projectId : null;
+  const detailMatchesRoute = sheetActive && projectDetail?.project.id === currentSheetProjectId;
+  const workbookExpected = Boolean(detailMatchesRoute && projectDetail?.xlsxManifest?.exists);
+  const workbookReady = Boolean(xlsxRuntime?.renderWorkbook);
+  // "Stabilizing" covers every transient startup state: project detail still loading,
+  // the artifact still parsing/rendering, or stale detail from a previous project.
+  const sheetStabilizing = sheetActive && (loading || xlsxLoading || !detailMatchesRoute || (workbookExpected && !workbookReady));
+
+  // Once a project has fully settled, remember it so that in-place reloads (e.g. an agent
+  // edit re-parsing the workbook) keep the editor mounted instead of dropping back to the
+  // boot screen. The boot screen is only for the very first entry into a project.
+  useEffect(() => {
+    if (sheetActive && !sheetStabilizing && detailMatchesRoute) setBootedProjectId(currentSheetProjectId);
+  }, [currentSheetProjectId, detailMatchesRoute, sheetActive, sheetStabilizing]);
+
+  if (sheetActive) {
+    const fatalError = Boolean((xlsxError || error) && !projectDetail);
+    if (fatalError) {
+      return (
+        <SheetBootScreen
+          tone="error"
+          title={t("preview.errorTitle")}
+          body={xlsxError || error}
+          backLabel={t("editor.backHome")}
+          onBackHome={() => setRoute(pushHomeRoute())}
+        />
+      );
+    }
+    const showBoot = !projectDetail || (sheetStabilizing && bootedProjectId !== currentSheetProjectId);
+    if (showBoot) {
+      return <SheetBootScreen title={t("preview.loadingTitle")} body={t("preview.loadingBody")} />;
+    }
     const agentBusy = agentSending || hasActiveAgentRun(agentConversation.items);
     return (
       <SheetViewerScreen
