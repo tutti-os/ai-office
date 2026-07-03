@@ -30,7 +30,7 @@ export type SheetArtifactType = "xlsx";
 export type SheetProjectUpdatedBy = "human" | "ai" | "system";
 export type SheetRunStatus = RunStatus;
 export type SheetRunEventType = RunEventType;
-export type SheetSelectionType = "sheet" | "cell" | "range" | "write";
+export type SheetSelectionType = "sheet" | "cell" | "range" | "row" | "column" | "write";
 
 export interface SheetProject {
   id: Id;

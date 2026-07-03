@@ -35,6 +35,14 @@ type FormulaRangeDrag = {
   sheetName: string;
 };
 
+type ParsedSelectionRange = {
+  col: number;
+  colSpan: number;
+  kind: NonNullable<XlsxRendererFocusSelection["kind"]>;
+  row: number;
+  rowSpan: number;
+};
+
 export function XlsxPreview(props: {
   workbook: SpreadsheetRenderWorkbook | null;
   selection: XlsxSelection | null;
@@ -64,11 +72,12 @@ export function XlsxPreview(props: {
       ?? props.workbook.sheets[0]
       ?? null;
     if (!sheet) return null;
-    const point = pointFromAddress(props.selection.address);
+    const point = pointFromAddress(props.selection.activeAddress ?? props.selection.address);
     const cell = point ? sheet.cellMap[`${point.row}:${point.col}`] : null;
     const displayText = cell?.formula ? `=${cell.formula}` : cell?.clipboardText || cell?.formattedText || props.selection.selectedText || "";
     return {
       address: props.selection.address,
+      activeAddress: props.selection.activeAddress ?? props.selection.address,
       displayText,
       sheetId: sheet.id,
       sheetName: sheet.name,
@@ -93,20 +102,26 @@ export function XlsxPreview(props: {
     if (!props.workbook || !props.selection?.sheetId || !props.selection.address) return null;
     const sheetIndex = props.workbook.sheets.findIndex((item) => item.id === props.selection?.sheetId || item.name === props.selection?.sheetName);
     const sheet = sheetIndex >= 0 ? props.workbook.sheets[sheetIndex] : null;
-    const point = pointFromAddress(props.selection.address);
-    if (!sheet || !point) return null;
+    if (!sheet) return null;
+    const range = selectionRangeFromAddress(props.selection.address, sheet);
+    const point = pointFromAddress(props.selection.activeAddress ?? props.selection.address) ?? (range ? { col: range.col, row: range.row } : null);
+    if (!range || !point) return null;
     return {
-      key: `${sheet.id}:${props.selection.address.toUpperCase()}`,
+      key: `${sheet.id}:${props.selection.address.toUpperCase()}:${props.selection.activeAddress ?? ""}`,
       point,
+      range,
       sheet,
     };
-  }, [props.selection?.address, props.selection?.sheetId, props.selection?.sheetName, props.workbook]);
+  }, [props.selection?.activeAddress, props.selection?.address, props.selection?.sheetId, props.selection?.sheetName, props.workbook]);
   const focusSelection = useMemo<XlsxRendererFocusSelection | null>(() => {
     if (props.selectionRestoreKey <= 0 || !restoreTarget) return null;
     return {
       col: restoreTarget.point.col,
+      colSpan: restoreTarget.range.colSpan,
       key: props.selectionRestoreKey,
+      kind: restoreTarget.range.kind,
       row: restoreTarget.point.row,
+      rowSpan: restoreTarget.range.rowSpan,
       scrollIntoView: true,
       sheetId: restoreTarget.sheet.id,
       sheetName: restoreTarget.sheet.name,
@@ -116,7 +131,7 @@ export function XlsxPreview(props: {
   useEffect(() => {
     if (editing) return;
     setDraft(activeSelection?.displayText ?? "");
-  }, [activeSelection?.address, activeSelection?.displayText, editing]);
+  }, [activeSelection?.activeAddress, activeSelection?.address, activeSelection?.displayText, editing]);
 
   useEffect(() => {
     if (!editing) setInputSelection({ end: draft.length, start: draft.length });
@@ -224,7 +239,8 @@ export function XlsxPreview(props: {
 
   const updateSelection = (selection: XlsxRendererSelection | null) => {
     if (!selection) return;
-    const address = cellAddressFromPoint(selection.row, selection.col);
+    const address = selectionAddressFromRendererSelection(selection);
+    const activeAddress = cellAddressFromPoint(selection.row, selection.col);
     const sheet = props.workbook?.sheets.find((item) => item.id === selection.sheetId);
     const cell = sheet?.cellMap[`${selection.row}:${selection.col}`];
     if (formulaMode && editing) {
@@ -247,6 +263,8 @@ export function XlsxPreview(props: {
       sheetId: selection.sheetId,
       sheetName: selection.sheetName,
       address,
+      activeAddress,
+      kind: selection.kind,
       selectedText: cell?.clipboardText || cell?.formattedText || "",
     });
     setEditing(false);
@@ -258,6 +276,8 @@ export function XlsxPreview(props: {
       sheetId: sheet.sheetId,
       sheetName: sheet.sheetName,
       address: "A1",
+      activeAddress: "A1",
+      kind: "cell",
       selectedText: "",
     });
     setEditing(false);
@@ -277,7 +297,7 @@ export function XlsxPreview(props: {
     const nextValue = draft;
     setEditing(false);
     await props.onCommitCellValue({
-      address: activeSelection.address,
+      address: activeSelection.activeAddress,
       input: nextValue,
       sheetId: activeSelection.sheetId,
       sheetName: activeSelection.sheetName,
@@ -529,7 +549,7 @@ function formulaReplacementRange(selection: { end: number; start: number }, refe
 }
 
 function formulaReferenceForSelection(selection: XlsxRendererSelection, activeSelection: { sheetId: string; sheetName: string } | null) {
-  const address = cellAddressFromPoint(selection.row, selection.col);
+  const address = selectionAddressFromRendererSelection(selection);
   if (!activeSelection || activeSelection.sheetId === selection.sheetId) return address;
   return `${quoteSheetName(selection.sheetName)}!${address}`;
 }
@@ -581,6 +601,21 @@ function rangeAddressFromPoints(start: { col: number; row: number }, end: { col:
   const startAddress = cellAddressFromPoint(start.row, start.col);
   const endAddress = cellAddressFromPoint(end.row, end.col);
   return startAddress === endAddress ? startAddress : `${startAddress}:${endAddress}`;
+}
+
+function selectionAddressFromRendererSelection(selection: XlsxRendererSelection) {
+  if (selection.kind === "row") {
+    return `${selection.row + 1}:${selection.row + selection.rowSpan}`;
+  }
+  if (selection.kind === "column") {
+    return `${columnNameFromIndex(selection.col)}:${columnNameFromIndex(selection.col + selection.colSpan - 1)}`;
+  }
+
+  const end = {
+    col: selection.col + Math.max(1, selection.colSpan) - 1,
+    row: selection.row + Math.max(1, selection.rowSpan) - 1,
+  };
+  return rangeAddressFromPoints({ col: selection.col, row: selection.row }, end);
 }
 
 function pointFromFormulaMouseEvent(
@@ -649,12 +684,68 @@ function pointFromAddress(address: string) {
   return { col: columnNameToIndex(match[1]), row: Number(match[2]) - 1 };
 }
 
+function selectionRangeFromAddress(address: string, sheet: SpreadsheetRenderWorkbook["sheets"][number]): ParsedSelectionRange | null {
+  const normalized = address.trim().replace(/\$/g, "").toUpperCase();
+  const cellRangeMatch = normalized.match(/^([A-Z]+[1-9]\d*)(?::([A-Z]+[1-9]\d*))?$/);
+  if (cellRangeMatch) {
+    const start = pointFromAddress(cellRangeMatch[1]);
+    const end = pointFromAddress(cellRangeMatch[2] ?? cellRangeMatch[1]);
+    if (!start || !end) return null;
+    const col = Math.min(start.col, end.col);
+    const row = Math.min(start.row, end.row);
+    const colSpan = Math.abs(end.col - start.col) + 1;
+    const rowSpan = Math.abs(end.row - start.row) + 1;
+    return { col, colSpan, kind: colSpan > 1 || rowSpan > 1 ? "range" : "cell", row, rowSpan };
+  }
+
+  const rowRangeMatch = normalized.match(/^([1-9]\d*):([1-9]\d*)$/);
+  if (rowRangeMatch) {
+    const startRow = Number(rowRangeMatch[1]) - 1;
+    const endRow = Number(rowRangeMatch[2]) - 1;
+    const row = Math.min(startRow, endRow);
+    return {
+      col: 0,
+      colSpan: Math.max(1, sheet.columnCount),
+      kind: "row" as const,
+      row,
+      rowSpan: Math.abs(endRow - startRow) + 1,
+    };
+  }
+
+  const columnRangeMatch = normalized.match(/^([A-Z]+):([A-Z]+)$/);
+  if (columnRangeMatch) {
+    const startCol = columnNameToIndex(columnRangeMatch[1]);
+    const endCol = columnNameToIndex(columnRangeMatch[2]);
+    const col = Math.min(startCol, endCol);
+    return {
+      col,
+      colSpan: Math.abs(endCol - startCol) + 1,
+      kind: "column" as const,
+      row: 0,
+      rowSpan: Math.max(1, sheet.rowCount),
+    };
+  }
+
+  return null;
+}
+
 function columnNameToIndex(name: string) {
   let index = 0;
   for (const char of name.trim().toUpperCase()) {
     index = index * 26 + char.charCodeAt(0) - 64;
   }
   return index - 1;
+}
+
+function columnNameFromIndex(index: number) {
+  let value = "";
+  let cursor = Math.max(0, index) + 1;
+  while (cursor > 0) {
+    const remainder = (cursor - 1) % 26;
+    value = String.fromCharCode(65 + remainder) + value;
+    cursor = Math.floor((cursor - 1) / 26);
+  }
+  return value;
 }
 
 function normalizeWheelDeltaX(event: WheelEvent, pageWidth: number) {

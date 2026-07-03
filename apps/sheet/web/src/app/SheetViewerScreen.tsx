@@ -51,6 +51,7 @@ export function SheetViewerScreen(props: {
     <ArtifactEditorWorkspace
       title={props.detail.project.title}
       saveState={props.saveState}
+      agentWorking={props.sending}
       stats={stats}
       copy={artifactEditorCopy(t)}
       exportItems={[
