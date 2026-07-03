@@ -677,27 +677,63 @@ function restoreRendererSelection(
 
   const frozenWidth = spanColumnWidth(target.sheet, 0, target.sheet.freeze?.colCount ?? 0);
   const frozenHeight = spanRowHeight(target.sheet, 0, target.sheet.freeze?.rowCount ?? 0);
-  const left = Math.max(0, column.xPx - frozenWidth);
-  const top = Math.max(0, row.yPx - frozenHeight);
-  scroll.scrollTo({ left, top });
+  const rowHeaderWidth = target.sheet.showHeaders ? ROW_HEADER_WIDTH_PX : 0;
+  const columnHeaderHeight = target.sheet.showHeaders ? COLUMN_HEADER_HEIGHT_PX : 0;
+  const rect = canvas.getBoundingClientRect();
+  if (!cellCenterIsVisible({
+    column,
+    columnHeaderHeight,
+    frozenHeight,
+    frozenWidth,
+    rect,
+    row,
+    rowHeaderWidth,
+    scroll,
+  })) {
+    const left = Math.max(0, column.xPx - frozenWidth);
+    const top = Math.max(0, row.yPx - frozenHeight);
+    scroll.scrollTo({ left, top });
+  }
 
   window.requestAnimationFrame(() => {
-    const rowHeaderWidth = target.sheet.showHeaders ? ROW_HEADER_WIDTH_PX : 0;
-    const columnHeaderHeight = target.sheet.showHeaders ? COLUMN_HEADER_HEIGHT_PX : 0;
     const gridX = column.xPx < frozenWidth ? column.xPx : column.xPx - scroll.scrollLeft;
     const gridY = row.yPx < frozenHeight ? row.yPx : row.yPx - scroll.scrollTop;
     const x = rowHeaderWidth + gridX + Math.max(1, column.widthPx / 2);
     const y = columnHeaderHeight + gridY + Math.max(1, row.heightPx / 2);
-    const rect = canvas.getBoundingClientRect();
-    if (x < rowHeaderWidth || y < columnHeaderHeight || x > rect.width || y > rect.height) return;
+    const nextRect = canvas.getBoundingClientRect();
+    if (x < rowHeaderWidth || y < columnHeaderHeight || x > nextRect.width || y > nextRect.height) return;
     canvas.dispatchEvent(new MouseEvent("click", {
       bubbles: true,
       cancelable: true,
-      clientX: rect.left + x,
-      clientY: rect.top + y,
+      clientX: nextRect.left + x,
+      clientY: nextRect.top + y,
       view: window,
     }));
   });
+}
+
+function cellCenterIsVisible(input: {
+  column: { widthPx: number; xPx: number };
+  columnHeaderHeight: number;
+  frozenHeight: number;
+  frozenWidth: number;
+  rect: DOMRect;
+  row: { heightPx: number; yPx: number };
+  rowHeaderWidth: number;
+  scroll: HTMLElement;
+}) {
+  const gridX = input.column.xPx < input.frozenWidth
+    ? input.column.xPx
+    : input.column.xPx - input.scroll.scrollLeft;
+  const gridY = input.row.yPx < input.frozenHeight
+    ? input.row.yPx
+    : input.row.yPx - input.scroll.scrollTop;
+  const centerX = input.rowHeaderWidth + gridX + Math.max(1, input.column.widthPx / 2);
+  const centerY = input.columnHeaderHeight + gridY + Math.max(1, input.row.heightPx / 2);
+  return centerX >= input.rowHeaderWidth
+    && centerY >= input.columnHeaderHeight
+    && centerX <= input.rect.width
+    && centerY <= input.rect.height;
 }
 
 function columnAt(sheet: SpreadsheetRenderWorkbook["sheets"][number], index: number) {
