@@ -55,6 +55,13 @@ export function XlsxPreview(props: {
   onSelectionChange: (selection: XlsxSelection) => void;
 }) {
   const { t } = useI18n();
+  // Keep the last rendered workbook on screen while a reload is in flight. Reloads (formula
+  // recalculation on open, agent edits, WebSocket reconciles) briefly set `workbook` to null
+  // while the new preview is parsed; without this the grid would blink to a "Loading workbook"
+  // placeholder and back. We only surface the loading placeholder on the very first load.
+  const lastWorkbookRef = useRef<SpreadsheetRenderWorkbook | null>(props.workbook);
+  if (props.workbook) lastWorkbookRef.current = props.workbook;
+  const workbook = props.workbook ?? lastWorkbookRef.current;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const formulaDragRef = useRef<FormulaRangeDrag | null>(null);
@@ -66,10 +73,10 @@ export function XlsxPreview(props: {
   const [inputSelection, setInputSelection] = useState({ end: 0, start: 0 });
   const [viewport, setViewport] = useState({ height: 0, left: 0, top: 0, width: 0 });
   const activeSelection = useMemo(() => {
-    if (!props.workbook || !props.selection?.sheetId || !props.selection.address) return null;
-    const sheet = props.workbook.sheets.find((item) => item.id === props.selection?.sheetId)
-      ?? props.workbook.sheets[props.workbook.activeSheetIndex]
-      ?? props.workbook.sheets[0]
+    if (!workbook || !props.selection?.sheetId || !props.selection.address) return null;
+    const sheet = workbook.sheets.find((item) => item.id === props.selection?.sheetId)
+      ?? workbook.sheets[workbook.activeSheetIndex]
+      ?? workbook.sheets[0]
       ?? null;
     if (!sheet) return null;
     const point = pointFromAddress(props.selection.activeAddress ?? props.selection.address);
@@ -82,11 +89,11 @@ export function XlsxPreview(props: {
       sheetId: sheet.id,
       sheetName: sheet.name,
     };
-  }, [props.selection, props.workbook]);
+  }, [props.selection, workbook]);
   const formulaMode = isFormulaDraft(draft);
   const formulaReferences = useMemo(
-    () => parseFormulaReferences(draft, props.workbook, activeSelection),
-    [activeSelection, draft, props.workbook],
+    () => parseFormulaReferences(draft, workbook, activeSelection),
+    [activeSelection, draft, workbook],
   );
   const overlaySheet = rendererGeometry?.sheet ?? null;
   const formulaReferencePreview = useMemo(() => {
@@ -99,9 +106,9 @@ export function XlsxPreview(props: {
     ];
   }, [activeSelection, formulaDrag, formulaReferences, inputSelection]);
   const restoreTarget = useMemo(() => {
-    if (!props.workbook || !props.selection?.sheetId || !props.selection.address) return null;
-    const sheetIndex = props.workbook.sheets.findIndex((item) => item.id === props.selection?.sheetId || item.name === props.selection?.sheetName);
-    const sheet = sheetIndex >= 0 ? props.workbook.sheets[sheetIndex] : null;
+    if (!workbook || !props.selection?.sheetId || !props.selection.address) return null;
+    const sheetIndex = workbook.sheets.findIndex((item) => item.id === props.selection?.sheetId || item.name === props.selection?.sheetName);
+    const sheet = sheetIndex >= 0 ? workbook.sheets[sheetIndex] : null;
     if (!sheet) return null;
     const range = selectionRangeFromAddress(props.selection.address, sheet);
     const point = pointFromAddress(props.selection.activeAddress ?? props.selection.address) ?? (range ? { col: range.col, row: range.row } : null);
@@ -112,7 +119,7 @@ export function XlsxPreview(props: {
       range,
       sheet,
     };
-  }, [props.selection?.activeAddress, props.selection?.address, props.selection?.sheetId, props.selection?.sheetName, props.workbook]);
+  }, [props.selection?.activeAddress, props.selection?.address, props.selection?.sheetId, props.selection?.sheetName, workbook]);
   const focusSelection = useMemo<XlsxRendererFocusSelection | null>(() => {
     if (props.selectionRestoreKey <= 0 || !restoreTarget) return null;
     return {
@@ -182,10 +189,10 @@ export function XlsxPreview(props: {
       scroll?.removeEventListener("scroll", updateViewport);
       root.removeEventListener("wheel", onWheel, { capture: true });
     };
-  }, [props.workbook]);
+  }, [workbook]);
 
   useEffect(() => {
-    if (!formulaDrag || !formulaMode || !editing || !props.workbook) return;
+    if (!formulaDrag || !formulaMode || !editing || !workbook) return;
 
     const handleMouseMove = (event: MouseEvent) => {
       const root = rootRef.current;
@@ -225,15 +232,13 @@ export function XlsxPreview(props: {
       window.removeEventListener("mousemove", handleMouseMove, { capture: true });
       window.removeEventListener("mouseup", handleMouseUp, { capture: true });
     };
-  }, [activeSelection, draft, editing, formulaDrag, formulaMode, formulaReferences, inputSelection, props.workbook, rendererGeometry]);
+  }, [activeSelection, draft, editing, formulaDrag, formulaMode, formulaReferences, inputSelection, workbook, rendererGeometry]);
 
-  if (props.loading) {
-    return <PreviewState title={t("preview.loadingTitle")} body={t("preview.loadingBody")} />;
-  }
-  if (props.error) {
-    return <PreviewState title={t("preview.errorTitle")} body={props.error} />;
-  }
-  if (!props.workbook) {
+  // Only show a full-screen state when there is no workbook to display at all (first load).
+  // Once a workbook has rendered we keep it on screen through reloads to avoid flicker.
+  if (!workbook) {
+    if (props.error) return <PreviewState title={t("preview.errorTitle")} body={props.error} />;
+    if (props.loading) return <PreviewState title={t("preview.loadingTitle")} body={t("preview.loadingBody")} />;
     return <PreviewState title={t("preview.emptyTitle")} body={t("preview.emptyBody")} />;
   }
 
@@ -241,7 +246,7 @@ export function XlsxPreview(props: {
     if (!selection) return;
     const address = selectionAddressFromRendererSelection(selection);
     const activeAddress = cellAddressFromPoint(selection.row, selection.col);
-    const sheet = props.workbook?.sheets.find((item) => item.id === selection.sheetId);
+    const sheet = workbook?.sheets.find((item) => item.id === selection.sheetId);
     const cell = sheet?.cellMap[`${selection.row}:${selection.col}`];
     if (formulaMode && editing) {
       if (suppressFormulaSelectionRef.current) {
@@ -390,7 +395,7 @@ export function XlsxPreview(props: {
       >
         <XlsxRenderer
           focusSelection={focusSelection}
-          workbook={props.workbook}
+          workbook={workbook}
           onActiveSheetChange={updateActiveSheet}
           onGeometryChange={setRendererGeometry}
           onSelectionChange={updateSelection}

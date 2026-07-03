@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { ArtifactEditorWorkspace, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import type { LocalAgentProviderStatus, ProjectDetailResponse, RuntimeProfile, SheetRunTimelineItem } from "@ai-sheet/shared";
 import { AgentConversationPanel } from "./AgentConversationPanel";
@@ -35,7 +35,12 @@ export function SheetViewerScreen(props: {
 }) {
   const { t } = useI18n();
   const manifest = props.detail.xlsxManifest;
-  const sheets = props.runtime?.renderWorkbook?.sheets.length ?? 0;
+  // Hold the last known sheet count so the header stat doesn't flip to the artifact type
+  // during a reload, when the runtime's render workbook is momentarily null.
+  const lastSheetsRef = useRef(0);
+  const liveSheets = props.runtime?.renderWorkbook?.sheets.length ?? 0;
+  if (liveSheets > 0) lastSheetsRef.current = liveSheets;
+  const sheets = liveSheets || lastSheetsRef.current;
   const activeSelectionText = useMemo(() => {
     const selection = props.runtime?.selection;
     if (!selection?.address) return "";

@@ -71,6 +71,10 @@ export function App() {
   const [xlsxSelectionRestoreKey, setXlsxSelectionRestoreKey] = useState(0);
   const routeRef = useRef(route);
   const xlsxSelectionRef = useRef<XlsxSelection | null>(null);
+  // Signature of the workbook currently reflected in the runtime. Used to skip redundant
+  // reloads (e.g. the WebSocket reconcile re-hydrating the project on connect), which would
+  // otherwise flash the "Loading workbook" placeholder right after the grid first appears.
+  const loadedWorkbookSigRef = useRef<string | null>(null);
   const homeAttachments = useHomeAttachments();
   const xlsxArtifactAdapter = useMemo(() => new XlsxArtifactRuntimeAdapter(), []);
   const {
@@ -86,8 +90,14 @@ export function App() {
   } = useXlsxArtifactRuntime(xlsxArtifactAdapter);
   const currentProjectId = route.name === "sheet" ? route.projectId : null;
   const loadProjectXlsxArtifact = useCallback(
-    async (detail: ProjectDetailResponse, options: { preserveSelection?: boolean } = {}) => {
+    async (detail: ProjectDetailResponse, options: { preserveSelection?: boolean; force?: boolean } = {}) => {
       if (!detail.xlsxManifest) return null;
+      const signature = workbookLoadSignature(detail);
+      // Skip when the same workbook content is already loaded (or loading). This absorbs the
+      // duplicate hydrate emitted when the run-timeline WebSocket connects, StrictMode's
+      // double-invoked effects, and any other redundant "project.updated" for unchanged content.
+      if (!options.force && loadedWorkbookSigRef.current === signature) return null;
+      loadedWorkbookSigRef.current = signature;
       const runtime = await loadXlsxArtifact(detail.project.id, {
         title: detail.project.title,
         manifest: detail.xlsxManifest,
@@ -172,6 +182,7 @@ export function App() {
 
   useEffect(() => {
     setBootedProjectId(null);
+    loadedWorkbookSigRef.current = null;
     if (route.name !== "sheet") {
       setProjectDetail(null);
       clearXlsxArtifact();
@@ -284,7 +295,13 @@ export function App() {
       });
       setProjectDetail(detail);
       setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
-      if (detail.calc?.changed) await loadProjectXlsxArtifact(detail, { preserveSelection: true });
+      if (detail.calc?.changed) {
+        await loadProjectXlsxArtifact(detail, { preserveSelection: true });
+      } else {
+        // The command was applied locally; the runtime already matches this detail's content,
+        // so record its signature to avoid a redundant reload from a later "project.updated".
+        loadedWorkbookSigRef.current = workbookLoadSignature(detail);
+      }
       setXlsxSaveState("saved");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -295,7 +312,7 @@ export function App() {
           const detail = await getProject(currentProjectId);
           setProjectDetail(detail);
           setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
-          await loadProjectXlsxArtifact(detail, { preserveSelection: true });
+          await loadProjectXlsxArtifact(detail, { preserveSelection: true, force: true });
         } catch {
           // Keep the original stale-save error visible.
         }
@@ -483,4 +500,11 @@ export function App() {
 
 function isStaleWorkbookError(message: string) {
   return message.toLowerCase().includes("stale");
+}
+
+// Identity of a workbook's rendered content: the file hash (falling back to the artifact
+// revision when no xlsx file exists). Two details with the same signature render identically,
+// so there is no need to re-parse/re-render the preview for the second one.
+function workbookLoadSignature(detail: ProjectDetailResponse) {
+  return `${detail.project.id}:${detail.xlsxManifest?.sha256 || `rev:${detail.artifact.revision}`}`;
 }
