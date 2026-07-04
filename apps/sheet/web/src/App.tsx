@@ -22,6 +22,7 @@ import { SheetBootScreen } from "./app/SheetBootScreen";
 import { SheetHome } from "./app/SheetHome";
 import { initialPromptWithAttachmentContext, uploadHomeContextAttachments } from "./app/homeAttachmentPrompt";
 import { SheetViewerScreen } from "./app/SheetViewerScreen";
+import { reportUserActive } from "./app/tuttiActivity";
 import { useAgentConversation } from "./app/useAgentConversation";
 import { useHomeAttachments } from "./app/useHomeAttachments";
 import { XlsxArtifactRuntimeAdapter } from "./artifact/xlsxArtifactAdapter";
@@ -238,6 +239,7 @@ export function App() {
           selectedText: "",
           selectedHtml: "",
         });
+        reportUserActive();
       }
       setPrompt("");
       if (attachments.length) homeAttachments.clearAttachments();
@@ -264,6 +266,7 @@ export function App() {
           runtimeProfileId: selectedAgent || null,
         }),
       );
+      reportUserActive();
       await agentConversation.reload();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

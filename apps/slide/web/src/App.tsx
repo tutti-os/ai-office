@@ -10,6 +10,7 @@ import { HomeComposer } from "./app/HomeComposer";
 import { BlankTemplateCard, CategoryButton, ProjectHistory, TemplateCard, TemplatePreviewModal } from "./app/SlideHomePanels";
 import { SlideEditorScreen } from "./app/SlideEditorScreen";
 import { initialPromptWithAttachmentContext, uploadHomeContextAttachments } from "./app/homeAttachmentPrompt";
+import { reportUserActive } from "./app/tuttiActivity";
 import { pushHomeRoute, pushSlideRoute, readCurrentRoute, routePath, type AppRoute } from "./app/slideRoutes";
 import { useAgentConversation } from "./app/useAgentConversation";
 import { useHomeAttachments, type HomeAttachment } from "./app/useHomeAttachments";
@@ -266,6 +267,7 @@ export function App() {
           selectionPath: "",
           runtimeProfileId: selectedAgent || null,
         });
+        reportUserActive();
       }
       if (input.attachments?.length) homeAttachments.clearAttachments();
       setPrompt("");
@@ -405,6 +407,7 @@ export function App() {
         );
         void agentConversation.reload();
       }
+      reportUserActive();
       await agentConversation.reload();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
