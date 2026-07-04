@@ -6,6 +6,7 @@ import { cancelRun, startAiEdit } from "../api/projects";
 import type { DocxRuntimeState } from "../artifact/docxArtifactAdapter";
 import type { MarkdownRuntimeState } from "../artifact/markdownArtifactAdapter";
 import type { RuntimeState } from "../artifact/runtime/types";
+import { reportUserActive } from "./tuttiActivity";
 import { useAgentConversation } from "./useAgentConversation";
 
 type Ref<T> = { current: T };
@@ -107,6 +108,7 @@ export function useDocumentAgentRuntime(input: DocumentAgentRuntimeInput) {
           runtimeProfileId: input.selectedRuntimeProfileId || null,
         }));
       }
+      reportUserActive();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       input.setError(message);

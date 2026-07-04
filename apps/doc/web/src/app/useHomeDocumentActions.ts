@@ -1,6 +1,7 @@
 import type { DocumentProject, DocumentType, OfficeCliStatus } from "@ai-doc/shared";
 import { createInitialPromptAiEditRequest, initialContentForType } from "./documentWorkbenchContent";
 import { pushDocumentRoute, type AppRoute } from "./documentWorkbenchRoutes";
+import { reportUserActive } from "./tuttiActivity";
 import { fetchTuttiStudyPlanFixture } from "../api/fixtures";
 import { installOfficeCli, fetchOfficeCliStatus } from "../api/runtime";
 import { clearProjectHistory, createProject, deleteProject, importProjectFile, listProjects, startAiEdit, uploadContextAttachment } from "../api/projects";
@@ -107,6 +108,7 @@ export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
           type: project.type,
           userPrompt: initialUserPrompt,
         }));
+        reportUserActive();
       }
       input.homeAttachments.clearAttachments();
       input.setPrompt("");
