@@ -16,7 +16,7 @@
     "@ai-sheet/shared": "workspace:*",
     "@fastify/static": "^9.1.3",
     "@fastify/websocket": "^11.2.0",
-    "@tutti-os/office-formula-calc": "0.0.0-test.20260702080759.dd0112bf59c8",
+    "@tutti-os/office-formula-calc": "0.0.0-test.20260706055103.ad1e4504c24a",
     "fastify": "^5.8.5"
   },
   "devDependencies": {

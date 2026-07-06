@@ -14,7 +14,7 @@
     "@ai-app/shared": "workspace:*",
     "@ai-app/ui": "workspace:*",
     "@ai-sheet/shared": "workspace:*",
-    "@tutti-os/office-preview": "0.0.0-test.20260703082335.62401e60c8d2",
+    "@tutti-os/office-preview": "0.0.0-test.20260706055103.ad1e4504c24a",
     "@vitejs/plugin-react": "^5.1.1",
     "lucide-react": "^0.562.0",
     "react": "^19.2.3",
