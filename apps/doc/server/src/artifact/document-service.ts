@@ -72,10 +72,12 @@ export class DocumentService {
       this.runtimes.listLocalAgentProviders(headers),
       getAgentProviders().catch(() => null),
     ]);
-    return {
+    const merged = {
       providers: mergeTuttiAgentProviderStatuses(providers, tuttiProviders?.providers),
       defaultProvider: tuttiProviders?.defaultProvider ?? null,
     };
+    this.repo.syncLocalAgentRuntimeProfiles(merged.providers);
+    return merged;
   }
 
   listProjects() {

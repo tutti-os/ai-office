@@ -47,7 +47,9 @@ export class SheetService {
   }
 
   async listLocalAgentProviders() {
-    return { providers: await this.runtimes.listLocalAgentProviders() };
+    const providers = await this.runtimes.listLocalAgentProviders();
+    this.repo.syncLocalAgentRuntimeProfiles(providers);
+    return { providers };
   }
 
   listProjects() {

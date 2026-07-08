@@ -1,7 +1,8 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { AgentConversationMessage, AgentConversationRole, AgentConversationSession, BaseRun, BaseRunEvent, RuntimeProfile } from "@ai-app/shared/types";
+import { localAgentRuntimeProfileSeed } from "../agent-providers/index.js";
+import type { AgentConversationMessage, AgentConversationRole, AgentConversationSession, BaseRun, BaseRunEvent, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
 
 export type DatabaseMigrator = (database: DatabaseSync) => void;
 
@@ -109,6 +110,23 @@ export class RuntimeProfileStore {
     );
     if (!row) throw new Error("No runtime profile configured");
     return rowToRuntimeProfile(row);
+  }
+
+  syncLocalAgentRuntimeProfiles(providers: readonly Pick<LocalAgentProviderStatus, "provider" | "displayName">[]) {
+    const existingIds = new Set(this.list().map((profile) => profile.id));
+    const database = this.getDb();
+    const now = new Date().toISOString();
+    for (const provider of providers) {
+      const seed = localAgentRuntimeProfileSeed(provider.provider, provider.displayName);
+      if (existingIds.has(seed.id)) continue;
+      database
+        .prepare(
+          `INSERT INTO ${this.tableName} (id, kind, provider, model, display_name, enabled, capabilities, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(seed.id, seed.kind, seed.provider, seed.model, seed.displayName, seed.enabled ? 1 : 0, json(seed.capabilities), now, now);
+      existingIds.add(seed.id);
+    }
   }
 
   private get tableName() {

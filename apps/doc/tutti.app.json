@@ -1,7 +1,7 @@
 {
   "schemaVersion": "tutti.app.manifest.v1",
   "appId": "ai-doc",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "name": "AI Doc",
   "description": "Human and local agents editing rich docs together.",
   "icon": {
@@ -36,5 +36,10 @@
   "author": {
     "name": "Tutti"
   },
-  "tags": ["local-first", "agent", "doc", "editor"]
+  "tags": [
+    "local-first",
+    "agent",
+    "doc",
+    "editor"
+  ]
 }

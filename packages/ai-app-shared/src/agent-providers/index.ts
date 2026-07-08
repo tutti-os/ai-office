@@ -1,4 +1,5 @@
 import type { LocalAgentProviderStatus } from "../types/index.js";
+import type { RuntimeProfileSeed } from "../project-store/index.js";
 
 export function normalizeLocalAgentProviderId(provider: string | null | undefined) {
   const normalized = provider?.trim().toLowerCase().replace(/[\s_]+/g, "-");
@@ -77,4 +78,49 @@ export function resolvePreferredLocalAgentRuntimeProfileId(input: {
 function findRuntimeProfileForProvider(profiles: LocalAgentRuntimeProfileLike[], provider: string | null | undefined) {
   if (!provider) return null;
   return profiles.find((profile) => localAgentProviderIdsMatch(profile.provider, provider)) ?? null;
+}
+
+export function normalizeRuntimeProfileProviderId(provider: string | null | undefined) {
+  const normalized = normalizeLocalAgentProviderId(provider);
+  if (!normalized) return "";
+  if (normalized === "claude-code") return "claude";
+  return normalized;
+}
+
+export function runtimeProfileIdFromProvider(provider: string): { value?: string; error?: string } {
+  const profileProvider = normalizeRuntimeProfileProviderId(provider);
+  if (!profileProvider) return { error: "provider is required" };
+  return { value: `local-agent:${profileProvider}` };
+}
+
+export function displayNameForLocalAgentProvider(provider: string, fallback?: string | null) {
+  const trimmed = fallback?.trim();
+  if (trimmed) return trimmed;
+  const normalized = normalizeRuntimeProfileProviderId(provider);
+  if (normalized === "codex") return "Codex";
+  if (normalized === "claude") return "Claude Code";
+  if (normalized === "cursor") return "Cursor";
+  if (normalized === "opencode") return "OpenCode";
+  if (!normalized) return "Agent";
+  return normalized
+    .split(/[-_.]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+export function localAgentRuntimeProfileSeed(
+  provider: string,
+  displayName?: string | null,
+): RuntimeProfileSeed {
+  const profileProvider = normalizeRuntimeProfileProviderId(provider);
+  return {
+    id: `local-agent:${profileProvider}`,
+    kind: "local-agent",
+    provider: profileProvider,
+    model: `${profileProvider}:default`,
+    displayName: displayNameForLocalAgentProvider(provider, displayName),
+    enabled: true,
+    capabilities: { streaming: true, toolUse: true, reasoning: true, resume: true },
+  };
 }

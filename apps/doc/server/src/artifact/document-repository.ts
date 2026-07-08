@@ -309,6 +309,10 @@ export class DocumentRepository {
     return this.runtimeProfiles.getDefault();
   }
 
+  syncLocalAgentRuntimeProfiles(providers: Array<{ provider: string; displayName: string }>) {
+    this.runtimeProfiles.syncLocalAgentRuntimeProfiles(providers);
+  }
+
   private materializeProject(project: DocumentProject) {
     const root = ensureProjectDirs(project.id);
     if (project.type === "docx") {

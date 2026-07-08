@@ -338,10 +338,12 @@ export class ProjectService {
       this.runtimes.listLocalAgentProviders(headers),
       getAgentProviders().catch(() => null),
     ]);
-    return {
+    const merged = {
       providers: mergeTuttiAgentProviderStatuses(providers, tuttiProviders?.providers),
       defaultProvider: tuttiProviders?.defaultProvider ?? null,
     };
+    this.repo.syncLocalAgentRuntimeProfiles(merged.providers);
+    return merged;
   }
 
   private resolveConversationSession(projectId: string, title: string, sessionId: string | null | undefined) {
