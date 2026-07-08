@@ -64,26 +64,17 @@ export function resolvePreferredLocalAgentRuntimeProfileId(input: {
   const profiles = input.profiles.filter((profile) => profile.kind === "local-agent");
   const defaultProfile = findRuntimeProfileForProvider(profiles, input.defaultProvider);
   if (defaultProfile) return defaultProfile.id;
-  return (
-    findAvailableRuntimeProfileForProvider(profiles, input.providers, "codex")?.id ??
-    findAvailableRuntimeProfileForProvider(profiles, input.providers, "claude-code")?.id ??
-    profiles[0]?.id ??
-    ""
-  );
+
+  const availableProvider = input.providers?.find((provider) => provider.available);
+  if (availableProvider) {
+    const matched = findRuntimeProfileForProvider(profiles, availableProvider.provider);
+    if (matched) return matched.id;
+  }
+
+  return profiles[0]?.id ?? "";
 }
 
 function findRuntimeProfileForProvider(profiles: LocalAgentRuntimeProfileLike[], provider: string | null | undefined) {
   if (!provider) return null;
   return profiles.find((profile) => localAgentProviderIdsMatch(profile.provider, provider)) ?? null;
-}
-
-function findAvailableRuntimeProfileForProvider(
-  profiles: LocalAgentRuntimeProfileLike[],
-  providers: LocalAgentProviderStatusLike[] | undefined,
-  provider: string,
-) {
-  const runtimeProfile = findRuntimeProfileForProvider(profiles, provider);
-  if (!runtimeProfile) return null;
-  if (providers?.some((item) => localAgentProviderIdsMatch(item.provider, provider) && item.available)) return runtimeProfile;
-  return null;
 }
