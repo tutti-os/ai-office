@@ -8,7 +8,7 @@ import {
   WandSparkles,
   XCircle,
 } from "lucide-react";
-import { localAgentProviderIdsMatch } from "@ai-app/shared/agent-providers";
+import { localAgentProviderIdsMatch, resolveAgentMenuProfiles } from "@ai-app/shared/agent-providers";
 import type { BaseRun, BaseRunEvent, BaseRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { isAgentRunActive, timelineToMessages, type AgentConversationBlock, type AgentConversationMessage } from "@ai-app/agent/conversation";
 import { MarkdownText } from "./markdown.js";
@@ -118,13 +118,13 @@ export function ArtifactAgentConversationPanel<TRun extends BaseRun, TEvent exte
     onRuntimeProfileChange,
     ...panelProps
   } = props;
-  const agentOptions = runtimeProfiles.map((profile) => {
+  const agentOptions = resolveAgentMenuProfiles(runtimeProfiles, localAgentProviders).map((profile) => {
     const provider = profile.kind === "local-agent" ? localAgentProviders.find((item) => localAgentProviderIdsMatch(item.provider, profile.provider)) ?? null : null;
     return {
       id: profile.id,
       label: !provider || provider.available
         ? profile.displayName
-        : formatUnavailableRuntimeProfileLabel?.(profile, provider) ?? `${profile.displayName} (${provider.authState})`,
+        : formatUnavailableRuntimeProfileLabel?.(profile as RuntimeProfile, provider) ?? `${profile.displayName} (${provider.authState})`,
       disabled: provider ? !provider.available : false,
     };
   });

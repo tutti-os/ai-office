@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hasActiveAgentRun } from "@ai-app/agent/conversation";
-import { resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
+import { mergeLocalAgentRuntimeProfiles, resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
 import {
   History,
   Upload,
@@ -164,13 +164,17 @@ export function App() {
     void fetchLocalAgentProviders()
       .then((response) => {
         setLocalAgentProviders(response.providers);
-        setSelectedAgent((current) => {
-          if (runtimeProfiles.some((profile) => profile.id === current)) return current;
-          return resolvePreferredLocalAgentRuntimeProfileId({
-            profiles: runtimeProfiles,
-            providers: response.providers,
-            defaultProvider: response.defaultProvider,
+        setRuntimeProfiles((current) => {
+          const merged = mergeLocalAgentRuntimeProfiles(current, response.providers);
+          setSelectedAgent((selected) => {
+            if (merged.some((profile) => profile.id === selected)) return selected;
+            return resolvePreferredLocalAgentRuntimeProfileId({
+              profiles: merged,
+              providers: response.providers,
+              defaultProvider: response.defaultProvider,
+            });
           });
+          return merged;
         });
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));

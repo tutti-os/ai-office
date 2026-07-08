@@ -17,7 +17,7 @@ import {
   type UpdateProjectRequest,
 } from "@ai-slide/shared";
 import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
-import { mergeTuttiAgentProviderStatuses } from "@ai-app/shared/agent-providers";
+import { mergeTuttiAgentProviderStatuses, normalizeRuntimeProfileProviderId } from "@ai-app/shared/agent-providers";
 import { projectAssetFileExtensions, projectAssetMimeTypes } from "@ai-app/shared/artifact-assets";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
 import { resolveWorkspaceImportSourcePath } from "@ai-app/shared/import-source";
@@ -358,19 +358,21 @@ export class ProjectService {
       getAgentProviders().catch(() => null),
     ]);
     const statuses = localStatuses ? mergeTuttiAgentProviderStatuses(localStatuses, tuttiProviders?.providers) : null;
-    const defaultProvider = normalizeTuttiAgentProvider(tuttiProviders?.defaultProvider ?? (await getDefaultAgentProvider().catch(() => undefined)));
+    if (statuses) this.repo.syncLocalAgentRuntimeProfiles(statuses);
+    const defaultProvider = normalizeRuntimeProfileProviderId(tuttiProviders?.defaultProvider ?? (await getDefaultAgentProvider().catch(() => undefined)));
     const defaultProfile = defaultProvider ? this.availableRuntimeProfile(defaultProvider, statuses) : null;
     if (defaultProfile) return defaultProfile;
-    return (
-      this.availableRuntimeProfile("codex", statuses) ??
-      this.availableRuntimeProfile("claude", statuses) ??
-      this.repo.getRuntimeProfile(undefined)
-    );
+    const firstAvailable = statuses?.find((item) => item.available);
+    if (firstAvailable) {
+      const profile = this.availableRuntimeProfile(normalizeRuntimeProfileProviderId(firstAvailable.provider), statuses);
+      if (profile) return profile;
+    }
+    return this.repo.getRuntimeProfile(undefined);
   }
 
   private availableRuntimeProfile(provider: string | undefined, statuses: LocalAgentProviderStatus[] | null) {
     if (!provider) return null;
-    if (statuses && !statuses.some((item) => normalizeTuttiAgentProvider(item.provider) === provider && item.available)) return null;
+    if (statuses && !statuses.some((item) => normalizeRuntimeProfileProviderId(item.provider) === provider && item.available)) return null;
     return this.repo.getLocalAgentRuntimeProfileByProvider(provider);
   }
 
@@ -608,14 +610,6 @@ function isSupportedExportMimeType(mimeType: string) {
 
 function isSupportedPptxImport(fileName: string, mimeType: string) {
   return fileName.toLowerCase().endsWith(".pptx") || mimeType.toLowerCase() === pptxMimeType;
-}
-
-function normalizeTuttiAgentProvider(provider: string | undefined) {
-  const normalized = provider?.trim().toLowerCase().replace(/[\s_]+/g, "-");
-  if (!normalized) return undefined;
-  if (normalized === "claude-code" || normalized === "claude") return "claude";
-  if (normalized === "codex") return "codex";
-  return normalized;
 }
 
 function isSupportedImageMimeType(mimeType: string) {

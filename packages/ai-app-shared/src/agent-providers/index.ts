@@ -124,3 +124,59 @@ export function localAgentRuntimeProfileSeed(
     capabilities: { streaming: true, toolUse: true, reasoning: true, resume: true },
   };
 }
+
+export type AgentMenuProfileLike = {
+  displayName: string;
+  id: string;
+  kind: string;
+  provider?: string | null;
+};
+
+export type AgentMenuProviderLike = {
+  displayName?: string | null;
+  provider: string;
+};
+
+export function resolveAgentMenuProfiles(
+  agentProfiles: AgentMenuProfileLike[],
+  agentProviders: AgentMenuProviderLike[],
+): AgentMenuProfileLike[] {
+  if (agentProviders.length === 0) return agentProfiles;
+
+  const profilesByProvider = new Map<string, AgentMenuProfileLike>();
+  for (const profile of agentProfiles) {
+    if (profile.kind !== "local-agent" || !profile.provider) continue;
+    profilesByProvider.set(normalizeRuntimeProfileProviderId(profile.provider), profile);
+  }
+
+  return agentProviders.map((provider) => {
+    const profileProvider = normalizeRuntimeProfileProviderId(provider.provider);
+    const existing = profilesByProvider.get(profileProvider);
+    if (existing) return existing;
+    const seed = localAgentRuntimeProfileSeed(provider.provider, provider.displayName);
+    return {
+      id: seed.id,
+      kind: seed.kind,
+      provider: seed.provider,
+      displayName: seed.displayName,
+    };
+  });
+}
+
+export function mergeLocalAgentRuntimeProfiles<TProfile extends RuntimeProfileSeed & { createdAt?: string; updatedAt?: string }>(
+  existing: TProfile[],
+  providers: readonly AgentMenuProviderLike[],
+): TProfile[] {
+  const now = new Date().toISOString();
+  const merged = new Map(existing.filter((profile) => profile.kind === "local-agent").map((profile) => [profile.id, profile]));
+  for (const provider of providers) {
+    const seed = localAgentRuntimeProfileSeed(provider.provider, provider.displayName);
+    if (merged.has(seed.id)) continue;
+    merged.set(seed.id, {
+      ...seed,
+      createdAt: now,
+      updatedAt: now,
+    } as TProfile);
+  }
+  return [...merged.values(), ...existing.filter((profile) => profile.kind !== "local-agent")];
+}

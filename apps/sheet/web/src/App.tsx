@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hasActiveAgentRun } from "@ai-app/agent/conversation";
 import type { LocalAgentProviderStatus, OfficeCliStatus, ProjectDetailResponse, RuntimeProfile, SheetProject } from "@ai-sheet/shared";
+import { mergeLocalAgentRuntimeProfiles, resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
 import {
   applyProjectCommands,
   cancelRun,
@@ -163,16 +164,20 @@ export function App() {
     void fetchLocalAgentProviders()
       .then((response) => {
         setLocalAgentProviders(response.providers);
-        setSelectedAgent((current) => {
-          const currentProfile = runtimeProfiles.find((profile) => profile.id === current);
-          const currentStatus = currentProfile ? response.providers.find((provider) => provider.provider === currentProfile.provider) : null;
-          if (currentStatus?.available) return current;
-          const firstAvailable = runtimeProfiles.find((profile) => response.providers.find((provider) => provider.provider === profile.provider)?.available);
-          return firstAvailable?.id ?? current;
+        setRuntimeProfiles((current) => {
+          const merged = mergeLocalAgentRuntimeProfiles(current, response.providers);
+          setSelectedAgent((selected) => {
+            if (merged.some((profile) => profile.id === selected)) return selected;
+            return resolvePreferredLocalAgentRuntimeProfileId({
+              profiles: merged,
+              providers: response.providers,
+            });
+          });
+          return merged;
         });
       })
       .catch(() => setLocalAgentProviders([]));
-  }, [runtimeProfiles]);
+  }, []);
 
   useEffect(() => {
     if (route.name !== "home") return;
