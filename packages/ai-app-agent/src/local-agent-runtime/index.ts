@@ -12,10 +12,13 @@ import {
 } from "@tutti-os/agent-acp-kit";
 import {
   loadTuttiAgentSkillContext,
+  resolveTuttiAgentProviderCatalog,
   type LoadTuttiAgentSkillContextInput,
+  type TuttiAgentProviderCatalogEntry,
+  type TuttiAgentProviderCatalogResult,
   type TuttiRecommendedSystemPrompt,
 } from "@tutti-os/agent-acp-kit/tutti";
-import { localAgentProviderIdsMatch } from "@ai-app/shared/agent-providers";
+import { localAgentModelIdForAcp, localAgentProviderIdsMatch } from "@ai-app/shared/agent-providers";
 import type { BaseAiEditRequest, BaseRun, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { safePathSegment } from "@ai-app/shared/local-paths";
 import type { RuntimeEditContext, RuntimeProvider, RuntimeStreamEvent } from "@ai-app/agent/runtime";
@@ -127,22 +130,19 @@ export class LocalAgentRuntimeProvider<
     return { available: true };
   }
 
-  async listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>): Promise<LocalAgentProviderStatus[]> {
-    const detections = await this.localAgentRuntime.detect(createManagedAgentDetectContextFromHeaders(headers));
-    return detections.map((item: any) => {
-      const available = Boolean(item.result && item.result.supported !== false);
-      return {
-        provider: item.provider,
-        displayName: item.displayName,
-        available,
-        authState: item.result?.authState ?? "unknown",
-        executablePath: item.result?.executablePath ?? "",
-        version: item.result?.version ?? "not-installed",
-        configDir: item.result?.configDir,
-        models: (item.result?.models ?? []).map((model: any) => ({ id: model.id, label: model.label })),
-        reason: available ? undefined : localAgentUnavailableReason(item.displayName, item.result),
-      };
+  async listLocalAgentProviderCatalog(
+    headers?: Record<string, string | string[] | undefined>,
+  ): Promise<TuttiAgentProviderCatalogResult> {
+    return resolveTuttiAgentProviderCatalog({
+      runtime: this.localAgentRuntime,
+      detectContext: createManagedAgentDetectContextFromHeaders(headers),
+      workspaceCwd: process.env.TUTTI_WORKSPACE_ROOT?.trim() || undefined,
     });
+  }
+
+  async listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>): Promise<LocalAgentProviderStatus[]> {
+    const catalog = await this.listLocalAgentProviderCatalog(headers);
+    return catalog.providers.map(mapCatalogEntryToLocalAgentProviderStatus);
   }
 
   async *streamEdit(context: RuntimeEditContext<TRun, TProject, TRequest>) {
@@ -229,7 +229,7 @@ export class LocalAgentRuntimeProvider<
       prompt: this.options.buildPrompt(context),
       systemPrompt,
       history: context.history ?? [],
-      model: stripProviderPrefix(context.runtimeProfile.model, provider),
+      model: localAgentModelIdForAcp(context.runtimeProfile.model, provider),
       reasoning: context.request.reasoningEffort ?? undefined,
       mcpServers: context.managedAgent ? [] : (this.options.buildMcpServers?.(context) ?? []),
       skillManifest: skillContext.skills,
@@ -430,6 +430,26 @@ export function toRuntimeStreamEvent(event: AgentEvent): RuntimeStreamEvent | nu
 export function stripProviderPrefix(model: string, provider: string) {
   const prefix = `${provider}:`;
   return model.startsWith(prefix) ? model.slice(prefix.length) : model;
+}
+
+function mapCatalogEntryToLocalAgentProviderStatus(
+  entry: TuttiAgentProviderCatalogEntry,
+): LocalAgentProviderStatus {
+  return {
+    provider: entry.provider,
+    displayName: entry.displayName,
+    available: entry.available,
+    authState: entry.authState,
+    executablePath: entry.executablePath,
+    version: entry.version,
+    configDir: entry.configDir,
+    models: entry.models.map((model) => ({
+      id: model.id,
+      label: model.label,
+    })),
+    ...(entry.defaultModelId ? { defaultModelId: entry.defaultModelId } : {}),
+    reason: entry.reason,
+  };
 }
 
 function localAgentUnavailableReason(displayName: string, result: any) {

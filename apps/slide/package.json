@@ -10,7 +10,7 @@
     "build": "pnpm --filter @ai-slide/shared build && pnpm --filter @ai-slide/web build && pnpm --filter @ai-slide/server build",
     "check": "pnpm --filter @ai-slide/shared check && pnpm --filter @ai-slide/web check && pnpm --filter @ai-slide/server check",
     "check:i18n": "node ../../scripts/check-doc-i18n.mjs",
-    "package:tutti": "node ../../tooling/tutti/package-slide-tutti-app.mjs",
+    "package:tutti": "node ../../scripts/patch-agent-acp-kit-base.mjs && node ../../tooling/tutti/package-slide-tutti-app.mjs",
     "sync:templates": "node scripts/sync-slide-templates.mjs",
     "publish:office-templates": "node scripts/publish-office-templates.mjs"
   }

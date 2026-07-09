@@ -54,6 +54,7 @@ export function App() {
   const [slideTemplates, setSlideTemplates] = useState<SlideTemplate[]>([]);
   const [runtimeProfiles, setRuntimeProfiles] = useState<RuntimeProfile[]>([]);
   const [localAgentProviders, setLocalAgentProviders] = useState<LocalAgentProviderStatus[]>([]);
+  const [localAgentProvidersLoaded, setLocalAgentProvidersLoaded] = useState(false);
   const [officeCliStatus, setOfficeCliStatus] = useState<OfficeCliStatus | null>(null);
   const [officeCliInstalling, setOfficeCliInstalling] = useState(false);
   const [templatesLoading, setTemplatesLoading] = useState(false);
@@ -161,9 +162,12 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     void fetchLocalAgentProviders()
       .then((response) => {
+        if (cancelled) return;
         setLocalAgentProviders(response.providers);
+        setLocalAgentProvidersLoaded(true);
         setRuntimeProfiles((current) => {
           const merged = mergeLocalAgentRuntimeProfiles(current, response.providers);
           setSelectedAgent((selected) => {
@@ -177,8 +181,15 @@ export function App() {
           return merged;
         });
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
-  }, [runtimeProfiles]);
+      .catch((err) => {
+        if (cancelled) return;
+        setLocalAgentProvidersLoaded(true);
+        setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     void fetchOfficeCliStatus()
@@ -506,8 +517,8 @@ export function App() {
             outputType={outputType}
             prompt={prompt}
             selectedAgent={selectedAgent}
-            localAgentProviders={localAgentProviders}
-            runtimeProfiles={runtimeProfiles}
+            localAgentProviders={localAgentProvidersLoaded ? localAgentProviders : []}
+            runtimeProfiles={localAgentProvidersLoaded ? runtimeProfiles : []}
             onAddFiles={homeAttachments.addFiles}
             onCreate={createFromPrompt}
             onInstallOfficeCli={downloadOfficeCli}

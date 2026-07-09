@@ -101,6 +101,12 @@ export async function packageTuttiApp() {
     webBuildFilter: "@ai-slide/web",
     webDistDir: path.join(appDir, "web", "dist"),
     serverEntry: "apps/slide/server/src/main.ts",
+    serverExtraEntries: [
+      {
+        entry: "apps/slide/server/src/agent-tools-mcp.ts",
+        outfile: "build/tutti-slide-app/package/server/agent-tools-mcp.js",
+      },
+    ],
     cliManifestFile: "tutti.cli.json",
     cliManifest: createArtifactCliManifest("slide"),
     commandsGuide: renderArtifactCommandsGuide("slide"),

@@ -38,6 +38,7 @@ export interface LocalAgentProviderStatus {
   version: string;
   configDir?: string;
   models: LocalAgentProviderModel[];
+  defaultModelId?: string;
   reason?: string;
 }
 
