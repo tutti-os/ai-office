@@ -248,6 +248,7 @@ export interface ProjectRunsResponse {
 
 export interface LocalAgentProviderStatusResponse {
   providers: LocalAgentProviderStatus[];
+  defaultProvider?: string | null;
 }
 
 export type OfficeCliSource = "env" | "bundled" | "tutti" | "missing";

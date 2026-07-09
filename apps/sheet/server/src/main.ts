@@ -10,6 +10,7 @@ import { type AiEditRequest, type ApplySheetCommandsRequest, xlsxMimeType } from
 import { SheetRepository } from "./artifact/sheet-repository.js";
 import { SheetService } from "./artifact/sheet-service.js";
 import { XlsxStorageAdapter } from "./artifact/xlsx-storage-adapter.js";
+import { registerSheetAgentToolRoutes } from "./agent-tools.js";
 import { listTemplates } from "./templates/template-service.js";
 import { getOfficeCliStatus, installOfficeCli } from "./toolchains/officecli.js";
 import { registerTuttiCliRoutes } from "./tutti/cli-routes.js";
@@ -32,6 +33,7 @@ addArtifactBufferContentTypeParsers(server, {
 });
 
 await server.register(fastifyWebsocket);
+registerSheetAgentToolRoutes(server, sheets);
 registerTuttiCliRoutes(server, sheets);
 registerTuttiReferenceRoutes(server);
 

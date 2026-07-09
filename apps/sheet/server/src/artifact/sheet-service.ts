@@ -1,5 +1,6 @@
 import { openPathInFileManager } from "@ai-app/shared/local-open";
 import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
+import { normalizeRuntimeProfileProviderId } from "@ai-app/shared/agent-providers";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
 import { resolveWorkspaceImportSourcePath } from "@ai-app/shared/import-source";
 import type { RuntimeProfile } from "@ai-app/shared/types";
@@ -7,6 +8,7 @@ import type {
   AiEditRequest,
   ApplySheetCommandsRequest,
   CreateProjectRequest,
+  LocalAgentProviderStatus,
   SheetArtifact,
   SheetRun,
   SheetRunEvent,
@@ -46,10 +48,14 @@ export class SheetService {
     return this.repo.snapshot();
   }
 
-  async listLocalAgentProviders() {
-    const providers = await this.runtimes.listLocalAgentProviders();
-    this.repo.syncLocalAgentRuntimeProfiles(providers);
-    return { providers };
+  async listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>) {
+    const catalog = await this.runtimes.listLocalAgentProviderCatalog(headers);
+    const merged = {
+      providers: catalog.providers,
+      defaultProvider: catalog.defaultProvider,
+    };
+    this.repo.syncLocalAgentRuntimeProfiles(merged.providers);
+    return merged;
   }
 
   listProjects() {
@@ -141,6 +147,17 @@ export class SheetService {
     return result;
   }
 
+  async setProjectTitle(projectId: string, title: string, updatedBy: "human" | "ai" | "system" = "ai") {
+    const cleanTitle = title.trim();
+    if (!cleanTitle) throw new Error("Project title is required");
+    const project = this.repo.updateProject(projectId, { title: cleanTitle, updatedBy });
+    if (!project) throw new Error("Project not found");
+    this.repo.updateProjectSessionTitle(projectId, cleanTitle);
+    const detail = await this.getProject(projectId);
+    this.events.emit({ type: "project.updated", projectId, payload: detail });
+    return detail;
+  }
+
   readXlsxFile(projectId: string) {
     return this.repo.readXlsxFile(projectId);
   }
@@ -199,7 +216,7 @@ export class SheetService {
   async startAiEdit(projectId: string, request: AiEditRequest) {
     await requireOfficeCli();
     const runtimeProject = await this.createRuntimeProject(projectId);
-    const runtimeProfile = this.repo.getRuntimeProfile(request.runtimeProfileId);
+    const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);
     const session = this.resolveConversationSession(projectId, runtimeProject.title, request.sessionId);
@@ -251,6 +268,30 @@ export class SheetService {
   private resolveConversationSession(projectId: string, title: string, sessionId: string | null | undefined) {
     if (!sessionId?.trim()) return this.repo.ensureConversationSession(projectId, title);
     return this.requireProjectSession(projectId, sessionId);
+  }
+
+  private async resolveRuntimeProfile(runtimeProfileId: string | null | undefined) {
+    if (runtimeProfileId) return this.repo.getRuntimeProfile(runtimeProfileId);
+    const catalog = await this.runtimes.listLocalAgentProviderCatalog().catch(() => null);
+    const statuses = catalog?.providers ?? null;
+    if (statuses) this.repo.syncLocalAgentRuntimeProfiles(statuses);
+    const defaultProvider = normalizeRuntimeProfileProviderId(catalog?.defaultProvider ?? undefined);
+    const defaultProfile = defaultProvider ? this.availableRuntimeProfile(defaultProvider, statuses) : null;
+    if (defaultProfile) return defaultProfile;
+    const firstAvailable = statuses?.find((item) => item.available);
+    if (firstAvailable) {
+      const profile = this.availableRuntimeProfile(normalizeRuntimeProfileProviderId(firstAvailable.provider), statuses);
+      if (profile) return profile;
+    }
+    return this.repo.getRuntimeProfile(undefined);
+  }
+
+  private availableRuntimeProfile(provider: string | undefined, statuses: LocalAgentProviderStatus[] | null) {
+    if (!provider) return null;
+    if (statuses && !statuses.some((item) => normalizeRuntimeProfileProviderId(item.provider) === provider && item.available)) {
+      return null;
+    }
+    return this.repo.getLocalAgentRuntimeProfileByProvider(provider);
   }
 
   private requireProjectSession(projectId: string, sessionId: string) {

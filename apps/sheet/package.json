@@ -10,6 +10,6 @@
     "build": "pnpm --filter @ai-sheet/shared build && pnpm --filter @ai-sheet/web build && pnpm --filter @ai-sheet/server build",
     "check": "pnpm --filter @ai-sheet/shared check && pnpm --filter @ai-sheet/web check && pnpm --filter @ai-sheet/server check",
     "check:i18n": "node ../../scripts/check-doc-i18n.mjs",
-    "package:tutti": "node ../../tooling/tutti/package-sheet-tutti-app.mjs"
+    "package:tutti": "node ../../scripts/patch-agent-acp-kit-base.mjs && node ../../tooling/tutti/package-sheet-tutti-app.mjs"
   }
 }
