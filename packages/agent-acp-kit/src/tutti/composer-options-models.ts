@@ -100,8 +100,14 @@ export function modelsFromTuttiComposerOptions(value: unknown): {
   const modelsFromConfig = settingOptionsFromComposerConfig(modelConfig);
   const modelsFromLiveConfig = settingOptionsFromConfigOption(rawConfigOptions, ["model"]);
   const models = modelsFromLiveConfig.length > 0 ? modelsFromLiveConfig : modelsFromConfig;
+  const liveModelConfig = rawConfigOptions
+    .map((item) => toRecord(item))
+    .find((option) => readString(option?.id) === "model");
   const defaultModelId =
-    readString(modelConfig.currentValue)
+    readString(liveModelConfig?.currentValue)
+    ?? readString(liveModelConfig?.current_value)
+    ?? readString(liveModelConfig?.defaultValue)
+    ?? readString(modelConfig.currentValue)
     ?? readString(modelConfig.current_value)
     ?? readString(modelConfig.defaultValue)
     ?? models[0]?.id;

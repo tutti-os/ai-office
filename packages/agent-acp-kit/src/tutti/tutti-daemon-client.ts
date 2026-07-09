@@ -268,7 +268,7 @@ export async function queryTuttiAgentProviderStatuses(
     }
   }
 
-  if (!env.tuttiCliPath) return null;
+  if (!env.tuttiCliPath && !options.runTuttiCli) return null;
   const payload = await runTuttiCliJson(
     ["agent", "providers"],
     options,
@@ -355,7 +355,7 @@ export async function queryTuttiAgentProviderComposerOptions(
     return unwrapDaemonPayload(payload);
   }
 
-  if (!env.tuttiCliPath) return null;
+  if (!env.tuttiCliPath && !options.runTuttiCli) return null;
   const args = ["agent", "composer-options", "--provider", provider];
   if (options.cwd) args.push("--cwd", options.cwd);
   if (env.workspaceId) args.push("--workspace-id", env.workspaceId);

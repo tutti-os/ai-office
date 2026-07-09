@@ -8,7 +8,7 @@ import {
   WandSparkles,
   XCircle,
 } from "lucide-react";
-import { localAgentProviderIdsMatch, resolveAgentMenuProfiles } from "@ai-app/shared/agent-providers";
+import { localAgentProviderIdsMatch, resolveAgentMenuProfiles, type AgentMenuProfileLike } from "@ai-app/shared/agent-providers";
 import type { BaseRun, BaseRunEvent, BaseRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { isAgentRunActive, timelineToMessages, type AgentConversationBlock, type AgentConversationMessage } from "@ai-app/agent/conversation";
 import { MarkdownText } from "./markdown.js";
@@ -98,7 +98,7 @@ export type AgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent e
 export type ArtifactAgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent extends BaseRunEvent = BaseRunEvent> =
   Omit<AgentConversationPanelProps<TRun, TEvent>, "agentOptions" | "copy" | "onAgentChange" | "selectedAgentId" | "variant"> & {
     copy: AgentConversationCopy;
-    formatUnavailableRuntimeProfileLabel?: (profile: RuntimeProfile, provider: LocalAgentProviderStatus | null) => string;
+    formatUnavailableRuntimeProfileLabel?: (profile: AgentMenuProfileLike, provider: LocalAgentProviderStatus | null) => string;
     localAgentProviders?: LocalAgentProviderStatus[];
     runtimeProfiles?: RuntimeProfile[];
     selectedRuntimeProfileId?: string;
@@ -124,7 +124,7 @@ export function ArtifactAgentConversationPanel<TRun extends BaseRun, TEvent exte
       id: profile.id,
       label: !provider || provider.available
         ? profile.displayName
-        : formatUnavailableRuntimeProfileLabel?.(profile as RuntimeProfile, provider) ?? `${profile.displayName} (${provider.authState})`,
+        : formatUnavailableRuntimeProfileLabel?.(profile, provider) ?? `${profile.displayName} (${provider.authState})`,
       disabled: provider ? !provider.available : false,
     };
   });

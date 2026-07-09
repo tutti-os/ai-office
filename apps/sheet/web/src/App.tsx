@@ -61,6 +61,7 @@ export function App() {
   const [prompt, setPrompt] = useState("");
   const [runtimeProfiles, setRuntimeProfiles] = useState<RuntimeProfile[]>([]);
   const [localAgentProviders, setLocalAgentProviders] = useState<LocalAgentProviderStatus[]>([]);
+  const localAgentProvidersRef = useRef<LocalAgentProviderStatus[]>([]);
   const [localAgentProvidersLoaded, setLocalAgentProvidersLoaded] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [officeCliStatus, setOfficeCliStatus] = useState<OfficeCliStatus | null>(null);
@@ -154,8 +155,15 @@ export function App() {
       .then(([snapshot, officeCli]) => {
         setHistoryProjects(snapshot.projects);
         const enabledProfiles = snapshot.runtimeProfiles.filter((profile) => profile.enabled && profile.kind === "local-agent");
-        setRuntimeProfiles(enabledProfiles);
-        setSelectedAgent((current) => current || enabledProfiles[0]?.id || "");
+        const mergedProfiles = mergeLocalAgentRuntimeProfiles(enabledProfiles, localAgentProvidersRef.current);
+        setRuntimeProfiles(mergedProfiles);
+        setSelectedAgent((current) => {
+          if (current && mergedProfiles.some((profile) => profile.id === current)) return current;
+          return resolvePreferredLocalAgentRuntimeProfileId({
+            profiles: mergedProfiles,
+            providers: localAgentProvidersRef.current,
+          });
+        });
         setOfficeCliStatus(officeCli.officecli);
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
@@ -166,6 +174,7 @@ export function App() {
     void fetchLocalAgentProviders()
       .then((response) => {
         if (cancelled) return;
+        localAgentProvidersRef.current = response.providers;
         setLocalAgentProviders(response.providers);
         setLocalAgentProvidersLoaded(true);
         setRuntimeProfiles((current) => {

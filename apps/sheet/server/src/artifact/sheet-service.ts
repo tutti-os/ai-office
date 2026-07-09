@@ -153,7 +153,7 @@ export class SheetService {
     const project = this.repo.updateProject(projectId, { title: cleanTitle, updatedBy });
     if (!project) throw new Error("Project not found");
     this.repo.updateProjectSessionTitle(projectId, cleanTitle);
-    const detail = await this.getProject(projectId);
+    const detail = await this.getProject(projectId, { recalculate: false });
     this.events.emit({ type: "project.updated", projectId, payload: detail });
     return detail;
   }
@@ -271,7 +271,15 @@ export class SheetService {
   }
 
   private async resolveRuntimeProfile(runtimeProfileId: string | null | undefined) {
-    if (runtimeProfileId) return this.repo.getRuntimeProfile(runtimeProfileId);
+    if (runtimeProfileId) {
+      const existing = this.repo.getRuntimeProfile(runtimeProfileId);
+      if (existing.id === runtimeProfileId) return existing;
+      const catalog = await this.runtimes.listLocalAgentProviderCatalog().catch(() => null);
+      if (catalog) this.repo.syncLocalAgentRuntimeProfiles(catalog.providers);
+      const synced = this.repo.getRuntimeProfile(runtimeProfileId);
+      if (synced.id !== runtimeProfileId) throw new Error(`Runtime profile not found: ${runtimeProfileId}`);
+      return synced;
+    }
     const catalog = await this.runtimes.listLocalAgentProviderCatalog().catch(() => null);
     const statuses = catalog?.providers ?? null;
     if (statuses) this.repo.syncLocalAgentRuntimeProfiles(statuses);

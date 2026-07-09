@@ -306,7 +306,7 @@ function AgentMenu(props: {
         </option>
         {menuProfiles.map((profile) => {
           const status = profile.kind === "local-agent" ? props.agentProviders.find((provider) => localAgentProviderIdsMatch(provider.provider, profile.provider)) : null;
-          const available = status?.available ?? false;
+          const available = status?.available ?? props.agentProviders.length === 0;
           return (
             <option disabled={!available} key={profile.id} value={profile.id}>
               {profile.displayName}{available ? "" : ` ${props.agentUnavailableLabel}`}

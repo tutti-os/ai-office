@@ -136,7 +136,12 @@ export class LocalAgentRuntimeProvider<
     return resolveTuttiAgentProviderCatalog({
       runtime: this.localAgentRuntime,
       detectContext: createManagedAgentDetectContextFromHeaders(headers),
-      workspaceCwd: process.env.TUTTI_WORKSPACE_ROOT?.trim() || undefined,
+      workspaceCwd:
+        process.env.TUTTI_WORKSPACE_ROOT?.trim()
+        || process.env.AI_DOC_WORKSPACE_ROOT?.trim()
+        || process.env.AI_SLIDE_WORKSPACE_ROOT?.trim()
+        || process.env.AI_SHEET_WORKSPACE_ROOT?.trim()
+        || undefined,
     });
   }
 
@@ -156,12 +161,14 @@ export class LocalAgentRuntimeProvider<
       const conversationSessionId = context.conversation?.sessionId ?? context.project.id;
       const providerResumeEnabled = this.options.useProviderResume?.(context) ?? true;
       const previousSession = providerResumeEnabled ? sessionStore.read(conversationSessionId) : null;
+      const providerSessionId = previousSession?.provider === provider ? previousSession.providerSessionId : undefined;
+      const resumeToken = previousSession?.provider === provider ? previousSession.resumeToken : undefined;
       const resume =
-        previousSession?.provider === provider && (previousSession.providerSessionId || previousSession.resumeToken)
+        providerSessionId || resumeToken
           ? {
               mode: "provider" as const,
-              ...(previousSession.providerSessionId ? { providerSessionId: previousSession.providerSessionId } : {}),
-              ...(previousSession.resumeToken ? { resumeToken: previousSession.resumeToken } : {}),
+              ...(providerSessionId ? { providerSessionId } : {}),
+              ...(resumeToken ? { resumeToken } : {}),
             }
           : { mode: "fresh" as const };
 

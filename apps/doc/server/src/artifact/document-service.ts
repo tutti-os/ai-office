@@ -376,7 +376,15 @@ export class DocumentService {
   }
 
   private async resolveRuntimeProfile(runtimeProfileId: string | null | undefined) {
-    if (runtimeProfileId) return this.repo.getRuntimeProfile(runtimeProfileId);
+    if (runtimeProfileId) {
+      const existing = this.repo.getRuntimeProfile(runtimeProfileId);
+      if (existing.id === runtimeProfileId) return existing;
+      const catalog = await this.runtimes.listLocalAgentProviderCatalog().catch(() => null);
+      if (catalog) this.repo.syncLocalAgentRuntimeProfiles(catalog.providers);
+      const synced = this.repo.getRuntimeProfile(runtimeProfileId);
+      if (synced.id !== runtimeProfileId) throw new Error(`Runtime profile not found: ${runtimeProfileId}`);
+      return synced;
+    }
     const catalog = await this.runtimes.listLocalAgentProviderCatalog().catch(() => null);
     const statuses = catalog?.providers ?? null;
     if (statuses) this.repo.syncLocalAgentRuntimeProfiles(statuses);

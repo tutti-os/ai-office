@@ -204,29 +204,6 @@ patchFile(
 );
 
 patchFile(
-  "acp lifecycle debug logging",
-  `    catch (error) {
-        fatalError = true;
-        queue.push({
-            type: "error",
-            code: "acp_lifecycle_failed",
-            message: error instanceof Error ? error.message : "ACP lifecycle failed.",
-        });`,
-  `    catch (error) {
-        console.error("[ai-slide-acp-debug] " + JSON.stringify({
-            stage: "acp_lifecycle",
-            error: error instanceof Error ? error.message : String(error),
-        }));
-        fatalError = true;
-        queue.push({
-            type: "error",
-            code: "acp_lifecycle_failed",
-            message: error instanceof Error ? error.message : "ACP lifecycle failed.",
-        });`,
-  "[ai-slide-acp-debug]",
-);
-
-patchFile(
   "concurrent acp lifecycle streaming",
   `    try {
         await sendRequest("initialize", {
@@ -251,7 +228,7 @@ patchFile(
             catch (modelConfigError) {
                 console.error("[ai-slide-acp-debug] " + JSON.stringify({
                     stage: "session/set_config_option",
-                    modelId: params.model,
+                    model: params.model,
                     error: modelConfigError instanceof Error ? modelConfigError.message : String(modelConfigError),
                 }));
                 await sendRequest("session/set_model", {
@@ -269,10 +246,6 @@ patchFile(
         });
     }
     catch (error) {
-        console.error("[ai-slide-acp-debug] " + JSON.stringify({
-            stage: "acp_lifecycle",
-            error: error instanceof Error ? error.message : String(error),
-        }));
         fatalError = true;
         queue.push({
             type: "error",
