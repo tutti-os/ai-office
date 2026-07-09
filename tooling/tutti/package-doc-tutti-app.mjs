@@ -102,6 +102,12 @@ export async function packageTuttiApp() {
     webBuildFilter: "@ai-doc/web",
     webDistDir: path.join(appDir, "web", "dist"),
     serverEntry: "apps/doc/server/src/main.ts",
+    serverExtraEntries: [
+      {
+        entry: "apps/doc/server/src/agent-tools-mcp.ts",
+        outfile: "build/tutti-app/package/server/agent-tools-mcp.js",
+      },
+    ],
     cliManifestFile: "tutti.cli.json",
     cliManifest: createArtifactCliManifest("doc"),
     commandsGuide: renderArtifactCommandsGuide("doc"),

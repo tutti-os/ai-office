@@ -21,7 +21,7 @@ import {
   type UpdateProjectRequest,
 } from "@ai-doc/shared";
 import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
-import { mergeTuttiAgentProviderStatuses, normalizeRuntimeProfileProviderId } from "@ai-app/shared/agent-providers";
+import { normalizeRuntimeProfileProviderId } from "@ai-app/shared/agent-providers";
 import { projectAssetFileExtensions, projectAssetMimeTypes } from "@ai-app/shared/artifact-assets";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
 import { openPathInFileManager } from "@ai-app/shared/local-open";
@@ -32,7 +32,6 @@ import { mimeTypeForImportFileName, resolveImportSourcePath } from "./import-sou
 import { assistantConversationContent, previewText } from "./run-preview.js";
 import { documentTemplates, getTemplate } from "./templates.js";
 import { loadTemplateProjectSeed, materializeTemplateAssetsToProject } from "../templates/template-service.js";
-import { getAgentProviders, getDefaultAgentProvider } from "../tutti/tutti-cli.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
 import { EventHub } from "../ws/event-hub.js";
@@ -68,13 +67,10 @@ export class DocumentService {
   }
 
   async listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>) {
-    const [providers, tuttiProviders] = await Promise.all([
-      this.runtimes.listLocalAgentProviders(headers),
-      getAgentProviders().catch(() => null),
-    ]);
+    const catalog = await this.runtimes.listLocalAgentProviderCatalog(headers);
     const merged = {
-      providers: mergeTuttiAgentProviderStatuses(providers, tuttiProviders?.providers),
-      defaultProvider: tuttiProviders?.defaultProvider ?? null,
+      providers: catalog.providers,
+      defaultProvider: catalog.defaultProvider,
     };
     this.repo.syncLocalAgentRuntimeProfiles(merged.providers);
     return merged;
@@ -381,13 +377,10 @@ export class DocumentService {
 
   private async resolveRuntimeProfile(runtimeProfileId: string | null | undefined) {
     if (runtimeProfileId) return this.repo.getRuntimeProfile(runtimeProfileId);
-    const [localStatuses, tuttiProviders] = await Promise.all([
-      this.runtimes.listLocalAgentProviders().catch(() => null),
-      getAgentProviders().catch(() => null),
-    ]);
-    const statuses = localStatuses ? mergeTuttiAgentProviderStatuses(localStatuses, tuttiProviders?.providers) : null;
+    const catalog = await this.runtimes.listLocalAgentProviderCatalog().catch(() => null);
+    const statuses = catalog?.providers ?? null;
     if (statuses) this.repo.syncLocalAgentRuntimeProfiles(statuses);
-    const defaultProvider = normalizeRuntimeProfileProviderId(tuttiProviders?.defaultProvider ?? (await getDefaultAgentProvider().catch(() => undefined)));
+    const defaultProvider = normalizeRuntimeProfileProviderId(catalog?.defaultProvider ?? undefined);
     const defaultProfile = defaultProvider ? this.availableRuntimeProfile(defaultProvider, statuses) : null;
     if (defaultProfile) return defaultProfile;
     const firstAvailable = statuses?.find((item) => item.available);
