@@ -18,7 +18,8 @@ const noBrowserRenderVerification =
 const localFilesystemArtifactNotice =
   "This artifact is a local filesystem file owned by the AI Doc app. It is not a Lark/Feishu Markdown file, cloud document, wiki page, sheet, or slide resource. Do not use Lark/Feishu cloud-document skills or tools, including lark-markdown, lark-doc, lark-drive, lark-sheets, or lark-slides, to inspect or edit this artifact unless the user explicitly asks to import, export, sync, publish, upload, download, or otherwise interact with Lark/Feishu.";
 
-const defaultLocalAgentTimeoutMs = 30 * 60_000;
+const defaultLocalAgentTimeoutMs = 3 * 24 * 60 * 60_000;
+const minimumLocalAgentTimeoutMs = 5 * 60_000;
 
 export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<DocumentRun, DocumentProject, AiEditRequest> {
   constructor() {
@@ -37,7 +38,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<D
         AI_DOC_PROJECT_ID: context.project.id,
         AI_DOC_RUN_ID: context.run.id,
       }),
-      timeoutMs: () => Number(process.env.AI_DOC_LOCAL_AGENT_TIMEOUT_MS ?? defaultLocalAgentTimeoutMs),
+      timeoutMs: localAgentTimeoutMs,
       sessionDirName: ".ai-doc",
     });
   }
@@ -63,6 +64,13 @@ function tuttiWorkspaceCwd(fallback: string) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function localAgentTimeoutMs() {
+  const raw = process.env.AI_DOC_LOCAL_AGENT_TIMEOUT_MS;
+  if (!raw) return defaultLocalAgentTimeoutMs;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= minimumLocalAgentTimeoutMs ? parsed : defaultLocalAgentTimeoutMs;
 }
 
 function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, skillContext: LocalAgentSkillContext) {

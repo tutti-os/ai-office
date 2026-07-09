@@ -23,7 +23,8 @@ const noBrowserRenderVerification =
 const localFilesystemArtifactNotice =
   "This artifact is a local filesystem file or directory owned by the AI Slide app. It is not a Lark/Feishu Markdown file, cloud document, wiki page, sheet, or slide resource. Do not use Lark/Feishu cloud-document skills or tools, including lark-markdown, lark-doc, lark-drive, lark-sheets, or lark-slides, to inspect or edit this artifact unless the user explicitly asks to import, export, sync, publish, upload, download, or otherwise interact with Lark/Feishu.";
 
-const defaultLocalAgentTimeoutMs = 30 * 60_000;
+const defaultLocalAgentTimeoutMs = 3 * 24 * 60 * 60_000;
+const minimumLocalAgentTimeoutMs = 5 * 60_000;
 
 export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<SlideRun, SlideRuntimeProject, AiEditRequest> {
   constructor() {
@@ -42,7 +43,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
         AI_SLIDE_RUN_ID: context.run.id,
       }),
       useProviderResume: (context) => context.project.artifact.type !== "deck",
-      timeoutMs: () => Number(process.env.AI_SLIDE_LOCAL_AGENT_TIMEOUT_MS ?? defaultLocalAgentTimeoutMs),
+      timeoutMs: localAgentTimeoutMs,
       sessionDirName: ".ai-slide",
       buildMcpServers: buildSlideAppToolMcpServers,
     });
@@ -77,6 +78,13 @@ function tuttiWorkspaceCwd(fallback: string) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function localAgentTimeoutMs() {
+  const raw = process.env.AI_SLIDE_LOCAL_AGENT_TIMEOUT_MS;
+  if (!raw) return defaultLocalAgentTimeoutMs;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= minimumLocalAgentTimeoutMs ? parsed : defaultLocalAgentTimeoutMs;
 }
 
 async function buildProjectSkillManifest(context: RuntimeEditContext, workspaceRoot: string): Promise<SkillMaterializationRecord[]> {

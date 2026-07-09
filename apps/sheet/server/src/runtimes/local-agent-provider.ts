@@ -10,7 +10,8 @@ import { officeCliEnvSync } from "../toolchains/officecli.js";
 import { tuttiAgentProviderEnv, tuttiCliEnv } from "../tutti/tutti-cli.js";
 import type { RuntimeEditContext, SheetRuntimeProject } from "./runtime-provider.js";
 
-const defaultLocalAgentTimeoutMs = 30 * 60_000;
+const defaultLocalAgentTimeoutMs = 3 * 24 * 60 * 60_000;
+const minimumLocalAgentTimeoutMs = 5 * 60_000;
 
 const localFilesystemArtifactNotice =
   "This artifact is a local filesystem file owned by the AI Sheet app. It is not a Lark/Feishu cloud sheet or document. Do not use Lark/Feishu cloud-document skills or tools unless the user explicitly asks to import, export, sync, publish, upload, download, or otherwise interact with Lark/Feishu.";
@@ -31,7 +32,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
         AI_SHEET_RUN_ID: context.run.id,
       }),
       useProviderResume: () => true,
-      timeoutMs: () => Number(process.env.AI_SHEET_LOCAL_AGENT_TIMEOUT_MS ?? defaultLocalAgentTimeoutMs),
+      timeoutMs: localAgentTimeoutMs,
       sessionDirName: ".ai-sheet",
     });
   }
@@ -57,6 +58,13 @@ function tuttiWorkspaceCwd(fallback: string) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function localAgentTimeoutMs() {
+  const raw = process.env.AI_SHEET_LOCAL_AGENT_TIMEOUT_MS;
+  if (!raw) return defaultLocalAgentTimeoutMs;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= minimumLocalAgentTimeoutMs ? parsed : defaultLocalAgentTimeoutMs;
 }
 
 function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, skillContext: LocalAgentSkillContext) {
