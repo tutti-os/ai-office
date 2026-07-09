@@ -106,6 +106,10 @@ export async function packageTuttiApp() {
         entry: formulaCalcWorkerEntry,
         outfile: path.join(path.relative(rootDir, packageRoot), "server", "worker.js"),
       },
+      {
+        entry: "apps/sheet/server/src/agent-tools-mcp.ts",
+        outfile: path.join(path.relative(rootDir, packageRoot), "server", "agent-tools-mcp.js"),
+      },
     ],
     cliManifestFile: "tutti.cli.json",
     cliManifest: createArtifactCliManifest("sheet"),

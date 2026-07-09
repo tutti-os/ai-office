@@ -147,6 +147,15 @@ function resolveAppToolMcpLaunch(input: { mcpEntryPath?: string; serverDir?: str
   if (input.mcpEntryPath) return { command: process.execPath, args: [input.mcpEntryPath] };
 
   const serverDir = input.serverDir ?? process.cwd();
+  const bundledEntries = [
+    join(serverDir, "agent-tools-mcp.js"),
+    join(serverDir, "server", "agent-tools-mcp.js"),
+  ];
+  const bundledEntry = bundledEntries.find((entry) => existsSync(entry));
+  if (bundledEntry) {
+    return { command: process.execPath, args: [bundledEntry] };
+  }
+
   const entryPath = join(serverDir, "src", "agent-tools-mcp.ts");
   const localTsx = join(serverDir, "node_modules", ".bin", process.platform === "win32" ? "tsx.cmd" : "tsx");
   if (existsSync(localTsx)) return { command: localTsx, args: [entryPath] };

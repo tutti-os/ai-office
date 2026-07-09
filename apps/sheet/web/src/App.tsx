@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hasActiveAgentRun } from "@ai-app/agent/conversation";
 import type { LocalAgentProviderStatus, OfficeCliStatus, ProjectDetailResponse, RuntimeProfile, SheetProject } from "@ai-sheet/shared";
+import { mergeLocalAgentRuntimeProfiles, resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
 import {
   applyProjectCommands,
   cancelRun,
@@ -60,6 +61,8 @@ export function App() {
   const [prompt, setPrompt] = useState("");
   const [runtimeProfiles, setRuntimeProfiles] = useState<RuntimeProfile[]>([]);
   const [localAgentProviders, setLocalAgentProviders] = useState<LocalAgentProviderStatus[]>([]);
+  const localAgentProvidersRef = useRef<LocalAgentProviderStatus[]>([]);
+  const [localAgentProvidersLoaded, setLocalAgentProvidersLoaded] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [officeCliStatus, setOfficeCliStatus] = useState<OfficeCliStatus | null>(null);
   const [officeCliInstalling, setOfficeCliInstalling] = useState(false);
@@ -152,27 +155,50 @@ export function App() {
       .then(([snapshot, officeCli]) => {
         setHistoryProjects(snapshot.projects);
         const enabledProfiles = snapshot.runtimeProfiles.filter((profile) => profile.enabled && profile.kind === "local-agent");
-        setRuntimeProfiles(enabledProfiles);
-        setSelectedAgent((current) => current || enabledProfiles[0]?.id || "");
+        const mergedProfiles = mergeLocalAgentRuntimeProfiles(enabledProfiles, localAgentProvidersRef.current);
+        setRuntimeProfiles(mergedProfiles);
+        setSelectedAgent((current) => {
+          if (current && mergedProfiles.some((profile) => profile.id === current)) return current;
+          return resolvePreferredLocalAgentRuntimeProfileId({
+            profiles: mergedProfiles,
+            providers: localAgentProvidersRef.current,
+          });
+        });
         setOfficeCliStatus(officeCli.officecli);
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
   }, [t]);
 
   useEffect(() => {
+    let cancelled = false;
     void fetchLocalAgentProviders()
       .then((response) => {
+        if (cancelled) return;
+        localAgentProvidersRef.current = response.providers;
         setLocalAgentProviders(response.providers);
-        setSelectedAgent((current) => {
-          const currentProfile = runtimeProfiles.find((profile) => profile.id === current);
-          const currentStatus = currentProfile ? response.providers.find((provider) => provider.provider === currentProfile.provider) : null;
-          if (currentStatus?.available) return current;
-          const firstAvailable = runtimeProfiles.find((profile) => response.providers.find((provider) => provider.provider === profile.provider)?.available);
-          return firstAvailable?.id ?? current;
+        setLocalAgentProvidersLoaded(true);
+        setRuntimeProfiles((current) => {
+          const merged = mergeLocalAgentRuntimeProfiles(current, response.providers);
+          setSelectedAgent((selected) => {
+            if (merged.some((profile) => profile.id === selected)) return selected;
+            return resolvePreferredLocalAgentRuntimeProfileId({
+              profiles: merged,
+              providers: response.providers,
+              defaultProvider: response.defaultProvider,
+            });
+          });
+          return merged;
         });
       })
-      .catch(() => setLocalAgentProviders([]));
-  }, [runtimeProfiles]);
+      .catch((err) => {
+        if (cancelled) return;
+        setLocalAgentProvidersLoaded(true);
+        setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (route.name !== "home") return;
@@ -457,8 +483,8 @@ export function App() {
         conversationError={agentConversation.error}
         conversationItems={agentConversation.items}
         conversationLoading={agentConversation.loading}
-        localAgentProviders={localAgentProviders}
-        runtimeProfiles={runtimeProfiles}
+        localAgentProviders={localAgentProvidersLoaded ? localAgentProviders : []}
+        runtimeProfiles={localAgentProvidersLoaded ? runtimeProfiles : []}
         selectedRuntimeProfileId={selectedAgent}
         selectionRestoreKey={xlsxSelectionRestoreKey}
         sending={agentBusy}
@@ -482,11 +508,11 @@ export function App() {
       projects={historyProjects}
       loading={loading}
       error={error}
-      localAgentProviders={localAgentProviders}
+      localAgentProviders={localAgentProvidersLoaded ? localAgentProviders : []}
       officeCliInstalling={officeCliInstalling}
       officeCliStatus={officeCliStatus}
       prompt={prompt}
-      runtimeProfiles={runtimeProfiles}
+      runtimeProfiles={localAgentProvidersLoaded ? runtimeProfiles : []}
       selectedRuntimeProfileId={selectedAgent}
       onAddFiles={homeAttachments.addFiles}
       onClearHistory={clearHistory}

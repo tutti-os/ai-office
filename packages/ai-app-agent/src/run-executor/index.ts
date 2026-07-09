@@ -199,10 +199,11 @@ export class RuntimeRunExecutor<
 }
 
 function managedAgentProviderId(provider: string) {
-  const normalized = provider.trim().toLowerCase().replace(/[\s_]+/g, "-");
+  const normalized = provider.trim().toLowerCase().replace(/[\s_]+/g, "-").replace(/[^a-z0-9_.-]/g, "");
+  if (!normalized) return "";
   if (normalized === "claude-code" || normalized === "claude") return "claude";
-  if (normalized === "codex" || normalized === "nexight") return normalized;
-  return "";
+  if (normalized === "tutti-agent") return "nexight";
+  return normalized;
 }
 
 class RuntimeRunRecorder<TRun extends BaseRun, TEvent extends BaseRunEvent> {

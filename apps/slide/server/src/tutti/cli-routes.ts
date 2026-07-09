@@ -2,6 +2,7 @@ import { readdir, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { cliErrorOutput, cliJsonOutput, readCliInputBody } from "@ai-app/shared/tutti-cli";
+import { runtimeProfileIdFromProvider } from "@ai-app/shared/agent-providers";
 import type { AiEditMode, DeckManifestSlide, OpenSlideCliResponse, SlideArtifact, SlideArtifactType, SlideProject } from "@ai-slide/shared";
 import { getDefaultAgentProvider, getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { ProjectService } from "../artifact/project-service.js";
@@ -414,13 +415,6 @@ async function runtimeProfileIdFromCliInput(input: Record<string, unknown>): Pro
 async function defaultRuntimeProfileIdFromTuttiCli() {
   const provider = await getDefaultAgentProvider().catch(() => undefined);
   return provider ? runtimeProfileIdFromProvider(provider).value : undefined;
-}
-
-function runtimeProfileIdFromProvider(provider: string): { value?: string; error?: string } {
-  const normalized = provider.toLowerCase().replace(/[\s_]+/g, "-");
-  if (normalized === "codex") return { value: "local-agent:codex" };
-  if (normalized === "claude" || normalized === "claude-code") return { value: "local-agent:claude" };
-  return { error: "provider must be codex or claude-code" };
 }
 
 function optionalBoolean(input: Record<string, unknown>, key: string) {

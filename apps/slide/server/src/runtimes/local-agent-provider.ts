@@ -45,7 +45,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       useProviderResume: (context) => context.project.artifact.type !== "deck",
       timeoutMs: localAgentTimeoutMs,
       sessionDirName: ".ai-slide",
-      buildMcpServers: buildSlideAppToolMcpServers,
+      buildMcpServers: (context) => buildSlideAppToolMcpServers(context),
     });
   }
 }

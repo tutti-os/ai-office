@@ -77,9 +77,19 @@ export class SheetRepository {
     return this.runtimeProfiles.get(profileId);
   }
 
+  getLocalAgentRuntimeProfileByProvider(provider: string) {
+    this.ensureSeedData();
+    return this.runtimeProfiles.getLocalAgentByProvider(provider);
+  }
+
   getRuntimeProfileForRun(run: Pick<SheetRun, "runtime" | "provider" | "model">) {
     this.ensureSeedData();
     return this.runtimeProfiles.getForRun(run);
+  }
+
+  syncLocalAgentRuntimeProfiles(providers: Array<{ provider: string; displayName: string }>) {
+    this.ensureSeedData();
+    this.runtimeProfiles.syncLocalAgentRuntimeProfiles(providers);
   }
 
   createProject(input: CreateProjectRequest = {}) {

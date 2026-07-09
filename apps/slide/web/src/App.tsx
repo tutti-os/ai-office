@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hasActiveAgentRun } from "@ai-app/agent/conversation";
-import { resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
+import { mergeLocalAgentRuntimeProfiles, resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
 import {
   History,
   Upload,
@@ -54,6 +54,8 @@ export function App() {
   const [slideTemplates, setSlideTemplates] = useState<SlideTemplate[]>([]);
   const [runtimeProfiles, setRuntimeProfiles] = useState<RuntimeProfile[]>([]);
   const [localAgentProviders, setLocalAgentProviders] = useState<LocalAgentProviderStatus[]>([]);
+  const localAgentProvidersRef = useRef<LocalAgentProviderStatus[]>([]);
+  const [localAgentProvidersLoaded, setLocalAgentProvidersLoaded] = useState(false);
   const [officeCliStatus, setOfficeCliStatus] = useState<OfficeCliStatus | null>(null);
   const [officeCliInstalling, setOfficeCliInstalling] = useState(false);
   const [templatesLoading, setTemplatesLoading] = useState(false);
@@ -151,30 +153,49 @@ export function App() {
     void fetchBootstrapSnapshot()
       .then((snapshot) => {
         const enabledProfiles = snapshot.runtimeProfiles.filter((profile) => profile.enabled && profile.kind === "local-agent");
-        setRuntimeProfiles(enabledProfiles);
+        const mergedProfiles = mergeLocalAgentRuntimeProfiles(enabledProfiles, localAgentProvidersRef.current);
+        setRuntimeProfiles(mergedProfiles);
         setSelectedAgent((current) => {
-          if (enabledProfiles.some((profile) => profile.id === current)) return current;
-          return "";
+          if (mergedProfiles.some((profile) => profile.id === current)) return current;
+          return resolvePreferredLocalAgentRuntimeProfileId({
+            profiles: mergedProfiles,
+            providers: localAgentProvidersRef.current,
+          });
         });
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     void fetchLocalAgentProviders()
       .then((response) => {
+        if (cancelled) return;
+        localAgentProvidersRef.current = response.providers;
         setLocalAgentProviders(response.providers);
-        setSelectedAgent((current) => {
-          if (runtimeProfiles.some((profile) => profile.id === current)) return current;
-          return resolvePreferredLocalAgentRuntimeProfileId({
-            profiles: runtimeProfiles,
-            providers: response.providers,
-            defaultProvider: response.defaultProvider,
+        setLocalAgentProvidersLoaded(true);
+        setRuntimeProfiles((current) => {
+          const merged = mergeLocalAgentRuntimeProfiles(current, response.providers);
+          setSelectedAgent((selected) => {
+            if (merged.some((profile) => profile.id === selected)) return selected;
+            return resolvePreferredLocalAgentRuntimeProfileId({
+              profiles: merged,
+              providers: response.providers,
+              defaultProvider: response.defaultProvider,
+            });
           });
+          return merged;
         });
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
-  }, [runtimeProfiles]);
+      .catch((err) => {
+        if (cancelled) return;
+        setLocalAgentProvidersLoaded(true);
+        setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     void fetchOfficeCliStatus()
@@ -502,8 +523,8 @@ export function App() {
             outputType={outputType}
             prompt={prompt}
             selectedAgent={selectedAgent}
-            localAgentProviders={localAgentProviders}
-            runtimeProfiles={runtimeProfiles}
+            localAgentProviders={localAgentProvidersLoaded ? localAgentProviders : []}
+            runtimeProfiles={localAgentProvidersLoaded ? runtimeProfiles : []}
             onAddFiles={homeAttachments.addFiles}
             onCreate={createFromPrompt}
             onInstallOfficeCli={downloadOfficeCli}

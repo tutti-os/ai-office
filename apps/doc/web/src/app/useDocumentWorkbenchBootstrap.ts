@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
+import { mergeLocalAgentRuntimeProfiles, resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
 import type { LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
 import { fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, fetchTemplates } from "../api/runtime";
 import { normalizeTemplates, type TuttiTemplate } from "../templates/tuttiTemplates";
@@ -48,14 +48,15 @@ export function useDocumentWorkbenchBootstrap(input: DocumentWorkbenchBootstrapI
       .then(([snapshot, providerStatus, libraryTemplates, officeCli]) => {
         if (cancelled) return;
         const enabledProfiles = snapshot.runtimeProfiles.filter((profile) => profile.enabled && profile.kind === "local-agent");
-        setRuntimeProfiles(enabledProfiles);
+        const mergedProfiles = mergeLocalAgentRuntimeProfiles(enabledProfiles, providerStatus.providers);
+        setRuntimeProfiles(mergedProfiles);
         setLocalAgentProviders(providerStatus.providers);
         setTemplates(normalizeTemplates(libraryTemplates));
         setOfficeCliStatus(officeCli.officecli);
         setSelectedRuntimeProfileId((current) => {
-          if (enabledProfiles.some((profile) => profile.id === current)) return current;
+          if (mergedProfiles.some((profile) => profile.id === current)) return current;
           return resolvePreferredLocalAgentRuntimeProfileId({
-            profiles: enabledProfiles,
+            profiles: mergedProfiles,
             providers: providerStatus.providers,
             defaultProvider: providerStatus.defaultProvider,
           });

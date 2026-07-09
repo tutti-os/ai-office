@@ -21,7 +21,7 @@ import {
   type UpdateProjectRequest,
 } from "@ai-doc/shared";
 import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
-import { mergeTuttiAgentProviderStatuses } from "@ai-app/shared/agent-providers";
+import { normalizeRuntimeProfileProviderId } from "@ai-app/shared/agent-providers";
 import { projectAssetFileExtensions, projectAssetMimeTypes } from "@ai-app/shared/artifact-assets";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
 import { openPathInFileManager } from "@ai-app/shared/local-open";
@@ -32,7 +32,6 @@ import { mimeTypeForImportFileName, resolveImportSourcePath } from "./import-sou
 import { assistantConversationContent, previewText } from "./run-preview.js";
 import { documentTemplates, getTemplate } from "./templates.js";
 import { loadTemplateProjectSeed, materializeTemplateAssetsToProject } from "../templates/template-service.js";
-import { getAgentProviders, getDefaultAgentProvider } from "../tutti/tutti-cli.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
 import { EventHub } from "../ws/event-hub.js";
@@ -68,14 +67,13 @@ export class DocumentService {
   }
 
   async listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>) {
-    const [providers, tuttiProviders] = await Promise.all([
-      this.runtimes.listLocalAgentProviders(headers),
-      getAgentProviders().catch(() => null),
-    ]);
-    return {
-      providers: mergeTuttiAgentProviderStatuses(providers, tuttiProviders?.providers),
-      defaultProvider: tuttiProviders?.defaultProvider ?? null,
+    const catalog = await this.runtimes.listLocalAgentProviderCatalog(headers);
+    const merged = {
+      providers: catalog.providers,
+      defaultProvider: catalog.defaultProvider,
     };
+    this.repo.syncLocalAgentRuntimeProfiles(merged.providers);
+    return merged;
   }
 
   listProjects() {
@@ -378,25 +376,32 @@ export class DocumentService {
   }
 
   private async resolveRuntimeProfile(runtimeProfileId: string | null | undefined) {
-    if (runtimeProfileId) return this.repo.getRuntimeProfile(runtimeProfileId);
-    const [localStatuses, tuttiProviders] = await Promise.all([
-      this.runtimes.listLocalAgentProviders().catch(() => null),
-      getAgentProviders().catch(() => null),
-    ]);
-    const statuses = localStatuses ? mergeTuttiAgentProviderStatuses(localStatuses, tuttiProviders?.providers) : null;
-    const defaultProvider = normalizeTuttiAgentProvider(tuttiProviders?.defaultProvider ?? (await getDefaultAgentProvider().catch(() => undefined)));
+    if (runtimeProfileId) {
+      const existing = this.repo.getRuntimeProfile(runtimeProfileId);
+      if (existing.id === runtimeProfileId) return existing;
+      const catalog = await this.runtimes.listLocalAgentProviderCatalog().catch(() => null);
+      if (catalog) this.repo.syncLocalAgentRuntimeProfiles(catalog.providers);
+      const synced = this.repo.getRuntimeProfile(runtimeProfileId);
+      if (synced.id !== runtimeProfileId) throw new Error(`Runtime profile not found: ${runtimeProfileId}`);
+      return synced;
+    }
+    const catalog = await this.runtimes.listLocalAgentProviderCatalog().catch(() => null);
+    const statuses = catalog?.providers ?? null;
+    if (statuses) this.repo.syncLocalAgentRuntimeProfiles(statuses);
+    const defaultProvider = normalizeRuntimeProfileProviderId(catalog?.defaultProvider ?? undefined);
     const defaultProfile = defaultProvider ? this.availableRuntimeProfile(defaultProvider, statuses) : null;
     if (defaultProfile) return defaultProfile;
-    return (
-      this.availableRuntimeProfile("codex", statuses) ??
-      this.availableRuntimeProfile("claude", statuses) ??
-      this.repo.getRuntimeProfile(undefined)
-    );
+    const firstAvailable = statuses?.find((item) => item.available);
+    if (firstAvailable) {
+      const profile = this.availableRuntimeProfile(normalizeRuntimeProfileProviderId(firstAvailable.provider), statuses);
+      if (profile) return profile;
+    }
+    return this.repo.getRuntimeProfile(undefined);
   }
 
   private availableRuntimeProfile(provider: string | undefined, statuses: LocalAgentProviderStatus[] | null) {
     if (!provider) return null;
-    if (statuses && !statuses.some((item) => normalizeTuttiAgentProvider(item.provider) === provider && item.available)) return null;
+    if (statuses && !statuses.some((item) => normalizeRuntimeProfileProviderId(item.provider) === provider && item.available)) return null;
     return this.repo.getLocalAgentRuntimeProfileByProvider(provider);
   }
 
@@ -604,14 +609,6 @@ function extractMarkdownDocument(raw: string) {
   if (!trimmed) return "";
   const fence = trimmed.match(/```(?:markdown|md)?\s*([\s\S]*?)```/i);
   return (fence?.[1] ?? trimmed).trim();
-}
-
-function normalizeTuttiAgentProvider(provider: string | undefined) {
-  const normalized = provider?.trim().toLowerCase().replace(/[\s_]+/g, "-");
-  if (!normalized) return undefined;
-  if (normalized === "claude-code" || normalized === "claude") return "claude";
-  if (normalized === "codex") return "codex";
-  return normalized;
 }
 
 function defaultProjectContent(type: DocumentProject["type"], template: DocumentTemplate) {

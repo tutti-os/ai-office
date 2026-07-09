@@ -49,6 +49,7 @@ export interface RuntimeProvider<
   describeRun(profile: RuntimeProfile): { runtime: string; provider: string; model: string };
   detect(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>): Promise<{ available: boolean; reason?: string }>;
   listLocalAgentProviders?(headers?: Record<string, string | string[] | undefined>): Promise<LocalAgentProviderStatus[]>;
+  listLocalAgentProviderCatalog?(headers?: Record<string, string | string[] | undefined>): Promise<import("@tutti-os/agent-acp-kit/tutti").TuttiAgentProviderCatalogResult>;
   streamEdit(context: RuntimeEditContext<TRun, TProject, TRequest>): AsyncIterable<string | RuntimeStreamEvent>;
   cancel(runId: string): Promise<{ cancelled: boolean; reason?: string }>;
 }
@@ -71,6 +72,17 @@ export class RuntimeProviderRegistry<
   async listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>): Promise<LocalAgentProviderStatus[]> {
     const provider = this.providers.find((item) => typeof item.listLocalAgentProviders === "function");
     return provider?.listLocalAgentProviders?.(headers) ?? [];
+  }
+
+  async listLocalAgentProviderCatalog(
+    headers?: Record<string, string | string[] | undefined>,
+  ) {
+    const provider = this.providers.find((item) => typeof item.listLocalAgentProviderCatalog === "function");
+    return provider?.listLocalAgentProviderCatalog?.(headers) ?? {
+      capturedAt: null,
+      defaultProvider: null,
+      providers: [],
+    };
   }
 }
 

@@ -124,6 +124,11 @@ export class ProjectRepository {
     return this.runtimeProfiles.getForRun(run);
   }
 
+  syncLocalAgentRuntimeProfiles(providers: Array<{ provider: string; displayName: string }>) {
+    this.ensureSeedData();
+    this.runtimeProfiles.syncLocalAgentRuntimeProfiles(providers);
+  }
+
   async createProject(input: CreateProjectRequest) {
     const id = randomUUID();
     const artifactType = input.artifactType ?? "deck";

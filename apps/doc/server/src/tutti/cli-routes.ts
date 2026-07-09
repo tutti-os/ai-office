@@ -2,6 +2,7 @@ import { readdir, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { cliErrorOutput, cliJsonOutput, readCliInputBody } from "@ai-app/shared/tutti-cli";
+import { runtimeProfileIdFromProvider } from "@ai-app/shared/agent-providers";
 import { parseDocxDocumentManifest, type AiEditMode, type DocumentProject, type DocumentType, type OpenDocumentCliResponse } from "@ai-doc/shared";
 import { getDefaultAgentProvider, getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { DocumentService } from "../artifact/document-service.js";
@@ -332,13 +333,6 @@ async function runtimeProfileIdFromCliInput(input: Record<string, unknown>): Pro
 async function defaultRuntimeProfileIdFromTuttiCli() {
   const provider = await getDefaultAgentProvider().catch(() => undefined);
   return provider ? runtimeProfileIdFromProvider(provider).value : undefined;
-}
-
-function runtimeProfileIdFromProvider(provider: string): { value?: string; error?: string } {
-  const normalized = provider.toLowerCase().replace(/[\s_]+/g, "-");
-  if (normalized === "codex") return { value: "local-agent:codex" };
-  if (normalized === "claude" || normalized === "claude-code") return { value: "local-agent:claude" };
-  return { error: "provider must be codex or claude-code" };
 }
 
 function normalizeMessageRole(value: unknown): "user" | "assistant" | null {

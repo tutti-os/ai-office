@@ -8,7 +8,7 @@ import {
   WandSparkles,
   XCircle,
 } from "lucide-react";
-import { localAgentProviderIdsMatch } from "@ai-app/shared/agent-providers";
+import { localAgentProviderIdsMatch, resolveAgentMenuProfiles, type AgentMenuProfileLike } from "@ai-app/shared/agent-providers";
 import type { BaseRun, BaseRunEvent, BaseRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { isAgentRunActive, timelineToMessages, type AgentConversationBlock, type AgentConversationMessage } from "@ai-app/agent/conversation";
 import { MarkdownText } from "./markdown.js";
@@ -98,7 +98,7 @@ export type AgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent e
 export type ArtifactAgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent extends BaseRunEvent = BaseRunEvent> =
   Omit<AgentConversationPanelProps<TRun, TEvent>, "agentOptions" | "copy" | "onAgentChange" | "selectedAgentId" | "variant"> & {
     copy: AgentConversationCopy;
-    formatUnavailableRuntimeProfileLabel?: (profile: RuntimeProfile, provider: LocalAgentProviderStatus | null) => string;
+    formatUnavailableRuntimeProfileLabel?: (profile: AgentMenuProfileLike, provider: LocalAgentProviderStatus | null) => string;
     localAgentProviders?: LocalAgentProviderStatus[];
     runtimeProfiles?: RuntimeProfile[];
     selectedRuntimeProfileId?: string;
@@ -118,7 +118,7 @@ export function ArtifactAgentConversationPanel<TRun extends BaseRun, TEvent exte
     onRuntimeProfileChange,
     ...panelProps
   } = props;
-  const agentOptions = runtimeProfiles.map((profile) => {
+  const agentOptions = resolveAgentMenuProfiles(runtimeProfiles, localAgentProviders).map((profile) => {
     const provider = profile.kind === "local-agent" ? localAgentProviders.find((item) => localAgentProviderIdsMatch(item.provider, profile.provider)) ?? null : null;
     return {
       id: profile.id,

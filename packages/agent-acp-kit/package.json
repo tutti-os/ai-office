@@ -1,0 +1,38 @@
+{
+  "name": "@tutti-os/agent-acp-kit",
+  "version": "0.2.5",
+  "private": true,
+  "type": "module",
+  "description": "Workspace wrapper for @tutti-os/agent-acp-kit with Tutti agent provider catalog helpers.",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/index.js"
+    },
+    "./tutti": {
+      "types": "./src/tutti/index.ts",
+      "import": "./dist/tutti/index.js"
+    },
+    "./runtime-control-plane": {
+      "types": "./src/runtime-control-plane.ts",
+      "import": "./dist/runtime-control-plane.js"
+    },
+    "./testing": {
+      "types": "./src/testing.ts",
+      "import": "./dist/testing.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@tutti-os/agent-acp-kit-base": "npm:@tutti-os/agent-acp-kit@0.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}

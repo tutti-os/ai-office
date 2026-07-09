@@ -1,7 +1,12 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { AgentConversationMessage, AgentConversationRole, AgentConversationSession, BaseRun, BaseRunEvent, RuntimeProfile } from "@ai-app/shared/types";
+import {
+  isPlaceholderRuntimeProfileModel,
+  localAgentRuntimeProfileSeed,
+  runtimeProfileModelForProvider,
+} from "../agent-providers/index.js";
+import type { AgentConversationMessage, AgentConversationRole, AgentConversationSession, BaseRun, BaseRunEvent, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
 
 export type DatabaseMigrator = (database: DatabaseSync) => void;
 
@@ -109,6 +114,44 @@ export class RuntimeProfileStore {
     );
     if (!row) throw new Error("No runtime profile configured");
     return rowToRuntimeProfile(row);
+  }
+
+  syncLocalAgentRuntimeProfiles(
+    providers: readonly (Pick<LocalAgentProviderStatus, "provider" | "displayName"> &
+      Partial<Pick<LocalAgentProviderStatus, "defaultModelId" | "models">>)[],
+  ) {
+    const existingProfiles = this.list();
+    const existingIds = new Set(existingProfiles.map((profile) => profile.id));
+    const database = this.getDb();
+    const now = new Date().toISOString();
+    const allowedLocalAgentIds = new Set<string>();
+    for (const provider of providers) {
+      const seed = localAgentRuntimeProfileSeed(provider.provider, provider.displayName, provider);
+      allowedLocalAgentIds.add(seed.id);
+      const existing = existingProfiles.find((profile) => profile.id === seed.id);
+      if (!existing) {
+        database
+          .prepare(
+            `INSERT INTO ${this.tableName} (id, kind, provider, model, display_name, enabled, capabilities, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(seed.id, seed.kind, seed.provider, seed.model, seed.displayName, seed.enabled ? 1 : 0, json(seed.capabilities), now, now);
+        existingIds.add(seed.id);
+        continue;
+      }
+      if (isPlaceholderRuntimeProfileModel(existing.model, provider.provider)) {
+        const resolvedModel = runtimeProfileModelForProvider(provider.provider, provider);
+        if (resolvedModel !== existing.model) {
+          database
+            .prepare(`UPDATE ${this.tableName} SET model = ?, updated_at = ? WHERE id = ?`)
+            .run(resolvedModel, now, seed.id);
+        }
+      }
+    }
+    for (const profile of existingProfiles) {
+      if (profile.kind !== "local-agent" || allowedLocalAgentIds.has(profile.id)) continue;
+      database.prepare(`DELETE FROM ${this.tableName} WHERE id = ?`).run(profile.id);
+    }
   }
 
   private get tableName() {
