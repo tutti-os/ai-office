@@ -12,7 +12,7 @@ import type { AiEditRequest, SlideRun } from "@ai-slide/shared";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { extractOoxmlTextPreview } from "../artifact/ooxml-text.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
-import { tuttiAgentProviderEnv, tuttiCliEnv } from "../tutti/tutti-cli.js";
+import { tuttiCliEnv } from "../tutti/tutti-cli.js";
 import { deckSystemAuthoringPrompt } from "./deck-system-prompt.js";
 import { buildSlideAppToolEnv, buildSlideAppToolMcpServers } from "../agent-tools.js";
 import type { RuntimeEditContext, SlideRuntimeProject } from "./runtime-provider.js";
@@ -36,7 +36,6 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       buildEnv: async (context, workspaceRoot) => ({
         ...officeCliEnvSync(),
         ...tuttiCliEnv(),
-        ...(await tuttiAgentProviderEnv(context.runtimeProfile.provider).catch(() => ({}))),
         ...buildSlideAppToolEnv(context),
         AI_SLIDE_WORKSPACE: workspaceRoot,
         AI_SLIDE_PROJECT_ID: context.project.id,

@@ -7,7 +7,7 @@ import {
 import type { AiEditRequest, SheetRun } from "@ai-sheet/shared";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
-import { tuttiAgentProviderEnv, tuttiCliEnv } from "../tutti/tutti-cli.js";
+import { tuttiCliEnv } from "../tutti/tutti-cli.js";
 import { buildSheetAppToolEnv, buildSheetAppToolMcpServers } from "../agent-tools.js";
 import type { RuntimeEditContext, SheetRuntimeProject } from "./runtime-provider.js";
 
@@ -27,7 +27,6 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       buildEnv: async (context, workspaceRoot) => ({
         ...officeCliEnvSync(),
         ...tuttiCliEnv(),
-        ...(await tuttiAgentProviderEnv(context.runtimeProfile.provider).catch(() => ({}))),
         ...buildSheetAppToolEnv(context),
         AI_SHEET_WORKSPACE: workspaceRoot,
         AI_SHEET_PROJECT_ID: context.project.id,
