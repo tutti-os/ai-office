@@ -14,8 +14,8 @@ import {
   loadTuttiAgentSkillContext,
   resolveTuttiAgentProviderCatalog,
   type LoadTuttiAgentSkillContextInput,
-  type TuttiAgentProviderCatalogEntry,
-  type TuttiAgentProviderCatalogResult,
+  type TuttiResolvedAgentProviderCatalog,
+  type TuttiResolvedAgentProviderCatalogEntry,
   type TuttiRecommendedSystemPrompt,
 } from "@tutti-os/agent-acp-kit/tutti";
 import { localAgentModelIdForAcp, localAgentProviderIdsMatch } from "@ai-app/shared/agent-providers";
@@ -132,11 +132,11 @@ export class LocalAgentRuntimeProvider<
 
   async listLocalAgentProviderCatalog(
     headers?: Record<string, string | string[] | undefined>,
-  ): Promise<TuttiAgentProviderCatalogResult> {
+  ): Promise<TuttiResolvedAgentProviderCatalog> {
     return resolveTuttiAgentProviderCatalog({
       runtime: this.localAgentRuntime,
       detectContext: createManagedAgentDetectContextFromHeaders(headers),
-      workspaceCwd:
+      cwd:
         process.env.TUTTI_WORKSPACE_ROOT?.trim()
         || process.env.AI_DOC_WORKSPACE_ROOT?.trim()
         || process.env.AI_SLIDE_WORKSPACE_ROOT?.trim()
@@ -440,7 +440,7 @@ export function stripProviderPrefix(model: string, provider: string) {
 }
 
 function mapCatalogEntryToLocalAgentProviderStatus(
-  entry: TuttiAgentProviderCatalogEntry,
+  entry: TuttiResolvedAgentProviderCatalogEntry,
 ): LocalAgentProviderStatus {
   return {
     provider: entry.provider,

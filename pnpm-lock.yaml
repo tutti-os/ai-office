@@ -372,27 +372,14 @@ importers:
         specifier: ^7.2.7
         version: 7.3.5(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
 
-  packages/agent-acp-kit:
-    dependencies:
-      '@tutti-os/agent-acp-kit-base':
-        specifier: npm:@tutti-os/agent-acp-kit@0.2.4
-        version: '@tutti-os/agent-acp-kit@0.2.4'
-    devDependencies:
-      '@types/node':
-        specifier: ^24.10.1
-        version: 24.13.2
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
   packages/ai-app-agent:
     dependencies:
       '@ai-app/shared':
         specifier: workspace:*
         version: link:../ai-app-shared
       '@tutti-os/agent-acp-kit':
-        specifier: workspace:*
-        version: link:../agent-acp-kit
+        specifier: 0.3.3
+        version: 0.3.3
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.7)
@@ -2409,8 +2396,8 @@ packages:
   '@tiptap/starter-kit@3.27.1':
     resolution: {integrity: sha512-vfxRsqW8rCc0k4pzo0ilU3wobVi2wqVj88VZI2SlgZlNnUAkrDGDIAph7CTa9k9fshV+O1ivpEgPC5yC046jow==}
 
-  '@tutti-os/agent-acp-kit@0.2.4':
-    resolution: {integrity: sha512-P8eAJZ/qV5uI2RwTJyNHnNdxOzneR0HBdDVBNIq+DrWofK2Nhnwo3vWRNvAObuPmSWtMTd1PitM52JaNo/mPUw==}
+  '@tutti-os/agent-acp-kit@0.3.3':
+    resolution: {integrity: sha512-o5GXFgggbbMKCUN3Sz9+sM6Z57/wtKtiQCYC9Fy+JAWJgyZCxgOnuozms3ApUpYkMtWuV0LxdfEwhS3yEOcenQ==}
 
   '@tutti-os/office-formula-calc@0.0.0-test.20260706055103.ad1e4504c24a':
     resolution: {integrity: sha512-Dq75BUzzbrsslu61kqVE0KRdNu8eax7GaL18HYGsiqEdXWbrq6iIAXCsfU2MBcxZWqanFRcq9FN4Y2WR6Setdg==}
@@ -6106,7 +6093,7 @@ snapshots:
       '@tiptap/extensions': 3.27.1(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1)
       '@tiptap/pm': 3.27.1
 
-  '@tutti-os/agent-acp-kit@0.2.4':
+  '@tutti-os/agent-acp-kit@0.3.3':
     dependencies:
       '@anthropic-ai/claude-agent-sdk': 0.2.101(zod@4.4.3)
       zod: 4.4.3
