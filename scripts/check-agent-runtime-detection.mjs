@@ -61,7 +61,10 @@ const detectedProvider = {
 };
 
 const first = detector.detect(managedContext);
-const joined = detector.detect(managedContext);
+const joined = detector.detect({
+  ...managedContext,
+  managedAgentInvocation: { ...managedContext.managedAgentInvocation },
+});
 assert.equal(first, joined);
 assert.equal(calls, 1);
 pending.shift().resolve([detectedProvider]);
@@ -76,15 +79,19 @@ const separateWorkspace = detector.detect({
   managedAgentInvocation: { cwd: "/workspace-b", credential: "secret-a" },
 });
 const refresh = detector.detect({ ...managedContext, refresh: true });
-assert.equal(calls, 4);
+const separateEnvironment = detector.detect({
+  ...managedContext,
+  env: { PATH: "/opt/alternate/bin" },
+});
+assert.equal(calls, 5);
 for (const operation of pending.splice(0)) operation.resolve([detectedProvider]);
-await Promise.all([separateCredential, separateWorkspace, refresh]);
+await Promise.all([separateCredential, separateWorkspace, refresh, separateEnvironment]);
 
 const rejected = detector.detect(managedContext);
 pending.shift().reject(new Error("expected rejection"));
 await assert.rejects(rejected, /expected rejection/);
 const retry = detector.detect(managedContext);
-assert.equal(calls, 6);
+assert.equal(calls, 7);
 pending.shift().resolve([detectedProvider]);
 await retry;
 

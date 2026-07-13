@@ -294,7 +294,7 @@ export class ProjectService {
     const runtimeProject = await this.createRuntimeProject(projectId);
     if (runtimeProject.artifact.type === "pptx") await requireOfficeCli();
     this.repo.syncProjectAgentInstructions(projectId);
-    const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId);
+    const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId, headers);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);
     const session = this.resolveConversationSession(projectId, runtimeProject.title, request.sessionId);
@@ -342,17 +342,20 @@ export class ProjectService {
     return this.requireProjectSession(projectId, sessionId);
   }
 
-  private async resolveRuntimeProfile(runtimeProfileId: string | null | undefined) {
+  private async resolveRuntimeProfile(
+    runtimeProfileId: string | null | undefined,
+    headers?: Record<string, string | string[] | undefined>,
+  ) {
     if (runtimeProfileId) {
       const existing = this.repo.getRuntimeProfile(runtimeProfileId);
       if (existing.id === runtimeProfileId) return existing;
-      const providers = await this.runtimes.listLocalAgentProviders().catch(() => null);
+      const providers = await this.runtimes.listLocalAgentProviders(headers).catch(() => null);
       if (providers) this.repo.syncLocalAgentRuntimeProfiles(providers);
       const synced = this.repo.getRuntimeProfile(runtimeProfileId);
       if (synced.id !== runtimeProfileId) throw new Error(`Runtime profile not found: ${runtimeProfileId}`);
       return synced;
     }
-    const providers = await this.runtimes.listLocalAgentProviders().catch(() => null);
+    const providers = await this.runtimes.listLocalAgentProviders(headers).catch(() => null);
     if (providers) this.repo.syncLocalAgentRuntimeProfiles(providers);
     const profiles = this.repo.snapshot().runtimeProfiles;
     const preferredProfileId = resolvePreferredLocalAgentRuntimeProfileId({

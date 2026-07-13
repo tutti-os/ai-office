@@ -53,6 +53,13 @@ function detectionKey(context: DetectContext | undefined) {
     context?.refresh ? "refresh" : "normal",
     fingerprint(workspace),
     fingerprint(managed?.credential ?? "anonymous"),
+    fingerprint(
+      Object.entries(context?.env ?? {})
+        .filter((entry): entry is [string, string] => typeof entry[1] === "string")
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, value]) => `${key}\u0000${value}`)
+        .join("\u0001"),
+    ),
   ].join(":");
 }
 

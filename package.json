@@ -15,7 +15,7 @@
     "build": "pnpm -r --filter \"./packages/*\" --if-present build && pnpm --filter @ai-doc/app build && pnpm --filter @ai-slide/app build && pnpm --filter @ai-sheet/app build",
     "check": "pnpm check:css-layering && pnpm check:agent-detection && pnpm check:parity && pnpm check:file-size && pnpm check:import-boundaries && pnpm -r --filter \"./packages/*\" --if-present check && pnpm --filter @ai-doc/app check && pnpm --filter @ai-slide/app check && pnpm --filter @ai-sheet/app check",
     "check:css-layering": "node scripts/check-css-layering.mjs",
-    "check:agent-detection": "node --experimental-strip-types scripts/check-agent-runtime-detection.mjs",
+    "check:agent-detection": "tsx scripts/check-agent-runtime-detection.mjs",
     "check:file-size": "node scripts/check-file-size.mjs",
     "check:i18n": "node scripts/check-doc-i18n.mjs",
     "check:import-boundaries": "node scripts/check-import-boundaries.mjs",
@@ -34,6 +34,7 @@
     "@ai-app/tutti-packager": "workspace:*",
     "@types/node": "^24.10.1",
     "esbuild": "^0.28.0",
+    "tsx": "^4.22.4",
     "typescript": "^5.9.3"
   },
   "packageManager": "pnpm@10.11.0"
