@@ -8,6 +8,8 @@ import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { ProjectService } from "../artifact/project-service.js";
 import { installOfficeCli } from "../toolchains/officecli.js";
 
+type ManagedAgentHeaders = Record<string, string | string[] | undefined>;
+
 export function registerTuttiCliRoutes(server: FastifyInstance, projects: ProjectService) {
   server.post("/tutti/cli/status", async (_request, reply) => {
     const projectRows = projects.listProjects().projects;
@@ -15,7 +17,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
     const latestProject = projectRows[0] ?? null;
     return reply.send(cliJsonOutput({
       ok: true,
-      appId: "ai-slide",
+      appId: appId(),
       version: process.env.AI_SLIDE_APP_VERSION ?? "0.0.0",
       projectCount: projectRows.length,
       runtimeProviderCount: providers.providers.length,
@@ -42,7 +44,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/projects/create", async (request, reply) => {
-    return createProjectCliResponse(reply, projects, readCliInputBody(request.body));
+    return createProjectCliResponse(reply, projects, readCliInputBody(request.body), request.headers);
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/projects/open", async (request, reply) => {
@@ -166,11 +168,11 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/agent/run", async (request, reply) => {
-    return agentRunCliResponse(reply, projects, readCliInputBody(request.body));
+    return agentRunCliResponse(reply, projects, readCliInputBody(request.body), request.headers);
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/agent/edit", async (request, reply) => {
-    return agentRunCliResponse(reply, projects, readCliInputBody(request.body));
+    return agentRunCliResponse(reply, projects, readCliInputBody(request.body), request.headers);
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/agent/events", async (request, reply) => {
@@ -182,7 +184,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
       return reply.send(cliJsonOutput({
         ...result,
         openTarget: result.run?.projectId ? projectOpenTarget(result.run.projectId) : null,
-        guidance: finalOpenGuidance("AI Slide"),
+        guidance: finalOpenGuidance("AI PPT"),
       }));
     } catch (error) {
       return sendCliError(reply, cliErrorStatus(error), "agent_events_failed", errorMessage(error));
@@ -317,7 +319,12 @@ async function slideOutput(
   return output;
 }
 
-async function createProjectCliResponse(reply: FastifyReply, projects: ProjectService, input: Record<string, unknown>) {
+async function createProjectCliResponse(
+  reply: FastifyReply,
+  projects: ProjectService,
+  input: Record<string, unknown>,
+  headers: ManagedAgentHeaders,
+) {
   const artifactType = normalizeArtifactType(input["artifact-type"] ?? input.artifactType);
   if (!artifactType) return sendCliError(reply, 400, "invalid_input", "artifactType must be deck or pptx");
   const prompt = optionalString(input, "prompt");
@@ -340,7 +347,7 @@ async function createProjectCliResponse(reply: FastifyReply, projects: ProjectSe
           selectionType: "write",
           selectionPath: "",
           runtimeProfileId: runtimeProfileId.value,
-        })).run
+        }, headers)).run
       : null;
     return reply.send(cliJsonOutput({
       ok: true,
@@ -349,14 +356,19 @@ async function createProjectCliResponse(reply: FastifyReply, projects: ProjectSe
       run,
       openTarget: projectOpenTarget(result.project.id),
       workspace: projects.projectWorkspaceContext(result.project.id, result.artifact),
-      guidance: finalOpenGuidance("AI Slide"),
+      guidance: finalOpenGuidance("AI PPT"),
     }));
   } catch (error) {
     return sendCliError(reply, cliErrorStatus(error), "project_create_failed", errorMessage(error));
   }
 }
 
-async function agentRunCliResponse(reply: FastifyReply, projects: ProjectService, input: Record<string, unknown>) {
+async function agentRunCliResponse(
+  reply: FastifyReply,
+  projects: ProjectService,
+  input: Record<string, unknown>,
+  headers: ManagedAgentHeaders,
+) {
   const projectId = requiredString(input, "project-id");
   const prompt = requiredString(input, "prompt");
   const mode = normalizeAiMode(input.mode);
@@ -377,11 +389,11 @@ async function agentRunCliResponse(reply: FastifyReply, projects: ProjectService
       selectionPath: "",
       sessionId: optionalString(input, "session-id"),
       runtimeProfileId: runtimeProfileId.value,
-    });
+    }, headers);
     return reply.send(cliJsonOutput({
       ...result,
       openTarget: projectOpenTarget(projectId),
-      guidance: finalOpenGuidance("AI Slide"),
+      guidance: finalOpenGuidance("AI PPT"),
     }));
   } catch (error) {
     return sendCliError(reply, cliErrorStatus(error), "agent_run_failed", errorMessage(error));
@@ -466,7 +478,7 @@ function projectOpenTarget(projectId: string) {
     kind: "tutti-cli-command" as const,
     appId: appId(),
     directOpenSupported: true as const,
-    label: "Open in AI Slide",
+    label: "Open in AI PPT",
     projectId,
     userFacing: false as const,
     command: {
@@ -534,7 +546,7 @@ function projectRoute(projectId: string) {
 }
 
 function appId() {
-  return process.env.TUTTI_APP_ID?.trim() || "ai-slide";
+  return process.env.TUTTI_APP_ID?.trim() || "ai-ppt";
 }
 
 function cliErrorStatus(error: unknown) {

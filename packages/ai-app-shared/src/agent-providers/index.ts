@@ -52,10 +52,11 @@ function findRuntimeProfileForProvider(profiles: LocalAgentRuntimeProfileLike[],
 }
 
 export function normalizeRuntimeProfileProviderId(provider: string | null | undefined) {
-  const normalized = normalizeLocalAgentProviderId(provider);
-  if (!normalized) return "";
-  if (normalized === "claude-code") return "claude";
-  return normalized;
+  return normalizeLocalAgentProviderId(provider);
+}
+
+export function isStaleLocalAgentProviderId(provider: string | null | undefined) {
+  return normalizeRuntimeProfileProviderId(provider) === "nexight";
 }
 
 export function runtimeProfileIdFromProvider(provider: string): { value?: string; error?: string } {
@@ -69,7 +70,7 @@ export function displayNameForLocalAgentProvider(provider: string, fallback?: st
   if (trimmed) return trimmed;
   const normalized = normalizeRuntimeProfileProviderId(provider);
   if (normalized === "codex") return "Codex";
-  if (normalized === "claude") return "Claude Code";
+  if (normalized === "claude-code") return "Claude Code";
   if (normalized === "cursor") return "Cursor";
   if (normalized === "opencode") return "OpenCode";
   if (!normalized) return "Agent";
@@ -97,6 +98,7 @@ export function runtimeProfileModelForProvider(
 export function stripRuntimeProfileModelPrefix(model: string, provider: string) {
   const profileProvider = normalizeRuntimeProfileProviderId(provider);
   const prefix = `${profileProvider}:`;
+  if (profileProvider === "claude-code" && model.startsWith("claude:")) return model.slice("claude:".length);
   return model.startsWith(prefix) ? model.slice(prefix.length) : model;
 }
 
@@ -142,7 +144,7 @@ export function resolveAgentMenuProfiles(
   agentProfiles: AgentMenuProfileLike[],
   agentProviders: AgentMenuProviderLike[],
 ): AgentMenuProfileLike[] {
-  if (agentProviders.length === 0) return agentProfiles;
+  if (agentProviders.length === 0) return agentProfiles.filter((profile) => !isStaleLocalAgentProviderId(profile.provider));
 
   const profilesByProvider = new Map<string, AgentMenuProfileLike>();
   for (const profile of agentProfiles) {
@@ -150,7 +152,7 @@ export function resolveAgentMenuProfiles(
     profilesByProvider.set(normalizeRuntimeProfileProviderId(profile.provider), profile);
   }
 
-  return agentProviders.map((provider) => {
+  return agentProviders.filter((provider) => !isStaleLocalAgentProviderId(provider.provider)).map((provider) => {
     const profileProvider = normalizeRuntimeProfileProviderId(provider.provider);
     const existing = profilesByProvider.get(profileProvider);
     if (existing) return existing;
@@ -169,8 +171,10 @@ export function mergeLocalAgentRuntimeProfiles<TProfile extends RuntimeProfileSe
   providers: readonly AgentMenuProviderLike[],
 ): TProfile[] {
   const now = new Date().toISOString();
-  const merged = new Map(existing.filter((profile) => profile.kind === "local-agent").map((profile) => [profile.id, profile]));
-  for (const provider of providers) {
+  const merged = new Map(existing
+    .filter((profile) => profile.kind === "local-agent" && !isStaleLocalAgentProviderId(profile.provider))
+    .map((profile) => [profile.id, profile]));
+  for (const provider of providers.filter((provider) => !isStaleLocalAgentProviderId(provider.provider))) {
     const seed = localAgentRuntimeProfileSeed(provider.provider, provider.displayName);
     if (merged.has(seed.id)) continue;
     merged.set(seed.id, {

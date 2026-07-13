@@ -23,7 +23,7 @@
     "generate:cli-manifests": "node tooling/tutti/generate-cli-manifests.mjs",
     "validate:tutti": "node scripts/validate-tutti-app-package.mjs build/tutti-app/package",
     "validate:doc-tutti": "node scripts/validate-tutti-app-package.mjs build/tutti-app/package ai-doc doc",
-    "validate:slide-tutti": "node scripts/validate-tutti-app-package.mjs build/tutti-slide-app/package ai-slide slide",
+    "validate:slide-tutti": "node scripts/validate-tutti-app-package.mjs build/tutti-slide-app/package ai-ppt slide",
     "validate:sheet-tutti": "node scripts/validate-tutti-app-package.mjs build/tutti-sheet-app/package ai-sheet sheet",
     "package:tutti": "pnpm --filter @ai-doc/app package:tutti",
     "package:doc-tutti": "pnpm --filter @ai-doc/app package:tutti",

@@ -1,8 +1,8 @@
 {
   "schemaVersion": "tutti.app.manifest.v1",
-  "appId": "ai-slide",
+  "appId": "ai-ppt",
   "version": "0.1.14",
-  "name": "AI Slide",
+  "name": "AI PPT",
   "description": "Human and local agents editing presentation decks together.",
   "icon": {
     "type": "asset",
@@ -11,6 +11,9 @@
   "runtime": {
     "bootstrap": "bootstrap.sh",
     "healthcheckPath": "/api/health"
+  },
+  "hostCompatibility": {
+    "requiredTuttiCapabilities": ["managed-model-cli-v1"]
   },
   "cli": {
     "manifest": "tutti.cli.json"

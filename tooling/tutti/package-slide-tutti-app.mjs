@@ -8,7 +8,7 @@ const scriptPath = fileURLToPath(import.meta.url);
 const rootDir = path.resolve(path.dirname(scriptPath), "../..");
 const appDir = path.join(rootDir, "apps", "slide");
 
-const APP_ID = "ai-slide";
+const APP_ID = "ai-ppt";
 const colorfulPptIconPath = path.join(
   rootDir,
   "tooling",
@@ -26,7 +26,7 @@ package_dir="\${TUTTI_APP_PACKAGE_DIR:-$script_dir}"
 
 export HOST="\${TUTTI_APP_HOST:-127.0.0.1}"
 export PORT="\${TUTTI_APP_PORT:-8791}"
-export TUTTI_APP_ID="\${TUTTI_APP_ID:-ai-slide}"
+export TUTTI_APP_ID="\${TUTTI_APP_ID:-ai-ppt}"
 export AI_SLIDE_APP_VERSION="${version}"
 export AI_SLIDE_WEB_DIST="$package_dir/dist"
 export AI_SLIDE_HOME="\${TUTTI_APP_DATA_DIR:-$package_dir/.data}"
@@ -50,16 +50,16 @@ exec "$node_bin" "$package_dir/server/server.js"
 export function renderIcon() {
   const colorfulPptIcon = readFileSync(colorfulPptIconPath).toString("base64");
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="AI Slide">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="AI PPT">
   <image href="data:image/png;base64,${colorfulPptIcon}" width="1024" height="1024" preserveAspectRatio="xMidYMid meet"/>
 </svg>
 `;
 }
 
 export function renderPackageGuide() {
-  return `# AI Slide Tutti Package
+  return `# AI PPT Tutti Package
 
-This package runs AI Slide as a local Tutti workspace app.
+This package runs AI PPT as a local Tutti workspace app.
 
 - \`bootstrap.sh\` maps \`TUTTI_APP_*\` variables into \`AI_SLIDE_*\` variables.
 - \`server/server.js\` is the bundled Fastify server.
@@ -72,7 +72,7 @@ This package runs AI Slide as a local Tutti workspace app.
 - Templates load from CloudFront by default at \`/office-templates/slide/template.json\`; set \`AI_SLIDE_TEMPLATE_PROVIDER=local\` to use \`AI_SLIDE_TEMPLATE_ROOT\` and \`AI_SLIDE_TEMPLATE_ASSET_ROOT\`.
 - OfficeCLI auto-install uses the shared AI Office toolchain cache, not \`AI_SLIDE_HOME\`; override with \`AI_SLIDE_OFFICECLI_PATH\`, \`TUTTI_APP_OFFICECLI_PATH\`, or an \`*_OFFICECLI_INSTALL_ROOT\` env var.
 - Use \`AI_SLIDE_TUTTI_CLI\` for app-to-app calls. It is populated from \`TUTTI_CLI\` by \`bootstrap.sh\`.
-- The \`slide open\` command imports the file and returns the focused workspace path, project \`AGENTS.md\` path, and an internal \`openTarget\` command. It does not open the app automatically; use \`slide projects open\` only after the user confirms they want AI Slide opened directly.
+- The \`slide open\` command imports the file and returns the focused workspace path, project \`AGENTS.md\` path, and an internal \`openTarget\` command. It does not open the app automatically; use \`slide projects open\` only after the user confirms they want AI PPT opened directly.
 
 I18n:
 

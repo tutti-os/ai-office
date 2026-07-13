@@ -39,7 +39,7 @@ function mintSlideAppToolToken(context: RuntimeEditContext) {
   if (context.project.artifact.type === "deck") tools.push(createReorderSlidesTool());
   return slideAgentToolGateway.mint(
     {
-      appId: "ai-slide",
+      appId: process.env.TUTTI_APP_ID?.trim() || "ai-ppt",
       projectId: context.project.id,
       runId: context.run.id,
       conversationId: context.conversation?.conversationId,

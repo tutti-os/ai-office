@@ -3,7 +3,9 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
   isPlaceholderRuntimeProfileModel,
+  isStaleLocalAgentProviderId,
   localAgentRuntimeProfileSeed,
+  normalizeRuntimeProfileProviderId,
   runtimeProfileModelForProvider,
 } from "../agent-providers/index.js";
 import type { AgentConversationMessage, AgentConversationRole, AgentConversationSession, BaseRun, BaseRunEvent, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
@@ -49,6 +51,13 @@ export function parseJson<T>(value: unknown, fallback: T): T {
   }
 }
 
+function normalizeRuntimeProfileModel(model: string, provider: string) {
+  if (provider === "claude-code" && model.startsWith("claude:")) {
+    return `claude-code:${model.slice("claude:".length)}`;
+  }
+  return model;
+}
+
 export type RuntimeProfileSeed = Omit<RuntimeProfile, "createdAt" | "updatedAt">;
 
 export class RuntimeProfileStore {
@@ -65,6 +74,7 @@ export class RuntimeProfileStore {
     const database = this.getDb();
     const count = (database.prepare(`SELECT COUNT(*) AS count FROM ${this.tableName}`).get() as { count: number }).count;
     if (count === 0) this.insertDefaultProfiles(database);
+    this.migrateLegacyLocalAgentProfiles(database);
     this.options.normalize?.(database);
   }
 
@@ -83,25 +93,29 @@ export class RuntimeProfileStore {
   }
 
   getForRun(run: Pick<RuntimeProfile, "provider" | "model"> & { runtime: string }) {
+    const provider = normalizeRuntimeProfileProviderId(run.provider);
+    const model = normalizeRuntimeProfileModel(run.model, provider);
     const row = rowOrNull<RuntimeProfileRow>(
       this.getDb()
         .prepare(`SELECT * FROM ${this.tableName} WHERE kind = ? AND provider = ? AND model = ? AND enabled = 1 LIMIT 1`)
-        .get(run.runtime, run.provider, run.model),
+        .get(run.runtime, provider, model),
     );
     if (row) return rowToRuntimeProfile(row);
     const fallback = rowOrNull<RuntimeProfileRow>(
       this.getDb()
         .prepare(`SELECT * FROM ${this.tableName} WHERE kind = ? AND provider = ? AND enabled = 1 ORDER BY created_at ASC LIMIT 1`)
-        .get(run.runtime, run.provider),
+        .get(run.runtime, provider),
     );
     return fallback ? rowToRuntimeProfile(fallback) : this.getDefault();
   }
 
   getLocalAgentByProvider(provider: string) {
+    const canonicalProvider = normalizeRuntimeProfileProviderId(provider);
+    if (!canonicalProvider || isStaleLocalAgentProviderId(canonicalProvider)) return null;
     const row = rowOrNull<RuntimeProfileRow>(
       this.getDb()
         .prepare(`SELECT * FROM ${this.tableName} WHERE kind = 'local-agent' AND provider = ? AND enabled = 1 ORDER BY created_at ASC LIMIT 1`)
-        .get(provider),
+        .get(canonicalProvider),
     );
     return row ? rowToRuntimeProfile(row) : null;
   }
@@ -125,7 +139,7 @@ export class RuntimeProfileStore {
     const database = this.getDb();
     const now = new Date().toISOString();
     const allowedLocalAgentIds = new Set<string>();
-    for (const provider of providers) {
+    for (const provider of providers.filter((provider) => !isStaleLocalAgentProviderId(provider.provider))) {
       const seed = localAgentRuntimeProfileSeed(provider.provider, provider.displayName, provider);
       allowedLocalAgentIds.add(seed.id);
       const existing = existingProfiles.find((profile) => profile.id === seed.id);
@@ -156,6 +170,39 @@ export class RuntimeProfileStore {
 
   private get tableName() {
     return this.options.tableName ?? "runtime_profiles";
+  }
+
+  private migrateLegacyLocalAgentProfiles(database: DatabaseSync) {
+    const now = new Date().toISOString();
+    const canonicalExists = Boolean(rowOrNull<{ present: number }>(
+      database.prepare(
+        `SELECT 1 AS present FROM ${this.tableName}
+         WHERE kind = 'local-agent' AND (id = 'local-agent:claude-code' OR provider = 'claude-code') LIMIT 1`,
+      ).get(),
+    ));
+    if (canonicalExists) {
+      database.prepare(
+        `DELETE FROM ${this.tableName}
+         WHERE kind = 'local-agent' AND (id = 'local-agent:claude' OR provider = 'claude')`,
+      ).run();
+    } else {
+      database.prepare(
+        `UPDATE ${this.tableName}
+         SET id = 'local-agent:claude-code',
+             provider = 'claude-code',
+             model = CASE
+               WHEN model LIKE 'claude:%' THEN 'claude-code:' || substr(model, 8)
+               WHEN model = 'claude' OR model = '' THEN 'claude-code:default'
+               ELSE model
+             END,
+             updated_at = ?
+         WHERE kind = 'local-agent' AND (id = 'local-agent:claude' OR provider = 'claude')`,
+      ).run(now);
+    }
+    database.prepare(
+      `DELETE FROM ${this.tableName}
+       WHERE kind = 'local-agent' AND (id = 'local-agent:nexight' OR provider = 'nexight')`,
+    ).run();
   }
 
   private insertDefaultProfiles(database: DatabaseSync) {
@@ -482,10 +529,10 @@ export function defaultRuntimeProfiles(input: { demoModel: string; demoDisplayNa
       capabilities: { streaming: true, toolUse: true, reasoning: true, resume: true },
     },
     {
-      id: "local-agent:claude",
+      id: "local-agent:claude-code",
       kind: "local-agent",
-      provider: "claude",
-      model: "claude:default",
+      provider: "claude-code",
+      model: "claude-code:default",
       displayName: "Claude Code",
       enabled: true,
       capabilities: { streaming: true, toolUse: true, reasoning: true, resume: true },
