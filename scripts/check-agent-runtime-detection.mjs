@@ -33,6 +33,7 @@ assert.equal(resolvePreferredLocalAgentRuntimeProfileId({
     { provider: "claude-code", supported: false },
   ],
 }), "cursor");
+assert.equal(resolvePreferredLocalAgentRuntimeProfileId({ profiles, providers: [] }), "cursor");
 
 let calls = 0;
 const pending = [];
@@ -55,6 +56,7 @@ const detectedProvider = {
   supported: true,
   authState: "ok",
   models: [{ id: "default", label: "Default" }],
+  defaultModelId: "default",
   isDefault: true,
 };
 
