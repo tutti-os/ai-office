@@ -184,7 +184,6 @@ export function App() {
             return resolvePreferredLocalAgentRuntimeProfileId({
               profiles: merged,
               providers: response.providers,
-              defaultProvider: response.defaultProvider,
             });
           });
           return merged;

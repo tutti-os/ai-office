@@ -2,9 +2,10 @@ import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   createDefaultLocalAgentProviderPlugins,
+  createDefaultLocalAgentRuntime,
   createManagedAgentDetectContextFromHeaders,
-  createLocalAgentRuntime,
   type AgentEvent,
+  type DetectContext,
   type LocalAgentProviderPlugin,
   type RawAgentEvent,
   type RawAgentStream,
@@ -12,16 +13,14 @@ import {
 } from "@tutti-os/agent-acp-kit";
 import {
   loadTuttiAgentSkillContext,
-  resolveTuttiAgentProviderCatalog,
   type LoadTuttiAgentSkillContextInput,
-  type TuttiResolvedAgentProviderCatalog,
-  type TuttiResolvedAgentProviderCatalogEntry,
   type TuttiRecommendedSystemPrompt,
 } from "@tutti-os/agent-acp-kit/tutti";
 import { localAgentModelIdForAcp, localAgentProviderIdsMatch } from "@ai-app/shared/agent-providers";
 import type { BaseAiEditRequest, BaseRun, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { safePathSegment } from "@ai-app/shared/local-paths";
 import type { RuntimeEditContext, RuntimeProvider, RuntimeStreamEvent } from "@ai-app/agent/runtime";
+import { createLocalAgentProviderDetector } from "./provider-detection.js";
 
 const DEFAULT_TIMEOUT_MS = 180_000;
 
@@ -87,9 +86,10 @@ export class LocalAgentRuntimeProvider<
 > implements RuntimeProvider<TRun, TProject, TRequest> {
   id = "local-agent";
   private readonly controllers = new Map<string, AbortController>();
-  private readonly localAgentRuntime = createLocalAgentRuntime({
+  private readonly localAgentRuntime = createDefaultLocalAgentRuntime({
     providers: createAiAppLocalAgentProviderPlugins(),
   });
+  private readonly providerDetector = createLocalAgentProviderDetector(this.localAgentRuntime);
   private readonly options: LocalAgentRuntimeProviderOptions<TRun, TProject, TRequest>;
 
   constructor(options: LocalAgentRuntimeProviderOptions<TRun, TProject, TRequest>) {
@@ -111,43 +111,36 @@ export class LocalAgentRuntimeProvider<
     }
     const workspaceRoot = context ? this.options.workspaceRoot(context) : undefined;
     const env = context && workspaceRoot ? await this.options.buildEnv?.(context, workspaceRoot) : undefined;
-    const detectionContext = context?.managedAgent
-      ? { cwd: context.managedAgent.cwd, ...(env ? { env } : {}), managedAgentInvocation: context.managedAgent.managedAgentInvocation }
-      : env
-        ? { env }
-        : undefined;
-    const detection = (await this.localAgentRuntime.detect(detectionContext)).find((item: any) => localAgentProviderIdsMatch(item.provider, providerId));
-    if (!detection) return { available: true };
-    if (detection.result?.supported === false) {
+    const detectionContext: DetectContext | undefined = context
+      ? {
+          ...(workspaceRoot ? { cwd: context.managedAgent?.cwd ?? workspaceRoot } : {}),
+          ...(env ? { env } : {}),
+          ...(context.managedAgent ? { managedAgentInvocation: context.managedAgent.managedAgentInvocation } : {}),
+        }
+      : undefined;
+    const detection = (await this.providerDetector.detect(detectionContext))
+      .find((item) => localAgentProviderIdsMatch(item.provider, providerId));
+    if (!detection?.supported) {
       return {
         available: false,
-        reason: detection.result.unsupportedReason ?? `${profile.provider} is not supported on this machine.`,
+        reason: detection?.reason ?? `${profile.provider} is not installed, authenticated, or supported on this machine.`,
       };
-    }
-    if (detection.result === null) {
-      return { available: false, reason: `${profile.provider} is not installed or not discoverable.` };
     }
     return { available: true };
   }
 
-  async listLocalAgentProviderCatalog(
+  async listLocalAgentProviders(
     headers?: Record<string, string | string[] | undefined>,
-  ): Promise<TuttiResolvedAgentProviderCatalog> {
-    return resolveTuttiAgentProviderCatalog({
-      runtime: this.localAgentRuntime,
-      detectContext: createManagedAgentDetectContextFromHeaders(headers),
-      cwd:
-        process.env.TUTTI_WORKSPACE_ROOT?.trim()
-        || process.env.AI_DOC_WORKSPACE_ROOT?.trim()
-        || process.env.AI_SLIDE_WORKSPACE_ROOT?.trim()
-        || process.env.AI_SHEET_WORKSPACE_ROOT?.trim()
-        || undefined,
-    });
-  }
-
-  async listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>): Promise<LocalAgentProviderStatus[]> {
-    const catalog = await this.listLocalAgentProviderCatalog(headers);
-    return catalog.providers.map(mapCatalogEntryToLocalAgentProviderStatus);
+    refresh = false,
+  ): Promise<LocalAgentProviderStatus[]> {
+    const cwd = configuredWorkspaceRoot();
+    const managedContext = createManagedAgentDetectContextFromHeaders(headers, cwd ? { cwd } : undefined);
+    const detectionContext: DetectContext | undefined = managedContext
+      ? { ...managedContext, ...(refresh ? { refresh: true } : {}) }
+      : cwd || refresh
+        ? { ...(cwd ? { cwd } : {}), ...(refresh ? { refresh: true } : {}) }
+        : undefined;
+    return this.providerDetector.detect(detectionContext);
   }
 
   async *streamEdit(context: RuntimeEditContext<TRun, TProject, TRequest>) {
@@ -439,32 +432,12 @@ export function stripProviderPrefix(model: string, provider: string) {
   return model.startsWith(prefix) ? model.slice(prefix.length) : model;
 }
 
-function mapCatalogEntryToLocalAgentProviderStatus(
-  entry: TuttiResolvedAgentProviderCatalogEntry,
-): LocalAgentProviderStatus {
-  return {
-    provider: entry.provider,
-    displayName: entry.displayName,
-    available: entry.available,
-    authState: entry.authState,
-    executablePath: entry.executablePath,
-    version: entry.version,
-    configDir: entry.configDir,
-    models: entry.models.map((model) => ({
-      id: model.id,
-      label: model.label,
-    })),
-    ...(entry.defaultModelId ? { defaultModelId: entry.defaultModelId } : {}),
-    reason: entry.reason,
-  };
-}
-
-function localAgentUnavailableReason(displayName: string, result: any) {
-  if (!result) return `${displayName} is not installed or not discoverable.`;
-  if (result.supported === false) return result.unsupportedReason ?? `${displayName} is not supported on this machine.`;
-  if (result.authState === "missing") return `${displayName} is installed but authentication is missing.`;
-  if (result.authState === "expired") return `${displayName} authentication has expired.`;
-  return `${displayName} is not available.`;
+function configuredWorkspaceRoot() {
+  return process.env.TUTTI_WORKSPACE_ROOT?.trim()
+    || process.env.AI_DOC_WORKSPACE_ROOT?.trim()
+    || process.env.AI_SLIDE_WORKSPACE_ROOT?.trim()
+    || process.env.AI_SHEET_WORKSPACE_ROOT?.trim()
+    || undefined;
 }
 
 interface StoredLocalAgentSession {

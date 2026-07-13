@@ -58,7 +58,6 @@ export function useDocumentWorkbenchBootstrap(input: DocumentWorkbenchBootstrapI
           return resolvePreferredLocalAgentRuntimeProfileId({
             profiles: mergedProfiles,
             providers: providerStatus.providers,
-            defaultProvider: providerStatus.defaultProvider,
           });
         });
       })
