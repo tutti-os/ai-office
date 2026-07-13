@@ -22,54 +22,24 @@ export type LocalAgentRuntimeProfileLike = {
 
 export type LocalAgentProviderStatusLike = {
   provider: string;
-  available?: boolean;
+  supported: boolean;
+  isDefault?: true;
 };
-
-export type TuttiAgentProviderStatusLike = {
-  provider?: string | null;
-  status?: string | null;
-  detail?: string | null;
-};
-
-export function mergeTuttiAgentProviderStatuses(
-  providers: LocalAgentProviderStatus[],
-  tuttiProviders: readonly TuttiAgentProviderStatusLike[] | null | undefined,
-) {
-  if (!tuttiProviders?.length) return providers;
-  return providers.map((provider) => {
-    const tuttiProvider = tuttiProviders.find((item) => localAgentProviderIdsMatch(item.provider, provider.provider));
-    if (!tuttiProvider) return provider;
-    const status = tuttiProvider.status?.trim().toLowerCase();
-    if (status === "available") {
-      const detail = tuttiProvider.detail?.trim();
-      return {
-        ...provider,
-        available: true,
-        authState: provider.authState === "missing" ? "ok" : provider.authState,
-        executablePath: detail || provider.executablePath,
-        version: provider.version === "not-installed" ? "available via Tutti" : provider.version,
-        reason: undefined,
-      };
-    }
-    if (provider.available) return provider;
-    const detail = tuttiProvider.detail?.trim();
-    return detail ? { ...provider, reason: detail } : provider;
-  });
-}
 
 export function resolvePreferredLocalAgentRuntimeProfileId(input: {
   profiles: LocalAgentRuntimeProfileLike[];
   providers?: LocalAgentProviderStatusLike[];
-  defaultProvider?: string | null;
 }) {
   const profiles = input.profiles.filter((profile) => profile.kind === "local-agent");
-  const defaultProfile = findRuntimeProfileForProvider(profiles, input.defaultProvider);
-  const defaultProviderAvailable = !input.providers
-    || input.providers.some((provider) => provider.available && localAgentProviderIdsMatch(provider.provider, input.defaultProvider));
-  if (defaultProfile && defaultProviderAvailable) return defaultProfile.id;
+  const supportedProviders = input.providers?.filter((provider) => provider.supported) ?? [];
+  const preferredProviders = [
+    supportedProviders.find((provider) => provider.isDefault)?.provider,
+    supportedProviders.find((provider) => normalizeLocalAgentProviderId(provider.provider) === "codex")?.provider,
+    supportedProviders.find((provider) => normalizeLocalAgentProviderId(provider.provider) === "claude-code")?.provider,
+  ];
 
-  for (const availableProvider of input.providers?.filter((provider) => provider.available) ?? []) {
-    const matched = findRuntimeProfileForProvider(profiles, availableProvider.provider);
+  for (const provider of preferredProviders) {
+    const matched = findRuntimeProfileForProvider(profiles, provider);
     if (matched) return matched.id;
   }
 

@@ -122,10 +122,10 @@ export function ArtifactAgentConversationPanel<TRun extends BaseRun, TEvent exte
     const provider = profile.kind === "local-agent" ? localAgentProviders.find((item) => localAgentProviderIdsMatch(item.provider, profile.provider)) ?? null : null;
     return {
       id: profile.id,
-      label: !provider || provider.available
+      label: !provider || provider.supported
         ? profile.displayName
         : formatUnavailableRuntimeProfileLabel?.(profile, provider) ?? `${profile.displayName} (${provider.authState})`,
-      disabled: provider ? !provider.available : false,
+      disabled: provider ? !provider.supported : false,
     };
   });
 

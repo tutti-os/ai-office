@@ -13,7 +13,6 @@ import {
   type DocumentProject,
   type DocumentRun,
   type DocumentRunEvent,
-  type LocalAgentProviderStatus,
   type ProjectAssetUploadResponse,
   parseDocxDocumentManifest,
   type RuntimeProfile,
@@ -21,7 +20,7 @@ import {
   type UpdateProjectRequest,
 } from "@ai-doc/shared";
 import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
-import { normalizeRuntimeProfileProviderId } from "@ai-app/shared/agent-providers";
+import { resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
 import { projectAssetFileExtensions, projectAssetMimeTypes } from "@ai-app/shared/artifact-assets";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
 import { openPathInFileManager } from "@ai-app/shared/local-open";
@@ -67,13 +66,9 @@ export class DocumentService {
   }
 
   async listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>) {
-    const catalog = await this.runtimes.listLocalAgentProviderCatalog(headers);
-    const merged = {
-      providers: catalog.providers,
-      defaultProvider: catalog.defaultProvider,
-    };
-    this.repo.syncLocalAgentRuntimeProfiles(merged.providers);
-    return merged;
+    const providers = await this.runtimes.listLocalAgentProviders(headers);
+    this.repo.syncLocalAgentRuntimeProfiles(providers);
+    return { providers };
   }
 
   listProjects() {
@@ -323,7 +318,7 @@ export class DocumentService {
     if (!project) throw new Error("Project not found");
     if (project.type === "docx") await requireOfficeCli();
     this.repo.syncProjectAgentInstructions(projectId);
-    const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId);
+    const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId, headers);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);
     const session = this.resolveConversationSession(projectId, project.title, request.sessionId);
@@ -375,34 +370,27 @@ export class DocumentService {
     return this.requireProjectSession(projectId, sessionId);
   }
 
-  private async resolveRuntimeProfile(runtimeProfileId: string | null | undefined) {
+  private async resolveRuntimeProfile(
+    runtimeProfileId: string | null | undefined,
+    headers?: Record<string, string | string[] | undefined>,
+  ) {
     if (runtimeProfileId) {
       const existing = this.repo.getRuntimeProfile(runtimeProfileId);
       if (existing.id === runtimeProfileId) return existing;
-      const catalog = await this.runtimes.listLocalAgentProviderCatalog().catch(() => null);
-      if (catalog) this.repo.syncLocalAgentRuntimeProfiles(catalog.providers);
+      const providers = await this.runtimes.listLocalAgentProviders(headers).catch(() => null);
+      if (providers) this.repo.syncLocalAgentRuntimeProfiles(providers);
       const synced = this.repo.getRuntimeProfile(runtimeProfileId);
       if (synced.id !== runtimeProfileId) throw new Error(`Runtime profile not found: ${runtimeProfileId}`);
       return synced;
     }
-    const catalog = await this.runtimes.listLocalAgentProviderCatalog().catch(() => null);
-    const statuses = catalog?.providers ?? null;
-    if (statuses) this.repo.syncLocalAgentRuntimeProfiles(statuses);
-    const defaultProvider = normalizeRuntimeProfileProviderId(catalog?.defaultProvider ?? undefined);
-    const defaultProfile = defaultProvider ? this.availableRuntimeProfile(defaultProvider, statuses) : null;
-    if (defaultProfile) return defaultProfile;
-    const firstAvailable = statuses?.find((item) => item.available);
-    if (firstAvailable) {
-      const profile = this.availableRuntimeProfile(normalizeRuntimeProfileProviderId(firstAvailable.provider), statuses);
-      if (profile) return profile;
-    }
-    return this.repo.getRuntimeProfile(undefined);
-  }
-
-  private availableRuntimeProfile(provider: string | undefined, statuses: LocalAgentProviderStatus[] | null) {
-    if (!provider) return null;
-    if (statuses && !statuses.some((item) => normalizeRuntimeProfileProviderId(item.provider) === provider && item.available)) return null;
-    return this.repo.getLocalAgentRuntimeProfileByProvider(provider);
+    const providers = await this.runtimes.listLocalAgentProviders(headers).catch(() => null);
+    if (providers) this.repo.syncLocalAgentRuntimeProfiles(providers);
+    const profiles = this.repo.snapshot().runtimeProfiles;
+    const preferredProfileId = resolvePreferredLocalAgentRuntimeProfileId({
+      profiles,
+      ...(providers ? { providers } : {}),
+    });
+    return this.repo.getRuntimeProfile(preferredProfileId || undefined);
   }
 
   private requireProjectSession(projectId: string, sessionId: string) {

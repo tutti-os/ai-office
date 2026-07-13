@@ -32,13 +32,11 @@ export interface LocalAgentProviderModel {
 export interface LocalAgentProviderStatus {
   provider: string;
   displayName: string;
-  available: boolean;
+  supported: boolean;
   authState: "ok" | "missing" | "expired" | "unknown";
-  executablePath: string;
-  version: string;
-  configDir?: string;
   models: LocalAgentProviderModel[];
   defaultModelId?: string;
+  isDefault?: true;
   reason?: string;
 }
 

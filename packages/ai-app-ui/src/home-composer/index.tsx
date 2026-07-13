@@ -20,9 +20,9 @@ export type ArtifactHomeAgentProfile = {
 };
 
 export type ArtifactHomeAgentProvider = {
-  authState?: string;
-  available?: boolean;
+  authState: "ok" | "missing" | "expired" | "unknown";
   provider: string;
+  supported: boolean;
 };
 
 export type ArtifactHomeFormatOption<T extends string> = {
@@ -306,7 +306,7 @@ function AgentMenu(props: {
         </option>
         {menuProfiles.map((profile) => {
           const status = profile.kind === "local-agent" ? props.agentProviders.find((provider) => localAgentProviderIdsMatch(provider.provider, profile.provider)) : null;
-          const available = status?.available ?? props.agentProviders.length === 0;
+          const available = status?.supported ?? props.agentProviders.length === 0;
           return (
             <option disabled={!available} key={profile.id} value={profile.id}>
               {profile.displayName}{available ? "" : ` ${props.agentUnavailableLabel}`}
