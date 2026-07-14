@@ -6,7 +6,7 @@ import {
   type LocalAgentSkillContext,
 } from "@ai-app/agent/local-agent-runtime";
 import type { AiEditRequest, DocumentProject, DocumentRun } from "@ai-doc/shared";
-import { buildDocAppToolEnv, buildDocAppToolMcpServers } from "../agent-tools.js";
+import { buildDocAppToolMcpServers } from "../agent-tools.js";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
 import { tuttiCliEnv } from "../tutti/tutti-cli.js";
@@ -32,7 +32,6 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<D
       buildEnv: async (context, workspaceRoot) => ({
         ...officeCliEnvSync(),
         ...tuttiCliEnv(),
-        ...buildDocAppToolEnv(context),
         AI_DOC_WORKSPACE: workspaceRoot,
         AI_DOC_PROJECT_ID: context.project.id,
         AI_DOC_RUN_ID: context.run.id,
@@ -160,10 +159,9 @@ function joinPromptParts(...parts: Array<string | undefined>) {
 function appToolPrompt() {
   return [
     "App-owned tools:",
-    "- Prefer MCP app tools when visible: `mcp__app_tools__set_project_title`.",
-    "- If MCP app tools are not visible, use the run-scoped HTTP fallback instead of editing app databases, session files, or manifests by hand:",
-    `  curl -sS -X POST "$AI_APP_TOOL_GATEWAY_URL/call" -H "Authorization: Bearer $AI_APP_TOOL_TOKEN" -H "Content-Type: application/json" --data '{"name":"set_project_title","input":{"title":"Project Brief"}}'`,
+    "- Use the MCP app tool `mcp__app_tools__set_project_title` for project titles.",
     "- When the request starts a new document artifact in this app, choose a concise human title and call `set_project_title`; do not leave the raw instruction as the project title.",
+    "- If the MCP app tool is unavailable, report that app tools are unavailable instead of editing app databases, session files, or manifests by hand.",
   ].join("\n");
 }
 

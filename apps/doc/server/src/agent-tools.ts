@@ -18,15 +18,9 @@ export function buildDocAppToolMcpServers(context: RuntimeEditContext) {
       gatewayBaseUrl: `${agentToolBaseUrl()}/api/agent-tools`,
       token,
       serverDir: resolve(dirname(fileURLToPath(import.meta.url)), ".."),
+      requireSandboxEntrypoint: Boolean(context.managedAgent),
     }),
   ];
-}
-
-export function buildDocAppToolEnv(context: RuntimeEditContext) {
-  return {
-    AI_APP_TOOL_GATEWAY_URL: `${agentToolBaseUrl()}/api/agent-tools`,
-    AI_APP_TOOL_TOKEN: mintDocAppToolToken(context),
-  };
 }
 
 function mintDocAppToolToken(context: RuntimeEditContext) {

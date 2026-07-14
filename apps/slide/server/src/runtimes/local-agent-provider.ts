@@ -14,7 +14,7 @@ import { extractOoxmlTextPreview } from "../artifact/ooxml-text.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
 import { tuttiCliEnv } from "../tutti/tutti-cli.js";
 import { deckSystemAuthoringPrompt } from "./deck-system-prompt.js";
-import { buildSlideAppToolEnv, buildSlideAppToolMcpServers } from "../agent-tools.js";
+import { buildSlideAppToolMcpServers } from "../agent-tools.js";
 import type { RuntimeEditContext, SlideRuntimeProject } from "./runtime-provider.js";
 
 const noBrowserRenderVerification =
@@ -36,7 +36,6 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       buildEnv: async (context, workspaceRoot) => ({
         ...officeCliEnvSync(),
         ...tuttiCliEnv(),
-        ...buildSlideAppToolEnv(context),
         AI_SLIDE_WORKSPACE: workspaceRoot,
         AI_SLIDE_PROJECT_ID: context.project.id,
         AI_SLIDE_RUN_ID: context.run.id,
@@ -179,7 +178,7 @@ function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, 
       "You are working in a project workspace on the local filesystem. The app refreshes the deck from workspace files after you edit them.",
       "The current artifact is an HTML-based slide deck, not a PowerPoint `.pptx` file and not a single HTML document.",
       localFilesystemArtifactNotice,
-      appToolPrompt("slide"),
+      appToolPrompt(),
       artifactIntentPrompt("deck"),
       progressiveSlideAuthoringPrompt("deck"),
       [
@@ -231,22 +230,11 @@ function joinPromptParts(...parts: Array<string | undefined>) {
     .join("\n\n");
 }
 
-function appToolPrompt(app: "doc" | "slide") {
-  const slideTools = app === "slide" ? ", `mcp__app_tools__reorder_slides`" : "";
-  const fallbackExamples =
-    app === "slide"
-      ? [
-          `curl -sS -X POST "$AI_APP_TOOL_GATEWAY_URL/call" -H "Authorization: Bearer $AI_APP_TOOL_TOKEN" -H "Content-Type: application/json" --data '{"name":"set_project_title","input":{"title":"Product Launch Plan"}}'`,
-          `curl -sS -X POST "$AI_APP_TOOL_GATEWAY_URL/call" -H "Authorization: Bearer $AI_APP_TOOL_TOKEN" -H "Content-Type: application/json" --data '{"name":"reorder_slides","input":{"slides":["01-cover.html","02-problem.html"]}}'`,
-        ]
-      : [
-          `curl -sS -X POST "$AI_APP_TOOL_GATEWAY_URL/call" -H "Authorization: Bearer $AI_APP_TOOL_TOKEN" -H "Content-Type: application/json" --data '{"name":"set_project_title","input":{"title":"Project Brief"}}'`,
-        ];
+function appToolPrompt() {
   return [
     "App-owned tools:",
-    `- Prefer MCP app tools when visible: \`mcp__app_tools__set_project_title\`${slideTools}.`,
-    "- If MCP app tools are not visible, use the run-scoped HTTP fallback instead of editing app databases, session files, or manifest playlists by hand:",
-    ...fallbackExamples.map((example) => `  ${example}`),
+    "- Use MCP app tools `mcp__app_tools__set_project_title` and `mcp__app_tools__reorder_slides`.",
+    "- If MCP app tools are unavailable, report that app tools are unavailable instead of editing app databases, session files, or manifest playlists by hand.",
   ].join("\n");
 }
 

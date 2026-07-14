@@ -8,7 +8,7 @@ import type { AiEditRequest, SheetRun } from "@ai-sheet/shared";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
 import { tuttiCliEnv } from "../tutti/tutti-cli.js";
-import { buildSheetAppToolEnv, buildSheetAppToolMcpServers } from "../agent-tools.js";
+import { buildSheetAppToolMcpServers } from "../agent-tools.js";
 import type { RuntimeEditContext, SheetRuntimeProject } from "./runtime-provider.js";
 
 const defaultLocalAgentTimeoutMs = 3 * 24 * 60 * 60_000;
@@ -27,7 +27,6 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       buildEnv: async (context, workspaceRoot) => ({
         ...officeCliEnvSync(),
         ...tuttiCliEnv(),
-        ...buildSheetAppToolEnv(context),
         AI_SHEET_WORKSPACE: workspaceRoot,
         AI_SHEET_PROJECT_ID: context.project.id,
         AI_SHEET_RUN_ID: context.run.id,

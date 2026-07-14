@@ -21,7 +21,15 @@ async function validatePackage(root) {
     errors.push(`Package root does not exist: ${root}`);
     return;
   }
-  const requiredFiles = ["tutti.app.json", "AGENTS.md", "bootstrap.sh", "icon.svg", "server/server.js", "dist/index.html"];
+  const requiredFiles = [
+    "tutti.app.json",
+    "AGENTS.md",
+    "bootstrap.sh",
+    "icon.svg",
+    "server/server.js",
+    "server/agent-tools-mcp.js",
+    "dist/index.html",
+  ];
   for (const file of requiredFiles) {
     if (!await exists(path.join(root, file))) errors.push(`Missing file: ${file}`);
   }
