@@ -11,7 +11,7 @@
         "status"
       ],
       "summary": "Show AI Sheet status",
-      "description": "Return app health, project counts, runtime provider counts, and Tutti CLI availability for AI Sheet.",
+      "description": "Return app health, project counts, Agent Target counts, and Tutti CLI availability for AI Sheet.",
       "inputSchema": {
         "type": "object",
         "properties": {}
@@ -132,9 +132,13 @@
             "type": "string",
             "description": "Optional prompt for the AI Sheet app agent to initialize or edit the workbook after project creation."
           },
+          "agent-id": {
+            "type": "string",
+            "description": "Optional exact Agent Target id for AI Sheet. Discover current targets with `tutti agent list --json`. If omitted, the current default available Agent Target is used."
+          },
           "provider": {
             "type": "string",
-            "description": "Optional app-agent provider: codex or claude-code. If omitted, AI Sheet reads the Tutti global default from `tutti agent providers --json` defaultProvider, then falls back to Codex or Claude Code if available."
+            "description": "Deprecated provider compatibility input. It succeeds only when the provider maps to exactly one Agent Target in the full current catalog; otherwise use agent-id."
           }
         }
       },
@@ -409,9 +413,13 @@
             "type": "string",
             "description": "Optional edit mode: write or rewrite."
           },
+          "agent-id": {
+            "type": "string",
+            "description": "Optional exact Agent Target id for AI Sheet. Discover current targets with `tutti agent list --json`. If omitted, the current default available Agent Target is used."
+          },
           "provider": {
             "type": "string",
-            "description": "Optional app-agent provider: codex or claude-code. If omitted, AI Sheet reads the Tutti global default from `tutti agent providers --json` defaultProvider, then falls back to Codex or Claude Code if available."
+            "description": "Deprecated provider compatibility input. It succeeds only when the provider maps to exactly one Agent Target in the full current catalog; otherwise use agent-id."
           }
         },
         "required": [

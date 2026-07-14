@@ -38,16 +38,19 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<D
       }),
       timeoutMs: localAgentTimeoutMs,
       sessionDirName: ".ai-doc",
+      commandEnvNames: ["AI_DOC_TUTTI_CLI"],
     });
   }
 }
 
 async function buildTuttiAgentSkillContext(context: RuntimeEditContext, workspaceRoot: string) {
   try {
+    const cwd = tuttiWorkspaceCwd(workspaceRoot);
     return await loadTuttiLocalAgentSkillContext({
-      provider: context.runtimeProfile.provider,
+      agentTargetId: context.runtimeProfile.agentTargetId!,
       agentSessionId: context.run.id,
-      cwd: tuttiWorkspaceCwd(workspaceRoot),
+      cwd,
+      detectContext: context.agentDetectContext ?? { cwd },
       commandEnvNames: ["AI_DOC_TUTTI_CLI"],
     });
   } catch (error) {

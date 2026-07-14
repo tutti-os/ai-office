@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { ArtifactEditorWorkspace, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
-import type { DocumentRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
+import type { DocumentRunTimelineItem, LocalAgentTargetStatus, RuntimeProfile } from "@ai-doc/shared";
 import type { DocxRuntimeState, DocxSelection } from "../artifact/docxArtifactAdapter";
 import type { MarkdownRuntimeState, MarkdownSelection } from "../artifact/markdownArtifactAdapter";
 import { AgentConversationPanel } from "./AgentConversationPanel";
@@ -19,7 +19,7 @@ type SharedShellProps = {
   dirty: boolean;
   error: string;
   exportNotice: string;
-  localAgentProviders: LocalAgentProviderStatus[];
+  localAgentTargets: LocalAgentTargetStatus[];
   runtimeProfiles: RuntimeProfile[];
   selectedRuntimeProfileId: string;
   onBackHome: () => void;
@@ -148,7 +148,7 @@ function DocumentAgentSidebar(props: SharedShellProps & { artifactLabel: "markdo
       dirty={props.dirty}
       error={props.error || props.agentConversationError}
       items={props.agentConversationItems}
-      localAgentProviders={props.localAgentProviders}
+      localAgentTargets={props.localAgentTargets}
       loading={props.agentConversationLoading}
       runtimeProfiles={props.runtimeProfiles}
       selectedRuntimeProfileId={props.selectedRuntimeProfileId}

@@ -12,15 +12,16 @@ import {
   type SkillMaterializationRecord,
 } from "@tutti-os/agent-acp-kit";
 import {
+  loadTuttiAgentCatalog,
+  loadTuttiAgentComposerOptions,
   loadTuttiAgentSkillContext,
   type LoadTuttiAgentSkillContextInput,
   type TuttiRecommendedSystemPrompt,
 } from "@tutti-os/agent-acp-kit/tutti";
-import { localAgentModelIdForAcp, localAgentProviderIdsMatch } from "@ai-app/shared/agent-providers";
-import type { BaseAiEditRequest, BaseRun, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
+import { localAgentModelIdForAcp, localAgentProviderIdsMatch, normalizeRuntimeProfileProviderId } from "@ai-app/shared/agent-providers";
+import type { BaseAiEditRequest, BaseRun, LocalAgentTargetStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { safePathSegment } from "@ai-app/shared/local-paths";
 import type { RuntimeEditContext, RuntimeProvider, RuntimeStreamEvent } from "@ai-app/agent/runtime";
-import { createLocalAgentProviderDetector } from "./provider-detection.js";
 
 const DEFAULT_TIMEOUT_MS = 180_000;
 
@@ -77,6 +78,7 @@ export interface LocalAgentRuntimeProviderOptions<
   timeoutMs?: () => number;
   sessionDirName?: string;
   extraAllowedDirs?: (context: RuntimeEditContext<TRun, TProject, TRequest>, workspaceRoot: string) => string[];
+  commandEnvNames?: string[];
 }
 
 export class LocalAgentRuntimeProvider<
@@ -89,7 +91,6 @@ export class LocalAgentRuntimeProvider<
   private readonly localAgentRuntime = createDefaultLocalAgentRuntime({
     providers: createAiAppLocalAgentProviderPlugins(),
   });
-  private readonly providerDetector = createLocalAgentProviderDetector(this.localAgentRuntime);
   private readonly options: LocalAgentRuntimeProviderOptions<TRun, TProject, TRequest>;
 
   constructor(options: LocalAgentRuntimeProviderOptions<TRun, TProject, TRequest>) {
@@ -101,38 +102,45 @@ export class LocalAgentRuntimeProvider<
   }
 
   describeRun(profile: RuntimeProfile) {
-    return { runtime: profile.kind, provider: profile.provider, model: profile.model };
+    return { runtime: profile.kind, agentTargetId: profile.agentTargetId, provider: profile.provider, model: profile.model };
+  }
+
+  async resolveExecutionProfile(profile: RuntimeProfile, detectContext?: DetectContext) {
+    if (!profile.agentTargetId) throw new Error("local-agent profile does not contain an exact Agent Target id");
+    const target = (await this.loadAgentTargets(detectContext))
+      .find((candidate) => candidate.agentTargetId === profile.agentTargetId);
+    if (!target?.supported) throw new Error(target?.reason ?? `Agent Target is not available: ${profile.agentTargetId}`);
+    return reconcileAgentTargetExecutionProfile(profile, target);
   }
 
   async detect(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>) {
-    const providerId = this.resolveProviderId(profile.provider);
-    if (!providerId) {
-      return { available: false, reason: `local-agent provider is not registered: ${profile.provider}` };
-    }
+    if (!profile.agentTargetId) return { available: false, reason: "local-agent profile does not contain an exact Agent Target id" };
     const workspaceRoot = context ? this.options.workspaceRoot(context) : undefined;
     const env = context && workspaceRoot ? await this.options.buildEnv?.(context, workspaceRoot) : undefined;
-    const detectionContext: DetectContext | undefined = context
+    const detectionContext: DetectContext | undefined = context?.agentDetectContext ?? (context
       ? {
           ...(workspaceRoot ? { cwd: context.managedAgent?.cwd ?? workspaceRoot } : {}),
           ...(env ? { env } : {}),
-          ...(context.managedAgent ? { managedAgentInvocation: context.managedAgent.managedAgentInvocation } : {}),
         }
-      : undefined;
-    const detection = (await this.providerDetector.detect(detectionContext))
-      .find((item) => localAgentProviderIdsMatch(item.provider, providerId));
-    if (!detection?.supported) {
+      : undefined);
+    const target = (await this.loadAgentTargets(detectionContext))
+      .find((item) => item.agentTargetId === profile.agentTargetId);
+    if (!target?.supported) {
       return {
         available: false,
-        reason: detection?.reason ?? `${profile.provider} is not installed, authenticated, or supported on this machine.`,
+        reason: target?.reason ?? `Agent Target is not available: ${profile.agentTargetId}`,
       };
+    }
+    if (normalizeRuntimeProfileProviderId(profile.provider) !== normalizeRuntimeProfileProviderId(target.providerId)) {
+      return { available: false, reason: `Agent Target provider metadata changed: ${profile.agentTargetId}` };
     }
     return { available: true };
   }
 
-  async listLocalAgentProviders(
+  async listLocalAgentTargets(
     headers?: Record<string, string | string[] | undefined>,
     refresh = false,
-  ): Promise<LocalAgentProviderStatus[]> {
+  ): Promise<LocalAgentTargetStatus[]> {
     const cwd = configuredWorkspaceRoot();
     const managedContext = createManagedAgentDetectContextFromHeaders(headers, cwd ? { cwd } : undefined);
     const detectionContext: DetectContext | undefined = managedContext
@@ -140,22 +148,41 @@ export class LocalAgentRuntimeProvider<
       : cwd || refresh
         ? { ...(cwd ? { cwd } : {}), ...(refresh ? { refresh: true } : {}) }
         : undefined;
-    return this.providerDetector.detect(detectionContext);
+    return this.loadAgentTargets(detectionContext);
   }
 
   async *streamEdit(context: RuntimeEditContext<TRun, TProject, TRequest>) {
-    const provider = this.resolveProviderId(context.runtimeProfile.provider) ?? context.runtimeProfile.provider;
+    const agentTargetId = context.runtimeProfile.agentTargetId;
+    if (!agentTargetId) throw new Error("local-agent runtime profile is missing agentTargetId");
     const workspaceRoot = this.options.workspaceRoot(context);
     const controller = new AbortController();
     this.controllers.set(context.run.id, controller);
 
     try {
+      const agentCwd = context.managedAgent?.cwd ?? workspaceRoot;
+      const composer = await loadTuttiAgentComposerOptions({
+        runtime: this.localAgentRuntime,
+        agentTargetId,
+        cwd: agentCwd,
+        commandEnvNames: this.options.commandEnvNames,
+        detectContext: context.agentDetectContext ?? { cwd: agentCwd },
+        ...(isPlaceholderProfileModel(context.runtimeProfile.model, context.runtimeProfile.provider)
+          ? {}
+          : { model: localAgentModelIdForAcp(context.runtimeProfile.model, context.runtimeProfile.provider) }),
+        ...(context.request.reasoningEffort ? { reasoningEffort: context.request.reasoningEffort } : {}),
+        signal: controller.signal,
+      });
+      if (normalizeRuntimeProfileProviderId(composer.providerId) !== normalizeRuntimeProfileProviderId(context.runtimeProfile.provider)) {
+        throw new Error(`Agent Target provider metadata changed during execution: ${agentTargetId}`);
+      }
+      const provider = this.resolveProviderId(composer.providerId) ?? composer.providerId;
       const sessionStore = new LocalAgentSessionStore(workspaceRoot, this.options.sessionDirName ?? ".ai-app");
       const conversationSessionId = context.conversation?.sessionId ?? context.project.id;
       const providerResumeEnabled = this.options.useProviderResume?.(context) ?? true;
       const previousSession = providerResumeEnabled ? sessionStore.read(conversationSessionId) : null;
-      const providerSessionId = previousSession?.provider === provider ? previousSession.providerSessionId : undefined;
-      const resumeToken = previousSession?.provider === provider ? previousSession.resumeToken : undefined;
+      const sameTarget = previousSession?.agentTargetId === agentTargetId && previousSession.provider === provider;
+      const providerSessionId = sameTarget ? previousSession?.providerSessionId : undefined;
+      const resumeToken = sameTarget ? previousSession?.resumeToken : undefined;
       const resume =
         providerSessionId || resumeToken
           ? {
@@ -171,6 +198,8 @@ export class LocalAgentRuntimeProvider<
           context,
           controller,
           provider,
+          composer,
+          agentTargetId,
           persistProviderSession: providerResumeEnabled,
           resume,
           sessionStore,
@@ -186,6 +215,8 @@ export class LocalAgentRuntimeProvider<
             context,
             controller,
             provider,
+            composer,
+            agentTargetId,
             persistProviderSession: providerResumeEnabled,
             resume: { mode: "fresh" },
             sessionStore,
@@ -206,18 +237,23 @@ export class LocalAgentRuntimeProvider<
     context: RuntimeEditContext<TRun, TProject, TRequest>;
     controller: AbortController;
     persistProviderSession: boolean;
+    agentTargetId: string;
     provider: string;
+    composer: Awaited<ReturnType<typeof loadTuttiAgentComposerOptions>>;
     resume: { mode: "provider"; providerSessionId?: string; resumeToken?: string } | { mode: "fresh" };
     sessionStore: LocalAgentSessionStore;
     workspaceRoot: string;
   }) {
-    const { context, controller, persistProviderSession, provider, resume, sessionStore, workspaceRoot } = input;
+    const { context, controller, persistProviderSession, agentTargetId, provider, composer, resume, sessionStore, workspaceRoot } = input;
     let lastError: Extract<AgentEvent, { type: "error" }> | undefined;
     const agentCwd = context.managedAgent?.cwd ?? workspaceRoot;
     const skillContext = normalizeSkillManifestResult(await this.options.buildSkillManifest?.(context, workspaceRoot));
     const systemPrompt = await this.options.buildSystemPrompt(context, workspaceRoot, skillContext);
     const conversationId = context.conversation?.conversationId ?? context.project.id;
     const sessionId = context.conversation?.sessionId ?? context.project.id;
+    const model = isPlaceholderProfileModel(context.runtimeProfile.model, provider)
+      ? composer.modelConfig.currentValue || composer.modelConfig.defaultValue || undefined
+      : localAgentModelIdForAcp(context.runtimeProfile.model, provider);
     for await (const event of this.localAgentRuntime.run({
       runId: context.run.id,
       conversationId,
@@ -229,7 +265,7 @@ export class LocalAgentRuntimeProvider<
       prompt: this.options.buildPrompt(context),
       systemPrompt,
       history: context.history ?? [],
-      model: localAgentModelIdForAcp(context.runtimeProfile.model, provider),
+      model,
       reasoning: context.request.reasoningEffort ?? undefined,
       mcpServers: this.options.buildMcpServers?.(context) ?? [],
       skillManifest: skillContext.skills,
@@ -252,6 +288,7 @@ export class LocalAgentRuntimeProvider<
         const done = event as any;
         if (persistProviderSession && (done.sessionId || done.resumeToken)) {
           sessionStore.write(sessionId, {
+            agentTargetId,
             provider,
             providerSessionId: done.sessionId,
             resumeToken: done.resumeToken,
@@ -274,8 +311,29 @@ export class LocalAgentRuntimeProvider<
   }
 
   private resolveProviderId(provider: string) {
-    const registered = this.localAgentRuntime.listProviders().find((item: any) => localAgentProviderIdsMatch(item.id, provider));
-    return registered?.id;
+    return resolveRegisteredProviderId(provider, this.localAgentRuntime.listProviders().map((item: any) => String(item.id)));
+  }
+
+  private async loadAgentTargets(detectContext?: DetectContext): Promise<LocalAgentTargetStatus[]> {
+    const catalog = await loadTuttiAgentCatalog({
+      runtime: this.localAgentRuntime,
+      detectContext,
+      commandEnvNames: this.options.commandEnvNames,
+    });
+    return catalog.agents.map((agent) => {
+      const supported = agent.runtimeSupported && agent.availability.status === "available";
+      return {
+        agentTargetId: agent.agentTargetId,
+        providerId: agent.providerId,
+        provider: agent.providerId,
+        displayName: agent.displayName,
+        supported,
+        authState: supported ? "ok" as const : "unknown" as const,
+        models: [],
+        ...(agent.agentTargetId === catalog.defaultAgentTargetId ? { isDefault: true as const } : {}),
+        ...(!supported ? { reason: agent.availability.detail || agent.availability.reasonCode || "Agent Target unavailable" } : {}),
+      };
+    });
   }
 
   async cancel(runId: string) {
@@ -286,6 +344,35 @@ export class LocalAgentRuntimeProvider<
     this.controllers.delete(runId);
     return { cancelled: true };
   }
+}
+
+export function reconcileAgentTargetExecutionProfile(
+  profile: RuntimeProfile,
+  target: Pick<LocalAgentTargetStatus, "agentTargetId" | "providerId">,
+): RuntimeProfile {
+  if (!profile.agentTargetId || profile.agentTargetId !== target.agentTargetId) {
+    throw new Error(`Agent Target mismatch: ${profile.agentTargetId ?? "missing"}`);
+  }
+  const providerChanged = normalizeRuntimeProfileProviderId(profile.provider) !== normalizeRuntimeProfileProviderId(target.providerId);
+  return {
+    ...profile,
+    provider: target.providerId,
+    ...(providerChanged ? { model: `${target.providerId}:default` } : {}),
+  };
+}
+
+export function resolveRegisteredProviderId(provider: string, registeredProviderIds: string[]) {
+  const exact = registeredProviderIds.find((candidate) => candidate === provider);
+  if (exact) return exact;
+  const canonicalMatches = registeredProviderIds.filter(
+    (candidate) => normalizeRuntimeProfileProviderId(candidate) === normalizeRuntimeProfileProviderId(provider),
+  );
+  if (canonicalMatches.length === 1) return canonicalMatches[0];
+  if (canonicalMatches.length > 1) throw new Error(`Provider adapter is ambiguous: ${provider}`);
+  const legacyMatches = registeredProviderIds.filter((candidate) => localAgentProviderIdsMatch(candidate, provider));
+  if (legacyMatches.length === 1) return legacyMatches[0];
+  if (legacyMatches.length > 1) throw new Error(`Provider adapter is ambiguous: ${provider}`);
+  return undefined;
 }
 
 function normalizeSkillManifestResult(value: LocalAgentSkillManifestResult | undefined): LocalAgentSkillContext {
@@ -441,6 +528,7 @@ function configuredWorkspaceRoot() {
 }
 
 interface StoredLocalAgentSession {
+  agentTargetId: string;
   provider: string;
   providerSessionId?: string;
   resumeToken?: string;
@@ -459,7 +547,7 @@ class LocalAgentSessionStore {
   read(projectId: string): StoredLocalAgentSession | null {
     try {
       const parsed = JSON.parse(readFileSync(this.pathFor(projectId), "utf8")) as StoredLocalAgentSession;
-      return typeof parsed.provider === "string" && parsed.provider ? parsed : null;
+      return typeof parsed.agentTargetId === "string" && parsed.agentTargetId && typeof parsed.provider === "string" && parsed.provider ? parsed : null;
     } catch {
       return null;
     }
@@ -482,4 +570,8 @@ class LocalAgentSessionStore {
   private pathFor(projectId: string) {
     return join(this.workspaceRoot, this.sessionDirName, "local-agent-sessions", `${safePathSegment(projectId)}.json`);
   }
+}
+
+function isPlaceholderProfileModel(model: string, provider: string) {
+  return !model.trim() || model === `${provider}:default` || model === "default";
 }

@@ -1,6 +1,6 @@
 import { ArtifactAgentConversationPanel } from "@ai-app/agent/conversation-ui";
 import type { ArtifactEditorKind } from "@ai-app/ui/editor-frame";
-import type { DocumentRun, DocumentRunEvent, DocumentRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
+import type { DocumentRun, DocumentRunEvent, DocumentRunTimelineItem, LocalAgentTargetStatus, RuntimeProfile } from "@ai-doc/shared";
 import { agentConversationUiCopy } from "../i18n/copy";
 import { useI18n } from "../i18n";
 import { AgentPromptRichTextInput } from "./AgentPromptRichTextInput";
@@ -12,7 +12,7 @@ type AgentConversationPanelProps = {
   dirty: boolean;
   error: string;
   items: DocumentRunTimelineItem[];
-  localAgentProviders: LocalAgentProviderStatus[];
+  localAgentTargets: LocalAgentTargetStatus[];
   loading: boolean;
   runtimeProfiles: RuntimeProfile[];
   selectedRuntimeProfileId: string;
@@ -36,7 +36,7 @@ export function AgentConversationPanel(props: AgentConversationPanelProps) {
         quickPrompts: [t("agent.quickRewrite"), t("agent.quickContinue"), t("agent.quickPolish"), t("agent.quickFormat")],
       }}
       uiCopy={agentConversationUiCopy(t)}
-      formatUnavailableRuntimeProfileLabel={(profile, provider) => `${profile.displayName} (${provider?.authState ?? t("agent.unknown")})`}
+      formatUnavailableRuntimeProfileLabel={(profile, target) => `${profile.displayName} (${target?.authState ?? t("agent.unknown")})`}
       renderComposerInput={(inputProps) => <AgentPromptRichTextInput {...inputProps} />}
       renderUserMessageText={(messageProps) => <AgentUserMessageRichText {...messageProps} />}
       selectedRuntimeProfileId={props.selectedRuntimeProfileId}

@@ -242,6 +242,6 @@ The runtime/model still contains handlers for some richer operations, but the cu
 
 - Should HTML browser tests create projects only through API, or should a smaller smoke suite also cover home composer/template creation?
 - Should the HTML toolbar add stable `data-testid` values before broad automation, or is title/aria-label based targeting acceptable?
-- Should AI context tests use a dedicated stub ACP provider to avoid relying on Codex/Claude availability?
+- Should AI context tests use a dedicated stub Agent Target to avoid relying on the machine's current Agent catalog?
 - Should currently-unmounted runtime actions get product UI again, or should separate non-browser unit/integration tests cover those handlers?
 - Should sanitization assertions compare saved HTML exactly, or assert only the absence of unsafe/runtime-only nodes and attributes plus presence of expected safe content?

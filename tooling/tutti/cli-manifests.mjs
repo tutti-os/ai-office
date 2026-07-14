@@ -164,7 +164,7 @@ function statusCommand(appName) {
   return {
     path: ["status"],
     summary: `Show ${appName} status`,
-    description: `Return app health, project counts, runtime provider counts, and Tutti CLI availability for ${appName}.`,
+    description: `Return app health, project counts, Agent Target counts, and Tutti CLI availability for ${appName}.`,
     timeoutMs: 10000,
   };
 }
@@ -240,11 +240,7 @@ function docCreateProperties() {
         "Document type: html, markdown, or docx. Default intent mapping: document/draft/article/report/manuscript => html; explicit DOCX or traditional Office Word => docx; explicit Markdown => markdown.",
     },
     prompt: { type: "string", description: "Optional prompt for the AI Doc app agent to generate or edit the document after project creation." },
-    provider: {
-      type: "string",
-      description:
-        "Optional app-agent provider for prompt-based creation: codex or claude-code. If omitted, AI Doc reads the Tutti global default from `tutti agent providers --json` defaultProvider, then falls back to Codex or Claude Code if available.",
-    },
+    ...agentTargetProperties("AI Doc"),
   };
 }
 
@@ -261,11 +257,7 @@ function slideCreateProperties() {
       description:
         "Optional prompt for the AI Slide app agent to generate or edit the deck after project creation. If supplied, poll the returned run with slide agent events and do not write fallback deck files while the run is accepted or running.",
     },
-    provider: {
-      type: "string",
-      description:
-        "Optional app-agent provider for prompt-based creation: codex or claude-code. If omitted, AI Slide reads the Tutti global default from `tutti agent providers --json` defaultProvider, then falls back to Codex or Claude Code if available.",
-    },
+    ...agentTargetProperties("AI Slide"),
   };
 }
 
@@ -273,11 +265,7 @@ function sheetCreateProperties() {
   return {
     title: { type: "string", description: "Project title." },
     prompt: { type: "string", description: "Optional prompt for the AI Sheet app agent to initialize or edit the workbook after project creation." },
-    provider: {
-      type: "string",
-      description:
-        "Optional app-agent provider: codex or claude-code. If omitted, AI Sheet reads the Tutti global default from `tutti agent providers --json` defaultProvider, then falls back to Codex or Claude Code if available.",
-    },
+    ...agentTargetProperties("AI Sheet"),
   };
 }
 
@@ -398,15 +386,25 @@ function agentEditProperties(promptDescription, options = {}) {
     mode: { type: "string", description: "Optional edit mode: write or rewrite." },
   };
   if (options.includeProvider) {
-    properties.provider = {
-      type: "string",
-      description: `Optional app-agent provider: codex or claude-code. If omitted, ${options.appName ?? "the app"} reads the Tutti global default from \`tutti agent providers --json\` defaultProvider, then falls back to Codex or Claude Code if available.`,
-    };
+    Object.assign(properties, agentTargetProperties(options.appName ?? "the app"));
   }
   if (options.includeRuntimeProfileId) {
     properties["runtime-profile-id"] = { type: "string", description: "Optional runtime profile id." };
   }
   return properties;
+}
+
+function agentTargetProperties(appName) {
+  return {
+    "agent-id": {
+      type: "string",
+      description: `Optional exact Agent Target id for ${appName}. Discover current targets with \`tutti agent list --json\`. If omitted, the current default available Agent Target is used.`,
+    },
+    provider: {
+      type: "string",
+      description: "Deprecated provider compatibility input. It succeeds only when the provider maps to exactly one Agent Target in the full current catalog; otherwise use agent-id.",
+    },
+  };
 }
 
 function agentRunDescription(domain, options) {

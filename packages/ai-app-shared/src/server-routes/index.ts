@@ -6,7 +6,7 @@ export type ArtifactAppRouteService<
   TAiEditInput = unknown,
 > = {
   bootstrap(): unknown | Promise<unknown>;
-  listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>): unknown | Promise<unknown>;
+  listLocalAgentTargets(headers?: Record<string, string | string[] | undefined>): unknown | Promise<unknown>;
   listProjects(): unknown | Promise<unknown>;
   createProject(input: TCreateProjectInput): unknown | Promise<unknown>;
   clearProjectHistory(): unknown | Promise<unknown>;
@@ -94,7 +94,7 @@ export class ArtifactAppHttpRoutes<
     server.get("/api/health", async () => ({ ok: true, app: this.input.appId }));
     server.get("/api/bootstrap", async () => this.input.service.bootstrap());
     server.get("/api/templates", async () => ({ templates: await this.input.listTemplates() }));
-    server.get("/api/local-agent/providers", async (request: ArtifactRouteRequest) => this.input.service.listLocalAgentProviders(request.headers));
+    server.get("/api/local-agent/targets", async (request: ArtifactRouteRequest) => this.input.service.listLocalAgentTargets(request.headers));
   }
 
   private registerToolchainRoutes(server: ArtifactRouteServer) {

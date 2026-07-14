@@ -14,7 +14,7 @@ import { artifactEditorCopy } from "../i18n/copy";
 import { useI18n } from "../i18n";
 import type { DeckAgentRuntimeProvider } from "../artifact/deckArtifactAdapter";
 import type { ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
-import type { LocalAgentProviderStatus, ProjectDetailResponse, RuntimeProfile, SlideArtifactType, SlideRunTimelineItem } from "@ai-slide/shared";
+import type { LocalAgentTargetStatus, ProjectDetailResponse, RuntimeProfile, SlideArtifactType, SlideRunTimelineItem } from "@ai-slide/shared";
 
 export function SlideEditorScreen(props: {
   activeSelectionLabel?: string;
@@ -27,7 +27,7 @@ export function SlideEditorScreen(props: {
   detail: ProjectDetailResponse | null;
   error: string;
   loading: boolean;
-  localAgentProviders: LocalAgentProviderStatus[];
+  localAgentTargets: LocalAgentTargetStatus[];
   pptxError: string;
   pptxRuntime: ReturnType<typeof usePptxArtifactRuntime>["runtime"];
   projectId: string;
@@ -158,7 +158,7 @@ export function SlideEditorScreen(props: {
           dirty={false}
           error={props.conversationError || props.error || props.pptxError}
           items={props.conversationItems}
-          localAgentProviders={props.localAgentProviders}
+          localAgentTargets={props.localAgentTargets}
           loading={props.conversationLoading}
           runtimeProfiles={props.runtimeProfiles}
           selectedAgent={props.selectedAgent}

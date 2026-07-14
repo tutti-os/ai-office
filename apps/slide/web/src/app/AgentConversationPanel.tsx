@@ -1,6 +1,6 @@
 import { ArtifactAgentConversationPanel } from "@ai-app/agent/conversation-ui";
 import type { ArtifactEditorKind } from "@ai-app/ui/editor-frame";
-import type { LocalAgentProviderStatus, RuntimeProfile, SlideRun, SlideRunEvent, SlideRunTimelineItem } from "@ai-slide/shared";
+import type { LocalAgentTargetStatus, RuntimeProfile, SlideRun, SlideRunEvent, SlideRunTimelineItem } from "@ai-slide/shared";
 import { agentConversationUiCopy } from "../i18n/copy";
 import { useI18n } from "../i18n";
 import { AgentPromptRichTextInput } from "./AgentPromptRichTextInput";
@@ -14,7 +14,7 @@ type AgentConversationPanelProps = {
   dirty: boolean;
   error: string;
   items: SlideRunTimelineItem[];
-  localAgentProviders: LocalAgentProviderStatus[];
+  localAgentTargets: LocalAgentTargetStatus[];
   loading: boolean;
   runtimeProfiles: RuntimeProfile[];
   selectedAgent: string;

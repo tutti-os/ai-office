@@ -6,7 +6,7 @@ These commands expose AI Doc to Tutti apps and agents. Command outputs use `CliC
 
 ## `doc status`
 
-Return app health, project counts, runtime provider counts, and Tutti CLI availability for AI Doc.
+Return app health, project counts, Agent Target counts, and Tutti CLI availability for AI Doc.
 
 Handler: `/tutti/cli/status`
 
@@ -28,7 +28,7 @@ Explicitly request Tutti to open one document project in AI Doc. Use this only a
 
 Handler: `/tutti/cli/projects/open`
 
-## `doc projects create --title --type --prompt --provider`
+## `doc projects create --title --type --prompt --agent-id --provider`
 
 Create a new AI Doc project, return an internal openTarget command, and optionally start the app's agent with prompt. This command must not open the app automatically. Use prompt for generated document content; direct content input is not supported. For user requests to write a document, draft, article, report, or manuscript without an explicit file format, set type to html. If the user explicitly asks for DOCX or traditional Office Word format, set type to docx. Use markdown only when the user explicitly asks for Markdown. Do not present localhost URLs or raw routes as final links. When the task is complete, tell the user they can view the result in AI Doc and ask whether they want you to open it directly; if they confirm, call doc projects open with the project-id.
 
@@ -70,7 +70,7 @@ Append a text-only user or assistant message to one conversation session.
 
 Handler: `/tutti/cli/messages/create`
 
-## `doc agent edit --project-id <required> --prompt <required> --session-id --mode --provider`
+## `doc agent edit --project-id <required> --prompt <required> --session-id --mode --agent-id --provider`
 
 Start an app-owned agent edit for a document project and return an internal openTarget command. External agents and other Tutti apps must use this command to modify document content, then poll agent events until the run reaches a terminal status. This command must not open the app automatically. After completion, tell the user they can view the result in AI Doc and ask whether they want you to open it directly; if they confirm, call doc projects open.
 

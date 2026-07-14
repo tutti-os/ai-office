@@ -4,7 +4,7 @@ import { Loader2, Redo2, Undo2 } from "lucide-react";
 import { scrollbarClass } from "@ai-app/ui/app-shell";
 import { ArtifactAgentProcessingOverlay, ArtifactEditorWorkspace, type ArtifactSaveState as WorkspaceSaveState } from "@ai-app/ui/editor-frame";
 import { editorToolbarStripClass, type ToolbarLayoutValue } from "@ai-app/ui/toolbar";
-import type { DocumentRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-doc/shared";
+import type { DocumentRunTimelineItem, LocalAgentTargetStatus, RuntimeProfile } from "@ai-doc/shared";
 import type { RuntimeState, SelectionState } from "../artifact/runtime/types";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { HtmlEditorToolbar } from "./HtmlEditorToolbar";
@@ -58,7 +58,7 @@ export type HtmlEditorScreenProps = {
   agentConversationLoading: boolean;
   agentConversationError: string;
   agentSending: boolean;
-  localAgentProviders: LocalAgentProviderStatus[];
+  localAgentTargets: LocalAgentTargetStatus[];
   runtimeProfiles: RuntimeProfile[];
   selectedRuntimeProfileId: string;
   linkDraft: LinkDraft;
@@ -306,7 +306,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
             dirty={props.dirty}
             error={props.error || props.agentConversationError}
             items={props.agentConversationItems}
-            localAgentProviders={props.localAgentProviders}
+            localAgentTargets={props.localAgentTargets}
             loading={props.agentConversationLoading}
             runtimeProfiles={props.runtimeProfiles}
             selectedRuntimeProfileId={props.selectedRuntimeProfileId}

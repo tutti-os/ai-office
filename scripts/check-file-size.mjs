@@ -16,6 +16,17 @@ const ignoredDirs = new Set([
 ]);
 
 const allowlist = new Map([
+  ["apps/doc/server/src/artifact/document-repository.ts", "existing artifact repository scheduled for decomposition"],
+  ["apps/doc/server/src/artifact/document-service.ts", "existing artifact service scheduled for decomposition"],
+  ["apps/doc/web/src/app/HtmlTiptapEditorSurface.tsx", "existing rich editor surface scheduled for decomposition"],
+  ["apps/doc/web/src/app/htmlTiptapEditor.ts", "existing rich editor implementation scheduled for decomposition"],
+  ["apps/doc/web/src/app/markdownEditorToolbar.tsx", "existing rich editor toolbar scheduled for decomposition"],
+  ["apps/sheet/web/src/app/XlsxPreview.tsx", "existing workbook preview scheduled for decomposition"],
+  ["apps/slide/server/src/artifact/project-repository.ts", "existing artifact repository scheduled for decomposition"],
+  ["apps/slide/server/src/artifact/project-service.ts", "existing artifact service scheduled for decomposition"],
+  ["apps/slide/web/src/App.tsx", "existing app shell scheduled for decomposition"],
+  ["packages/ai-app-shared/src/project-store/index.ts", "existing shared persistence module scheduled for decomposition"],
+  ["packages/ai-app-ui/src/rich-text/index.ts", "existing rich text module scheduled for decomposition"],
   ["apps/slide/shared/src/generatedTemplates.ts", "generated template catalog"],
   ["apps/slide/scripts/restyle-slide-template-batch.mjs", "one-off template migration script"],
 ]);

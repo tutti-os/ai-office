@@ -44,7 +44,7 @@
   "composer.addSourceFiles": "Add source files",
   "composer.createDeck": "Create deck",
   "composer.create": "Create",
-  "composer.selectAgent": "Select ACP agent",
+  "composer.selectAgent": "Select agent",
   "composer.agentUnavailable": "unavailable",
   "editor.selectedText": "Selected text",
   "editor.selectedBlock": "Selected block",

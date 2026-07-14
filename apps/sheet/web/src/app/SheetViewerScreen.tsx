@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react";
 import { ArtifactEditorWorkspace, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
-import type { LocalAgentProviderStatus, ProjectDetailResponse, RuntimeProfile, SheetRunTimelineItem } from "@ai-sheet/shared";
+import type { LocalAgentTargetStatus, ProjectDetailResponse, RuntimeProfile, SheetRunTimelineItem } from "@ai-sheet/shared";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { XlsxPreview } from "./XlsxPreview";
 import { artifactEditorCopy } from "../i18n/copy";
@@ -18,7 +18,7 @@ export function SheetViewerScreen(props: {
   conversationError: string;
   conversationItems: SheetRunTimelineItem[];
   conversationLoading: boolean;
-  localAgentProviders: LocalAgentProviderStatus[];
+  localAgentTargets: LocalAgentTargetStatus[];
   runtimeProfiles: RuntimeProfile[];
   selectedRuntimeProfileId: string;
   selectionRestoreKey: number;
@@ -83,7 +83,7 @@ export function SheetViewerScreen(props: {
           dirty={false}
           error={props.conversationError || props.error}
           items={props.conversationItems}
-          localAgentProviders={props.localAgentProviders}
+          localAgentTargets={props.localAgentTargets}
           loading={props.loading || props.conversationLoading}
           runtimeProfiles={props.runtimeProfiles}
           selectedRuntimeProfileId={props.selectedRuntimeProfileId}

@@ -40,7 +40,7 @@
   "composer.addContext": "添加上下文",
   "composer.createFromPrompt": "从提示创建",
   "composer.create": "创建",
-  "composer.selectAgent": "选择 ACP Agent",
+  "composer.selectAgent": "选择智能体",
   "composer.agentUnavailable": "不可用",
   "agent.introTitle": "AI 文档 Agent",
   "agent.introBody": "在文档中选中文本，然后让 AI 重写、续写、润色或调整结构。",

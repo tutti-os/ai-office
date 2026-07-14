@@ -114,19 +114,19 @@ export class ProjectRepository {
     return this.runtimeProfiles.get(profileId);
   }
 
-  getLocalAgentRuntimeProfileByProvider(provider: string) {
+  getLocalAgentRuntimeProfileByTarget(agentTargetId: string) {
     this.ensureSeedData();
-    return this.runtimeProfiles.getLocalAgentByProvider(provider);
+    return this.runtimeProfiles.getLocalAgentByTarget(agentTargetId);
   }
 
-  getRuntimeProfileForRun(run: Pick<SlideRun, "runtime" | "provider" | "model">) {
+  getRuntimeProfileForRun(run: Pick<SlideRun, "runtime" | "agentTargetId" | "provider" | "model">) {
     this.ensureSeedData();
     return this.runtimeProfiles.getForRun(run);
   }
 
-  syncLocalAgentRuntimeProfiles(providers: Array<{ provider: string; displayName: string }>) {
+  syncLocalAgentRuntimeProfiles(agents: Array<{ agentTargetId: string; providerId: string; displayName: string; supported: boolean }>) {
     this.ensureSeedData();
-    this.runtimeProfiles.syncLocalAgentRuntimeProfiles(providers);
+    this.runtimeProfiles.syncLocalAgentRuntimeProfiles(agents);
   }
 
   async createProject(input: CreateProjectRequest) {
@@ -315,6 +315,7 @@ export class ProjectRepository {
   createRun(input: {
     projectId: string;
     runtime: string;
+    agentTargetId: string | null;
     provider: string;
     model: string;
     mode: string;

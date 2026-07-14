@@ -77,19 +77,19 @@ export class SheetRepository {
     return this.runtimeProfiles.get(profileId);
   }
 
-  getLocalAgentRuntimeProfileByProvider(provider: string) {
+  getLocalAgentRuntimeProfileByTarget(agentTargetId: string) {
     this.ensureSeedData();
-    return this.runtimeProfiles.getLocalAgentByProvider(provider);
+    return this.runtimeProfiles.getLocalAgentByTarget(agentTargetId);
   }
 
-  getRuntimeProfileForRun(run: Pick<SheetRun, "runtime" | "provider" | "model">) {
+  getRuntimeProfileForRun(run: Pick<SheetRun, "runtime" | "agentTargetId" | "provider" | "model">) {
     this.ensureSeedData();
     return this.runtimeProfiles.getForRun(run);
   }
 
-  syncLocalAgentRuntimeProfiles(providers: Array<{ provider: string; displayName: string }>) {
+  syncLocalAgentRuntimeProfiles(agents: Array<{ agentTargetId: string; providerId: string; displayName: string; supported: boolean }>) {
     this.ensureSeedData();
-    this.runtimeProfiles.syncLocalAgentRuntimeProfiles(providers);
+    this.runtimeProfiles.syncLocalAgentRuntimeProfiles(agents);
   }
 
   createProject(input: CreateProjectRequest = {}) {

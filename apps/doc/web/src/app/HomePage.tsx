@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FileCode2, FileText, Hash, History, Plus, Upload } from "lucide-react";
-import { parseDocxDocumentManifest, type DocumentProject, type DocumentType, type LocalAgentProviderStatus, type OfficeCliStatus, type RuntimeProfile } from "@ai-doc/shared";
+import { parseDocxDocumentManifest, type DocumentProject, type DocumentType, type LocalAgentTargetStatus, type OfficeCliStatus, type RuntimeProfile } from "@ai-doc/shared";
 import {
   allTemplatesLabel,
   type TuttiTemplate,
@@ -28,7 +28,7 @@ export function HomePage(props: {
   attachments: HomeAttachment[];
   categories: string[];
   historyProjects: DocumentProject[];
-  localAgentProviders: LocalAgentProviderStatus[];
+  localAgentTargets: LocalAgentTargetStatus[];
   officeCliInstalling: boolean;
   officeCliStatus: OfficeCliStatus | null;
   outputType: DocumentType;
@@ -91,7 +91,7 @@ export function HomePage(props: {
             attachments={props.attachments}
             error={props.error}
             loading={props.loading}
-            localAgentProviders={props.localAgentProviders}
+            localAgentTargets={props.localAgentTargets}
             officeCliInstalling={props.officeCliInstalling}
             officeCliStatus={props.officeCliStatus}
             outputType={props.outputType}

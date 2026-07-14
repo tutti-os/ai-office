@@ -8,8 +8,8 @@ import {
   WandSparkles,
   XCircle,
 } from "lucide-react";
-import { localAgentProviderIdsMatch, resolveAgentMenuProfiles, type AgentMenuProfileLike } from "@ai-app/shared/agent-providers";
-import type { BaseRun, BaseRunEvent, BaseRunTimelineItem, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
+import { resolveAgentMenuProfiles, type AgentMenuProfileLike } from "@ai-app/shared/agent-providers";
+import type { BaseRun, BaseRunEvent, BaseRunTimelineItem, LocalAgentTargetStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { isAgentRunActive, timelineToMessages, type AgentConversationBlock, type AgentConversationMessage } from "@ai-app/agent/conversation";
 import { MarkdownText } from "./markdown.js";
 import { defaultConversationToolCopy, ToolGroupBlock, type ConversationToolCopy } from "./toolGroup.js";
@@ -45,7 +45,7 @@ export const defaultAgentConversationUiCopy: AgentConversationUiCopy = {
   completed: "completed",
   failed: "failed",
   running: "running",
-  selectAgent: "Select ACP agent",
+  selectAgent: "Select agent",
   stopAgent: "Stop agent",
   thinking: "Thinking",
   tool: defaultConversationToolCopy,
@@ -88,6 +88,7 @@ export type AgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent e
   quickPromptsVisible?: boolean;
   selectedAgentId?: string;
   renderComposerInput?: (props: AgentComposerInputRenderProps) => ReactNode;
+  formatRunAgentLabel?: (run: TRun) => string;
   renderUserMessageText?: (props: AgentUserMessageTextRenderProps) => ReactNode;
   onBackHome: () => void;
   onAgentChange?: (agentId: string) => void;
@@ -98,8 +99,8 @@ export type AgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent e
 export type ArtifactAgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent extends BaseRunEvent = BaseRunEvent> =
   Omit<AgentConversationPanelProps<TRun, TEvent>, "agentOptions" | "copy" | "onAgentChange" | "selectedAgentId" | "variant"> & {
     copy: AgentConversationCopy;
-    formatUnavailableRuntimeProfileLabel?: (profile: AgentMenuProfileLike, provider: LocalAgentProviderStatus | null) => string;
-    localAgentProviders?: LocalAgentProviderStatus[];
+    formatUnavailableRuntimeProfileLabel?: (profile: AgentMenuProfileLike, target: LocalAgentTargetStatus | null) => string;
+    localAgentTargets?: LocalAgentTargetStatus[];
     runtimeProfiles?: RuntimeProfile[];
     selectedRuntimeProfileId?: string;
     variant?: AgentConversationVariant;
@@ -111,21 +112,21 @@ export function ArtifactAgentConversationPanel<TRun extends BaseRun, TEvent exte
 ) {
   const {
     formatUnavailableRuntimeProfileLabel,
-    localAgentProviders = [],
+    localAgentTargets = [],
     runtimeProfiles = [],
     selectedRuntimeProfileId,
     variant = "document",
     onRuntimeProfileChange,
     ...panelProps
   } = props;
-  const agentOptions = resolveAgentMenuProfiles(runtimeProfiles, localAgentProviders).map((profile) => {
-    const provider = profile.kind === "local-agent" ? localAgentProviders.find((item) => localAgentProviderIdsMatch(item.provider, profile.provider)) ?? null : null;
+  const agentOptions = resolveAgentMenuProfiles(runtimeProfiles, localAgentTargets).map((profile) => {
+    const target = profile.kind === "local-agent" ? localAgentTargets.find((item) => item.agentTargetId === profile.agentTargetId) ?? null : null;
     return {
       id: profile.id,
-      label: !provider || provider.supported
+      label: !target || target.supported
         ? profile.displayName
-        : formatUnavailableRuntimeProfileLabel?.(profile, provider) ?? `${profile.displayName} (${provider.authState})`,
-      disabled: provider ? !provider.supported : false,
+        : formatUnavailableRuntimeProfileLabel?.(profile, target) ?? `${profile.displayName} (${target.authState})`,
+      disabled: target ? !target.supported : false,
     };
   });
 
@@ -134,6 +135,7 @@ export function ArtifactAgentConversationPanel<TRun extends BaseRun, TEvent exte
       {...panelProps}
       agentOptions={agentOptions.length ? agentOptions : undefined}
       selectedAgentId={selectedRuntimeProfileId}
+      formatRunAgentLabel={(run) => agentLabelForRun(run, localAgentTargets)}
       variant={variant}
       onAgentChange={onRuntimeProfileChange}
     />
@@ -210,6 +212,7 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
               cx={cx}
               key={message.id}
               message={message}
+              formatRunAgentLabel={props.formatRunAgentLabel}
               renderUserMessageText={props.renderUserMessageText}
             />
           ))}
@@ -332,6 +335,7 @@ function ConversationMessage<TRun extends BaseRun>(props: {
   copy: AgentConversationUiCopy;
   cx: ConversationClassNames;
   message: AgentConversationMessage<TRun>;
+  formatRunAgentLabel?: (run: TRun) => string;
   renderUserMessageText?: (props: AgentUserMessageTextRenderProps) => ReactNode;
 }) {
   if (props.message.role === "user") {
@@ -362,7 +366,7 @@ function ConversationMessage<TRun extends BaseRun>(props: {
   return (
     <div className={props.cx.assistantRow}>
       <div className={props.cx.assistantMessage}>
-        <RunStatusBadge copy={props.copy} cx={props.cx} message={props.message} />
+        <RunStatusBadge agentLabel={props.formatRunAgentLabel?.(props.message.run)} copy={props.copy} cx={props.cx} message={props.message} />
         {props.message.blocks.map((block, index) => (
           <ConversationBlock block={block} copy={props.copy} cx={props.cx} key={`${block.type}:${index}`} />
         ))}
@@ -371,7 +375,7 @@ function ConversationMessage<TRun extends BaseRun>(props: {
   );
 }
 
-function RunStatusBadge<TRun extends BaseRun>(props: { copy: AgentConversationUiCopy; cx: ConversationClassNames; message: Extract<AgentConversationMessage<TRun>, { role: "assistant" }> }) {
+function RunStatusBadge<TRun extends BaseRun>(props: { agentLabel?: string; copy: AgentConversationUiCopy; cx: ConversationClassNames; message: Extract<AgentConversationMessage<TRun>, { role: "assistant" }> }) {
   const status = props.message.run.status;
   const icon =
     status === "completed" ? (
@@ -384,9 +388,14 @@ function RunStatusBadge<TRun extends BaseRun>(props: { copy: AgentConversationUi
   return (
     <div className={props.cx.runStatus}>
       {icon}
-      {props.message.run.provider} · {runStatusLabel(status, props.copy)}
+      {props.agentLabel ?? props.message.run.agentTargetId ?? props.message.run.provider} · {runStatusLabel(status, props.copy)}
     </div>
   );
+}
+
+export function agentLabelForRun(run: Pick<BaseRun, "agentTargetId" | "provider">, targets: LocalAgentTargetStatus[]) {
+  if (!run.agentTargetId) return run.provider;
+  return targets.find((target) => target.agentTargetId === run.agentTargetId)?.displayName ?? run.agentTargetId;
 }
 
 function ConversationBlock(props: { copy: AgentConversationUiCopy; cx: ConversationClassNames; block: AgentConversationBlock }) {

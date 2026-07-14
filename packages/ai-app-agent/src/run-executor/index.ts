@@ -1,6 +1,6 @@
 import type { BaseAiEditRequest, BaseRun, BaseRunEvent, RuntimeProfile } from "@ai-app/shared/types";
 import type { RuntimeConversationMessage, RuntimeProviderRegistry, RuntimeStreamEvent } from "@ai-app/agent/runtime";
-import { createManagedAgentRunContextFromHeaders, type ManagedAgentInvocationCredentialHeaders } from "@tutti-os/agent-acp-kit";
+import { createManagedAgentDetectContextFromHeaders, createManagedAgentRunContextFromHeaders, type ManagedAgentInvocationCredentialHeaders } from "@tutti-os/agent-acp-kit";
 
 export type RunEventInput<TEvent extends BaseRunEvent> = {
   runId: string;
@@ -73,7 +73,11 @@ export class RuntimeRunExecutor<
     let generatedText = "";
 
     try {
-      const provider = this.input.runtimes.getProvider(input.runtimeProfile);
+      const agentDetectContext = input.managedAgentHeaders
+        ? createManagedAgentDetectContextFromHeaders(input.managedAgentHeaders)
+        : undefined;
+      const runtimeProfile = await this.input.runtimes.resolveExecutionProfile(input.runtimeProfile, agentDetectContext);
+      const provider = this.input.runtimes.getProvider(runtimeProfile);
       await input.beforeRun?.();
       this.input.repo.updateRun(input.runId, { status: "running" } as Partial<Pick<TRun, "status" | "error" | "resultPreview">>);
       this.input.events.emit({
@@ -83,17 +87,18 @@ export class RuntimeRunExecutor<
         payload: { run: this.input.repo.getRun(input.runId) },
       });
 
-      const managedAgent = await this.createManagedAgentRunContext(input);
+      const managedAgent = await this.createManagedAgentRunContext(input, runtimeProfile);
       const runtimeContext = {
         run,
         project: input.project,
-        runtimeProfile: input.runtimeProfile,
+        runtimeProfile,
         request: input.request,
         conversation: input.conversation,
         history: input.history,
         ...(managedAgent ? { managedAgent } : {}),
+        ...(agentDetectContext ? { agentDetectContext } : {}),
       };
-      const readiness = await provider.detect(input.runtimeProfile, runtimeContext);
+      const readiness = await provider.detect(runtimeProfile, runtimeContext);
       if (!readiness.available) throw new Error(readiness.reason ?? "Runtime provider is unavailable");
 
       for await (const rawEvent of provider.streamEdit(runtimeContext)) {
@@ -139,9 +144,12 @@ export class RuntimeRunExecutor<
     }
   }
 
-  private async createManagedAgentRunContext(input: RuntimeRunExecutorInput<TRun, TEvent, TProject, TRequest>) {
-    if (!input.managedAgentHeaders || input.runtimeProfile.kind !== "local-agent") return undefined;
-    const providerId = input.runtimeProfile.provider.trim();
+  private async createManagedAgentRunContext(
+    input: RuntimeRunExecutorInput<TRun, TEvent, TProject, TRequest>,
+    runtimeProfile: RuntimeProfile,
+  ) {
+    if (!input.managedAgentHeaders || runtimeProfile.kind !== "local-agent") return undefined;
+    const providerId = runtimeProfile.provider.trim();
     if (!providerId) return undefined;
     const context = await createManagedAgentRunContextFromHeaders(input.managedAgentHeaders, {
       providerId,

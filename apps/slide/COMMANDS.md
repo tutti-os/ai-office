@@ -6,7 +6,7 @@ These commands expose AI Slide to Tutti apps and agents. Command outputs use `Cl
 
 ## `slide status`
 
-Return app health, project counts, runtime provider counts, and Tutti CLI availability for AI Slide.
+Return app health, project counts, Agent Target counts, and Tutti CLI availability for AI Slide.
 
 Handler: `/tutti/cli/status`
 
@@ -28,7 +28,7 @@ Explicitly request Tutti to open one slide project in AI Slide. Use this only af
 
 Handler: `/tutti/cli/projects/open`
 
-## `slide projects create --title --artifact-type --prompt --provider`
+## `slide projects create --title --artifact-type --prompt --agent-id --provider`
 
 Create a new AI Slide project, return an internal openTarget command, and optionally start app-owned async editing with prompt. This command must not open the app automatically. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs or raw routes as final links. When the task is complete, tell the user they can view the result in AI Slide and ask whether they want you to open it directly; if they confirm, call slide projects open with the project-id. When a prompt starts app-owned editing, treat the returned run-id as the only writer for that project until it reaches a terminal status. Poll slide agent events by run-id until run.status is completed, failed, or cancelled; accepted/running means the app is still working. Do not inspect deck.slides and write fallback slide files while app-owned editing is accepted or running. If it is still running after several polls, report that generation is still in progress instead of creating content yourself.
 
@@ -82,7 +82,7 @@ Append a text-only user or assistant message to one conversation session.
 
 Handler: `/tutti/cli/messages/create`
 
-## `slide agent edit --project-id <required> --prompt <required> --session-id --mode --provider`
+## `slide agent edit --project-id <required> --prompt <required> --session-id --mode --agent-id --provider`
 
 Start an app-owned async agent edit for a slide project and return an internal openTarget command. External agents and other Tutti apps must use this command to modify slide content, then poll slide agent events until run.status is completed, failed, or cancelled. This command must not open the app automatically. After completion, tell the user they can view the result in AI Slide and ask whether they want you to open it directly; if they confirm, call slide projects open.
 

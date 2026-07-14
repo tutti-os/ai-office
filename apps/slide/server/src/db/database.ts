@@ -39,6 +39,7 @@ function migrate(database: DatabaseSync) {
     CREATE TABLE IF NOT EXISTS runtime_profiles (
       id TEXT PRIMARY KEY,
       kind TEXT NOT NULL,
+      agent_target_id TEXT,
       provider TEXT NOT NULL,
       model TEXT NOT NULL,
       display_name TEXT NOT NULL,
@@ -52,6 +53,7 @@ function migrate(database: DatabaseSync) {
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
       runtime TEXT NOT NULL,
+      agent_target_id TEXT,
       provider TEXT NOT NULL,
       model TEXT NOT NULL,
       status TEXT NOT NULL,
@@ -96,7 +98,14 @@ function migrate(database: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_stream_events_seq ON stream_events(seq);
   `);
+  ensureColumn(database, "runtime_profiles", "agent_target_id", "TEXT");
+  ensureColumn(database, "slide_runs", "agent_target_id", "TEXT");
   database.exec(agentConversationSchemaSql);
+}
+
+function ensureColumn(database: DatabaseSync, table: string, column: string, declaration: string) {
+  const columns = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!columns.some((item) => item.name === column)) database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${declaration}`);
 }
 
 export { json, parseJson, rowOrNull, rows };

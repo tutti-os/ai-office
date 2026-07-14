@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hasActiveAgentRun } from "@ai-app/agent/conversation";
-import { mergeLocalAgentRuntimeProfiles, resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
+import { isAvailableLocalAgentRuntimeProfileId, mergeLocalAgentRuntimeProfiles, resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
 import {
   History,
   Upload,
@@ -14,7 +14,7 @@ import { reportUserActive } from "./app/tuttiActivity";
 import { pushHomeRoute, pushSlideRoute, readCurrentRoute, routePath, type AppRoute } from "./app/slideRoutes";
 import { useAgentConversation } from "./app/useAgentConversation";
 import { useHomeAttachments, type HomeAttachment } from "./app/useHomeAttachments";
-import { cancelRun, clearProjectHistory, createProject, deleteProject, fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, getProject, importProjectFile, installOfficeCli, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
+import { cancelRun, clearProjectHistory, createProject, deleteProject, fetchBootstrapSnapshot, fetchLocalAgentTargets, fetchOfficeCliStatus, getProject, importProjectFile, installOfficeCli, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
 import { DeckArtifactRuntimeAdapter, type DeckAgentRuntimeProvider } from "./artifact/deckArtifactAdapter";
 import { PptxArtifactRuntimeAdapter } from "./artifact/pptxArtifactAdapter";
 import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
@@ -32,7 +32,7 @@ import {
 } from "@ai-app/ui/app-shell";
 import type { ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { artifactInteractionForAgentBusy, type ArtifactInteractionPolicy } from "@ai-app/shared/artifact-runtime";
-import type { LocalAgentProviderStatus, OfficeCliStatus, ProjectDetailResponse, RuntimeProfile, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
+import type { LocalAgentTargetStatus, OfficeCliStatus, ProjectDetailResponse, RuntimeProfile, SlideArtifactType, SlideProject, SlideRunTimelineItem } from "@ai-slide/shared";
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -53,9 +53,9 @@ export function App() {
   const [historyProjects, setHistoryProjects] = useState<SlideProject[]>([]);
   const [slideTemplates, setSlideTemplates] = useState<SlideTemplate[]>([]);
   const [runtimeProfiles, setRuntimeProfiles] = useState<RuntimeProfile[]>([]);
-  const [localAgentProviders, setLocalAgentProviders] = useState<LocalAgentProviderStatus[]>([]);
-  const localAgentProvidersRef = useRef<LocalAgentProviderStatus[]>([]);
-  const [localAgentProvidersLoaded, setLocalAgentProvidersLoaded] = useState(false);
+  const [localAgentTargets, setLocalAgentTargets] = useState<LocalAgentTargetStatus[]>([]);
+  const localAgentTargetsRef = useRef<LocalAgentTargetStatus[]>([]);
+  const [localAgentTargetsLoaded, setLocalAgentTargetsLoaded] = useState(false);
   const [officeCliStatus, setOfficeCliStatus] = useState<OfficeCliStatus | null>(null);
   const [officeCliInstalling, setOfficeCliInstalling] = useState(false);
   const [templatesLoading, setTemplatesLoading] = useState(false);
@@ -153,13 +153,13 @@ export function App() {
     void fetchBootstrapSnapshot()
       .then((snapshot) => {
         const enabledProfiles = snapshot.runtimeProfiles.filter((profile) => profile.enabled && profile.kind === "local-agent");
-        const mergedProfiles = mergeLocalAgentRuntimeProfiles(enabledProfiles, localAgentProvidersRef.current);
+        const mergedProfiles = mergeLocalAgentRuntimeProfiles(enabledProfiles, localAgentTargetsRef.current);
         setRuntimeProfiles(mergedProfiles);
         setSelectedAgent((current) => {
-          if (mergedProfiles.some((profile) => profile.id === current)) return current;
+          if (isAvailableLocalAgentRuntimeProfileId(current, mergedProfiles, localAgentTargetsRef.current)) return current;
           return resolvePreferredLocalAgentRuntimeProfileId({
             profiles: mergedProfiles,
-            providers: localAgentProvidersRef.current,
+            agents: localAgentTargetsRef.current,
           });
         });
       })
@@ -168,19 +168,19 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-    void fetchLocalAgentProviders()
+    void fetchLocalAgentTargets()
       .then((response) => {
         if (cancelled) return;
-        localAgentProvidersRef.current = response.providers;
-        setLocalAgentProviders(response.providers);
-        setLocalAgentProvidersLoaded(true);
+        localAgentTargetsRef.current = response.agents;
+        setLocalAgentTargets(response.agents);
+        setLocalAgentTargetsLoaded(true);
         setRuntimeProfiles((current) => {
-          const merged = mergeLocalAgentRuntimeProfiles(current, response.providers);
+          const merged = mergeLocalAgentRuntimeProfiles(current, response.agents);
           setSelectedAgent((selected) => {
-            if (merged.some((profile) => profile.id === selected)) return selected;
+            if (isAvailableLocalAgentRuntimeProfileId(selected, merged, response.agents)) return selected;
             return resolvePreferredLocalAgentRuntimeProfileId({
               profiles: merged,
-              providers: response.providers,
+              agents: response.agents,
             });
           });
           return merged;
@@ -188,7 +188,7 @@ export function App() {
       })
       .catch((err) => {
         if (cancelled) return;
-        setLocalAgentProvidersLoaded(true);
+        setLocalAgentTargetsLoaded(true);
         setError(err instanceof Error ? err.message : String(err));
       });
     return () => {
@@ -466,7 +466,7 @@ export function App() {
         activeSelectionLabel={projectDetail?.artifact.type === "pptx" ? t("editor.selectedText") : deckActiveSelectionPreview.label}
         activeSelectionText={projectDetail?.artifact.type === "pptx" ? pptxRuntime?.selection.selectedText ?? "" : deckActiveSelectionPreview.text}
         activeSelectionVisible={projectDetail?.artifact.type === "pptx" ? Boolean(pptxRuntime?.selection.selectedText.trim()) : deckActiveSelectionPreview.visible}
-        localAgentProviders={localAgentProviders}
+        localAgentTargets={localAgentTargets}
         runtimeProfiles={runtimeProfiles}
         selectedAgent={selectedAgent}
         sending={agentBusy}
@@ -522,8 +522,8 @@ export function App() {
             outputType={outputType}
             prompt={prompt}
             selectedAgent={selectedAgent}
-            localAgentProviders={localAgentProvidersLoaded ? localAgentProviders : []}
-            runtimeProfiles={localAgentProvidersLoaded ? runtimeProfiles : []}
+            localAgentTargets={localAgentTargetsLoaded ? localAgentTargets : []}
+            runtimeProfiles={localAgentTargetsLoaded ? runtimeProfiles : []}
             onAddFiles={homeAttachments.addFiles}
             onCreate={createFromPrompt}
             onInstallOfficeCli={downloadOfficeCli}

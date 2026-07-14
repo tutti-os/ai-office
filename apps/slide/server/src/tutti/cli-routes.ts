@@ -2,7 +2,7 @@ import { readdir, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { cliErrorOutput, cliJsonOutput, readCliInputBody } from "@ai-app/shared/tutti-cli";
-import { runtimeProfileIdFromProvider } from "@ai-app/shared/agent-providers";
+import { resolveAgentTargetFromCatalog, runtimeProfileIdFromAgentTarget } from "@ai-app/shared/agent-providers";
 import type { AiEditMode, DeckManifestSlide, OpenSlideCliResponse, SlideArtifact, SlideArtifactType, SlideProject } from "@ai-slide/shared";
 import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { ProjectService } from "../artifact/project-service.js";
@@ -13,14 +13,14 @@ type ManagedAgentHeaders = Record<string, string | string[] | undefined>;
 export function registerTuttiCliRoutes(server: FastifyInstance, projects: ProjectService) {
   server.post("/tutti/cli/status", async (_request, reply) => {
     const projectRows = projects.listProjects().projects;
-    const providers = await projects.listLocalAgentProviders().catch(() => ({ providers: [] }));
+    const agents = await projects.listLocalAgentTargets().catch(() => ({ agents: [] }));
     const latestProject = projectRows[0] ?? null;
     return reply.send(cliJsonOutput({
       ok: true,
       appId: "ai-slide",
       version: process.env.AI_SLIDE_APP_VERSION ?? "0.0.0",
       projectCount: projectRows.length,
-      runtimeProviderCount: providers.providers.length,
+      agentTargetCount: agents.agents.length,
       latestProject: latestProject ? projectSummary(latestProject) : null,
       tuttiCli: await getTuttiCliStatus(),
     }));
@@ -330,7 +330,7 @@ async function createProjectCliResponse(
   const prompt = optionalString(input, "prompt");
   const mode = normalizeAiMode(input.mode);
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
-  const runtimeProfileId = await runtimeProfileIdFromCliInput(input);
+  const runtimeProfileId = await runtimeProfileIdFromCliInput(input, projects, headers);
   if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
   try {
     const result = await projects.createProject({
@@ -375,7 +375,7 @@ async function agentRunCliResponse(
   if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
   if (!prompt) return sendCliError(reply, 400, "invalid_input", "prompt is required");
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
-  const runtimeProfileId = await runtimeProfileIdFromCliInput(input);
+  const runtimeProfileId = await runtimeProfileIdFromCliInput(input, projects, headers);
   if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
   try {
     const { artifact } = await projects.getProject(projectId);
@@ -414,14 +414,27 @@ function optionalString(input: Record<string, unknown>, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-async function runtimeProfileIdFromCliInput(input: Record<string, unknown>): Promise<{ value?: string; error?: string }> {
+async function runtimeProfileIdFromCliInput(
+  input: Record<string, unknown>,
+  projects: ProjectService,
+  headers: ManagedAgentHeaders,
+): Promise<{ value?: string; error?: string }> {
+  const agentTargetId = optionalString(input, "agent-id");
   const provider = optionalString(input, "provider");
-  if (!provider) {
-    const runtimeProfileId = optionalString(input, "runtime-profile-id");
-    if (runtimeProfileId) return { value: runtimeProfileId };
-    return { value: undefined };
+  const runtimeProfileId = optionalString(input, "runtime-profile-id");
+  if (runtimeProfileId && (agentTargetId || provider)) {
+    return { error: "provide agent-id, deprecated provider, or runtime-profile-id, not more than one" };
   }
-  return runtimeProfileIdFromProvider(provider);
+  if (runtimeProfileId) return { value: runtimeProfileId };
+  if (!agentTargetId && !provider) return { value: undefined };
+  try {
+    const { agents } = await projects.listLocalAgentTargets(headers);
+    const target = resolveAgentTargetFromCatalog({ agents, agentTargetId, legacyProvider: provider, useDefault: false });
+    if (target.error || !target.value) return { error: target.error ?? "agent-id is required" };
+    return runtimeProfileIdFromAgentTarget(target.value.agentTargetId);
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
 }
 
 function optionalBoolean(input: Record<string, unknown>, key: string) {
