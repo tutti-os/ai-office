@@ -1,5 +1,5 @@
-import { readdir, stat } from "node:fs/promises";
-import { basename, extname, join, relative } from "node:path";
+import { readFile, readdir, stat } from "node:fs/promises";
+import { basename, extname, join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { getDb, rows } from "../db/database.js";
 import { appPaths } from "../local/paths.js";
@@ -41,6 +41,13 @@ type GroupItem = {
   displayName: string;
   description?: string;
   referenceCount: number;
+};
+
+type ProjectMetadata = {
+  title: string;
+  artifactType: "deck" | "pptx";
+  fileRef: string;
+  updatedAt: string;
 };
 
 export function registerTuttiReferenceRoutes(server: FastifyInstance) {
@@ -92,8 +99,10 @@ async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]) {
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const projectId = entry.name;
+    const metadata = projectMetadata.get(projectId);
+    if (!metadata) continue;
     const displayName = projectDisplayName(projectId, projectMetadata);
-    const references = await listReferencesForProject(projectId, timeRange, displayName);
+    const references = await listReferencesForProject(projectId, timeRange, displayName, metadata);
     if (references.length === 0) continue;
     groups.push({
       type: "group",
@@ -115,19 +124,29 @@ async function listAllReferences(timeRange: ReferenceSearchRequest["timeRange"])
   const nested = await Promise.all(
     groups
       .filter((entry) => entry.isDirectory())
-      .map((entry) => listReferencesForProject(entry.name, timeRange, projectDisplayName(entry.name, projectMetadata))),
+      .map((entry) => {
+        const metadata = projectMetadata.get(entry.name);
+        if (!metadata) return [];
+        return listReferencesForProject(entry.name, timeRange, projectDisplayName(entry.name, projectMetadata), metadata);
+      }),
   );
   return nested.flat();
 }
 
-async function listReferencesForProject(projectId: string, timeRange: ReferenceListRequest["timeRange"], projectDisplayNameValue?: string) {
+async function listReferencesForProject(
+  projectId: string,
+  timeRange: ReferenceListRequest["timeRange"],
+  projectDisplayNameValue?: string,
+  projectMetadataValue?: ProjectMetadata,
+) {
   const root = join(appPaths.projectsDir, projectId);
-  const files = await collectFiles(root);
+  const projectMetadata = projectMetadataValue ?? loadProjectMetadata().get(projectId);
+  if (!projectMetadata) return [];
+  const projectFiles = await focusedSlideProjectFiles(root, projectMetadata);
   const items: ReferenceItem[] = [];
   const parentGroupLabel = projectDisplayNameValue ?? projectDisplayName(projectId, loadProjectMetadata());
-  for (const file of files) {
-    const relativeToProject = relative(root, file).split("\\").join("/");
-    if (!isReferenceFile(relativeToProject)) continue;
+  for (const relativeToProject of projectFiles) {
+    const file = join(root, relativeToProject);
     const info = await stat(file).catch(() => null);
     if (!info?.isFile()) continue;
     const mtimeMs = Math.trunc(info.mtimeMs);
@@ -149,21 +168,36 @@ async function listReferencesForProject(projectId: string, timeRange: ReferenceL
       },
     });
   }
-  return items.sort((left, right) => (right.reference.mtimeMs ?? 0) - (left.reference.mtimeMs ?? 0));
+  return items;
 }
 
-async function collectFiles(root: string) {
-  const entries = await safeReaddir(root);
-  const files: string[] = [];
-  for (const entry of entries) {
-    const filePath = join(root, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...await collectFiles(filePath));
-    } else if (entry.isFile()) {
-      files.push(filePath);
-    }
+async function focusedSlideProjectFiles(root: string, metadata: ProjectMetadata) {
+  if (!isSafeRelativePath(metadata.fileRef)) return [];
+  if (metadata.artifactType === "pptx") return [metadata.fileRef];
+  try {
+    const manifest = JSON.parse(await readFile(join(root, metadata.fileRef, "manifest.json"), "utf8")) as {
+      slides?: Array<{ file?: unknown }>;
+    };
+    const slideFiles = manifest.slides?.flatMap((slide) => {
+      if (typeof slide.file !== "string" || !isSafeRelativePath(slide.file) || !slide.file.startsWith("slides/")) return [];
+      return [`${metadata.fileRef}/${slide.file}`];
+    }) ?? [];
+    return [...new Set(slideFiles)];
+  } catch {
+    return [];
   }
-  return files;
+}
+
+function isSafeRelativePath(pathValue: string) {
+  if (
+    !pathValue
+    || pathValue.startsWith("/")
+    || pathValue.includes("\\")
+    || pathValue.includes("\0")
+    || pathValue.includes("://")
+    || /^[a-zA-Z]:/.test(pathValue)
+  ) return false;
+  return pathValue.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
 }
 
 async function safeReaddir(root: string) {
@@ -204,18 +238,29 @@ function normalizeSearchText(value: unknown) {
 
 function loadProjectMetadata() {
   return new Map(
-    rows<{ id: string; title: string; updated_at: string }>(getDb().prepare(`SELECT id, title, updated_at FROM projects`).all()).map((project) => [
+    rows<{ id: string; title: string; artifact_type: ProjectMetadata["artifactType"]; file_ref: string; updated_at: string }>(
+      getDb().prepare(
+        `SELECT projects.id, projects.title, artifacts.type AS artifact_type, artifacts.file_ref, projects.updated_at
+         FROM projects
+         JOIN artifacts ON artifacts.id = projects.active_artifact_id AND artifacts.project_id = projects.id`,
+      ).all(),
+    ).map((project) => [
       project.id,
-      { title: project.title, updatedAt: project.updated_at },
+      {
+        title: project.title,
+        artifactType: project.artifact_type,
+        fileRef: project.file_ref,
+        updatedAt: project.updated_at,
+      },
     ] as const),
   );
 }
 
-function projectDisplayName(projectId: string, projectMetadata: Map<string, { title: string; updatedAt: string }>) {
+function projectDisplayName(projectId: string, projectMetadata: Map<string, ProjectMetadata>) {
   return projectMetadata.get(projectId)?.title.trim() || projectId;
 }
 
-function projectUpdatedAt(projectId: string, projectMetadata: Map<string, { title: string; updatedAt: string }>) {
+function projectUpdatedAt(projectId: string, projectMetadata: Map<string, ProjectMetadata>) {
   return projectMetadata.get(projectId)?.updatedAt ?? "";
 }
 
@@ -238,11 +283,6 @@ function matchesTimeRange(mtimeMs: number, timeRange: ReferenceListRequest["time
   if (typeof timeRange.fromMs === "number" && mtimeMs < timeRange.fromMs) return false;
   if (typeof timeRange.toMs === "number" && mtimeMs > timeRange.toMs) return false;
   return true;
-}
-
-function isReferenceFile(pathValue: string) {
-  if (!pathValue.startsWith("exports/")) return false;
-  return [".pdf", ".pptx"].includes(extname(pathValue).toLowerCase());
 }
 
 function scoreFileName(fileName: string, query: string) {
