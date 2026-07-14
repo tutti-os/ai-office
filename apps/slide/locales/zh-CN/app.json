@@ -44,7 +44,7 @@
   "composer.addSourceFiles": "添加源文件",
   "composer.createDeck": "创建幻灯片",
   "composer.create": "创建",
-  "composer.selectAgent": "选择 ACP Agent",
+  "composer.selectAgent": "选择智能体",
   "composer.agentUnavailable": "不可用",
   "editor.selectedText": "已选文本",
   "editor.selectedBlock": "已选块",

@@ -5,7 +5,7 @@ import type {
   AiEditRequest,
   AiEditResponse,
   CreateProjectRequest,
-  LocalAgentProviderStatusResponse,
+  LocalAgentTargetStatusResponse,
   OfficeCliStatusResponse,
   ProjectDetailResponse,
   ProjectRunsResponse,
@@ -68,8 +68,8 @@ export async function fetchOfficeCliStatus() {
   return requestJson<OfficeCliStatusResponse>("/api/toolchains/officecli");
 }
 
-export async function fetchLocalAgentProviders() {
-  return requestJson<LocalAgentProviderStatusResponse>("/api/local-agent/providers");
+export async function fetchLocalAgentTargets() {
+  return requestJson<LocalAgentTargetStatusResponse>("/api/local-agent/targets");
 }
 
 export async function installOfficeCli() {

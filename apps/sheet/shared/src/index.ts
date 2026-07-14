@@ -1,7 +1,7 @@
 import type {
   AiEditMode,
   Id,
-  LocalAgentProviderStatus,
+  LocalAgentTargetStatus,
   ReasoningEffort,
   RuntimeProfile,
   RunEventType,
@@ -15,8 +15,8 @@ import type { AgentArtifactContextBase, ArtifactSelectionBase } from "@ai-app/sh
 export type {
   AiEditMode,
   Id,
-  LocalAgentProviderModel,
-  LocalAgentProviderStatus,
+  LocalAgentTargetModel,
+  LocalAgentTargetStatus,
   ReasoningEffort,
   RunEventType,
   RunStatus,
@@ -117,6 +117,7 @@ export interface SheetRun {
   id: Id;
   projectId: Id;
   runtime: string;
+  agentTargetId: string | null;
   provider: string;
   model: string;
   status: SheetRunStatus;
@@ -246,8 +247,8 @@ export interface ProjectRunsResponse {
   runs: SheetRunTimelineItem[];
 }
 
-export interface LocalAgentProviderStatusResponse {
-  providers: LocalAgentProviderStatus[];
+export interface LocalAgentTargetStatusResponse {
+  agents: LocalAgentTargetStatus[];
 }
 
 export type OfficeCliSource = "env" | "bundled" | "tutti" | "missing";

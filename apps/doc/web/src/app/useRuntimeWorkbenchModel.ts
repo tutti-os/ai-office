@@ -7,7 +7,7 @@ import { useDocumentAgentRuntime } from "./useDocumentAgentRuntime";
 import { useDocumentRouteLifecycle } from "./useDocumentRouteLifecycle";
 import { pushDocumentRoute, pushHomeRoute, readCurrentRoute, routePath, type AppRoute } from "./documentWorkbenchRoutes";
 import { uploadHtmlEditorImageFileAsset } from "./htmlEditorUploads";
-import type { DocumentProject, DocumentType, LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
+import type { DocumentProject, DocumentType, LocalAgentTargetStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
 import { DocxArtifactRuntimeAdapter } from "../artifact/docxArtifactAdapter";
 import { HtmlArtifactRuntimeAdapter } from "../artifact/htmlArtifactAdapter";
 import { MarkdownArtifactRuntimeAdapter } from "../artifact/markdownArtifactAdapter";
@@ -95,7 +95,7 @@ export function useRuntimeWorkbenchModel() {
   const [prompt, setPrompt] = useState("");
   const [outputType, setOutputType] = useState<DocumentType>("html");
   const [runtimeProfiles, setRuntimeProfiles] = useState<RuntimeProfile[]>([]);
-  const [localAgentProviders, setLocalAgentProviders] = useState<LocalAgentProviderStatus[]>([]);
+  const [localAgentTargets, setLocalAgentTargets] = useState<LocalAgentTargetStatus[]>([]);
   const [officeCliStatus, setOfficeCliStatus] = useState<OfficeCliStatus | null>(null);
   const [officeCliInstalling, setOfficeCliInstalling] = useState(false);
   const [sourceExporting, setSourceExporting] = useState(false);
@@ -138,7 +138,7 @@ export function useRuntimeWorkbenchModel() {
 
   useDocumentWorkbenchBootstrap({
     setError,
-    setLocalAgentProviders,
+    setLocalAgentTargets,
     setOfficeCliStatus,
     setRuntimeProfiles,
     setSelectedRuntimeProfileId,
@@ -347,7 +347,7 @@ export function useRuntimeWorkbenchModel() {
     loadPromptDocument,
     loadTemplate,
     loading,
-    localAgentProviders,
+    localAgentTargets,
     markdownRuntime,
     markdownSaveState,
     officeCliInstalling,

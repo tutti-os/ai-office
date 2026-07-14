@@ -9,7 +9,7 @@ export class ServerDemoRuntimeProvider implements RuntimeProvider {
   }
 
   describeRun(profile: RuntimeProfile) {
-    return { runtime: profile.kind, provider: profile.provider, model: profile.model };
+    return { runtime: profile.kind, agentTargetId: null, provider: profile.provider, model: profile.model };
   }
 
   async detect() {

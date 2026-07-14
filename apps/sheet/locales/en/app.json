@@ -17,7 +17,7 @@
   "history.openProjectAria": "Open {{title}}",
   "composer.addContext": "Add context",
   "composer.agentUnavailable": "unavailable",
-  "composer.selectAgent": "Select ACP agent",
+  "composer.selectAgent": "Select agent",
   "composer.create": "Create",
   "composer.downloadOfficeCli": "Download OfficeCLI",
   "composer.officeCliRequired": "OfficeCLI is required for XLSX workbooks",

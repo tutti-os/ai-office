@@ -1,5 +1,5 @@
-import type { BaseAiEditRequest, BaseRun, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
-import type { ManagedAgentInvocation } from "@tutti-os/agent-acp-kit";
+import type { BaseAiEditRequest, BaseRun, LocalAgentTargetStatus, RuntimeProfile } from "@ai-app/shared/types";
+import type { DetectContext, ManagedAgentInvocation } from "@tutti-os/agent-acp-kit";
 
 export type RuntimeConversationMessage = {
   role: "user" | "assistant" | "system";
@@ -28,6 +28,7 @@ export interface RuntimeEditContext<
     cwd: string;
     managedAgentInvocation: ManagedAgentInvocation;
   };
+  agentDetectContext?: DetectContext;
 }
 
 export type RuntimeStreamEvent =
@@ -46,9 +47,10 @@ export interface RuntimeProvider<
 > {
   id: string;
   canHandle(profile: RuntimeProfile): boolean;
-  describeRun(profile: RuntimeProfile): { runtime: string; provider: string; model: string };
+  resolveExecutionProfile?(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>): Promise<RuntimeProfile>;
+  describeRun(profile: RuntimeProfile): { runtime: string; agentTargetId: string | null; provider: string; model: string };
   detect(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>): Promise<{ available: boolean; reason?: string }>;
-  listLocalAgentProviders?(headers?: Record<string, string | string[] | undefined>, refresh?: boolean): Promise<LocalAgentProviderStatus[]>;
+  listLocalAgentTargets?(headers?: Record<string, string | string[] | undefined>, refresh?: boolean): Promise<LocalAgentTargetStatus[]>;
   streamEdit(context: RuntimeEditContext<TRun, TProject, TRequest>): AsyncIterable<string | RuntimeStreamEvent>;
   cancel(runId: string): Promise<{ cancelled: boolean; reason?: string }>;
 }
@@ -68,9 +70,20 @@ export class RuntimeProviderRegistry<
     return this.providers.find((provider) => provider.canHandle(profile)) ?? this.providers[0]!;
   }
 
-  async listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>, refresh = false): Promise<LocalAgentProviderStatus[]> {
-    const provider = this.providers.find((item) => typeof item.listLocalAgentProviders === "function");
-    return provider?.listLocalAgentProviders?.(headers, refresh) ?? [];
+  getProviderForRuntime(runtime: string) {
+    const provider = this.providers.find((item) => item.id === runtime);
+    if (!provider) throw new RuntimeProviderUnsupportedError(`Runtime provider is not supported: ${runtime}`);
+    return provider;
+  }
+
+  async resolveExecutionProfile(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>) {
+    const provider = this.getProvider(profile);
+    return provider.resolveExecutionProfile?.(profile, context) ?? profile;
+  }
+
+  async listLocalAgentTargets(headers?: Record<string, string | string[] | undefined>, refresh = false): Promise<LocalAgentTargetStatus[]> {
+    const provider = this.providers.find((item) => typeof item.listLocalAgentTargets === "function");
+    return provider?.listLocalAgentTargets?.(headers, refresh) ?? [];
   }
 }
 

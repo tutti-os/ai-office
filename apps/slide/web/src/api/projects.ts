@@ -5,7 +5,7 @@ import type {
   AppSnapshot,
   DeckAssetUploadResponse,
   DeckSlideHtmlResponse,
-  LocalAgentProviderStatusResponse,
+  LocalAgentTargetStatusResponse,
   OfficeCliStatusResponse,
   ProjectDetailResponse,
   ProjectRunsResponse,
@@ -56,8 +56,8 @@ export async function listTemplates() {
   return response.templates;
 }
 
-export async function fetchLocalAgentProviders() {
-  return requestJson<LocalAgentProviderStatusResponse>("/api/local-agent/providers");
+export async function fetchLocalAgentTargets() {
+  return requestJson<LocalAgentTargetStatusResponse>("/api/local-agent/targets");
 }
 
 export async function fetchOfficeCliStatus() {

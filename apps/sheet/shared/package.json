@@ -11,9 +11,11 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "check": "tsc -p tsconfig.json --noEmit"
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test src/agent-target-contract.test.ts"
   },
   "devDependencies": {
+    "tsx": "^4.22.4",
     "typescript": "^5.9.3"
   }
 }

@@ -315,6 +315,7 @@ export class ProjectService {
     const run = this.repo.createRun({
       projectId,
       runtime: descriptor.runtime,
+      agentTargetId: descriptor.agentTargetId,
       provider: descriptor.provider,
       model: descriptor.model,
       mode: request.mode,
@@ -331,11 +332,10 @@ export class ProjectService {
     return { run };
   }
 
-  async listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>) {
-    const providers = (await this.runtimes.listLocalAgentProviders(headers))
-      .filter((provider) => provider.supported);
-    this.repo.syncLocalAgentRuntimeProfiles(providers);
-    return { providers };
+  async listLocalAgentTargets(headers?: Record<string, string | string[] | undefined>) {
+    const agents = await this.runtimes.listLocalAgentTargets(headers);
+    this.repo.syncLocalAgentRuntimeProfiles(agents);
+    return { agents };
   }
 
   private resolveConversationSession(projectId: string, title: string, sessionId: string | null | undefined) {
@@ -349,21 +349,25 @@ export class ProjectService {
   ) {
     if (runtimeProfileId) {
       const existing = this.repo.getRuntimeProfile(runtimeProfileId);
-      if (existing.id === runtimeProfileId) return existing;
-      const providers = await this.runtimes.listLocalAgentProviders(headers).catch(() => null);
-      if (providers) this.repo.syncLocalAgentRuntimeProfiles(providers);
+      if (existing.id === runtimeProfileId && existing.kind !== "local-agent") return existing;
+      const agents = await this.runtimes.listLocalAgentTargets(headers);
+      this.repo.syncLocalAgentRuntimeProfiles(agents);
       const synced = this.repo.getRuntimeProfile(runtimeProfileId);
       if (synced.id !== runtimeProfileId) throw new Error(`Runtime profile not found: ${runtimeProfileId}`);
+      if (!synced.agentTargetId || !agents.some((agent) => agent.agentTargetId === synced.agentTargetId && agent.supported)) {
+        throw new Error(`Agent Target is unavailable: ${synced.agentTargetId ?? runtimeProfileId}`);
+      }
       return synced;
     }
-    const providers = await this.runtimes.listLocalAgentProviders(headers).catch(() => null);
-    if (providers) this.repo.syncLocalAgentRuntimeProfiles(providers);
+    const agents = await this.runtimes.listLocalAgentTargets(headers);
+    this.repo.syncLocalAgentRuntimeProfiles(agents);
     const profiles = this.repo.snapshot().runtimeProfiles;
     const preferredProfileId = resolvePreferredLocalAgentRuntimeProfileId({
       profiles,
-      ...(providers ? { providers } : {}),
+      agents,
     });
-    return this.repo.getRuntimeProfile(preferredProfileId || undefined);
+    if (!preferredProfileId) throw new Error("No available Agent Target");
+    return this.repo.getRuntimeProfile(preferredProfileId);
   }
 
   private requireProjectSession(projectId: string, sessionId: string) {
@@ -379,7 +383,7 @@ export class ProjectService {
     if (!run) return null;
     if (!["accepted", "running"].includes(run.status)) return { run };
     this.cancelledRunIds.add(runId);
-    await this.runtimes.getProvider(this.repo.getRuntimeProfileForRun(run)).cancel(runId).catch(() => undefined);
+    await this.runtimes.getProviderForRuntime(run.runtime).cancel(runId).catch(() => undefined);
     return this.finalizeCancellation(runId, "Cancelled by user");
   }
 

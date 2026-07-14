@@ -41,7 +41,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     loadPromptDocument,
     loadTemplate,
     loading,
-    localAgentProviders,
+    localAgentTargets,
     markdownRuntime,
     markdownSaveState,
     officeCliInstalling,
@@ -95,7 +95,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           categories={templateCategories}
           activePanel={homePanel}
           historyProjects={historyProjects}
-          localAgentProviders={localAgentProviders}
+          localAgentTargets={localAgentTargets}
           officeCliInstalling={officeCliInstalling}
           officeCliStatus={officeCliStatus}
           outputType={outputType}
@@ -139,7 +139,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             dirty={activeDirty}
             error={error}
             exportNotice={exportNotice}
-            localAgentProviders={localAgentProviders}
+            localAgentTargets={localAgentTargets}
             loading={loading}
             projectId={currentProjectId}
             runtime={markdownRuntime}
@@ -185,7 +185,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             dirty={activeDirty}
             error={error || docxError}
             exportNotice={exportNotice}
-            localAgentProviders={localAgentProviders}
+            localAgentTargets={localAgentTargets}
             loading={loading || docxLoading}
             projectId={currentProjectId}
             runtime={docxRuntime}
@@ -223,7 +223,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             agentConversationLoading={agentConversation.loading}
             agentConversationError={agentConversation.error}
             agentSending={agentBusy}
-            localAgentProviders={localAgentProviders}
+            localAgentTargets={localAgentTargets}
             runtimeProfiles={runtimeProfiles}
             selectedRuntimeProfileId={selectedRuntimeProfileId}
             editorStats={editorStats}

@@ -233,6 +233,6 @@ The current deck runtime has editing primitives for existing slide objects, but 
 
 - Should deck toolbar and overlay controls add stable `data-testid` values before broad automation, or is title/aria-label based targeting acceptable?
 - Should deck browser tests create multi-slide fixtures through templates only, or should the app add a test-only API for seeded manifest plus slide HTML?
-- Should AI context tests use a dedicated stub ACP provider to avoid relying on Codex/Claude availability?
+- Should AI context tests use a dedicated stub Agent Target to avoid relying on the machine's current Agent catalog?
 - Should object geometry assertions compare exact CSS strings, or assert normalized numeric geometry through DOM APIs?
 - Should export assertions inspect generated PPTX slide count/content directly, or treat successful server export plus file metadata as sufficient for browser coverage?

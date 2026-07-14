@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { FileSpreadsheet, History, Upload } from "lucide-react";
-import type { LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile, SheetProject } from "@ai-sheet/shared";
+import type { LocalAgentTargetStatus, OfficeCliStatus, RuntimeProfile, SheetProject } from "@ai-sheet/shared";
 import { contextAttachmentFileAccept } from "@ai-app/shared/context-attachments";
 import { ArtifactHomeComposer, ProductFilledFormatIcon, type ArtifactHomeFormatOption } from "@ai-app/ui/home-composer";
 import {
@@ -22,7 +22,7 @@ export function SheetHome(props: {
   projects: SheetProject[];
   loading: boolean;
   error: string;
-  localAgentProviders: LocalAgentProviderStatus[];
+  localAgentTargets: LocalAgentTargetStatus[];
   officeCliInstalling: boolean;
   officeCliStatus: OfficeCliStatus | null;
   prompt: string;
@@ -75,7 +75,7 @@ export function SheetHome(props: {
             officeCliInstalling={officeCliInstalling}
             officeCliStatus={props.officeCliStatus}
             prompt={props.prompt}
-            localAgentProviders={props.localAgentProviders}
+            localAgentTargets={props.localAgentTargets}
             runtimeProfiles={props.runtimeProfiles}
             selectedRuntimeProfileId={props.selectedRuntimeProfileId}
             onAddFiles={props.onAddFiles}
@@ -121,7 +121,7 @@ function SheetComposer(props: {
   disabled: boolean;
   error: string;
   loading: boolean;
-  localAgentProviders: LocalAgentProviderStatus[];
+  localAgentTargets: LocalAgentTargetStatus[];
   officeCliInstalling: boolean;
   officeCliStatus: OfficeCliStatus | null;
   prompt: string;
@@ -139,7 +139,7 @@ function SheetComposer(props: {
     <ArtifactHomeComposer
       addFilesLabel={t("composer.addContext")}
       agentProfiles={props.runtimeProfiles}
-      agentProviders={props.localAgentProviders}
+      agentTargets={props.localAgentTargets}
       agentUnavailableLabel={t("composer.agentUnavailable")}
       acceptedFileTypes={contextAttachmentFileAccept}
       attachments={props.attachments}

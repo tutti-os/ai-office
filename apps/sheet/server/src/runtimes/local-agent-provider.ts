@@ -35,16 +35,19 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       useProviderResume: () => true,
       timeoutMs: localAgentTimeoutMs,
       sessionDirName: ".ai-sheet",
+      commandEnvNames: ["AI_SHEET_TUTTI_CLI"],
     });
   }
 }
 
 async function buildTuttiAgentSkillContext(context: RuntimeEditContext, workspaceRoot: string) {
   try {
+    const cwd = tuttiWorkspaceCwd(workspaceRoot);
     return await loadTuttiLocalAgentSkillContext({
-      provider: context.runtimeProfile.provider,
+      agentTargetId: context.runtimeProfile.agentTargetId!,
       agentSessionId: context.run.id,
-      cwd: tuttiWorkspaceCwd(workspaceRoot),
+      cwd,
+      detectContext: context.agentDetectContext ?? { cwd },
       commandEnvNames: ["AI_SHEET_TUTTI_CLI"],
     });
   } catch (error) {

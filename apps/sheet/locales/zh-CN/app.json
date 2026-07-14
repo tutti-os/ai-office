@@ -17,7 +17,7 @@
   "history.openProjectAria": "打开 {{title}}",
   "composer.addContext": "添加上下文",
   "composer.agentUnavailable": "不可用",
-  "composer.selectAgent": "选择 ACP Agent",
+  "composer.selectAgent": "选择智能体",
   "composer.create": "创建",
   "composer.downloadOfficeCli": "下载 OfficeCLI",
   "composer.officeCliRequired": "XLSX 工作簿需要 OfficeCLI",

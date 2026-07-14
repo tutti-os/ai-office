@@ -1,6 +1,6 @@
 import type { BaseAiEditRequest, BaseRun, BaseRunEvent, RuntimeProfile } from "@ai-app/shared/types";
 import type { RuntimeConversationMessage, RuntimeProviderRegistry, RuntimeStreamEvent } from "@ai-app/agent/runtime";
-import { createManagedAgentRunContextFromHeaders, type ManagedAgentInvocationCredentialHeaders } from "@tutti-os/agent-acp-kit";
+import { createManagedAgentDetectContextFromHeaders, createManagedAgentRunContextFromHeaders, type ManagedAgentInvocationCredentialHeaders } from "@tutti-os/agent-acp-kit";
 
 export type RunEventInput<TEvent extends BaseRunEvent> = {
   runId: string;
@@ -14,7 +14,7 @@ export type RunEventInput<TEvent extends BaseRunEvent> = {
 
 export type RunRepository<TRun extends BaseRun, TEvent extends BaseRunEvent> = {
   getRun(runId: string): TRun | null;
-  updateRun(runId: string, input: Partial<Pick<TRun, "status" | "error" | "resultPreview">>): TRun | null;
+  updateRun(runId: string, input: Partial<Pick<TRun, "status" | "error" | "resultPreview" | "agentTargetId" | "provider" | "model">>): TRun | null;
   createRunEvent(input: RunEventInput<TEvent>): TEvent;
 };
 
@@ -73,28 +73,49 @@ export class RuntimeRunExecutor<
     let generatedText = "";
 
     try {
-      const provider = this.input.runtimes.getProvider(input.runtimeProfile);
-      await input.beforeRun?.();
-      this.input.repo.updateRun(input.runId, { status: "running" } as Partial<Pick<TRun, "status" | "error" | "resultPreview">>);
-      this.input.events.emit({
-        type: "run.started",
-        projectId: input.project.id,
-        runId: input.runId,
-        payload: { run: this.input.repo.getRun(input.runId) },
-      });
-
-      const managedAgent = await this.createManagedAgentRunContext(input);
-      const runtimeContext = {
+      const agentDetectContext = input.managedAgentHeaders
+        ? createManagedAgentDetectContextFromHeaders(input.managedAgentHeaders)
+        : undefined;
+      const runtimeProfile = await this.input.runtimes.resolveExecutionProfile(input.runtimeProfile, {
         run,
         project: input.project,
         runtimeProfile: input.runtimeProfile,
         request: input.request,
         conversation: input.conversation,
         history: input.history,
+        ...(agentDetectContext ? { agentDetectContext } : {}),
+      });
+      const provider = this.input.runtimes.getProvider(runtimeProfile);
+      const descriptor = provider.describeRun(runtimeProfile);
+      await input.beforeRun?.();
+      const resolvedRun = this.input.repo.updateRun(input.runId, {
+        status: "running",
+        agentTargetId: descriptor.agentTargetId,
+        provider: descriptor.provider,
+        model: descriptor.model,
+      } as Partial<Pick<TRun, "status" | "error" | "resultPreview" | "agentTargetId" | "provider" | "model">>) ?? run;
+      this.input.events.emit({
+        type: "run.started",
+        projectId: input.project.id,
+        runId: input.runId,
+        payload: { run: resolvedRun },
+      });
+
+      const managedAgent = await this.createManagedAgentRunContext(input, runtimeProfile);
+      const runtimeContext = {
+        run: resolvedRun,
+        project: input.project,
+        runtimeProfile,
+        request: input.request,
+        conversation: input.conversation,
+        history: input.history,
         ...(managedAgent ? { managedAgent } : {}),
+        ...(agentDetectContext ? { agentDetectContext } : {}),
       };
-      const readiness = await provider.detect(input.runtimeProfile, runtimeContext);
-      if (!readiness.available) throw new Error(readiness.reason ?? "Runtime provider is unavailable");
+      if (!provider.resolveExecutionProfile) {
+        const readiness = await provider.detect(runtimeProfile, runtimeContext);
+        if (!readiness.available) throw new Error(readiness.reason ?? "Runtime provider is unavailable");
+      }
 
       for await (const rawEvent of provider.streamEdit(runtimeContext)) {
         if (input.isCancelled()) {
@@ -112,7 +133,7 @@ export class RuntimeRunExecutor<
         return;
       }
 
-      await input.complete({ generatedText, run });
+      await input.complete({ generatedText, run: resolvedRun });
     } catch (error) {
       if (input.isCancelled()) {
         await this.finalizeCancellation(input, "Cancelled by user");
@@ -139,9 +160,12 @@ export class RuntimeRunExecutor<
     }
   }
 
-  private async createManagedAgentRunContext(input: RuntimeRunExecutorInput<TRun, TEvent, TProject, TRequest>) {
-    if (!input.managedAgentHeaders || input.runtimeProfile.kind !== "local-agent") return undefined;
-    const providerId = input.runtimeProfile.provider.trim();
+  private async createManagedAgentRunContext(
+    input: RuntimeRunExecutorInput<TRun, TEvent, TProject, TRequest>,
+    runtimeProfile: RuntimeProfile,
+  ) {
+    if (!input.managedAgentHeaders || runtimeProfile.kind !== "local-agent") return undefined;
+    const providerId = runtimeProfile.provider.trim();
     if (!providerId) return undefined;
     const context = await createManagedAgentRunContextFromHeaders(input.managedAgentHeaders, {
       providerId,
@@ -155,7 +179,10 @@ export class RuntimeRunExecutor<
       : undefined;
   }
 
-  private safeUpdateRun(runId: string, input: Partial<Pick<TRun, "status" | "error" | "resultPreview">>) {
+  private safeUpdateRun(
+    runId: string,
+    input: Partial<Pick<TRun, "status" | "error" | "resultPreview" | "agentTargetId" | "provider" | "model">>,
+  ) {
     try {
       return this.input.repo.updateRun(runId, input);
     } catch {

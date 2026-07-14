@@ -30,11 +30,6 @@ export class DocumentRepository {
       demoModel: "html-demo",
       demoDisplayName: "Demo HTML editor",
     }),
-    normalize: (database) => {
-      database
-        .prepare(`UPDATE runtime_profiles SET model = 'codex:default', updated_at = ? WHERE id = 'local-agent:codex' AND model = 'codex:gpt-5'`)
-        .run(new Date().toISOString());
-    },
   });
 
   ensureSeedData() {
@@ -219,6 +214,7 @@ export class DocumentRepository {
   createRun(input: {
     projectId: string;
     runtime: string;
+    agentTargetId: string | null;
     provider: string;
     model: string;
     mode: string;
@@ -273,7 +269,7 @@ export class DocumentRepository {
     return this.runs.listProjectRuns(projectId);
   }
 
-  updateRun(runId: string, input: Partial<Pick<DocumentRun, "status" | "error" | "resultPreview">>) {
+  updateRun(runId: string, input: Partial<Pick<DocumentRun, "status" | "error" | "resultPreview" | "agentTargetId" | "provider" | "model">>) {
     return this.runs.updateRun(runId, input);
   }
 
@@ -297,11 +293,11 @@ export class DocumentRepository {
     return this.runtimeProfiles.get(profileId);
   }
 
-  getLocalAgentRuntimeProfileByProvider(provider: string) {
-    return this.runtimeProfiles.getLocalAgentByProvider(provider);
+  getLocalAgentRuntimeProfileByTarget(agentTargetId: string) {
+    return this.runtimeProfiles.getLocalAgentByTarget(agentTargetId);
   }
 
-  getRuntimeProfileForRun(run: Pick<DocumentRun, "runtime" | "provider" | "model">) {
+  getRuntimeProfileForRun(run: Pick<DocumentRun, "runtime" | "agentTargetId" | "provider" | "model">) {
     return this.runtimeProfiles.getForRun(run);
   }
 
@@ -309,8 +305,8 @@ export class DocumentRepository {
     return this.runtimeProfiles.getDefault();
   }
 
-  syncLocalAgentRuntimeProfiles(providers: Array<{ provider: string; displayName: string }>) {
-    this.runtimeProfiles.syncLocalAgentRuntimeProfiles(providers);
+  syncLocalAgentRuntimeProfiles(agents: Array<{ agentTargetId: string; providerId: string; displayName: string; supported: boolean }>) {
+    this.runtimeProfiles.syncLocalAgentRuntimeProfiles(agents);
   }
 
   private materializeProject(project: DocumentProject) {

@@ -43,6 +43,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       useProviderResume: (context) => context.project.artifact.type !== "deck",
       timeoutMs: localAgentTimeoutMs,
       sessionDirName: ".ai-slide",
+      commandEnvNames: ["AI_SLIDE_TUTTI_CLI"],
       buildMcpServers: (context) => buildSlideAppToolMcpServers(context),
     });
   }
@@ -54,10 +55,12 @@ async function buildSlideAgentSkillContext(
 ): Promise<LocalAgentSkillManifestResult> {
   const projectSkills = await buildProjectSkillManifest(context, workspaceRoot);
   try {
+    const cwd = tuttiWorkspaceCwd(workspaceRoot);
     const tuttiContext = await loadTuttiLocalAgentSkillContext({
-      provider: context.runtimeProfile.provider,
+      agentTargetId: context.runtimeProfile.agentTargetId!,
       agentSessionId: context.run.id,
-      cwd: tuttiWorkspaceCwd(workspaceRoot),
+      cwd,
+      detectContext: context.agentDetectContext ?? { cwd },
       commandEnvNames: ["AI_SLIDE_TUTTI_CLI"],
     });
     return {

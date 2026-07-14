@@ -1,6 +1,6 @@
 import { ArtifactAgentConversationPanel } from "@ai-app/agent/conversation-ui";
 import type { ArtifactEditorKind } from "@ai-app/ui/editor-frame";
-import type { LocalAgentProviderStatus, RuntimeProfile, SheetRun, SheetRunEvent, SheetRunTimelineItem } from "@ai-sheet/shared";
+import type { LocalAgentTargetStatus, RuntimeProfile, SheetRun, SheetRunEvent, SheetRunTimelineItem } from "@ai-sheet/shared";
 import { agentConversationUiCopy } from "../i18n/copy";
 import { useI18n } from "../i18n";
 
@@ -12,7 +12,7 @@ type AgentConversationPanelProps = {
   dirty: boolean;
   error: string;
   items: SheetRunTimelineItem[];
-  localAgentProviders: LocalAgentProviderStatus[];
+  localAgentTargets: LocalAgentTargetStatus[];
   loading: boolean;
   runtimeProfiles: RuntimeProfile[];
   selectedRuntimeProfileId: string;
@@ -37,7 +37,7 @@ export function AgentConversationPanel(props: AgentConversationPanelProps) {
         quickPrompts: [],
       }}
       uiCopy={agentConversationUiCopy(t)}
-      formatUnavailableRuntimeProfileLabel={(profile, provider) => `${profile.displayName} (${provider?.authState ?? t("agent.unknown")})`}
+      formatUnavailableRuntimeProfileLabel={(profile, target) => `${profile.displayName} (${target?.authState ?? t("agent.unknown")})`}
       selectedRuntimeProfileId={props.selectedRuntimeProfileId}
       onRuntimeProfileChange={props.onRuntimeProfileChange}
     />

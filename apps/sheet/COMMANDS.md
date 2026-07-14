@@ -6,7 +6,7 @@ These commands expose AI Sheet to Tutti apps and agents. Command outputs use `Cl
 
 ## `sheet status`
 
-Return app health, project counts, runtime provider counts, and Tutti CLI availability for AI Sheet.
+Return app health, project counts, Agent Target counts, and Tutti CLI availability for AI Sheet.
 
 Handler: `/tutti/cli/status`
 
@@ -28,7 +28,7 @@ Explicitly request Tutti to open one workbook project in AI Sheet. Use this only
 
 Handler: `/tutti/cli/projects/open`
 
-## `sheet projects create --title --prompt --provider`
+## `sheet projects create --title --prompt --agent-id --provider`
 
 Create a new AI Sheet workbook project, return an internal openTarget command, and optionally start app-owned async editing with prompt. This command must not open the app automatically. Do not present localhost URLs or raw routes as final links. When the task is complete, tell the user they can view the result in AI Sheet and ask whether they want you to open it directly; if they confirm, call sheet projects open with the project-id.
 
@@ -76,7 +76,7 @@ Append a text-only user or assistant message to one conversation session.
 
 Handler: `/tutti/cli/messages/create`
 
-## `sheet agent edit --project-id <required> --prompt <required> --session-id --mode --provider`
+## `sheet agent edit --project-id <required> --prompt <required> --session-id --mode --agent-id --provider`
 
 Start an app-owned agent edit for a workbook project and return an internal openTarget command. External agents and other Tutti apps must use this command to modify workbook content, then poll agent events until the run reaches a terminal status. This command must not open the app automatically. After completion, tell the user they can view the result in AI Sheet and ask whether they want you to open it directly; if they confirm, call sheet projects open.
 

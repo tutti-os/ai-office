@@ -1,6 +1,6 @@
 import { ArtifactHomeComposer, CodeFilledFormatIcon, PptFilledFormatIcon, type ArtifactHomeFormatOption } from "@ai-app/ui/home-composer";
 import { contextAttachmentFileAccept } from "@ai-app/shared/context-attachments";
-import type { LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-slide/shared";
+import type { LocalAgentTargetStatus, OfficeCliStatus, RuntimeProfile } from "@ai-slide/shared";
 import { useI18n } from "../i18n";
 import { AgentPromptRichTextInput } from "./AgentPromptRichTextInput";
 import type { OutputType } from "../templates";
@@ -10,7 +10,7 @@ export function HomeComposer(props: {
   attachments: HomeAttachment[];
   creating: boolean;
   error: string;
-  localAgentProviders: LocalAgentProviderStatus[];
+  localAgentTargets: LocalAgentTargetStatus[];
   officeCliInstalling: boolean;
   officeCliStatus: OfficeCliStatus | null;
   outputType: OutputType;
@@ -35,7 +35,7 @@ export function HomeComposer(props: {
     <ArtifactHomeComposer
       addFilesLabel={t("composer.addSourceFiles")}
       agentProfiles={props.runtimeProfiles}
-      agentProviders={props.localAgentProviders}
+      agentTargets={props.localAgentTargets}
       agentUnavailableLabel={t("composer.agentUnavailable")}
       acceptedFileTypes={contextAttachmentFileAccept}
       attachments={props.attachments}

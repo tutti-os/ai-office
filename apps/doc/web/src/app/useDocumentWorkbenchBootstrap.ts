@@ -1,14 +1,14 @@
 import { useEffect } from "react";
-import { mergeLocalAgentRuntimeProfiles, resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
-import type { LocalAgentProviderStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
-import { fetchBootstrapSnapshot, fetchLocalAgentProviders, fetchOfficeCliStatus, fetchTemplates } from "../api/runtime";
+import { isAvailableLocalAgentRuntimeProfileId, mergeLocalAgentRuntimeProfiles, resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
+import type { LocalAgentTargetStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
+import { fetchBootstrapSnapshot, fetchLocalAgentTargets, fetchOfficeCliStatus, fetchTemplates } from "../api/runtime";
 import { normalizeTemplates, type TuttiTemplate } from "../templates/tuttiTemplates";
 
 type StateSetter<T> = (value: T | ((current: T) => T)) => void;
 
 type DocumentWorkbenchBootstrapInput = {
   setError: (value: string) => void;
-  setLocalAgentProviders: StateSetter<LocalAgentProviderStatus[]>;
+  setLocalAgentTargets: StateSetter<LocalAgentTargetStatus[]>;
   setOfficeCliStatus: StateSetter<OfficeCliStatus | null>;
   setRuntimeProfiles: StateSetter<RuntimeProfile[]>;
   setSelectedRuntimeProfileId: StateSetter<string>;
@@ -18,7 +18,7 @@ type DocumentWorkbenchBootstrapInput = {
 export function useDocumentWorkbenchBootstrap(input: DocumentWorkbenchBootstrapInput) {
   const {
     setError,
-    setLocalAgentProviders,
+    setLocalAgentTargets,
     setOfficeCliStatus,
     setRuntimeProfiles,
     setSelectedRuntimeProfileId,
@@ -36,7 +36,7 @@ export function useDocumentWorkbenchBootstrap(input: DocumentWorkbenchBootstrapI
     };
     void Promise.all([
       fetchBootstrapSnapshot(),
-      fetchLocalAgentProviders(),
+      fetchLocalAgentTargets(),
       fetchTemplates(),
       fetchOfficeCliStatus().catch((error) => ({
         officecli: {
@@ -45,19 +45,19 @@ export function useDocumentWorkbenchBootstrap(input: DocumentWorkbenchBootstrapI
         },
       })),
     ])
-      .then(([snapshot, providerStatus, libraryTemplates, officeCli]) => {
+      .then(([snapshot, targetStatus, libraryTemplates, officeCli]) => {
         if (cancelled) return;
         const enabledProfiles = snapshot.runtimeProfiles.filter((profile) => profile.enabled && profile.kind === "local-agent");
-        const mergedProfiles = mergeLocalAgentRuntimeProfiles(enabledProfiles, providerStatus.providers);
+        const mergedProfiles = mergeLocalAgentRuntimeProfiles(enabledProfiles, targetStatus.agents);
         setRuntimeProfiles(mergedProfiles);
-        setLocalAgentProviders(providerStatus.providers);
+        setLocalAgentTargets(targetStatus.agents);
         setTemplates(normalizeTemplates(libraryTemplates));
         setOfficeCliStatus(officeCli.officecli);
         setSelectedRuntimeProfileId((current) => {
-          if (mergedProfiles.some((profile) => profile.id === current)) return current;
+          if (isAvailableLocalAgentRuntimeProfileId(current, mergedProfiles, targetStatus.agents)) return current;
           return resolvePreferredLocalAgentRuntimeProfileId({
             profiles: mergedProfiles,
-            providers: providerStatus.providers,
+            agents: targetStatus.agents,
           });
         });
       })
@@ -67,5 +67,5 @@ export function useDocumentWorkbenchBootstrap(input: DocumentWorkbenchBootstrapI
     return () => {
       cancelled = true;
     };
-  }, [setError, setLocalAgentProviders, setOfficeCliStatus, setRuntimeProfiles, setSelectedRuntimeProfileId, setTemplates]);
+  }, [setError, setLocalAgentTargets, setOfficeCliStatus, setRuntimeProfiles, setSelectedRuntimeProfileId, setTemplates]);
 }

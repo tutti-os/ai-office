@@ -1,4 +1,4 @@
-import type { LocalAgentProviderStatus } from "../types/index.js";
+import type { LocalAgentTargetStatus } from "../types/index.js";
 import type { RuntimeProfileSeed } from "../project-store/index.js";
 
 export function normalizeLocalAgentProviderId(provider: string | null | undefined) {
@@ -17,10 +17,13 @@ export function localAgentProviderIdsMatch(left: string | null | undefined, righ
 export type LocalAgentRuntimeProfileLike = {
   id: string;
   kind: string;
+  agentTargetId?: string | null;
   provider?: string | null;
 };
 
-export type LocalAgentProviderStatusLike = {
+export type LocalAgentTargetStatusLike = {
+  agentTargetId: string;
+  providerId: string;
   provider: string;
   supported: boolean;
   isDefault?: true;
@@ -28,51 +31,84 @@ export type LocalAgentProviderStatusLike = {
 
 export function resolvePreferredLocalAgentRuntimeProfileId(input: {
   profiles: LocalAgentRuntimeProfileLike[];
-  providers?: LocalAgentProviderStatusLike[];
+  agents?: LocalAgentTargetStatusLike[];
 }) {
   const profiles = input.profiles.filter((profile) => profile.kind === "local-agent");
-  const supportedProviders = input.providers?.filter((provider) => provider.supported) ?? [];
-  const preferredProviders = [
-    supportedProviders.find((provider) => provider.isDefault)?.provider,
-    supportedProviders.find((provider) => normalizeLocalAgentProviderId(provider.provider) === "codex")?.provider,
-    supportedProviders.find((provider) => normalizeLocalAgentProviderId(provider.provider) === "claude-code")?.provider,
-  ];
+  const availableAgents = (input.agents ?? []).filter((agent) => agent.supported);
+  const defaultAgent = availableAgents.find((agent) => agent.isDefault);
+  const preferredAgents = defaultAgent
+    ? [defaultAgent, ...availableAgents.filter((agent) => agent !== defaultAgent)]
+    : availableAgents;
 
-  for (const provider of preferredProviders) {
-    const matched = findRuntimeProfileForProvider(profiles, provider);
+  for (const agent of preferredAgents) {
+    const matched = profiles.find((profile) => profile.agentTargetId === agent.agentTargetId);
     if (matched) return matched.id;
   }
 
-  return profiles[0]?.id ?? "";
+  return input.agents === undefined ? profiles[0]?.id ?? "" : "";
 }
 
-function findRuntimeProfileForProvider(profiles: LocalAgentRuntimeProfileLike[], provider: string | null | undefined) {
-  if (!provider) return null;
-  return profiles.find((profile) => localAgentProviderIdsMatch(profile.provider, provider)) ?? null;
+export function isAvailableLocalAgentRuntimeProfileId(
+  profileId: string | null | undefined,
+  profiles: LocalAgentRuntimeProfileLike[],
+  agents: LocalAgentTargetStatusLike[],
+) {
+  const profile = profiles.find((candidate) => candidate.id === profileId && candidate.kind === "local-agent");
+  return Boolean(profile?.agentTargetId && agents.some((agent) => agent.agentTargetId === profile.agentTargetId && agent.supported));
 }
 
 export function normalizeRuntimeProfileProviderId(provider: string | null | undefined) {
-  return normalizeLocalAgentProviderId(provider);
+  const trimmed = provider?.trim();
+  if (!trimmed) return "";
+  const legacyAlias = trimmed.toLowerCase();
+  return legacyAlias === "claude" || legacyAlias === "claude-code" ? "claude-code" : trimmed;
 }
 
-export function isStaleLocalAgentProviderId(provider: string | null | undefined) {
-  return normalizeRuntimeProfileProviderId(provider) === "nexight";
+export function runtimeProfileIdFromAgentTarget(agentTargetId: string): { value?: string; error?: string } {
+  const target = agentTargetId.trim();
+  if (!target) return { error: "agent-id is required" };
+  return { value: `local-agent:${target}` };
 }
 
-export function runtimeProfileIdFromProvider(provider: string): { value?: string; error?: string } {
-  const profileProvider = normalizeRuntimeProfileProviderId(provider);
-  if (!profileProvider) return { error: "provider is required" };
-  return { value: `local-agent:${profileProvider}` };
+export function resolveAgentTargetFromCatalog(input: {
+  agents: readonly LocalAgentTargetStatusLike[];
+  agentTargetId?: string | null;
+  legacyProvider?: string | null;
+  useDefault?: boolean;
+}): { value?: LocalAgentTargetStatusLike; error?: string } {
+  const exact = input.agentTargetId?.trim();
+  const legacyProvider = normalizeLocalAgentProviderId(input.legacyProvider);
+  if (exact && legacyProvider) return { error: "provide agent-id or deprecated provider, not both" };
+  if (exact) {
+    const matched = input.agents.find((agent) => agent.agentTargetId === exact);
+    if (!matched) return { error: `Agent Target not found: ${exact}` };
+    if (!matched.supported) return { error: `Agent Target is unavailable: ${exact}` };
+    return { value: matched };
+  }
+  if (legacyProvider) {
+    const matches = input.agents.filter((agent) => localAgentProviderIdsMatch(agent.providerId, legacyProvider));
+    if (matches.length !== 1) {
+      return {
+        error: matches.length === 0
+          ? `Provider does not map to a current Agent Target: ${legacyProvider}`
+          : `Provider maps to multiple Agent Targets; use agent-id: ${legacyProvider}`,
+      };
+    }
+    if (!matches[0].supported) return { error: `Agent Target is unavailable: ${matches[0].agentTargetId}` };
+    return { value: matches[0] };
+  }
+  if (input.useDefault !== false) {
+    const fallback = input.agents.find((agent) => agent.isDefault && agent.supported)
+      ?? input.agents.find((agent) => agent.supported);
+    return fallback ? { value: fallback } : { error: "No available Agent Target" };
+  }
+  return { error: "agent-id is required" };
 }
 
 export function displayNameForLocalAgentProvider(provider: string, fallback?: string | null) {
   const trimmed = fallback?.trim();
   if (trimmed) return trimmed;
   const normalized = normalizeRuntimeProfileProviderId(provider);
-  if (normalized === "codex") return "Codex";
-  if (normalized === "claude-code") return "Claude Code";
-  if (normalized === "cursor") return "Cursor";
-  if (normalized === "opencode") return "OpenCode";
   if (!normalized) return "Agent";
   return normalized
     .split(/[-_.]+/)
@@ -88,7 +124,7 @@ export function isPlaceholderRuntimeProfileModel(model: string, provider: string
 
 export function runtimeProfileModelForProvider(
   provider: string,
-  catalog?: Partial<Pick<LocalAgentProviderStatus, "defaultModelId" | "models">>,
+  catalog?: Partial<Pick<LocalAgentTargetStatus, "defaultModelId" | "models">>,
 ) {
   const profileProvider = normalizeRuntimeProfileProviderId(provider);
   const modelId = catalog?.defaultModelId?.trim() || catalog?.models?.[0]?.id?.trim();
@@ -112,14 +148,16 @@ export function localAgentModelIdForAcp(model: string, provider: string) {
 }
 
 export function localAgentRuntimeProfileSeed(
+  agentTargetId: string,
   provider: string,
   displayName?: string | null,
-  catalog?: Partial<Pick<LocalAgentProviderStatus, "defaultModelId" | "models">>,
+  catalog?: Partial<Pick<LocalAgentTargetStatus, "defaultModelId" | "models">>,
 ): RuntimeProfileSeed {
   const profileProvider = normalizeRuntimeProfileProviderId(provider);
   return {
-    id: `local-agent:${profileProvider}`,
+    id: `local-agent:${agentTargetId}`,
     kind: "local-agent",
+    agentTargetId,
     provider: profileProvider,
     model: runtimeProfileModelForProvider(provider, catalog),
     displayName: displayNameForLocalAgentProvider(provider, displayName),
@@ -132,34 +170,37 @@ export type AgentMenuProfileLike = {
   displayName: string;
   id: string;
   kind: string;
+  agentTargetId?: string | null;
   provider?: string | null;
 };
 
-export type AgentMenuProviderLike = {
+export type AgentMenuTargetLike = {
+  agentTargetId: string;
+  providerId: string;
   displayName?: string | null;
   provider: string;
 };
 
 export function resolveAgentMenuProfiles(
   agentProfiles: AgentMenuProfileLike[],
-  agentProviders: AgentMenuProviderLike[],
+  agentTargets: AgentMenuTargetLike[],
 ): AgentMenuProfileLike[] {
-  if (agentProviders.length === 0) return agentProfiles.filter((profile) => !isStaleLocalAgentProviderId(profile.provider));
+  if (agentTargets.length === 0) return agentProfiles.filter((profile) => profile.kind !== "local-agent");
 
-  const profilesByProvider = new Map<string, AgentMenuProfileLike>();
+  const profilesByTarget = new Map<string, AgentMenuProfileLike>();
   for (const profile of agentProfiles) {
-    if (profile.kind !== "local-agent" || !profile.provider) continue;
-    profilesByProvider.set(normalizeRuntimeProfileProviderId(profile.provider), profile);
+    if (profile.kind !== "local-agent" || !profile.agentTargetId) continue;
+    profilesByTarget.set(profile.agentTargetId, profile);
   }
 
-  return agentProviders.filter((provider) => !isStaleLocalAgentProviderId(provider.provider)).map((provider) => {
-    const profileProvider = normalizeRuntimeProfileProviderId(provider.provider);
-    const existing = profilesByProvider.get(profileProvider);
+  return agentTargets.map((agent) => {
+    const existing = profilesByTarget.get(agent.agentTargetId);
     if (existing) return existing;
-    const seed = localAgentRuntimeProfileSeed(provider.provider, provider.displayName);
+    const seed = localAgentRuntimeProfileSeed(agent.agentTargetId, agent.providerId, agent.displayName);
     return {
       id: seed.id,
       kind: seed.kind,
+      agentTargetId: seed.agentTargetId,
       provider: seed.provider,
       displayName: seed.displayName,
     };
@@ -168,14 +209,14 @@ export function resolveAgentMenuProfiles(
 
 export function mergeLocalAgentRuntimeProfiles<TProfile extends RuntimeProfileSeed & { createdAt?: string; updatedAt?: string }>(
   existing: TProfile[],
-  providers: readonly AgentMenuProviderLike[],
+  agents: readonly AgentMenuTargetLike[],
 ): TProfile[] {
   const now = new Date().toISOString();
   const merged = new Map(existing
-    .filter((profile) => profile.kind === "local-agent" && !isStaleLocalAgentProviderId(profile.provider))
+    .filter((profile) => profile.kind === "local-agent" && profile.agentTargetId)
     .map((profile) => [profile.id, profile]));
-  for (const provider of providers.filter((provider) => !isStaleLocalAgentProviderId(provider.provider))) {
-    const seed = localAgentRuntimeProfileSeed(provider.provider, provider.displayName);
+  for (const agent of agents) {
+    const seed = localAgentRuntimeProfileSeed(agent.agentTargetId, agent.providerId, agent.displayName);
     if (merged.has(seed.id)) continue;
     merged.set(seed.id, {
       ...seed,

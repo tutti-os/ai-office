@@ -3,12 +3,13 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
   isPlaceholderRuntimeProfileModel,
-  isStaleLocalAgentProviderId,
+  localAgentProviderIdsMatch,
   localAgentRuntimeProfileSeed,
   normalizeRuntimeProfileProviderId,
   runtimeProfileModelForProvider,
+  stripRuntimeProfileModelPrefix,
 } from "../agent-providers/index.js";
-import type { AgentConversationMessage, AgentConversationRole, AgentConversationSession, BaseRun, BaseRunEvent, LocalAgentProviderStatus, RuntimeProfile } from "@ai-app/shared/types";
+import type { AgentConversationMessage, AgentConversationRole, AgentConversationSession, BaseRun, BaseRunEvent, LocalAgentTargetStatus, RuntimeProfile } from "@ai-app/shared/types";
 
 export type DatabaseMigrator = (database: DatabaseSync) => void;
 
@@ -74,7 +75,6 @@ export class RuntimeProfileStore {
     const database = this.getDb();
     const count = (database.prepare(`SELECT COUNT(*) AS count FROM ${this.tableName}`).get() as { count: number }).count;
     if (count === 0) this.insertDefaultProfiles(database);
-    this.migrateLegacyLocalAgentProfiles(database);
     this.options.normalize?.(database);
   }
 
@@ -92,7 +92,17 @@ export class RuntimeProfileStore {
     return row ? rowToRuntimeProfile(row) : this.getDefault();
   }
 
-  getForRun(run: Pick<RuntimeProfile, "provider" | "model"> & { runtime: string }) {
+  getForRun(run: Pick<RuntimeProfile, "agentTargetId" | "provider" | "model"> & { runtime: string }) {
+    if (run.runtime === "local-agent") {
+      if (!run.agentTargetId) throw new Error("Local Agent run does not contain an exact Agent Target id");
+      const exact = rowOrNull<RuntimeProfileRow>(
+        this.getDb()
+          .prepare(`SELECT * FROM ${this.tableName} WHERE kind = ? AND agent_target_id = ? AND enabled = 1 LIMIT 1`)
+          .get(run.runtime, run.agentTargetId),
+      );
+      if (exact) return rowToRuntimeProfile(exact);
+      throw new Error(`Runtime profile not found for Agent Target: ${run.agentTargetId}`);
+    }
     const provider = normalizeRuntimeProfileProviderId(run.provider);
     const model = normalizeRuntimeProfileModel(run.model, provider);
     const row = rowOrNull<RuntimeProfileRow>(
@@ -109,13 +119,13 @@ export class RuntimeProfileStore {
     return fallback ? rowToRuntimeProfile(fallback) : this.getDefault();
   }
 
-  getLocalAgentByProvider(provider: string) {
-    const canonicalProvider = normalizeRuntimeProfileProviderId(provider);
-    if (!canonicalProvider || isStaleLocalAgentProviderId(canonicalProvider)) return null;
+  getLocalAgentByTarget(agentTargetId: string) {
+    const target = agentTargetId.trim();
+    if (!target) return null;
     const row = rowOrNull<RuntimeProfileRow>(
       this.getDb()
-        .prepare(`SELECT * FROM ${this.tableName} WHERE kind = 'local-agent' AND provider = ? AND enabled = 1 ORDER BY created_at ASC LIMIT 1`)
-        .get(canonicalProvider),
+        .prepare(`SELECT * FROM ${this.tableName} WHERE kind = 'local-agent' AND agent_target_id = ? AND enabled = 1 LIMIT 1`)
+        .get(target),
     );
     return row ? rowToRuntimeProfile(row) : null;
   }
@@ -131,39 +141,68 @@ export class RuntimeProfileStore {
   }
 
   syncLocalAgentRuntimeProfiles(
-    providers: readonly (Pick<LocalAgentProviderStatus, "provider" | "displayName"> &
-      Partial<Pick<LocalAgentProviderStatus, "defaultModelId" | "models">>)[],
+    agents: readonly (Pick<LocalAgentTargetStatus, "agentTargetId" | "providerId" | "displayName" | "supported"> &
+      Partial<Pick<LocalAgentTargetStatus, "defaultModelId" | "models">>)[],
   ) {
     const existingProfiles = this.list();
-    const existingIds = new Set(existingProfiles.map((profile) => profile.id));
     const database = this.getDb();
     const now = new Date().toISOString();
     const allowedLocalAgentIds = new Set<string>();
-    for (const provider of providers.filter((provider) => !isStaleLocalAgentProviderId(provider.provider))) {
-      const seed = localAgentRuntimeProfileSeed(provider.provider, provider.displayName, provider);
+    const supportedAgentTargetIds = new Set(
+      agents.filter((candidate) => candidate.supported).map((candidate) => candidate.agentTargetId),
+    );
+    for (const agent of agents.filter((candidate) => candidate.supported)) {
+      const seed = localAgentRuntimeProfileSeed(agent.agentTargetId, agent.providerId, agent.displayName, agent);
       allowedLocalAgentIds.add(seed.id);
-      const existing = existingProfiles.find((profile) => profile.id === seed.id);
+      const exactTargetMatches = existingProfiles.filter(
+        (profile) => profile.kind === "local-agent" && profile.agentTargetId === agent.agentTargetId,
+      );
+      const existing = exactTargetMatches.find((profile) => profile.id === seed.id);
+      const sameProviderTargets = agents.filter(
+        (candidate) => localAgentProviderIdsMatch(candidate.providerId, agent.providerId),
+      );
+      const legacyMatches = existingProfiles.filter(
+        (profile) =>
+          profile.kind === "local-agent" &&
+          !profile.agentTargetId &&
+          localAgentProviderIdsMatch(profile.provider, agent.providerId),
+      );
+      const migrationSource = exactTargetMatches.length === 1
+        ? exactTargetMatches[0]
+        : sameProviderTargets.length === 1 && legacyMatches.length === 1
+          ? legacyMatches[0]
+          : null;
       if (!existing) {
+        const migratedModel = migrationSource
+          ? normalizeRuntimeProfileProviderId(migrationSource.provider) === seed.provider
+            ? migrationSource.model
+            : `${seed.provider}:${stripRuntimeProfileModelPrefix(migrationSource.model, migrationSource.provider)}`
+          : seed.model;
         database
           .prepare(
-            `INSERT INTO ${this.tableName} (id, kind, provider, model, display_name, enabled, capabilities, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO ${this.tableName} (id, kind, agent_target_id, provider, model, display_name, enabled, capabilities, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
-          .run(seed.id, seed.kind, seed.provider, seed.model, seed.displayName, seed.enabled ? 1 : 0, json(seed.capabilities), now, now);
-        existingIds.add(seed.id);
+          .run(seed.id, seed.kind, seed.agentTargetId, seed.provider, migratedModel, seed.displayName, seed.enabled ? 1 : 0, json(seed.capabilities), now, now);
         continue;
       }
-      if (isPlaceholderRuntimeProfileModel(existing.model, provider.provider)) {
-        const resolvedModel = runtimeProfileModelForProvider(provider.provider, provider);
-        if (resolvedModel !== existing.model) {
-          database
-            .prepare(`UPDATE ${this.tableName} SET model = ?, updated_at = ? WHERE id = ?`)
-            .run(resolvedModel, now, seed.id);
-        }
-      }
+      const providerChanged = normalizeRuntimeProfileProviderId(existing.provider) !== seed.provider;
+      const model = providerChanged
+        ? seed.model
+        : isPlaceholderRuntimeProfileModel(existing.model, agent.providerId)
+          ? runtimeProfileModelForProvider(agent.providerId, agent)
+          : existing.model;
+      database
+        .prepare(
+          `UPDATE ${this.tableName}
+           SET agent_target_id = ?, provider = ?, model = ?, display_name = ?, enabled = ?, capabilities = ?, updated_at = ?
+           WHERE id = ?`,
+        )
+        .run(seed.agentTargetId, seed.provider, model, seed.displayName, seed.enabled ? 1 : 0, json(seed.capabilities), now, seed.id);
     }
     for (const profile of existingProfiles) {
       if (profile.kind !== "local-agent" || allowedLocalAgentIds.has(profile.id)) continue;
+      if (profile.agentTargetId && !supportedAgentTargetIds.has(profile.agentTargetId)) continue;
       database.prepare(`DELETE FROM ${this.tableName} WHERE id = ?`).run(profile.id);
     }
   }
@@ -172,48 +211,15 @@ export class RuntimeProfileStore {
     return this.options.tableName ?? "runtime_profiles";
   }
 
-  private migrateLegacyLocalAgentProfiles(database: DatabaseSync) {
-    const now = new Date().toISOString();
-    const canonicalExists = Boolean(rowOrNull<{ present: number }>(
-      database.prepare(
-        `SELECT 1 AS present FROM ${this.tableName}
-         WHERE kind = 'local-agent' AND (id = 'local-agent:claude-code' OR provider = 'claude-code') LIMIT 1`,
-      ).get(),
-    ));
-    if (canonicalExists) {
-      database.prepare(
-        `DELETE FROM ${this.tableName}
-         WHERE kind = 'local-agent' AND (id = 'local-agent:claude' OR provider = 'claude')`,
-      ).run();
-    } else {
-      database.prepare(
-        `UPDATE ${this.tableName}
-         SET id = 'local-agent:claude-code',
-             provider = 'claude-code',
-             model = CASE
-               WHEN model LIKE 'claude:%' THEN 'claude-code:' || substr(model, 8)
-               WHEN model = 'claude' OR model = '' THEN 'claude-code:default'
-               ELSE model
-             END,
-             updated_at = ?
-         WHERE kind = 'local-agent' AND (id = 'local-agent:claude' OR provider = 'claude')`,
-      ).run(now);
-    }
-    database.prepare(
-      `DELETE FROM ${this.tableName}
-       WHERE kind = 'local-agent' AND (id = 'local-agent:nexight' OR provider = 'nexight')`,
-    ).run();
-  }
-
   private insertDefaultProfiles(database: DatabaseSync) {
     const now = new Date().toISOString();
     for (const profile of this.options.defaultProfiles) {
       database
         .prepare(
-          `INSERT INTO ${this.tableName} (id, kind, provider, model, display_name, enabled, capabilities, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO ${this.tableName} (id, kind, agent_target_id, provider, model, display_name, enabled, capabilities, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(profile.id, profile.kind, profile.provider, profile.model, profile.displayName, profile.enabled ? 1 : 0, json(profile.capabilities), now, now);
+        .run(profile.id, profile.kind, profile.agentTargetId, profile.provider, profile.model, profile.displayName, profile.enabled ? 1 : 0, json(profile.capabilities), now, now);
     }
   }
 }
@@ -221,6 +227,7 @@ export class RuntimeProfileStore {
 export type RunSeedInput = {
   projectId: string;
   runtime: string;
+  agentTargetId: string | null;
   provider: string;
   model: string;
   mode: string;
@@ -433,13 +440,14 @@ export class SqliteRunStore<TRun extends BaseRun, TEvent extends BaseRunEvent> {
     this.getDb()
       .prepare(
         `INSERT INTO ${this.options.runsTable}
-         (id, project_id, runtime, provider, model, status, mode, instruction, selection_type, selection_path, selected_text, selected_html, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'accepted', ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, project_id, runtime, agent_target_id, provider, model, status, mode, instruction, selection_type, selection_path, selected_text, selected_html, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'accepted', ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
         input.projectId,
         input.runtime,
+        input.agentTargetId,
         input.provider,
         input.model,
         input.mode,
@@ -469,7 +477,10 @@ export class SqliteRunStore<TRun extends BaseRun, TEvent extends BaseRunEvent> {
     ).map(rowToRun<TRun>);
   }
 
-  updateRun(runId: string, input: Partial<Pick<TRun, "status" | "error" | "resultPreview">>) {
+  updateRun(
+    runId: string,
+    input: Partial<Pick<TRun, "status" | "error" | "resultPreview" | "agentTargetId" | "provider" | "model">>,
+  ) {
     const current = this.getRun(runId);
     if (!current) return null;
     const now = new Date().toISOString();
@@ -477,10 +488,20 @@ export class SqliteRunStore<TRun extends BaseRun, TEvent extends BaseRunEvent> {
     this.getDb()
       .prepare(
         `UPDATE ${this.options.runsTable}
-         SET status = ?, error = ?, result_preview = ?, updated_at = ?, completed_at = ?
+         SET status = ?, error = ?, result_preview = ?, agent_target_id = ?, provider = ?, model = ?, updated_at = ?, completed_at = ?
          WHERE id = ?`,
       )
-      .run(input.status ?? current.status, input.error ?? current.error, input.resultPreview ?? current.resultPreview, now, completedAt, runId);
+      .run(
+        input.status ?? current.status,
+        input.error ?? current.error,
+        input.resultPreview ?? current.resultPreview,
+        input.agentTargetId ?? current.agentTargetId,
+        input.provider ?? current.provider,
+        input.model ?? current.model,
+        now,
+        completedAt,
+        runId,
+      );
     return this.getRun(runId);
   }
 
@@ -520,26 +541,9 @@ export class SqliteRunStore<TRun extends BaseRun, TEvent extends BaseRunEvent> {
 export function defaultRuntimeProfiles(input: { demoModel: string; demoDisplayName: string }): RuntimeProfileSeed[] {
   return [
     {
-      id: "local-agent:codex",
-      kind: "local-agent",
-      provider: "codex",
-      model: "codex:default",
-      displayName: "Codex",
-      enabled: true,
-      capabilities: { streaming: true, toolUse: true, reasoning: true, resume: true },
-    },
-    {
-      id: "local-agent:claude-code",
-      kind: "local-agent",
-      provider: "claude-code",
-      model: "claude-code:default",
-      displayName: "Claude Code",
-      enabled: true,
-      capabilities: { streaming: true, toolUse: true, reasoning: true, resume: true },
-    },
-    {
       id: "server-demo",
       kind: "server-demo",
+      agentTargetId: null,
       provider: "demo",
       model: input.demoModel,
       displayName: input.demoDisplayName,
@@ -552,6 +556,7 @@ export function defaultRuntimeProfiles(input: { demoModel: string; demoDisplayNa
 interface RuntimeProfileRow {
   id: string;
   kind: RuntimeProfile["kind"];
+  agent_target_id: string | null;
   provider: string;
   model: string;
   display_name: string;
@@ -565,6 +570,7 @@ interface RunRow {
   id: string;
   project_id: string;
   runtime: string;
+  agent_target_id: string | null;
   provider: string;
   model: string;
   status: BaseRun["status"];
@@ -616,6 +622,7 @@ function rowToRuntimeProfile(row: RuntimeProfileRow): RuntimeProfile {
   return {
     id: row.id,
     kind: row.kind,
+    agentTargetId: row.agent_target_id,
     provider: row.provider,
     model: row.model,
     displayName: row.display_name,
@@ -658,6 +665,7 @@ function rowToRun<TRun extends BaseRun>(row: RunRow): TRun {
     id: row.id,
     projectId: row.project_id,
     runtime: row.runtime,
+    agentTargetId: row.agent_target_id,
     provider: row.provider,
     model: row.model,
     status: row.status,

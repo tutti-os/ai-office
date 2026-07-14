@@ -1,7 +1,7 @@
 import type {
   AiEditMode,
   Id,
-  LocalAgentProviderStatus,
+  LocalAgentTargetStatus,
   ReasoningEffort,
   RunEventType,
   RunStatus,
@@ -16,8 +16,8 @@ import type { AgentArtifactContextBase, ArtifactSelectionBase } from "@ai-app/sh
 export type {
   AiEditMode,
   Id,
-  LocalAgentProviderModel,
-  LocalAgentProviderStatus,
+  LocalAgentTargetModel,
+  LocalAgentTargetStatus,
   ReasoningEffort,
   RuntimeKind,
   RuntimeProfile,
@@ -73,6 +73,7 @@ export interface SlideRun {
   id: Id;
   projectId: Id;
   runtime: string;
+  agentTargetId: string | null;
   provider: string;
   model: string;
   status: SlideRunStatus;
@@ -292,8 +293,8 @@ export interface ProjectRunsResponse {
   runs: SlideRunTimelineItem[];
 }
 
-export interface LocalAgentProviderStatusResponse {
-  providers: LocalAgentProviderStatus[];
+export interface LocalAgentTargetStatusResponse {
+  agents: LocalAgentTargetStatus[];
 }
 
 export type OfficeCliSource = "env" | "bundled" | "tutti" | "missing";

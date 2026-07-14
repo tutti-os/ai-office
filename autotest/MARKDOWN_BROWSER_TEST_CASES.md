@@ -218,6 +218,6 @@ The older Markdown test plan referenced controls or behaviors that are not part 
 
 - Should the Markdown toolbar add stable `data-testid` values before broad automation, or is title/aria-label based targeting acceptable?
 - Should Markdown browser tests create projects only through API, or should a smaller smoke suite also cover home composer/template creation?
-- Should AI context tests use a dedicated stub ACP provider to avoid relying on Codex/Claude availability?
+- Should AI context tests use a dedicated stub Agent Target to avoid relying on the machine's current Agent catalog?
 - Should selection assertions tolerate current MDXEditor selection API limitations, or should the product add stronger selection instrumentation?
 - Should table serialization assertions compare exact Markdown, or assert valid table structure plus expected edited content?

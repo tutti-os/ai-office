@@ -2,7 +2,7 @@ import { readdir, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { cliErrorOutput, cliJsonOutput, readCliInputBody } from "@ai-app/shared/tutti-cli";
-import { runtimeProfileIdFromProvider } from "@ai-app/shared/agent-providers";
+import { resolveAgentTargetFromCatalog, runtimeProfileIdFromAgentTarget } from "@ai-app/shared/agent-providers";
 import type { AiEditMode, OpenSheetCliResponse, SheetArtifact, SheetProject } from "@ai-sheet/shared";
 import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { SheetService } from "../artifact/sheet-service.js";
@@ -11,16 +11,16 @@ import { installOfficeCli } from "../toolchains/officecli.js";
 type ManagedAgentHeaders = Record<string, string | string[] | undefined>;
 
 export function registerTuttiCliRoutes(server: FastifyInstance, sheets: SheetService) {
-  server.post("/tutti/cli/status", async (_request, reply) => {
+  server.post("/tutti/cli/status", async (request, reply) => {
     const projects = sheets.listProjects().projects;
-    const providers = await sheets.listLocalAgentProviders().catch(() => ({ providers: [] }));
+    const agents = await sheets.listLocalAgentTargets(request.headers).catch(() => ({ agents: [] }));
     const latestProject = projects[0] ?? null;
     return reply.send(cliJsonOutput({
       ok: true,
       appId: "ai-sheet",
       version: process.env.AI_SHEET_APP_VERSION ?? "0.0.0",
       projectCount: projects.length,
-      runtimeProviderCount: providers.providers.length,
+      agentTargetCount: agents.agents.length,
       latestProject: latestProject ? projectSummary(latestProject) : null,
       tuttiCli: await getTuttiCliStatus(),
     }));
@@ -257,9 +257,9 @@ async function createProjectCliResponse(
   const prompt = optionalString(input, "prompt");
   const mode = normalizeAiMode(input.mode);
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
-  const runtimeProfileId = await runtimeProfileIdFromCliInput(input);
-  if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
   try {
+    const runtimeProfileId = await runtimeProfileIdFromCliInput(input, sheets, headers);
+    if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
     const result = await sheets.createProject({
       title: typeof input.title === "string" ? input.title : undefined,
     });
@@ -301,9 +301,9 @@ async function agentRunCliResponse(
   if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
   if (!prompt) return sendCliError(reply, 400, "invalid_input", "prompt is required");
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
-  const runtimeProfileId = await runtimeProfileIdFromCliInput(input);
-  if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
   try {
+    const runtimeProfileId = await runtimeProfileIdFromCliInput(input, sheets, headers);
+    if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
     await sheets.getProject(projectId);
     const result = await sheets.startAiEdit(projectId, {
       userPrompt: prompt,
@@ -339,14 +339,23 @@ function optionalString(input: Record<string, unknown>, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-async function runtimeProfileIdFromCliInput(input: Record<string, unknown>): Promise<{ value?: string; error?: string }> {
+async function runtimeProfileIdFromCliInput(
+  input: Record<string, unknown>,
+  sheets: SheetService,
+  headers: ManagedAgentHeaders,
+): Promise<{ value?: string; error?: string }> {
+  const agentTargetId = optionalString(input, "agent-id");
   const provider = optionalString(input, "provider");
-  if (!provider) {
-    const runtimeProfileId = optionalString(input, "runtime-profile-id");
-    if (runtimeProfileId) return { value: runtimeProfileId };
-    return { value: undefined };
+  const runtimeProfileId = optionalString(input, "runtime-profile-id");
+  if (runtimeProfileId && (agentTargetId || provider)) {
+    return { error: "provide agent-id, deprecated provider, or runtime-profile-id, not more than one" };
   }
-  return runtimeProfileIdFromProvider(provider);
+  if (runtimeProfileId) return { value: runtimeProfileId };
+  if (!agentTargetId && !provider) return { value: undefined };
+  const { agents } = await sheets.listLocalAgentTargets(headers);
+  const target = resolveAgentTargetFromCatalog({ agents, agentTargetId, legacyProvider: provider, useDefault: false });
+  if (target.error || !target.value) return { error: target.error ?? "agent-id is required" };
+  return runtimeProfileIdFromAgentTarget(target.value.agentTargetId);
 }
 
 function normalizeMessageRole(value: unknown): "user" | "assistant" | null {

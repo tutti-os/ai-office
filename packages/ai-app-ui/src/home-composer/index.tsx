@@ -1,5 +1,5 @@
 import { useRef, type ChangeEvent, type ReactNode } from "react";
-import { localAgentProviderIdsMatch, resolveAgentMenuProfiles } from "@ai-app/shared/agent-providers";
+import { resolveAgentMenuProfiles } from "@ai-app/shared/agent-providers";
 import { Check, ChevronDown, Download, File, FileImage, Loader2, Plus, Wand2, X } from "lucide-react";
 import { AgentSelectShell, appShell, cx, formatOptionClass, formatOptionIconClass } from "../app-shell/index.js";
 import { PromptComposer, type PromptComposerInputRenderProps } from "../prompt-composer/index.js";
@@ -13,15 +13,19 @@ export type ArtifactHomeAttachment = {
 };
 
 export type ArtifactHomeAgentProfile = {
+  agentTargetId?: string | null;
   displayName: string;
   id: string;
   kind: string;
   provider?: string;
 };
 
-export type ArtifactHomeAgentProvider = {
+export type ArtifactHomeAgentTarget = {
+  agentTargetId: string;
   authState: "ok" | "missing" | "expired" | "unknown";
+  displayName: string;
   provider: string;
+  providerId: string;
   supported: boolean;
 };
 
@@ -90,7 +94,7 @@ export function ProductFilledFormatIcon(props: { size?: number }) {
 export function ArtifactHomeComposer<T extends string>(props: {
   addFilesLabel: string;
   agentProfiles: ArtifactHomeAgentProfile[];
-  agentProviders: ArtifactHomeAgentProvider[];
+  agentTargets: ArtifactHomeAgentTarget[];
   agentUnavailableLabel: string;
   acceptedFileTypes?: string;
   attachments: ArtifactHomeAttachment[];
@@ -183,7 +187,7 @@ export function ArtifactHomeComposer<T extends string>(props: {
                 <Plus size={20} />
               </button>
               <AgentMenu
-                agentProviders={props.agentProviders}
+                agentTargets={props.agentTargets}
                 agentProfiles={props.agentProfiles}
                 agentUnavailableLabel={props.agentUnavailableLabel}
                 selectedAgentId={props.selectedAgentId}
@@ -284,13 +288,13 @@ function FormatOption(props: {
 
 function AgentMenu(props: {
   agentProfiles: ArtifactHomeAgentProfile[];
-  agentProviders: ArtifactHomeAgentProvider[];
+  agentTargets: ArtifactHomeAgentTarget[];
   agentUnavailableLabel: string;
   selectedAgentId: string;
   selectAgentLabel: string;
   onChange: (value: string) => void;
 }) {
-  const menuProfiles = resolveAgentMenuProfiles(props.agentProfiles, props.agentProviders);
+  const menuProfiles = resolveAgentMenuProfiles(props.agentProfiles, props.agentTargets);
   const hasSelectedAgent = menuProfiles.some((profile) => profile.id === props.selectedAgentId);
   const placeholderValue = "__agent-placeholder";
   return (
@@ -305,8 +309,8 @@ function AgentMenu(props: {
           {props.selectAgentLabel}
         </option>
         {menuProfiles.map((profile) => {
-          const status = profile.kind === "local-agent" ? props.agentProviders.find((provider) => localAgentProviderIdsMatch(provider.provider, profile.provider)) : null;
-          const available = status?.supported ?? props.agentProviders.length === 0;
+          const status = profile.kind === "local-agent" ? props.agentTargets.find((target) => target.agentTargetId === profile.agentTargetId) : null;
+          const available = status?.supported ?? props.agentTargets.length === 0;
           return (
             <option disabled={!available} key={profile.id} value={profile.id}>
               {profile.displayName}{available ? "" : ` ${props.agentUnavailableLabel}`}

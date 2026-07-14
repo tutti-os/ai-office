@@ -46,8 +46,8 @@ for (const path of ["apps/doc/bootstrap.sh", "apps/slide/bootstrap.sh", "apps/sh
   expectIncludes(path, "web_dist=\"$package_dir/dist\"", "packaged web dist fallback");
 }
 
-expectIncludes("apps/doc/server/src/runtimes/local-agent-provider.ts", "const defaultLocalAgentTimeoutMs = 30 * 60_000", "30 minute default local agent timeout");
-expectIncludes("apps/slide/server/src/runtimes/local-agent-provider.ts", "const defaultLocalAgentTimeoutMs = 30 * 60_000", "30 minute default local agent timeout");
+expectIncludes("apps/doc/server/src/runtimes/local-agent-provider.ts", "const defaultLocalAgentTimeoutMs = 3 * 24 * 60 * 60_000", "three day default local agent timeout");
+expectIncludes("apps/slide/server/src/runtimes/local-agent-provider.ts", "const defaultLocalAgentTimeoutMs = 3 * 24 * 60 * 60_000", "three day default local agent timeout");
 
 for (const path of ["apps/doc/server/src/artifact/document-service.ts", "apps/slide/server/src/artifact/project-service.ts", "apps/sheet/server/src/artifact/sheet-service.ts"]) {
   expectIncludes(path, "clearProjectHistory()", "clear history service method");

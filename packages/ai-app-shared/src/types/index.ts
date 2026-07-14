@@ -10,6 +10,7 @@ export type ReasoningEffort = "low" | "medium" | "high" | "xhigh";
 export interface RuntimeProfile {
   id: Id;
   kind: RuntimeKind;
+  agentTargetId: string | null;
   provider: string;
   model: string;
   displayName: string;
@@ -24,17 +25,20 @@ export interface RuntimeProfile {
   updatedAt: string;
 }
 
-export interface LocalAgentProviderModel {
+export interface LocalAgentTargetModel {
   id: string;
   label: string;
 }
 
-export interface LocalAgentProviderStatus {
+export interface LocalAgentTargetStatus {
+  agentTargetId: string;
+  providerId: string;
+  /** Derived runtime metadata retained for provider-specific adapters. */
   provider: string;
   displayName: string;
   supported: boolean;
   authState: "ok" | "missing" | "expired" | "unknown";
-  models: LocalAgentProviderModel[];
+  models: LocalAgentTargetModel[];
   defaultModelId?: string;
   isDefault?: true;
   reason?: string;
@@ -44,6 +48,7 @@ export interface BaseRun {
   id: Id;
   projectId: Id;
   runtime: string;
+  agentTargetId: string | null;
   provider: string;
   model: string;
   status: RunStatus;

@@ -40,7 +40,7 @@
   "composer.addContext": "Add to context",
   "composer.createFromPrompt": "Create from prompt",
   "composer.create": "Create",
-  "composer.selectAgent": "Select ACP agent",
+  "composer.selectAgent": "Select agent",
   "composer.agentUnavailable": "unavailable",
   "agent.introTitle": "AI Document Agent",
   "agent.introBody": "Select text in the document, then ask for a rewrite, continuation, polish, or structural edit.",

@@ -1,12 +1,12 @@
-import type { AppSnapshot, LocalAgentProviderStatusResponse, OfficeCliStatusResponse, TemplatesResponse } from "@ai-doc/shared";
+import type { AppSnapshot, LocalAgentTargetStatusResponse, OfficeCliStatusResponse, TemplatesResponse } from "@ai-doc/shared";
 import { requestJson } from "@ai-app/shared/api-client";
 
 export async function fetchBootstrapSnapshot() {
   return requestJson<AppSnapshot>("/api/bootstrap");
 }
 
-export async function fetchLocalAgentProviders() {
-  return requestJson<LocalAgentProviderStatusResponse>("/api/local-agent/providers");
+export async function fetchLocalAgentTargets() {
+  return requestJson<LocalAgentTargetStatusResponse>("/api/local-agent/targets");
 }
 
 export async function fetchOfficeCliStatus() {
