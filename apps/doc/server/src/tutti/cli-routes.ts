@@ -8,6 +8,8 @@ import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { DocumentService } from "../artifact/document-service.js";
 import { installOfficeCli } from "../toolchains/officecli.js";
 
+type ManagedAgentHeaders = Record<string, string | string[] | undefined>;
+
 export function registerTuttiCliRoutes(server: FastifyInstance, documents: DocumentService) {
   server.post("/tutti/cli/status", async (_request, reply) => {
     const projects = documents.listProjects().projects;
@@ -42,7 +44,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/projects/create", async (request, reply) => {
-    return createProjectCliResponse(reply, documents, readCliInputBody(request.body));
+    return createProjectCliResponse(reply, documents, readCliInputBody(request.body), request.headers);
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/projects/open", async (request, reply) => {
@@ -139,11 +141,11 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/agent/run", async (request, reply) => {
-    return agentRunCliResponse(reply, documents, readCliInputBody(request.body));
+    return agentRunCliResponse(reply, documents, readCliInputBody(request.body), request.headers);
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/agent/edit", async (request, reply) => {
-    return agentRunCliResponse(reply, documents, readCliInputBody(request.body));
+    return agentRunCliResponse(reply, documents, readCliInputBody(request.body), request.headers);
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/agent/events", async (request, reply) => {
@@ -233,7 +235,12 @@ async function documentContentOutput(documents: DocumentService, project: Docume
   };
 }
 
-async function createProjectCliResponse(reply: FastifyReply, documents: DocumentService, input: Record<string, unknown>) {
+async function createProjectCliResponse(
+  reply: FastifyReply,
+  documents: DocumentService,
+  input: Record<string, unknown>,
+  headers: ManagedAgentHeaders,
+) {
   if (Object.hasOwn(input, "content")) {
     return sendCliError(reply, 400, "invalid_input", "content is not supported; pass prompt to run the AI Doc app agent");
   }
@@ -259,7 +266,7 @@ async function createProjectCliResponse(reply: FastifyReply, documents: Document
           userPrompt: prompt,
           mode,
           runtimeProfileId: runtimeProfileId.value,
-        })).run
+        }, headers)).run
       : null;
     return reply.send(cliJsonOutput({
       ok: true,
@@ -274,7 +281,12 @@ async function createProjectCliResponse(reply: FastifyReply, documents: Document
   }
 }
 
-async function agentRunCliResponse(reply: FastifyReply, documents: DocumentService, input: Record<string, unknown>) {
+async function agentRunCliResponse(
+  reply: FastifyReply,
+  documents: DocumentService,
+  input: Record<string, unknown>,
+  headers: ManagedAgentHeaders,
+) {
   const projectId = requiredString(input, "project-id");
   const prompt = requiredString(input, "prompt");
   const mode = normalizeAiMode(input.mode);
@@ -295,7 +307,7 @@ async function agentRunCliResponse(reply: FastifyReply, documents: DocumentServi
       mode,
       sessionId: optionalString(input, "session-id"),
       runtimeProfileId: runtimeProfileId.value,
-    });
+    }, headers);
     return reply.send(cliJsonOutput({
       ...result,
       openTarget: projectOpenTarget(projectId),

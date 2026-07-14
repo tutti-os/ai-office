@@ -141,7 +141,7 @@ export class RuntimeRunExecutor<
 
   private async createManagedAgentRunContext(input: RuntimeRunExecutorInput<TRun, TEvent, TProject, TRequest>) {
     if (!input.managedAgentHeaders || input.runtimeProfile.kind !== "local-agent") return undefined;
-    const providerId = managedAgentProviderId(input.runtimeProfile.provider);
+    const providerId = input.runtimeProfile.provider.trim();
     if (!providerId) return undefined;
     const context = await createManagedAgentRunContextFromHeaders(input.managedAgentHeaders, {
       providerId,
@@ -196,14 +196,6 @@ export class RuntimeRunExecutor<
       // Failure callbacks should not turn an already-failed run into an unhandled background rejection.
     }
   }
-}
-
-function managedAgentProviderId(provider: string) {
-  const normalized = provider.trim().toLowerCase().replace(/[\s_]+/g, "-").replace(/[^a-z0-9_.-]/g, "");
-  if (!normalized) return "";
-  if (normalized === "claude-code" || normalized === "claude") return "claude";
-  if (normalized === "tutti-agent") return "nexight";
-  return normalized;
 }
 
 class RuntimeRunRecorder<TRun extends BaseRun, TEvent extends BaseRunEvent> {

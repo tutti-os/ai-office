@@ -13,6 +13,9 @@
     "healthcheckPath": "/api/health",
     "profile": "node-static"
   },
+  "hostCompatibility": {
+    "requiredTuttiCapabilities": ["managed-model-cli-v1"]
+  },
   "cli": {
     "manifest": "tutti.cli.json"
   },
