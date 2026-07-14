@@ -332,7 +332,8 @@ export class ProjectService {
   }
 
   async listLocalAgentProviders(headers?: Record<string, string | string[] | undefined>) {
-    const providers = await this.runtimes.listLocalAgentProviders(headers);
+    const providers = (await this.runtimes.listLocalAgentProviders(headers))
+      .filter((provider) => provider.supported);
     this.repo.syncLocalAgentRuntimeProfiles(providers);
     return { providers };
   }
