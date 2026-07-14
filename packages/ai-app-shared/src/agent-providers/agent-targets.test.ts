@@ -34,6 +34,17 @@ test("loaded catalogs with no available target never select stale or disabled pr
   assert.equal(resolvePreferredLocalAgentRuntimeProfileId({ profiles, agents: [] }), "");
 });
 
+test("catalogs without a declared default never select a provider-only legacy profile", () => {
+  const profiles = [
+    { id: "legacy", kind: "local-agent", provider: "codex" },
+    { id: "local-agent:research", kind: "local-agent", agentTargetId: "research", provider: "codex" },
+  ];
+  assert.equal(
+    resolvePreferredLocalAgentRuntimeProfileId({ profiles, agents: [target("research", "codex", true)] }),
+    "local-agent:research",
+  );
+});
+
 test("legacy provider mapping checks the full catalog and fails closed when ambiguous", () => {
   const result = resolveAgentTargetFromCatalog({
     agents: [target("available", "codex", true), target("offline", "codex", false)],
@@ -84,6 +95,19 @@ test("legacy provider-only profile migrates only for a unique full-catalog targe
     provider: "foo_bar",
     model: "foo-bar:custom",
   }), /missing-target/);
+  assert.throws(() => store.getForRun({
+    runtime: "local-agent",
+    agentTargetId: null,
+    provider: "foo_bar",
+    model: "foo-bar:custom",
+  }), /exact Agent Target/);
+  store.syncLocalAgentRuntimeProfiles([{
+    agentTargetId: "unique-custom",
+    providerId: "foo_bar",
+    displayName: "Custom Agent",
+    supported: false,
+  }]);
+  assert.equal(store.list()[0]?.agentTargetId, "unique-custom");
   store.syncLocalAgentRuntimeProfiles([{
     agentTargetId: "unique-custom",
     providerId: "claude-code",

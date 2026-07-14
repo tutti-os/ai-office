@@ -361,8 +361,7 @@ export class DocumentService {
     if (!run) return null;
     if (!["accepted", "running"].includes(run.status)) return { run };
     this.cancelledRunIds.add(runId);
-    const profile = this.repo.getRuntimeProfileForRun(run);
-    await this.runtimes.getProvider(profile).cancel(runId).catch(() => undefined);
+    await this.runtimes.getProviderForRuntime(run.runtime).cancel(runId).catch(() => undefined);
     return this.finalizeCancellation(runId, "Cancelled by user");
   }
 

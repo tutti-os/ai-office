@@ -47,7 +47,7 @@ export interface RuntimeProvider<
 > {
   id: string;
   canHandle(profile: RuntimeProfile): boolean;
-  resolveExecutionProfile?(profile: RuntimeProfile, detectContext?: DetectContext): Promise<RuntimeProfile>;
+  resolveExecutionProfile?(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>): Promise<RuntimeProfile>;
   describeRun(profile: RuntimeProfile): { runtime: string; agentTargetId: string | null; provider: string; model: string };
   detect(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>): Promise<{ available: boolean; reason?: string }>;
   listLocalAgentTargets?(headers?: Record<string, string | string[] | undefined>, refresh?: boolean): Promise<LocalAgentTargetStatus[]>;
@@ -70,9 +70,13 @@ export class RuntimeProviderRegistry<
     return this.providers.find((provider) => provider.canHandle(profile)) ?? this.providers[0]!;
   }
 
-  async resolveExecutionProfile(profile: RuntimeProfile, detectContext?: DetectContext) {
+  getProviderForRuntime(runtime: string) {
+    return this.providers.find((provider) => provider.id === runtime) ?? this.providers[0]!;
+  }
+
+  async resolveExecutionProfile(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>) {
     const provider = this.getProvider(profile);
-    return provider.resolveExecutionProfile?.(profile, detectContext) ?? profile;
+    return provider.resolveExecutionProfile?.(profile, context) ?? profile;
   }
 
   async listLocalAgentTargets(headers?: Record<string, string | string[] | undefined>, refresh = false): Promise<LocalAgentTargetStatus[]> {

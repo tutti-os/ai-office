@@ -112,6 +112,7 @@ export function ArtifactAgentConversationPanel<TRun extends BaseRun, TEvent exte
 ) {
   const {
     formatUnavailableRuntimeProfileLabel,
+    formatRunAgentLabel,
     localAgentTargets = [],
     runtimeProfiles = [],
     selectedRuntimeProfileId,
@@ -135,7 +136,7 @@ export function ArtifactAgentConversationPanel<TRun extends BaseRun, TEvent exte
       {...panelProps}
       agentOptions={agentOptions.length ? agentOptions : undefined}
       selectedAgentId={selectedRuntimeProfileId}
-      formatRunAgentLabel={(run) => agentLabelForRun(run, localAgentTargets)}
+      formatRunAgentLabel={(run) => formatRunAgentLabel?.(run) || agentLabelForRun(run, localAgentTargets)}
       variant={variant}
       onAgentChange={onRuntimeProfileChange}
     />

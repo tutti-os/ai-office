@@ -21,6 +21,11 @@ const agents = [
 assert.equal(resolvePreferredLocalAgentRuntimeProfileId({ profiles, agents }), "local-agent:writer");
 assert.deepEqual(runtimeProfileIdFromAgentTarget("writer"), { value: "local-agent:writer" });
 assert.equal(resolveAgentTargetFromCatalog({ agents, agentTargetId: "research" }).value?.agentTargetId, "research");
+assert.match(resolveAgentTargetFromCatalog({ agents, agentTargetId: "missing" }).error ?? "", /not found/);
+assert.match(
+  resolveAgentTargetFromCatalog({ agents: [target("offline", "codex", false)], agentTargetId: "offline" }).error ?? "",
+  /unavailable/,
+);
 assert.match(resolveAgentTargetFromCatalog({ agents, legacyProvider: "codex" }).error ?? "", /multiple Agent Targets/);
 assert.equal(localAgentRuntimeProfileSeed("writer", "codex", "Writing Agent").displayName, "Writing Agent");
 assert.deepEqual(defaultRuntimeProfiles({ demoModel: "demo", demoDisplayName: "Demo" }).map((profile) => profile.id), ["server-demo"]);
@@ -64,6 +69,10 @@ assert.deepEqual(
   ["research", "writer"],
 );
 assert.ok(profileStore.list().every((profile) => profile.id !== "local-agent:legacy-codex"));
+assert.deepEqual(
+  profileStore.list().filter((profile) => profile.kind === "local-agent").map((profile) => profile.model),
+  ["codex:default", "codex:default"],
+);
 
 for (const file of [
   "apps/doc/server/src/tutti/cli-routes.ts",
@@ -75,6 +84,7 @@ for (const file of [
   assert.match(source, /optionalString\(input, "agent-id"\)/);
   assert.match(source, /legacyProvider: provider/);
   assert.match(source, /headers: ManagedAgentHeaders/);
+  assert.match(source, /listLocalAgentTargets\(request\.headers\)/);
 }
 
 assert.doesNotMatch(readFileSync("packages/ai-app-agent/src/run-executor/index.ts", "utf8"), /managedAgentProviderId/);

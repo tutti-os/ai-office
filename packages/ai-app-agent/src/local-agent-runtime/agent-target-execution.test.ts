@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { RuntimeProfile } from "@ai-app/shared/types";
-import { reconcileAgentTargetExecutionProfile, resolveRegisteredProviderId } from "./index.js";
+import { isPlaceholderProfileModel, LocalAgentRuntimeProvider, reconcileAgentTargetExecutionProfile, resolveRegisteredProviderId } from "./index.js";
 
 test("execution profile derives provider from exact target and resets cross-provider model", () => {
   const resolved = reconcileAgentTargetExecutionProfile(profile("writer", "old_provider", "old_provider:custom"), {
@@ -26,6 +26,35 @@ test("adapter resolution prefers exact open provider id and rejects loose ambigu
   assert.equal(resolveRegisteredProviderId("claude-code", ["claude"]), "claude");
 });
 
+test("execution resolution discovers project-scoped targets with the workspace cwd", async () => {
+  const provider = new LocalAgentRuntimeProvider({
+    workspaceRoot: (context) => `/workspace/${context.project.id}`,
+    buildPrompt: () => "prompt",
+    buildSystemPrompt: () => "system",
+  });
+  let detectedCwd = "";
+  (provider as any).loadAgentTargets = async (context: { cwd?: string }) => {
+    detectedCwd = context.cwd ?? "";
+    return [{ agentTargetId: "writer", providerId: "new_provider", supported: true }];
+  };
+  const resolved = await provider.resolveExecutionProfile(
+    profile("writer", "old_provider", "old_provider:custom"),
+    {
+      run: run(),
+      project: { id: "project-1" },
+      runtimeProfile: profile("writer", "old_provider", "old_provider:custom"),
+      request: { userPrompt: "Write", mode: "write" },
+    },
+  );
+  assert.equal(detectedCwd, "/workspace/project-1");
+  assert.equal(resolved.provider, "new_provider");
+});
+
+test("placeholder model detection uses target metadata aliases instead of the resolved adapter id", () => {
+  assert.equal(isPlaceholderProfileModel("claude-code:default", "claude-code"), true);
+  assert.equal(isPlaceholderProfileModel("claude-code:default", "claude"), false);
+});
+
 function profile(agentTargetId: string, provider: string, model: string): RuntimeProfile {
   return {
     id: `local-agent:${agentTargetId}`,
@@ -38,5 +67,28 @@ function profile(agentTargetId: string, provider: string, model: string): Runtim
     capabilities: { streaming: true, toolUse: true, reasoning: true, resume: true },
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+}
+
+function run() {
+  return {
+    id: "run-1",
+    projectId: "project-1",
+    runtime: "local-agent",
+    agentTargetId: "writer",
+    provider: "old_provider",
+    model: "old_provider:custom",
+    status: "accepted" as const,
+    mode: "write" as const,
+    instruction: "Write",
+    selectionType: "write",
+    selectionPath: "",
+    selectedText: "",
+    selectedHtml: "",
+    resultPreview: "",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    completedAt: null,
+    error: null,
   };
 }

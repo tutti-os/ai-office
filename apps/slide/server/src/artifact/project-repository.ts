@@ -370,7 +370,7 @@ export class ProjectRepository {
     return this.runs.listProjectRuns(projectId);
   }
 
-  updateRun(runId: string, input: Partial<Pick<SlideRun, "status" | "error" | "resultPreview">>) {
+  updateRun(runId: string, input: Partial<Pick<SlideRun, "status" | "error" | "resultPreview" | "agentTargetId" | "provider" | "model">>) {
     return this.runs.updateRun(runId, input);
   }
 

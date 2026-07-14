@@ -300,7 +300,7 @@ export class SheetRepository {
     return this.runs.getRun(runId);
   }
 
-  updateRun(runId: string, input: Partial<Pick<SheetRun, "status" | "error" | "resultPreview">>) {
+  updateRun(runId: string, input: Partial<Pick<SheetRun, "status" | "error" | "resultPreview" | "agentTargetId" | "provider" | "model">>) {
     return this.runs.updateRun(runId, input);
   }
 

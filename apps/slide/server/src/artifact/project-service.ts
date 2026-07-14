@@ -383,7 +383,7 @@ export class ProjectService {
     if (!run) return null;
     if (!["accepted", "running"].includes(run.status)) return { run };
     this.cancelledRunIds.add(runId);
-    await this.runtimes.getProvider(this.repo.getRuntimeProfileForRun(run)).cancel(runId).catch(() => undefined);
+    await this.runtimes.getProviderForRuntime(run.runtime).cancel(runId).catch(() => undefined);
     return this.finalizeCancellation(runId, "Cancelled by user");
   }
 

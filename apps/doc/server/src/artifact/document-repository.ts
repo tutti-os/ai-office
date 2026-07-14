@@ -269,7 +269,7 @@ export class DocumentRepository {
     return this.runs.listProjectRuns(projectId);
   }
 
-  updateRun(runId: string, input: Partial<Pick<DocumentRun, "status" | "error" | "resultPreview">>) {
+  updateRun(runId: string, input: Partial<Pick<DocumentRun, "status" | "error" | "resultPreview" | "agentTargetId" | "provider" | "model">>) {
     return this.runs.updateRun(runId, input);
   }
 

@@ -105,8 +105,16 @@ export class LocalAgentRuntimeProvider<
     return { runtime: profile.kind, agentTargetId: profile.agentTargetId, provider: profile.provider, model: profile.model };
   }
 
-  async resolveExecutionProfile(profile: RuntimeProfile, detectContext?: DetectContext) {
+  async resolveExecutionProfile(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>) {
     if (!profile.agentTargetId) throw new Error("local-agent profile does not contain an exact Agent Target id");
+    const workspaceRoot = context ? this.options.workspaceRoot(context) : configuredWorkspaceRoot();
+    const env = context && workspaceRoot ? await this.options.buildEnv?.(context, workspaceRoot) : undefined;
+    const detectContext: DetectContext | undefined = context?.agentDetectContext ?? (workspaceRoot || env
+      ? {
+          ...(workspaceRoot ? { cwd: context?.managedAgent?.cwd ?? workspaceRoot } : {}),
+          ...(env ? { env } : {}),
+        }
+      : undefined);
     const target = (await this.loadAgentTargets(detectContext))
       .find((candidate) => candidate.agentTargetId === profile.agentTargetId);
     if (!target?.supported) throw new Error(target?.reason ?? `Agent Target is not available: ${profile.agentTargetId}`);
@@ -251,7 +259,7 @@ export class LocalAgentRuntimeProvider<
     const systemPrompt = await this.options.buildSystemPrompt(context, workspaceRoot, skillContext);
     const conversationId = context.conversation?.conversationId ?? context.project.id;
     const sessionId = context.conversation?.sessionId ?? context.project.id;
-    const model = isPlaceholderProfileModel(context.runtimeProfile.model, provider)
+    const model = isPlaceholderProfileModel(context.runtimeProfile.model, context.runtimeProfile.provider)
       ? composer.modelConfig.currentValue || composer.modelConfig.defaultValue || undefined
       : localAgentModelIdForAcp(context.runtimeProfile.model, provider);
     for await (const event of this.localAgentRuntime.run({
@@ -572,6 +580,6 @@ class LocalAgentSessionStore {
   }
 }
 
-function isPlaceholderProfileModel(model: string, provider: string) {
+export function isPlaceholderProfileModel(model: string, provider: string) {
   return !model.trim() || model === `${provider}:default` || model === "default";
 }

@@ -35,13 +35,13 @@ export function resolvePreferredLocalAgentRuntimeProfileId(input: {
 }) {
   const profiles = input.profiles.filter((profile) => profile.kind === "local-agent");
   const availableAgents = (input.agents ?? []).filter((agent) => agent.supported);
-  const preferredAgents = [
-    availableAgents.find((agent) => agent.isDefault),
-    ...availableAgents.filter((agent) => !agent.isDefault),
-  ];
+  const defaultAgent = availableAgents.find((agent) => agent.isDefault);
+  const preferredAgents = defaultAgent
+    ? [defaultAgent, ...availableAgents.filter((agent) => agent !== defaultAgent)]
+    : availableAgents;
 
   for (const agent of preferredAgents) {
-    const matched = profiles.find((profile) => profile.agentTargetId === agent?.agentTargetId);
+    const matched = profiles.find((profile) => profile.agentTargetId === agent.agentTargetId);
     if (matched) return matched.id;
   }
 

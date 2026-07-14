@@ -93,7 +93,8 @@ export class RuntimeProfileStore {
   }
 
   getForRun(run: Pick<RuntimeProfile, "agentTargetId" | "provider" | "model"> & { runtime: string }) {
-    if (run.runtime === "local-agent" && run.agentTargetId) {
+    if (run.runtime === "local-agent") {
+      if (!run.agentTargetId) throw new Error("Local Agent run does not contain an exact Agent Target id");
       const exact = rowOrNull<RuntimeProfileRow>(
         this.getDb()
           .prepare(`SELECT * FROM ${this.tableName} WHERE kind = ? AND agent_target_id = ? AND enabled = 1 LIMIT 1`)
@@ -147,6 +148,9 @@ export class RuntimeProfileStore {
     const database = this.getDb();
     const now = new Date().toISOString();
     const allowedLocalAgentIds = new Set<string>();
+    const supportedAgentTargetIds = new Set(
+      agents.filter((candidate) => candidate.supported).map((candidate) => candidate.agentTargetId),
+    );
     for (const agent of agents.filter((candidate) => candidate.supported)) {
       const seed = localAgentRuntimeProfileSeed(agent.agentTargetId, agent.providerId, agent.displayName, agent);
       allowedLocalAgentIds.add(seed.id);
@@ -198,6 +202,7 @@ export class RuntimeProfileStore {
     }
     for (const profile of existingProfiles) {
       if (profile.kind !== "local-agent" || allowedLocalAgentIds.has(profile.id)) continue;
+      if (profile.agentTargetId && !supportedAgentTargetIds.has(profile.agentTargetId)) continue;
       database.prepare(`DELETE FROM ${this.tableName} WHERE id = ?`).run(profile.id);
     }
   }
@@ -472,7 +477,10 @@ export class SqliteRunStore<TRun extends BaseRun, TEvent extends BaseRunEvent> {
     ).map(rowToRun<TRun>);
   }
 
-  updateRun(runId: string, input: Partial<Pick<TRun, "status" | "error" | "resultPreview">>) {
+  updateRun(
+    runId: string,
+    input: Partial<Pick<TRun, "status" | "error" | "resultPreview" | "agentTargetId" | "provider" | "model">>,
+  ) {
     const current = this.getRun(runId);
     if (!current) return null;
     const now = new Date().toISOString();
@@ -480,10 +488,20 @@ export class SqliteRunStore<TRun extends BaseRun, TEvent extends BaseRunEvent> {
     this.getDb()
       .prepare(
         `UPDATE ${this.options.runsTable}
-         SET status = ?, error = ?, result_preview = ?, updated_at = ?, completed_at = ?
+         SET status = ?, error = ?, result_preview = ?, agent_target_id = ?, provider = ?, model = ?, updated_at = ?, completed_at = ?
          WHERE id = ?`,
       )
-      .run(input.status ?? current.status, input.error ?? current.error, input.resultPreview ?? current.resultPreview, now, completedAt, runId);
+      .run(
+        input.status ?? current.status,
+        input.error ?? current.error,
+        input.resultPreview ?? current.resultPreview,
+        input.agentTargetId ?? current.agentTargetId,
+        input.provider ?? current.provider,
+        input.model ?? current.model,
+        now,
+        completedAt,
+        runId,
+      );
     return this.getRun(runId);
   }
 
