@@ -20,11 +20,10 @@ import { EventHub } from "./ws/event-hub.js";
 const webDist = process.env.AI_SLIDE_WEB_DIST ? resolve(process.env.AI_SLIDE_WEB_DIST) : resolve(process.cwd(), "../web/dist");
 const port = Number(process.env.PORT ?? 8791);
 const host = process.env.HOST ?? "127.0.0.1";
-const appId = process.env.TUTTI_APP_ID?.trim() || "ai-ppt";
 
 const server = Fastify({ logger: true, bodyLimit: 50 * 1024 * 1024 });
-registerArtifactServerErrorHandlers(server, { appId });
-installArtifactProcessErrorHandlers({ appId, logger: server.log });
+registerArtifactServerErrorHandlers(server, { appId: "ai-slide" });
+installArtifactProcessErrorHandlers({ appId: "ai-slide", logger: server.log });
 const events = new EventHub();
 const repo = new ProjectRepository();
 const projects = new ProjectService(repo, events);
@@ -48,7 +47,7 @@ if (existsSync(webDist)) {
 }
 
 new ArtifactAppHttpRoutes({
-  appId,
+  appId: "ai-slide",
   service: projects,
   events,
   listTemplates,

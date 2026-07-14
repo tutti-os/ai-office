@@ -1,4 +1,4 @@
-name: AI PPT / Publish Tutti App / Staging
+name: AI Slide / Publish Tutti App / Staging
 
 on:
   workflow_dispatch:
@@ -22,7 +22,7 @@ jobs:
   publish:
     uses: tutti-os/tutti/.github/workflows/publish-tutti-app-release.yml@main
     with:
-      app_id: ai-ppt
+      app_id: ai-slide
       package_command: pnpm package:slide-tutti
       package_dir: build/tutti-slide-app/package
       icon_path: build/tutti-slide-app/package/icon.svg

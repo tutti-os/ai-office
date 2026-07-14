@@ -17,7 +17,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
     const latestProject = projectRows[0] ?? null;
     return reply.send(cliJsonOutput({
       ok: true,
-      appId: appId(),
+      appId: "ai-slide",
       version: process.env.AI_SLIDE_APP_VERSION ?? "0.0.0",
       projectCount: projectRows.length,
       runtimeProviderCount: providers.providers.length,
@@ -184,7 +184,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
       return reply.send(cliJsonOutput({
         ...result,
         openTarget: result.run?.projectId ? projectOpenTarget(result.run.projectId) : null,
-        guidance: finalOpenGuidance("AI PPT"),
+        guidance: finalOpenGuidance("AI Slide"),
       }));
     } catch (error) {
       return sendCliError(reply, cliErrorStatus(error), "agent_events_failed", errorMessage(error));
@@ -356,7 +356,7 @@ async function createProjectCliResponse(
       run,
       openTarget: projectOpenTarget(result.project.id),
       workspace: projects.projectWorkspaceContext(result.project.id, result.artifact),
-      guidance: finalOpenGuidance("AI PPT"),
+      guidance: finalOpenGuidance("AI Slide"),
     }));
   } catch (error) {
     return sendCliError(reply, cliErrorStatus(error), "project_create_failed", errorMessage(error));
@@ -393,7 +393,7 @@ async function agentRunCliResponse(
     return reply.send(cliJsonOutput({
       ...result,
       openTarget: projectOpenTarget(projectId),
-      guidance: finalOpenGuidance("AI PPT"),
+      guidance: finalOpenGuidance("AI Slide"),
     }));
   } catch (error) {
     return sendCliError(reply, cliErrorStatus(error), "agent_run_failed", errorMessage(error));
@@ -478,7 +478,7 @@ function projectOpenTarget(projectId: string) {
     kind: "tutti-cli-command" as const,
     appId: appId(),
     directOpenSupported: true as const,
-    label: "Open in AI PPT",
+    label: "Open in AI Slide",
     projectId,
     userFacing: false as const,
     command: {
@@ -546,7 +546,7 @@ function projectRoute(projectId: string) {
 }
 
 function appId() {
-  return process.env.TUTTI_APP_ID?.trim() || "ai-ppt";
+  return process.env.TUTTI_APP_ID?.trim() || "ai-slide";
 }
 
 function cliErrorStatus(error: unknown) {

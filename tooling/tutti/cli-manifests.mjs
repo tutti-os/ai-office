@@ -45,20 +45,20 @@ export const artifactCliConfigs = {
   },
   slide: {
     scope: "slide",
-    description: "Open, create, and inspect AI PPT projects.",
+    description: "Open, create, and inspect AI Slide projects.",
     documentationFile: "COMMANDS.md",
-    guideTitle: "AI PPT CLI Commands",
-    guideIntro: "These commands expose AI PPT to Tutti apps and agents.",
+    guideTitle: "AI Slide CLI Commands",
+    guideIntro: "These commands expose AI Slide to Tutti apps and agents.",
     commands: [
-      statusCommand("AI PPT"),
+      statusCommand("AI Slide"),
       projectsListCommand("slide"),
       projectsGetCommand("slide"),
-      projectOpenCommand("slide", "AI PPT"),
+      projectOpenCommand("slide", "AI Slide"),
       {
         path: ["projects", "create"],
         summary: "Create a slide project",
         description:
-          "Create a new AI PPT project, return an internal openTarget command, and optionally start app-owned async editing with prompt. This command must not open the app automatically. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs or raw routes as final links. When the task is complete, tell the user they can view the result in AI PPT and ask whether they want you to open it directly; if they confirm, call slide projects open with the project-id. When a prompt starts app-owned editing, treat the returned run-id as the only writer for that project until it reaches a terminal status. Poll slide agent events by run-id until run.status is completed, failed, or cancelled; accepted/running means the app is still working. Do not inspect deck.slides and write fallback slide files while app-owned editing is accepted or running. If it is still running after several polls, report that generation is still in progress instead of creating content yourself.",
+          "Create a new AI Slide project, return an internal openTarget command, and optionally start app-owned async editing with prompt. This command must not open the app automatically. For user requests to make a PPT, slides, slide deck, or presentation without an explicit traditional Office file format, set artifact-type to deck. If the user explicitly asks for PPTX or traditional Office PowerPoint format, set artifact-type to pptx. Do not present localhost URLs or raw routes as final links. When the task is complete, tell the user they can view the result in AI Slide and ask whether they want you to open it directly; if they confirm, call slide projects open with the project-id. When a prompt starts app-owned editing, treat the returned run-id as the only writer for that project until it reaches a terminal status. Poll slide agent events by run-id until run.status is completed, failed, or cancelled; accepted/running means the app is still working. Do not inspect deck.slides and write fallback slide files while app-owned editing is accepted or running. If it is still running after several polls, report that generation is still in progress instead of creating content yourself.",
         properties: slideCreateProperties(),
       },
       {
@@ -84,16 +84,16 @@ export const artifactCliConfigs = {
         },
         required: ["project-id", "slide-id"],
       },
-      workspaceGetCommand("slide", "AI PPT"),
+      workspaceGetCommand("slide", "AI Slide"),
       exportsListCommand("slide"),
       ...conversationCommands("slide"),
-      ...agentCommands("slide", { scope: "slide", appName: "AI PPT", contentModificationPath: true }),
+      ...agentCommands("slide", { scope: "slide", appName: "AI Slide", contentModificationPath: true }),
       officeCliInstallCommand("PPTX"),
       {
         path: ["open"],
         summary: "Import a presentation file",
         description:
-          "Import a PPTX file into AI PPT and return workspace paths plus an internal openTarget command for the imported project. This command must not open the app automatically. Do not present localhost URLs or raw routes as final links. Ask whether the user wants you to open the project directly; if they confirm, call slide projects open with the project-id.",
+          "Import a PPTX file into AI Slide and return workspace paths plus an internal openTarget command for the imported project. This command must not open the app automatically. Do not present localhost URLs or raw routes as final links. Ask whether the user wants you to open the project directly; if they confirm, call slide projects open with the project-id.",
         properties: pathAndTitleProperties(
           "Absolute path, home-relative path, or path relative to the Tutti workspace root.",
         ),
@@ -259,12 +259,12 @@ function slideCreateProperties() {
     prompt: {
       type: "string",
       description:
-        "Optional prompt for the AI PPT app agent to generate or edit the deck after project creation. If supplied, poll the returned run with slide agent events and do not write fallback deck files while the run is accepted or running.",
+        "Optional prompt for the AI Slide app agent to generate or edit the deck after project creation. If supplied, poll the returned run with slide agent events and do not write fallback deck files while the run is accepted or running.",
     },
     provider: {
       type: "string",
       description:
-        "Optional app-agent provider for prompt-based creation: codex or claude-code. If omitted, AI PPT reads the Tutti global default from `tutti agent providers --json` defaultProvider, then falls back to Codex or Claude Code if available.",
+        "Optional app-agent provider for prompt-based creation: codex or claude-code. If omitted, AI Slide reads the Tutti global default from `tutti agent providers --json` defaultProvider, then falls back to Codex or Claude Code if available.",
     },
   };
 }
@@ -353,7 +353,7 @@ function agentCommands(domain, options = {}) {
       path: ["agent", "edit"],
       summary: "Ask the app agent to edit content",
       description: isSlide
-        ? "Start an app-owned async agent edit for a slide project and return an internal openTarget command. External agents and other Tutti apps must use this command to modify slide content, then poll slide agent events until run.status is completed, failed, or cancelled. This command must not open the app automatically. After completion, tell the user they can view the result in AI PPT and ask whether they want you to open it directly; if they confirm, call slide projects open."
+        ? "Start an app-owned async agent edit for a slide project and return an internal openTarget command. External agents and other Tutti apps must use this command to modify slide content, then poll slide agent events until run.status is completed, failed, or cancelled. This command must not open the app automatically. After completion, tell the user they can view the result in AI Slide and ask whether they want you to open it directly; if they confirm, call slide projects open."
         : `Start an app-owned agent edit for a ${domain} project and return an internal openTarget command. External agents and other Tutti apps must use this command to modify ${domain} content, then poll agent events until the run reaches a terminal status. This command must not open the app automatically. After completion, tell the user they can view the result in ${appName} and ask whether they want you to open it directly; if they confirm, call ${options.scope} projects open.`,
       properties: agentEditProperties("User prompt for the app-owned agent.", { includeProvider: true, appName }),
       required: ["project-id", "prompt"],

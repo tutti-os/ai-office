@@ -1,4 +1,4 @@
-name: AI PPT / Publish Tutti App / Production
+name: AI Slide / Publish Tutti App / Production
 
 on:
   workflow_dispatch:
@@ -31,11 +31,11 @@ jobs:
   publish:
     uses: tutti-os/tutti/.github/workflows/publish-tutti-app-release.yml@main
     with:
-      app_id: ai-ppt
+      app_id: ai-slide
       package_command: pnpm package:slide-tutti
       package_dir: build/tutti-slide-app/package
       icon_path: build/tutti-slide-app/package/icon.svg
-      release_tag_prefix: ai-ppt-v
+      release_tag_prefix: ai-slide-v
       release_bump: ${{ inputs.release_bump }}
       create_release_tag: ${{ !inputs.catalog_only }}
       runner: ubuntu-latest
