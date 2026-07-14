@@ -71,7 +71,9 @@ export class RuntimeProviderRegistry<
   }
 
   getProviderForRuntime(runtime: string) {
-    return this.providers.find((provider) => provider.id === runtime) ?? this.providers[0]!;
+    const provider = this.providers.find((item) => item.id === runtime);
+    if (!provider) throw new RuntimeProviderUnsupportedError(`Runtime provider is not supported: ${runtime}`);
+    return provider;
   }
 
   async resolveExecutionProfile(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>) {
