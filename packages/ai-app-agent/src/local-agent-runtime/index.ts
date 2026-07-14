@@ -231,7 +231,7 @@ export class LocalAgentRuntimeProvider<
       history: context.history ?? [],
       model: localAgentModelIdForAcp(context.runtimeProfile.model, provider),
       reasoning: context.request.reasoningEffort ?? undefined,
-      mcpServers: context.managedAgent ? [] : (this.options.buildMcpServers?.(context) ?? []),
+      mcpServers: this.options.buildMcpServers?.(context) ?? [],
       skillManifest: skillContext.skills,
       env: (await this.options.buildEnv?.(context, workspaceRoot)) ?? {},
       ...(context.managedAgent ? { managedAgentInvocation: context.managedAgent.managedAgentInvocation } : {}),

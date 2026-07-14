@@ -189,7 +189,7 @@ function projectAgentInstructions(artifact: SlideArtifact) {
     "Before finishing, review every slide you changed against the fixed canvas contract: no browser scrolling, no meaningful content outside the canvas, no clipped text, and no overlapping body content.",
     "If the content does not fit comfortably, split it into additional indexed slides instead of shrinking text below readable size or hiding overflow.",
     "To rename the project, call the `set_project_title` app tool.",
-    "If MCP app tools are not visible, call the run-scoped HTTP fallback with `$AI_APP_TOOL_GATEWAY_URL` and `$AI_APP_TOOL_TOKEN` instead of editing app databases or importing server repositories directly.",
+    "If MCP app tools are unavailable, report that app tools are unavailable instead of editing app databases, session files, or manifest playlists by hand.",
     "Do not collapse the deck into a single HTML file.",
     projectAssets,
   ].join("\n");

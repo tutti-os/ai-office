@@ -127,6 +127,7 @@ export function appToolMcpServerConfig(input: {
   name?: string;
   mcpEntryPath?: string;
   serverDir?: string;
+  requireSandboxEntrypoint?: boolean;
 }) {
   const launch = resolveAppToolMcpLaunch(input);
   return {
@@ -143,8 +144,20 @@ export function appToolMcpServerConfig(input: {
   };
 }
 
-function resolveAppToolMcpLaunch(input: { mcpEntryPath?: string; serverDir?: string }) {
-  if (input.mcpEntryPath) return { command: process.execPath, args: [input.mcpEntryPath] };
+function resolveAppToolMcpLaunch(input: {
+  mcpEntryPath?: string;
+  serverDir?: string;
+  requireSandboxEntrypoint?: boolean;
+}) {
+  if (input.mcpEntryPath) {
+    if (input.requireSandboxEntrypoint && !existsSync(input.mcpEntryPath)) {
+      throw new Error(`Managed app tools MCP entrypoint does not exist: ${input.mcpEntryPath}`);
+    }
+    return {
+      command: input.requireSandboxEntrypoint ? "node" : process.execPath,
+      args: [input.mcpEntryPath],
+    };
+  }
 
   const serverDir = input.serverDir ?? process.cwd();
   const bundledEntries = [
@@ -153,7 +166,16 @@ function resolveAppToolMcpLaunch(input: { mcpEntryPath?: string; serverDir?: str
   ];
   const bundledEntry = bundledEntries.find((entry) => existsSync(entry));
   if (bundledEntry) {
-    return { command: process.execPath, args: [bundledEntry] };
+    return {
+      command: input.requireSandboxEntrypoint ? "node" : process.execPath,
+      args: [bundledEntry],
+    };
+  }
+
+  if (input.requireSandboxEntrypoint) {
+    throw new Error(
+      `Managed app tools require a packaged MCP entrypoint. Expected one of: ${bundledEntries.join(", ")}`,
+    );
   }
 
   const entryPath = join(serverDir, "src", "agent-tools-mcp.ts");
