@@ -11,6 +11,7 @@ import { registerSlideAgentToolRoutes } from "./agent-tools.js";
 import { projectWorkspaceRoot } from "./local/paths.js";
 import { ProjectRepository } from "./artifact/project-repository.js";
 import { ProjectService } from "./artifact/project-service.js";
+import { publishSlideReferenceExports } from "./artifact/reference-exports.js";
 import { ensureTemplateDirs, listTemplates, safeTemplateAssetPath, templateAssetRoot } from "./templates/template-service.js";
 import { getOfficeCliStatus, installOfficeCli } from "./toolchains/officecli.js";
 import { registerTuttiCliRoutes } from "./tutti/cli-routes.js";
@@ -26,6 +27,10 @@ registerArtifactServerErrorHandlers(server, { appId: "ai-slide" });
 installArtifactProcessErrorHandlers({ appId: "ai-slide", logger: server.log });
 const events = new EventHub();
 const repo = new ProjectRepository();
+for (const project of repo.listProjects()) {
+  const artifact = repo.getArtifact(project.activeArtifactId);
+  if (artifact) publishSlideReferenceExports(project, artifact);
+}
 const projects = new ProjectService(repo, events);
 
 addArtifactBufferContentTypeParsers(server, {

@@ -32,6 +32,23 @@ export function writeDeckHtmlExportBundle(input: {
   mkdirSync(exportsRoot, { recursive: true });
   const exportDirName = uniqueExportDirectoryName(exportsRoot, input.projectTitle || input.manifest.title || "slides");
   const exportDir = join(exportsRoot, exportDirName);
+  const exported = writeDeckHtmlExportToDirectory(input, exportDir);
+  return {
+    path: exported.absolutePath,
+    absolutePath: exported.absolutePath,
+    exportsDir: exportsRoot,
+    fileName: `${exportDirName}/index.html`,
+    mimeType: htmlMimeType,
+    sizeBytes: exported.sizeBytes,
+  };
+}
+
+export function writeDeckHtmlExportToDirectory(input: {
+  artifact: SlideArtifact;
+  manifest: DeckManifest;
+  projectId: string;
+  projectTitle: string;
+}, exportDir: string) {
   mkdirSync(exportDir, { recursive: true });
 
   const deckRoot = join(projectWorkspaceRoot(input.projectId), input.artifact.fileRef);
@@ -54,11 +71,7 @@ export function writeDeckHtmlExportBundle(input: {
   const absolutePath = join(exportDir, "index.html");
   writeFileSync(absolutePath, html, "utf8");
   return {
-    path: absolutePath,
     absolutePath,
-    exportsDir: exportsRoot,
-    fileName: `${exportDirName}/index.html`,
-    mimeType: htmlMimeType,
     sizeBytes: Buffer.byteLength(html, "utf8"),
   };
 }

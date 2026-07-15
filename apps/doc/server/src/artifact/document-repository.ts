@@ -13,7 +13,7 @@ import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationSto
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
 import { getDb } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
-
+import { publishDocumentReferenceExports } from "./reference-exports.js";
 export class DocumentRepository {
   private readonly conversations = new SqliteAgentConversationStore(getDb, {
     createSessionId: randomUUID,
@@ -319,8 +319,8 @@ export class DocumentRepository {
       writeFileSync(join(root, "document.html"), project.content, "utf8");
     }
     this.writeProjectAgentInstructions(project);
+    publishDocumentReferenceExports(project);
   }
-
   private writeProjectAgentInstructions(project: DocumentProject) {
     const root = ensureProjectDirs(project.id);
     writeFileSync(join(root, "AGENTS.md"), projectAgentInstructions(project), "utf8");

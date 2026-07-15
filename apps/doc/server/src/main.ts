@@ -11,6 +11,7 @@ import type { AiEditRequest, ApplyTemplateRequest } from "@ai-doc/shared";
 import { registerDocAgentToolRoutes } from "./agent-tools.js";
 import { DocumentRepository } from "./artifact/document-repository.js";
 import { DocumentService } from "./artifact/document-service.js";
+import { publishDocumentReferenceExports } from "./artifact/reference-exports.js";
 import { getTemplateScreenshotFile, listTemplates } from "./templates/template-service.js";
 import { getOfficeCliStatus, installOfficeCli } from "./toolchains/officecli.js";
 import { registerTuttiCliRoutes } from "./tutti/cli-routes.js";
@@ -28,6 +29,7 @@ registerArtifactServerErrorHandlers(server, { appId: "ai-doc" });
 installArtifactProcessErrorHandlers({ appId: "ai-doc", logger: server.log });
 const events = new EventHub();
 const repo = new DocumentRepository();
+for (const project of repo.listProjects()) publishDocumentReferenceExports(project);
 const documents = new DocumentService(repo, events);
 
 addArtifactBufferContentTypeParsers(server, {

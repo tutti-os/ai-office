@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -16,9 +16,11 @@ async function testDocReferencesUseProjectTitle() {
   const home = mkdtempSync(join(tmpdir(), "ai-doc-references-"));
   process.env.AI_DOC_HOME = home;
   try {
-    const [{ getDb }, { appPaths }, { registerTuttiReferenceRoutes }] = await Promise.all([
+    const [{ getDb }, { appPaths }, { DocumentRepository }, { publishDocumentReferenceExports }, { registerTuttiReferenceRoutes }] = await Promise.all([
       import("../apps/doc/server/src/db/database.ts"),
       import("../apps/doc/server/src/local/paths.ts"),
+      import("../apps/doc/server/src/artifact/document-repository.ts"),
+      import("../apps/doc/server/src/artifact/reference-exports.ts"),
       import("../apps/doc/server/src/tutti/reference-routes.ts"),
     ]);
     getDb()
@@ -60,7 +62,6 @@ async function testDocReferencesUseProjectTitle() {
     writeFileSync(join(appPaths.projectsDir, "doc-project-id", "exports", "memo.pdf"), "pdf");
     writeFileSync(join(appPaths.projectsDir, "doc-project-id", "exports", "debug.json"), "{}");
     writeFileSync(join(appPaths.projectsDir, "doc-archive-id", "document.html"), "<p>old</p>");
-    writeFileSync(join(appPaths.projectsDir, "doc-archive-id", "exports", "archive.pdf"), "pdf");
     writeFileSync(join(appPaths.projectsDir, "doc-markdown-id", "document.md"), "# Notes");
     writeFileSync(join(appPaths.projectsDir, "doc-markdown-id", "document.html"), "<p>stale sibling</p>");
     writeFileSync(join(appPaths.projectsDir, "doc-markdown-id", "exports", "notes.md"), "# Final notes");
@@ -70,13 +71,15 @@ async function testDocReferencesUseProjectTitle() {
     writeFileSync(join(appPaths.projectsDir, "doc-docx-id", "document.json"), "{}");
     writeFileSync(join(appPaths.projectsDir, "doc-docx-id", "exports", "word.pdf"), "pdf");
     writeFileSync(join(appPaths.projectsDir, "doc-docx-id", "exports", "word.docx"), "docx");
+    const repository = new DocumentRepository();
+    for (const project of repository.listProjects()) publishDocumentReferenceExports(project);
 
     await assertReferenceRoutes({
       registerTuttiReferenceRoutes,
       projectId: "doc-project-id",
       projectTitle: "Quarterly Strategy Memo",
       expectedPaths: [
-        "projects/doc-project-id/exports/memo.html",
+        "projects/doc-project-id/exports/.reference/document.html",
         "projects/doc-project-id/exports/memo.pdf",
       ],
       searchQuery: "Quarterly Strategy Memo",
@@ -84,6 +87,8 @@ async function testDocReferencesUseProjectTitle() {
     });
 
     const routes = registerRoutes(registerTuttiReferenceRoutes);
+    const neverExportedFilesBody = await callRoute(routes, "/tutti/references/list", { parentGroupId: "doc-archive-id" });
+    assert.deepEqual(referencePaths(neverExportedFilesBody), ["projects/doc-archive-id/exports/.reference/document.html"]);
     const refreshedHtmlExport = join(appPaths.projectsDir, "doc-project-id", "exports", "memo-2.html");
     writeFileSync(refreshedHtmlExport, "<p>refreshed final</p>");
     utimesSync(refreshedHtmlExport, refreshed, refreshed);
@@ -92,13 +97,24 @@ async function testDocReferencesUseProjectTitle() {
       "projects/doc-project-id/exports/memo-2.html",
       "projects/doc-project-id/exports/memo.pdf",
     ]);
+    rmSync(refreshedHtmlExport);
+    repository.updateProject("doc-project-id", { content: "<p>updated project</p>" });
+    const updatedProjectFilesBody = await callRoute(routes, "/tutti/references/list", { parentGroupId: "doc-project-id" });
+    assert.deepEqual(referencePaths(updatedProjectFilesBody), ["projects/doc-project-id/exports/.reference/document.html"]);
+    assert.match(
+      readFileSync(join(appPaths.projectsDir, "doc-project-id", "exports", ".reference", "document.html"), "utf8"),
+      /updated project/,
+    );
     const markdownFilesBody = await callRoute(routes, "/tutti/references/list", { parentGroupId: "doc-markdown-id" });
     assert.deepEqual(referencePaths(markdownFilesBody).sort(), [
-      "projects/doc-markdown-id/exports/notes.md",
+      "projects/doc-markdown-id/exports/.reference/document.md",
       "projects/doc-markdown-id/exports/notes.pdf",
     ]);
     const docxFilesBody = await callRoute(routes, "/tutti/references/list", { parentGroupId: "doc-docx-id" });
-    assert.deepEqual(referencePaths(docxFilesBody), ["projects/doc-docx-id/exports/word.pdf"]);
+    assert.deepEqual(referencePaths(docxFilesBody).sort(), [
+      "projects/doc-docx-id/exports/.reference/document.docx",
+      "projects/doc-docx-id/exports/word.pdf",
+    ]);
   } finally {
     rmSync(home, { force: true, recursive: true });
   }
@@ -108,9 +124,11 @@ async function testSlideReferencesUseProjectTitle() {
   const home = mkdtempSync(join(tmpdir(), "ai-slide-references-"));
   process.env.AI_SLIDE_HOME = home;
   try {
-    const [{ getDb }, { appPaths }, { registerTuttiReferenceRoutes }] = await Promise.all([
+    const [{ getDb }, { appPaths }, { ProjectRepository }, { publishSlideReferenceExports }, { registerTuttiReferenceRoutes }] = await Promise.all([
       import("../apps/slide/server/src/db/database.ts"),
       import("../apps/slide/server/src/local/paths.ts"),
+      import("../apps/slide/server/src/artifact/project-repository.ts"),
+      import("../apps/slide/server/src/artifact/reference-exports.ts"),
       import("../apps/slide/server/src/tutti/reference-routes.ts"),
     ]);
     getDb()
@@ -141,10 +159,15 @@ async function testSlideReferencesUseProjectTitle() {
     mkdirSync(join(appPaths.projectsDir, "slide-project-id", "exports", "board-readout"), { recursive: true });
     mkdirSync(join(appPaths.projectsDir, "slide-archive-id", "exports"), { recursive: true });
     writeFileSync(join(appPaths.projectsDir, "slide-project-id", "deck.slides", "manifest.json"), JSON.stringify({
+      schemaVersion: "ai-slide.deck.v1",
+      title: "Board Readout Deck",
+      canvas: { width: 1280, height: 720 },
       slides: [
         { id: "slide-001", file: "slides/01-cover.html" },
         { id: "slide-002", file: "slides/02-results.html" },
       ],
+      createdAt: now,
+      updatedAt: now,
     }));
     writeFileSync(join(appPaths.projectsDir, "slide-project-id", "deck.slides", "slides", "01-cover.html"), "<section></section>");
     writeFileSync(join(appPaths.projectsDir, "slide-project-id", "deck.slides", "slides", "02-results.html"), "<section></section>");
@@ -159,13 +182,18 @@ async function testSlideReferencesUseProjectTitle() {
     writeFileSync(join(appPaths.projectsDir, "slide-archive-id", "exports", "archive.pdf"), "pdf");
     writeFileSync(join(appPaths.projectsDir, "slide-archive-id", "exports", "archive.pptx"), "pptx");
     writeFileSync(join(appPaths.projectsDir, "slide-archive-id", "exports", "archive.html"), "unsupported");
+    const repository = new ProjectRepository();
+    for (const project of repository.listProjects()) {
+      const artifact = repository.getArtifact(project.activeArtifactId);
+      if (artifact) publishSlideReferenceExports(project, artifact);
+    }
 
     await assertReferenceRoutes({
       registerTuttiReferenceRoutes,
       projectId: "slide-project-id",
       projectTitle: "Board Readout Deck",
       expectedPaths: [
-        "projects/slide-project-id/exports/board-readout/index.html",
+        "projects/slide-project-id/exports/.reference/index.html",
         "projects/slide-project-id/exports/deck.pdf",
       ],
       searchQuery: "Board Readout Deck",
@@ -183,10 +211,18 @@ async function testSlideReferencesUseProjectTitle() {
       "projects/slide-project-id/exports/board-readout-2/index.html",
       "projects/slide-project-id/exports/deck.pdf",
     ]);
+    rmSync(refreshedHtmlExportDir, { recursive: true });
+    await repository.writeDeckSlideHtml("slide-project-id", "slide-001", "<html><body>updated slide</body></html>");
+    const updatedProjectFilesBody = await callRoute(routes, "/tutti/references/list", { parentGroupId: "slide-project-id" });
+    assert.deepEqual(referencePaths(updatedProjectFilesBody), ["projects/slide-project-id/exports/.reference/index.html"]);
+    assert.match(
+      readFileSync(join(appPaths.projectsDir, "slide-project-id", "exports", ".reference", "index.html"), "utf8"),
+      /updated slide/,
+    );
     const pptxFilesBody = await callRoute(routes, "/tutti/references/list", { parentGroupId: "slide-archive-id" });
     assert.deepEqual(referencePaths(pptxFilesBody).sort(), [
+      "projects/slide-archive-id/exports/.reference/slides.pptx",
       "projects/slide-archive-id/exports/archive.pdf",
-      "projects/slide-archive-id/exports/archive.pptx",
     ]);
   } finally {
     rmSync(home, { force: true, recursive: true });

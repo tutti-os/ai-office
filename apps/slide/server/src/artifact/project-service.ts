@@ -27,7 +27,7 @@ import type { SlideRuntimeProject } from "../runtimes/runtime-provider.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
 import { EventHub } from "../ws/event-hub.js";
 import { ProjectRepository } from "./project-repository.js";
-
+import { publishSlideReferenceExports } from "./reference-exports.js";
 export class ProjectService {
   private readonly runtimes = createRuntimeProviderRegistry();
   private readonly cancelledRunIds = new Set<string>();
@@ -115,6 +115,7 @@ export class ProjectService {
     const artifact = this.repo.getArtifact(project.activeArtifactId);
     if (!artifact) throw new Error("Active artifact not found");
     await this.repo.ensureTemplateDeckMaterialized(project, artifact);
+    publishSlideReferenceExports(project, artifact);
     return {
       project,
       artifact,
@@ -122,7 +123,6 @@ export class ProjectService {
       pptxManifest: await this.repo.readPptxManifest(project.id, artifact),
     };
   }
-
   updateProject(projectId: string, input: UpdateProjectRequest) {
     const project = this.repo.updateProject(projectId, input);
     if (!project) return null;

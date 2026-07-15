@@ -1,6 +1,7 @@
 import { readdir, stat } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
 import type { FastifyInstance } from "fastify";
+import { isPublishedReferencePath, readPublishedReferenceExports } from "@ai-app/shared/reference-exports";
 import { getDb, rows } from "../db/database.js";
 import { appPaths } from "../local/paths.js";
 
@@ -141,11 +142,33 @@ async function listReferencesForProject(
   const root = join(appPaths.projectsDir, projectId);
   const projectMetadata = projectMetadataValue ?? loadProjectMetadata().get(projectId);
   if (!projectMetadata) return [];
-  const files = await collectFiles(join(root, "exports"));
+  const exportsRoot = join(root, "exports");
+  const files = await collectFiles(exportsRoot);
   const latestByKind = new Map<string, ReferenceItem>();
   const parentGroupLabel = projectDisplayNameValue ?? projectDisplayName(projectId, loadProjectMetadata());
+  for (const published of readPublishedReferenceExports(root, projectMetadata.updatedAt)) {
+    if (!matchesTimeRange(published.mtimeMs, timeRange)) continue;
+    latestByKind.set(published.kind, {
+      type: "reference",
+      reference: {
+        kind: "file",
+        displayName: basename(published.absolutePath),
+        description: published.projectRelativePath,
+        location: {
+          type: "app-data-relative",
+          path: `projects/${projectId}/${published.projectRelativePath}`,
+        },
+        sizeBytes: published.sizeBytes,
+        mtimeMs: published.mtimeMs,
+        mimeType: published.mimeType,
+        parentGroupLabel,
+      },
+    });
+  }
   for (const file of files) {
-    const exportKind = slideExportKind(file, projectMetadata.artifactType);
+    const relativeToExports = relative(exportsRoot, file).split("\\").join("/");
+    if (isPublishedReferencePath(relativeToExports)) continue;
+    const exportKind = slideExportKind(relativeToExports, projectMetadata.artifactType);
     if (!exportKind) continue;
     const info = await stat(file).catch(() => null);
     if (!info?.isFile()) continue;
@@ -189,10 +212,11 @@ async function collectFiles(root: string) {
 }
 
 function slideExportKind(fileName: string, artifactType: ProjectMetadata["artifactType"]) {
+  const segments = fileName.split("/");
   const extension = extname(fileName).toLowerCase();
-  if (extension === ".pdf") return "pdf";
-  if (artifactType === "deck" && [".htm", ".html"].includes(extension)) return "html";
-  if (artifactType === "pptx" && extension === ".pptx") return "pptx";
+  if (segments.length === 1 && extension === ".pdf") return "pdf";
+  if (artifactType === "deck" && segments.length === 2 && segments[1] === "index.html") return "html";
+  if (artifactType === "pptx" && segments.length === 1 && extension === ".pptx") return "pptx";
   return "";
 }
 
