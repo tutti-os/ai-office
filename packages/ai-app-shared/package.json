@@ -18,6 +18,7 @@
     "./artifact-runtime": "./src/artifact-runtime/index.ts",
     "./server-errors": "./src/server-errors/index.ts",
     "./server-files": "./src/server-files/index.ts",
+    "./reference-exports": "./src/reference-exports/index.ts",
     "./server-routes": "./src/server-routes/index.ts",
     "./tutti-cli": "./src/tutti-cli/index.ts",
     "./toolchains/officecli": "./src/toolchains/officecli/index.ts",
@@ -26,7 +27,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/agent-providers/agent-targets.test.ts"
+    "test": "tsx --test src/agent-providers/agent-targets.test.ts src/reference-exports/reference-exports.test.ts"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

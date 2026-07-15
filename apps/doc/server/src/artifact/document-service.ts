@@ -28,13 +28,13 @@ import { projectWorkspaceRoot } from "../local/paths.js";
 import { DocumentRepository } from "./document-repository.js";
 import { renderTemplateSeed } from "./document-template-renderer.js";
 import { mimeTypeForImportFileName, resolveImportSourcePath } from "./import-source.js";
+import { publishDocumentReferenceExports } from "./reference-exports.js";
 import { assistantConversationContent, previewText } from "./run-preview.js";
 import { documentTemplates, getTemplate } from "./templates.js";
 import { loadTemplateProjectSeed, materializeTemplateAssetsToProject } from "../templates/template-service.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
 import { EventHub } from "../ws/event-hub.js";
-
 export class DocumentService {
   private readonly runtimes = createRuntimeProviderRegistry();
   private readonly cancelledRunIds = new Set<string>();
@@ -131,6 +131,7 @@ export class DocumentService {
     });
     if (type === "docx") {
       await writeFile(docxFilePath(project.id), input.bytes);
+      publishDocumentReferenceExports(project);
     }
     this.events.emit({ type: "project.created", projectId: project.id, payload: { project } });
     return { project };

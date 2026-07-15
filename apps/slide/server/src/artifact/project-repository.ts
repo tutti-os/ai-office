@@ -49,7 +49,7 @@ import {
 } from "./project-materialization.js";
 import { importedProjectTitle, projectAssetRelativePath, uniqueAssetFileName, uniqueExportFileName } from "./project-file-names.js";
 import { projectsWithArtifactTypeSql, rowToArtifact, rowToProject, type ArtifactRow, type ProjectRowWithArtifactType } from "./project-rows.js";
-
+import { publishSlideReferenceExports } from "./reference-exports.js";
 export class ProjectRepository {
   private readonly conversations = new SqliteAgentConversationStore(getDb, {
     createSessionId: randomUUID,
@@ -508,13 +508,11 @@ export class ProjectRepository {
       manifest,
     });
   }
-
   projectExportsDir(projectId: string) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
     return join(ensureProjectDirs(projectId), "exports");
   }
-
   bumpArtifactRevision(artifactId: string, updatedBy: SlideProject["updatedBy"]) {
     const current = this.getArtifact(artifactId);
     if (!current) return null;
@@ -527,9 +525,11 @@ export class ProjectRepository {
       )
       .run(updatedBy, now, artifactId);
     getDb().prepare(`UPDATE projects SET updated_by = ?, updated_at = ? WHERE id = ?`).run(updatedBy, now, current.projectId);
-    return this.getArtifact(artifactId);
+    const updatedArtifact = this.getArtifact(artifactId);
+    const updatedProject = updatedArtifact ? this.getProject(updatedArtifact.projectId) : null;
+    if (updatedProject && updatedArtifact) publishSlideReferenceExports(updatedProject, updatedArtifact);
+    return updatedArtifact;
   }
-
   async ensureTemplateDeckMaterialized(project: SlideProject, artifact: SlideArtifact) {
     if (artifact.type !== "deck" || !project.templateId) return;
     const deckRoot = join(projectWorkspaceRoot(project.id), artifact.fileRef);
@@ -585,8 +585,8 @@ export class ProjectRepository {
     syncDefaultDeckSkill(root, project, artifact);
     syncProjectTemplateSkill(root, project, artifact);
     writeProjectAgentInstructions(project, artifact);
+    publishSlideReferenceExports(project, artifact);
   }
-
   syncProjectAgentInstructions(projectId: string) {
     const project = this.getProject(projectId);
     if (!project) return null;

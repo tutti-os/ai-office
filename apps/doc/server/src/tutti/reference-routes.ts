@@ -1,6 +1,7 @@
 import { readdir, stat } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
 import type { FastifyInstance } from "fastify";
+import { readPublishedReferenceExports } from "@ai-app/shared/reference-exports";
 import { getDb, rows } from "../db/database.js";
 import { appPaths } from "../local/paths.js";
 
@@ -141,9 +142,31 @@ async function listReferencesForProject(
   const root = join(appPaths.projectsDir, projectId);
   const projectMetadata = projectMetadataValue ?? loadProjectMetadata().get(projectId);
   if (!projectMetadata) return [];
-  const files = await collectFiles(join(root, "exports"));
+  const exportsRoot = join(root, "exports");
   const latestByKind = new Map<string, ReferenceItem>();
   const parentGroupLabel = projectDisplayNameValue ?? projectDisplayName(projectId, loadProjectMetadata());
+  for (const published of readPublishedReferenceExports(root, projectMetadata.updatedAt)) {
+    if (!matchesTimeRange(published.mtimeMs, timeRange)) continue;
+    latestByKind.set(published.kind, {
+      type: "reference",
+      reference: {
+        kind: "file",
+        displayName: basename(published.absolutePath),
+        description: published.projectRelativePath,
+        location: {
+          type: "app-data-relative",
+          path: `projects/${projectId}/${published.projectRelativePath}`,
+        },
+        sizeBytes: published.sizeBytes,
+        mtimeMs: published.mtimeMs,
+        mimeType: published.mimeType,
+        parentGroupLabel,
+      },
+    });
+  }
+  const files = (await safeReaddir(exportsRoot))
+    .filter((entry) => entry.isFile())
+    .map((entry) => join(exportsRoot, entry.name));
   for (const file of files) {
     const exportKind = documentExportKind(file, projectMetadata.type);
     if (!exportKind) continue;
@@ -175,17 +198,6 @@ async function listReferencesForProject(
     (left, right) => (right.reference.mtimeMs ?? 0) - (left.reference.mtimeMs ?? 0)
       || left.reference.displayName.localeCompare(right.reference.displayName),
   );
-}
-
-async function collectFiles(root: string) {
-  const entries = await safeReaddir(root);
-  const files: string[] = [];
-  for (const entry of entries) {
-    const filePath = join(root, entry.name);
-    if (entry.isDirectory()) files.push(...await collectFiles(filePath));
-    else if (entry.isFile()) files.push(filePath);
-  }
-  return files;
 }
 
 function documentExportKind(fileName: string, type: ProjectMetadata["type"]) {
