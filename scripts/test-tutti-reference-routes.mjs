@@ -73,6 +73,13 @@ async function testDocReferencesUseProjectTitle() {
     writeFileSync(join(appPaths.projectsDir, "doc-docx-id", "exports", "word.docx"), "docx");
     const repository = new DocumentRepository();
     for (const project of repository.listProjects()) publishDocumentReferenceExports(project);
+    getDb()
+      .prepare(
+        `INSERT INTO projects (id, title, type, content, template_id, template_name, updated_by, created_at, updated_at)
+         VALUES (?, ?, 'html', '<p>empty</p>', NULL, NULL, 'system', ?, ?)`,
+      )
+      .run("doc-empty-id", "Empty Document", older, older);
+    mkdirSync(join(appPaths.projectsDir, "doc-empty-id"), { recursive: true });
 
     await assertReferenceRoutes({
       registerTuttiReferenceRoutes,
@@ -87,6 +94,11 @@ async function testDocReferencesUseProjectTitle() {
     });
 
     const routes = registerRoutes(registerTuttiReferenceRoutes);
+    await assertEmptyProjectRoutes({
+      routes,
+      projectId: "doc-empty-id",
+      projectTitle: "Empty Document",
+    });
     const neverExportedFilesBody = await callRoute(routes, "/tutti/references/list", { parentGroupId: "doc-archive-id" });
     assert.deepEqual(referencePaths(neverExportedFilesBody), ["projects/doc-archive-id/exports/.reference/document.html"]);
     const refreshedHtmlExport = join(appPaths.projectsDir, "doc-project-id", "exports", "memo-2.html");
@@ -187,6 +199,19 @@ async function testSlideReferencesUseProjectTitle() {
       const artifact = repository.getArtifact(project.activeArtifactId);
       if (artifact) publishSlideReferenceExports(project, artifact);
     }
+    getDb()
+      .prepare(
+        `INSERT INTO projects (id, title, active_artifact_id, template_id, template_name, updated_by, created_at, updated_at)
+         VALUES (?, ?, 'empty-artifact-id', NULL, NULL, 'system', ?, ?)`,
+      )
+      .run("slide-empty-id", "Empty Deck", older, older);
+    getDb()
+      .prepare(
+        `INSERT INTO artifacts (id, project_id, type, file_ref, mime_type, revision, updated_by, created_at, updated_at)
+         VALUES (?, ?, 'deck', 'empty.slides', 'application/vnd.ai-slide.deck', 1, 'system', ?, ?)`,
+      )
+      .run("empty-artifact-id", "slide-empty-id", older, older);
+    mkdirSync(join(appPaths.projectsDir, "slide-empty-id"), { recursive: true });
 
     await assertReferenceRoutes({
       registerTuttiReferenceRoutes,
@@ -201,6 +226,11 @@ async function testSlideReferencesUseProjectTitle() {
     });
 
     const routes = registerRoutes(registerTuttiReferenceRoutes);
+    await assertEmptyProjectRoutes({
+      routes,
+      projectId: "slide-empty-id",
+      projectTitle: "Empty Deck",
+    });
     const refreshedHtmlExportDir = join(appPaths.projectsDir, "slide-project-id", "exports", "board-readout-2");
     mkdirSync(refreshedHtmlExportDir, { recursive: true });
     const refreshedHtmlExport = join(refreshedHtmlExportDir, "index.html");
@@ -276,9 +306,19 @@ async function assertReferenceRoutes(input) {
   const groupsBody = await callRoute(routes, "/tutti/references/list", {});
   assert.equal(groupsBody.items[0].id, input.projectId);
   assert.equal(groupsBody.items[0].displayName, input.projectTitle);
+  assert.equal(groupsBody.items[0].referenceCount, input.expectedPaths.length);
+
+  const firstGroupsPage = await callRoute(routes, "/tutti/references/list", { limit: 1 });
+  assert.deepEqual(firstGroupsPage.items.map((item) => item.id), [input.projectId]);
+  assert.equal(firstGroupsPage.nextCursor, "1");
+  const secondGroupsPage = await callRoute(routes, "/tutti/references/list", { limit: 1, cursor: firstGroupsPage.nextCursor });
+  assert.equal(secondGroupsPage.items.length, 1);
+  assert.notEqual(secondGroupsPage.items[0].id, input.projectId);
 
   const groupByIdBody = await callRoute(routes, "/tutti/references/list", { filterText: input.projectId });
   assert.deepEqual(groupByIdBody.items.map((item) => item.id), [input.projectId]);
+  const groupByTitleBody = await callRoute(routes, "/tutti/references/list", { filterText: input.projectTitle });
+  assert.deepEqual(groupByTitleBody.items.map((item) => item.id), [input.projectId]);
 
   const projectFilesBody = await callRoute(routes, "/tutti/references/list", { parentGroupId: input.projectId });
   assert.equal(projectFilesBody.items[0].reference.parentGroupLabel, input.projectTitle);
@@ -296,6 +336,26 @@ async function assertReferenceRoutes(input) {
 
   const displayNameSearchBody = await callRoute(routes, "/tutti/references/search", { query: input.projectTitle });
   assert.deepEqual(referencePaths(displayNameSearchBody).sort(), input.expectedPaths.slice().sort());
+}
+
+async function assertEmptyProjectRoutes(input) {
+  const groupBody = await callRoute(input.routes, "/tutti/references/list", { filterText: input.projectId });
+  assert.deepEqual(groupBody, {
+    items: [{
+      type: "group",
+      id: input.projectId,
+      displayName: input.projectTitle,
+      description: "0 files",
+      referenceCount: 0,
+    }],
+    nextCursor: null,
+  });
+
+  const projectFilesBody = await callRoute(input.routes, "/tutti/references/list", { parentGroupId: input.projectId });
+  assert.deepEqual(projectFilesBody, { items: [], nextCursor: null });
+
+  const searchBody = await callRoute(input.routes, "/tutti/references/search", { query: input.projectTitle });
+  assert.deepEqual(searchBody, { items: [], nextCursor: null });
 }
 
 function registerRoutes(registerTuttiReferenceRoutes) {
