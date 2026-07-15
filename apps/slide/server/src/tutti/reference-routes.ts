@@ -103,7 +103,6 @@ async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]) {
     if (!metadata) continue;
     const displayName = projectDisplayName(projectId, projectMetadata);
     const references = await listReferencesForProject(projectId, timeRange, displayName, metadata);
-    if (references.length === 0) continue;
     groups.push({
       type: "group",
       id: projectId,
