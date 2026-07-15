@@ -1,5 +1,5 @@
 import { readdir, stat } from "node:fs/promises";
-import { basename, extname, join } from "node:path";
+import { basename, extname, join, relative } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { getDb, rows } from "../db/database.js";
 import { appPaths } from "../local/paths.js";
@@ -141,39 +141,64 @@ async function listReferencesForProject(
   const root = join(appPaths.projectsDir, projectId);
   const projectMetadata = projectMetadataValue ?? loadProjectMetadata().get(projectId);
   if (!projectMetadata) return [];
-  const relativeToProject = focusedDocumentFileName(projectMetadata.type);
-  const file = join(root, relativeToProject);
-  const items: ReferenceItem[] = [];
+  const files = await collectFiles(join(root, "exports"));
+  const latestByKind = new Map<string, ReferenceItem>();
   const parentGroupLabel = projectDisplayNameValue ?? projectDisplayName(projectId, loadProjectMetadata());
-  const info = await stat(file).catch(() => null);
-  if (info?.isFile()) {
+  for (const file of files) {
+    const exportKind = documentExportKind(file, projectMetadata.type);
+    if (!exportKind) continue;
+    const info = await stat(file).catch(() => null);
+    if (!info?.isFile()) continue;
     const mtimeMs = Math.trunc(info.mtimeMs);
-    if (matchesTimeRange(mtimeMs, timeRange)) {
-      items.push({
-        type: "reference",
-        reference: {
-          kind: "file",
-          displayName: basename(file),
-          description: relativeToProject,
-          location: {
-            type: "app-data-relative",
-            path: `projects/${projectId}/${relativeToProject}`,
-          },
-          sizeBytes: info.size,
-          mtimeMs,
-          mimeType: mimeTypeForFileName(file),
-          parentGroupLabel,
+    if (!isExportCurrent(mtimeMs, projectMetadata.updatedAt) || !matchesTimeRange(mtimeMs, timeRange)) continue;
+    const relativeToProject = relative(root, file).split("\\").join("/");
+    const item: ReferenceItem = {
+      type: "reference",
+      reference: {
+        kind: "file",
+        displayName: basename(file),
+        description: relativeToProject,
+        location: {
+          type: "app-data-relative",
+          path: `projects/${projectId}/${relativeToProject}`,
         },
-      });
-    }
+        sizeBytes: info.size,
+        mtimeMs,
+        mimeType: mimeTypeForFileName(file),
+        parentGroupLabel,
+      },
+    };
+    const current = latestByKind.get(exportKind);
+    if (!current || mtimeMs > (current.reference.mtimeMs ?? 0)) latestByKind.set(exportKind, item);
   }
-  return items;
+  return [...latestByKind.values()].sort(
+    (left, right) => (right.reference.mtimeMs ?? 0) - (left.reference.mtimeMs ?? 0)
+      || left.reference.displayName.localeCompare(right.reference.displayName),
+  );
 }
 
-function focusedDocumentFileName(type: ProjectMetadata["type"]) {
-  if (type === "docx") return "document.docx";
-  if (type === "markdown") return "document.md";
-  return "document.html";
+async function collectFiles(root: string) {
+  const entries = await safeReaddir(root);
+  const files: string[] = [];
+  for (const entry of entries) {
+    const filePath = join(root, entry.name);
+    if (entry.isDirectory()) files.push(...await collectFiles(filePath));
+    else if (entry.isFile()) files.push(filePath);
+  }
+  return files;
+}
+
+function documentExportKind(fileName: string, type: ProjectMetadata["type"]) {
+  const extension = extname(fileName).toLowerCase();
+  if (extension === ".pdf") return "pdf";
+  if (type === "html" && [".htm", ".html"].includes(extension)) return "html";
+  if (type === "markdown" && [".markdown", ".md"].includes(extension)) return "markdown";
+  return "";
+}
+
+function isExportCurrent(mtimeMs: number, projectUpdatedAt: string) {
+  const projectUpdatedAtMs = Date.parse(projectUpdatedAt);
+  return !Number.isFinite(projectUpdatedAtMs) || mtimeMs >= projectUpdatedAtMs;
 }
 
 async function safeReaddir(root: string) {
