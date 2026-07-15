@@ -1,5 +1,5 @@
-import { readFile, readdir, stat } from "node:fs/promises";
-import { basename, extname, join } from "node:path";
+import { readdir, stat } from "node:fs/promises";
+import { basename, extname, join, relative } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { getDb, rows } from "../db/database.js";
 import { appPaths } from "../local/paths.js";
@@ -46,7 +46,6 @@ type GroupItem = {
 type ProjectMetadata = {
   title: string;
   artifactType: "deck" | "pptx";
-  fileRef: string;
   updatedAt: string;
 };
 
@@ -142,16 +141,18 @@ async function listReferencesForProject(
   const root = join(appPaths.projectsDir, projectId);
   const projectMetadata = projectMetadataValue ?? loadProjectMetadata().get(projectId);
   if (!projectMetadata) return [];
-  const projectFiles = await focusedSlideProjectFiles(root, projectMetadata);
-  const items: ReferenceItem[] = [];
+  const files = await collectFiles(join(root, "exports"));
+  const latestByKind = new Map<string, ReferenceItem>();
   const parentGroupLabel = projectDisplayNameValue ?? projectDisplayName(projectId, loadProjectMetadata());
-  for (const relativeToProject of projectFiles) {
-    const file = join(root, relativeToProject);
+  for (const file of files) {
+    const exportKind = slideExportKind(file, projectMetadata.artifactType);
+    if (!exportKind) continue;
     const info = await stat(file).catch(() => null);
     if (!info?.isFile()) continue;
     const mtimeMs = Math.trunc(info.mtimeMs);
-    if (!matchesTimeRange(mtimeMs, timeRange)) continue;
-    items.push({
+    if (!isExportCurrent(mtimeMs, projectMetadata.updatedAt) || !matchesTimeRange(mtimeMs, timeRange)) continue;
+    const relativeToProject = relative(root, file).split("\\").join("/");
+    const item: ReferenceItem = {
       type: "reference",
       reference: {
         kind: "file",
@@ -166,38 +167,38 @@ async function listReferencesForProject(
         mimeType: mimeTypeForFileName(file),
         parentGroupLabel,
       },
-    });
-  }
-  return items;
-}
-
-async function focusedSlideProjectFiles(root: string, metadata: ProjectMetadata) {
-  if (!isSafeRelativePath(metadata.fileRef)) return [];
-  if (metadata.artifactType === "pptx") return [metadata.fileRef];
-  try {
-    const manifest = JSON.parse(await readFile(join(root, metadata.fileRef, "manifest.json"), "utf8")) as {
-      slides?: Array<{ file?: unknown }>;
     };
-    const slideFiles = manifest.slides?.flatMap((slide) => {
-      if (typeof slide.file !== "string" || !isSafeRelativePath(slide.file) || !slide.file.startsWith("slides/")) return [];
-      return [`${metadata.fileRef}/${slide.file}`];
-    }) ?? [];
-    return [...new Set(slideFiles)];
-  } catch {
-    return [];
+    const current = latestByKind.get(exportKind);
+    if (!current || mtimeMs > (current.reference.mtimeMs ?? 0)) latestByKind.set(exportKind, item);
   }
+  return [...latestByKind.values()].sort(
+    (left, right) => (right.reference.mtimeMs ?? 0) - (left.reference.mtimeMs ?? 0)
+      || left.reference.displayName.localeCompare(right.reference.displayName),
+  );
 }
 
-function isSafeRelativePath(pathValue: string) {
-  if (
-    !pathValue
-    || pathValue.startsWith("/")
-    || pathValue.includes("\\")
-    || pathValue.includes("\0")
-    || pathValue.includes("://")
-    || /^[a-zA-Z]:/.test(pathValue)
-  ) return false;
-  return pathValue.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
+async function collectFiles(root: string) {
+  const entries = await safeReaddir(root);
+  const files: string[] = [];
+  for (const entry of entries) {
+    const filePath = join(root, entry.name);
+    if (entry.isDirectory()) files.push(...await collectFiles(filePath));
+    else if (entry.isFile()) files.push(filePath);
+  }
+  return files;
+}
+
+function slideExportKind(fileName: string, artifactType: ProjectMetadata["artifactType"]) {
+  const extension = extname(fileName).toLowerCase();
+  if (extension === ".pdf") return "pdf";
+  if (artifactType === "deck" && [".htm", ".html"].includes(extension)) return "html";
+  if (artifactType === "pptx" && extension === ".pptx") return "pptx";
+  return "";
+}
+
+function isExportCurrent(mtimeMs: number, projectUpdatedAt: string) {
+  const projectUpdatedAtMs = Date.parse(projectUpdatedAt);
+  return !Number.isFinite(projectUpdatedAtMs) || mtimeMs >= projectUpdatedAtMs;
 }
 
 async function safeReaddir(root: string) {
@@ -238,9 +239,9 @@ function normalizeSearchText(value: unknown) {
 
 function loadProjectMetadata() {
   return new Map(
-    rows<{ id: string; title: string; artifact_type: ProjectMetadata["artifactType"]; file_ref: string; updated_at: string }>(
+    rows<{ id: string; title: string; artifact_type: ProjectMetadata["artifactType"]; updated_at: string }>(
       getDb().prepare(
-        `SELECT projects.id, projects.title, artifacts.type AS artifact_type, artifacts.file_ref, projects.updated_at
+        `SELECT projects.id, projects.title, artifacts.type AS artifact_type, projects.updated_at
          FROM projects
          JOIN artifacts ON artifacts.id = projects.active_artifact_id AND artifacts.project_id = projects.id`,
       ).all(),
@@ -249,7 +250,6 @@ function loadProjectMetadata() {
       {
         title: project.title,
         artifactType: project.artifact_type,
-        fileRef: project.file_ref,
         updatedAt: project.updated_at,
       },
     ] as const),
