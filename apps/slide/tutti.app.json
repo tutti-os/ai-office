@@ -1,7 +1,7 @@
 {
   "schemaVersion": "tutti.app.manifest.v1",
   "appId": "ai-slide",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "name": "AI Slide",
   "description": "Human and local agents editing presentation decks together.",
   "icon": {

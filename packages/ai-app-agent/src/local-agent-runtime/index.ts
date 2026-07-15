@@ -22,11 +22,10 @@ import { localAgentModelIdForAcp, localAgentProviderIdsMatch, normalizeRuntimePr
 import type { BaseAiEditRequest, BaseRun, LocalAgentTargetStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { safePathSegment } from "@ai-app/shared/local-paths";
 import type { RuntimeEditContext, RuntimeProvider, RuntimeStreamEvent } from "@ai-app/agent/runtime";
+import { logAgentComposerOptionsFailure, projectAgentTargetModels } from "./agent-target-models.js";
 
 const DEFAULT_TIMEOUT_MS = 180_000;
-
 export type { SkillMaterializationFile, SkillMaterializationRecord } from "@tutti-os/agent-acp-kit";
-
 export type LocalAgentMcpServer = {
   name: string;
   type: "stdio";
@@ -36,7 +35,6 @@ export type LocalAgentMcpServer = {
   startupTimeoutMs?: number;
   toolTimeoutMs?: number;
 };
-
 export type LocalAgentSkillContext = {
   skills: SkillMaterializationRecord[];
   recommendedSystemPrompt?: TuttiRecommendedSystemPrompt;
@@ -328,7 +326,7 @@ export class LocalAgentRuntimeProvider<
       detectContext,
       commandEnvNames: this.options.commandEnvNames,
     });
-    return catalog.agents.map((agent) => {
+    const targets = catalog.agents.map((agent) => {
       const supported = agent.runtimeSupported && agent.availability.status === "available";
       return {
         agentTargetId: agent.agentTargetId,
@@ -342,6 +340,22 @@ export class LocalAgentRuntimeProvider<
         ...(!supported ? { reason: agent.availability.detail || agent.availability.reasonCode || "Agent Target unavailable" } : {}),
       };
     });
+    return Promise.all(targets.map(async (target) => {
+      if (!target.supported) return target;
+      try {
+        const composer = await loadTuttiAgentComposerOptions({
+          runtime: this.localAgentRuntime,
+          agentTargetId: target.agentTargetId,
+          cwd: (detectContext?.cwd ?? configuredWorkspaceRoot()) || undefined,
+          commandEnvNames: this.options.commandEnvNames,
+          detectContext,
+        });
+        return { ...target, ...projectAgentTargetModels(composer) };
+      } catch (error) {
+        logAgentComposerOptionsFailure(error, target);
+        return target;
+      }
+    }));
   }
 
   async cancel(runId: string) {
