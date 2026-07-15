@@ -290,11 +290,11 @@ export class ProjectService {
     };
   }
 
-  async startAiEdit(projectId: string, request: AiEditRequest, headers?: Record<string, string | string[] | undefined>) {
+  async startAiEdit(projectId: string, request: AiEditRequest) {
     const runtimeProject = await this.createRuntimeProject(projectId);
     if (runtimeProject.artifact.type === "pptx") await requireOfficeCli();
     this.repo.syncProjectAgentInstructions(projectId);
-    const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId, headers);
+    const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);
     const session = this.resolveConversationSession(projectId, runtimeProject.title, request.sessionId);
@@ -328,12 +328,12 @@ export class ProjectService {
     this.runAssistantMessageIds.set(run.id, assistantMessage.id);
     this.repo.updateConversationMessage(assistantMessage.id, { metadata: { status: "accepted", runId: run.id } });
     this.events.emit({ type: "run.accepted", projectId, runId: run.id, payload: { run } });
-    void this.executeRun(runtimeProject, runtimeProfile, request, run.id, { assistantMessageId: assistantMessage.id, sessionId: session.id }, headers);
+    void this.executeRun(runtimeProject, runtimeProfile, request, run.id, { assistantMessageId: assistantMessage.id, sessionId: session.id });
     return { run };
   }
 
-  async listLocalAgentTargets(headers?: Record<string, string | string[] | undefined>) {
-    const agents = await this.runtimes.listLocalAgentTargets(headers);
+  async listLocalAgentTargets() {
+    const agents = await this.runtimes.listLocalAgentTargets();
     this.repo.syncLocalAgentRuntimeProfiles(agents);
     return { agents };
   }
@@ -343,14 +343,11 @@ export class ProjectService {
     return this.requireProjectSession(projectId, sessionId);
   }
 
-  private async resolveRuntimeProfile(
-    runtimeProfileId: string | null | undefined,
-    headers?: Record<string, string | string[] | undefined>,
-  ) {
+  private async resolveRuntimeProfile(runtimeProfileId: string | null | undefined) {
     if (runtimeProfileId) {
       const existing = this.repo.getRuntimeProfile(runtimeProfileId);
       if (existing.id === runtimeProfileId && existing.kind !== "local-agent") return existing;
-      const agents = await this.runtimes.listLocalAgentTargets(headers);
+      const agents = await this.runtimes.listLocalAgentTargets();
       this.repo.syncLocalAgentRuntimeProfiles(agents);
       const synced = this.repo.getRuntimeProfile(runtimeProfileId);
       if (synced.id !== runtimeProfileId) throw new Error(`Runtime profile not found: ${runtimeProfileId}`);
@@ -359,7 +356,7 @@ export class ProjectService {
       }
       return synced;
     }
-    const agents = await this.runtimes.listLocalAgentTargets(headers);
+    const agents = await this.runtimes.listLocalAgentTargets();
     this.repo.syncLocalAgentRuntimeProfiles(agents);
     const profiles = this.repo.snapshot().runtimeProfiles;
     const preferredProfileId = resolvePreferredLocalAgentRuntimeProfileId({
@@ -393,7 +390,6 @@ export class ProjectService {
     request: AiEditRequest,
     runId: string,
     conversation: { assistantMessageId: string; sessionId: string },
-    headers?: Record<string, string | string[] | undefined>,
   ) {
     let refreshedArtifact = false;
     let workspaceFingerprint = "";
@@ -437,7 +433,6 @@ export class ProjectService {
       runId,
       conversation: { conversationId: runtimeProject.id, sessionId: conversation.sessionId },
       history: this.repo.conversationHistory(conversation.sessionId, request.userPrompt),
-      managedAgentHeaders: headers,
       isCancelled: () => this.cancelledRunIds.has(runId),
       finalizeCancellation: (id, reason) => this.finalizeCancellation(id, reason),
       beforeRun: async () => {

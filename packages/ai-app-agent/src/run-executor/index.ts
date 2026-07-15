@@ -1,6 +1,5 @@
 import type { BaseAiEditRequest, BaseRun, BaseRunEvent, RuntimeProfile } from "@ai-app/shared/types";
 import type { RuntimeConversationMessage, RuntimeProviderRegistry, RuntimeStreamEvent } from "@ai-app/agent/runtime";
-import { createManagedAgentDetectContextFromHeaders, createManagedAgentRunContextFromHeaders, type ManagedAgentInvocationCredentialHeaders } from "@tutti-os/agent-acp-kit";
 
 export type RunEventInput<TEvent extends BaseRunEvent> = {
   runId: string;
@@ -46,7 +45,6 @@ export type RuntimeRunExecutorInput<
   beforeRun?: () => Promise<void> | void;
   history?: RuntimeConversationMessage[];
   onWorkspaceEvent?: (event: RuntimeStreamEvent, runId: string) => Promise<void> | void;
-  managedAgentHeaders?: ManagedAgentInvocationCredentialHeaders;
   complete: (input: { generatedText: string; run: TRun }) => Promise<void> | void;
   onFailure?: (input: { error: string; run: TRun }) => Promise<void> | void;
   onFinally?: () => void;
@@ -73,9 +71,6 @@ export class RuntimeRunExecutor<
     let generatedText = "";
 
     try {
-      const agentDetectContext = input.managedAgentHeaders
-        ? createManagedAgentDetectContextFromHeaders(input.managedAgentHeaders)
-        : undefined;
       const runtimeProfile = await this.input.runtimes.resolveExecutionProfile(input.runtimeProfile, {
         run,
         project: input.project,
@@ -83,7 +78,6 @@ export class RuntimeRunExecutor<
         request: input.request,
         conversation: input.conversation,
         history: input.history,
-        ...(agentDetectContext ? { agentDetectContext } : {}),
       });
       const provider = this.input.runtimes.getProvider(runtimeProfile);
       const descriptor = provider.describeRun(runtimeProfile);
@@ -101,7 +95,6 @@ export class RuntimeRunExecutor<
         payload: { run: resolvedRun },
       });
 
-      const managedAgent = await this.createManagedAgentRunContext(input, runtimeProfile);
       const runtimeContext = {
         run: resolvedRun,
         project: input.project,
@@ -109,8 +102,6 @@ export class RuntimeRunExecutor<
         request: input.request,
         conversation: input.conversation,
         history: input.history,
-        ...(managedAgent ? { managedAgent } : {}),
-        ...(agentDetectContext ? { agentDetectContext } : {}),
       };
       if (!provider.resolveExecutionProfile) {
         const readiness = await provider.detect(runtimeProfile, runtimeContext);
@@ -158,25 +149,6 @@ export class RuntimeRunExecutor<
     } catch {
       return null;
     }
-  }
-
-  private async createManagedAgentRunContext(
-    input: RuntimeRunExecutorInput<TRun, TEvent, TProject, TRequest>,
-    runtimeProfile: RuntimeProfile,
-  ) {
-    if (!input.managedAgentHeaders || runtimeProfile.kind !== "local-agent") return undefined;
-    const providerId = runtimeProfile.provider.trim();
-    if (!providerId) return undefined;
-    const context = await createManagedAgentRunContextFromHeaders(input.managedAgentHeaders, {
-      providerId,
-      runId: input.runId,
-    });
-    return context
-      ? {
-          cwd: context.cwd,
-          managedAgentInvocation: context.managedAgentInvocation,
-        }
-      : undefined;
   }
 
   private safeUpdateRun(

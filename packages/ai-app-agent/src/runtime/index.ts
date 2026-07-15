@@ -1,5 +1,5 @@
 import type { BaseAiEditRequest, BaseRun, LocalAgentTargetStatus, RuntimeProfile } from "@ai-app/shared/types";
-import type { DetectContext, ManagedAgentInvocation } from "@tutti-os/agent-acp-kit";
+import type { DetectContext } from "@tutti-os/agent-acp-kit";
 
 export type RuntimeConversationMessage = {
   role: "user" | "assistant" | "system";
@@ -24,10 +24,6 @@ export interface RuntimeEditContext<
     token: string;
     expiresAt: string;
   };
-  managedAgent?: {
-    cwd: string;
-    managedAgentInvocation: ManagedAgentInvocation;
-  };
   agentDetectContext?: DetectContext;
 }
 
@@ -50,7 +46,7 @@ export interface RuntimeProvider<
   resolveExecutionProfile?(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>): Promise<RuntimeProfile>;
   describeRun(profile: RuntimeProfile): { runtime: string; agentTargetId: string | null; provider: string; model: string };
   detect(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>): Promise<{ available: boolean; reason?: string }>;
-  listLocalAgentTargets?(headers?: Record<string, string | string[] | undefined>, refresh?: boolean): Promise<LocalAgentTargetStatus[]>;
+  listLocalAgentTargets?(refresh?: boolean): Promise<LocalAgentTargetStatus[]>;
   streamEdit(context: RuntimeEditContext<TRun, TProject, TRequest>): AsyncIterable<string | RuntimeStreamEvent>;
   cancel(runId: string): Promise<{ cancelled: boolean; reason?: string }>;
 }
@@ -81,9 +77,9 @@ export class RuntimeProviderRegistry<
     return provider.resolveExecutionProfile?.(profile, context) ?? profile;
   }
 
-  async listLocalAgentTargets(headers?: Record<string, string | string[] | undefined>, refresh = false): Promise<LocalAgentTargetStatus[]> {
+  async listLocalAgentTargets(refresh = false): Promise<LocalAgentTargetStatus[]> {
     const provider = this.providers.find((item) => typeof item.listLocalAgentTargets === "function");
-    return provider?.listLocalAgentTargets?.(headers, refresh) ?? [];
+    return provider?.listLocalAgentTargets?.(refresh) ?? [];
   }
 }
 

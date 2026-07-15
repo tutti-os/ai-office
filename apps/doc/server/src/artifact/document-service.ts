@@ -65,8 +65,8 @@ export class DocumentService {
     return this.repo.interruptActiveRuns(reason);
   }
 
-  async listLocalAgentTargets(headers?: Record<string, string | string[] | undefined>) {
-    const agents = await this.runtimes.listLocalAgentTargets(headers);
+  async listLocalAgentTargets() {
+    const agents = await this.runtimes.listLocalAgentTargets();
     this.repo.syncLocalAgentRuntimeProfiles(agents);
     return { agents };
   }
@@ -314,12 +314,12 @@ export class DocumentService {
     return this.startAiEdit(projectId, request);
   }
 
-  async startAiEdit(projectId: string, request: AiEditRequest, headers?: Record<string, string | string[] | undefined>) {
+  async startAiEdit(projectId: string, request: AiEditRequest) {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
     if (project.type === "docx") await requireOfficeCli();
     this.repo.syncProjectAgentInstructions(projectId);
-    const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId, headers);
+    const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);
     const session = this.resolveConversationSession(projectId, project.title, request.sessionId);
@@ -353,7 +353,7 @@ export class DocumentService {
     this.runAssistantMessageIds.set(run.id, assistantMessage.id);
     this.repo.updateConversationMessage(assistantMessage.id, { metadata: { status: "accepted", runId: run.id } });
     this.events.emit({ type: "run.accepted", projectId, runId: run.id, payload: { run } });
-    void this.executeRun(project, runtimeProfile, request, run.id, { assistantMessageId: assistantMessage.id, sessionId: session.id }, headers);
+    void this.executeRun(project, runtimeProfile, request, run.id, { assistantMessageId: assistantMessage.id, sessionId: session.id });
     return { run };
   }
 
@@ -371,14 +371,11 @@ export class DocumentService {
     return this.requireProjectSession(projectId, sessionId);
   }
 
-  private async resolveRuntimeProfile(
-    runtimeProfileId: string | null | undefined,
-    headers?: Record<string, string | string[] | undefined>,
-  ) {
+  private async resolveRuntimeProfile(runtimeProfileId: string | null | undefined) {
     if (runtimeProfileId) {
       const existing = this.repo.getRuntimeProfile(runtimeProfileId);
       if (existing.id === runtimeProfileId && existing.kind !== "local-agent") return existing;
-      const agents = await this.runtimes.listLocalAgentTargets(headers);
+      const agents = await this.runtimes.listLocalAgentTargets();
       this.repo.syncLocalAgentRuntimeProfiles(agents);
       const synced = this.repo.getRuntimeProfile(runtimeProfileId);
       if (synced.id !== runtimeProfileId) throw new Error(`Runtime profile not found: ${runtimeProfileId}`);
@@ -387,7 +384,7 @@ export class DocumentService {
       }
       return synced;
     }
-    const agents = await this.runtimes.listLocalAgentTargets(headers);
+    const agents = await this.runtimes.listLocalAgentTargets();
     this.repo.syncLocalAgentRuntimeProfiles(agents);
     const profiles = this.repo.snapshot().runtimeProfiles;
     const preferredProfileId = resolvePreferredLocalAgentRuntimeProfileId({
@@ -412,7 +409,6 @@ export class DocumentService {
     request: AiEditRequest,
     runId: string,
     conversation: { assistantMessageId: string; sessionId: string },
-    headers?: Record<string, string | string[] | undefined>,
   ) {
     let refreshedFromWorkspace = false;
 
@@ -423,7 +419,6 @@ export class DocumentService {
       runId,
       conversation: { conversationId: initialProject.id, sessionId: conversation.sessionId },
       history: this.repo.conversationHistory(conversation.sessionId, request.userPrompt),
-      managedAgentHeaders: headers,
       isCancelled: () => this.cancelledRunIds.has(runId),
       finalizeCancellation: (id, reason) => this.finalizeCancellation(id, reason),
       onWorkspaceEvent: async () => {

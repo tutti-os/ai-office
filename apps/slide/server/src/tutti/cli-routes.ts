@@ -8,12 +8,10 @@ import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { ProjectService } from "../artifact/project-service.js";
 import { installOfficeCli } from "../toolchains/officecli.js";
 
-type ManagedAgentHeaders = Record<string, string | string[] | undefined>;
-
 export function registerTuttiCliRoutes(server: FastifyInstance, projects: ProjectService) {
-  server.post("/tutti/cli/status", async (request, reply) => {
+  server.post("/tutti/cli/status", async (_request, reply) => {
     const projectRows = projects.listProjects().projects;
-    const agents = await projects.listLocalAgentTargets(request.headers).catch(() => ({ agents: [] }));
+    const agents = await projects.listLocalAgentTargets().catch(() => ({ agents: [] }));
     const latestProject = projectRows[0] ?? null;
     return reply.send(cliJsonOutput({
       ok: true,
@@ -44,7 +42,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/projects/create", async (request, reply) => {
-    return createProjectCliResponse(reply, projects, readCliInputBody(request.body), request.headers);
+    return createProjectCliResponse(reply, projects, readCliInputBody(request.body));
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/projects/open", async (request, reply) => {
@@ -168,11 +166,11 @@ export function registerTuttiCliRoutes(server: FastifyInstance, projects: Projec
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/agent/run", async (request, reply) => {
-    return agentRunCliResponse(reply, projects, readCliInputBody(request.body), request.headers);
+    return agentRunCliResponse(reply, projects, readCliInputBody(request.body));
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/agent/edit", async (request, reply) => {
-    return agentRunCliResponse(reply, projects, readCliInputBody(request.body), request.headers);
+    return agentRunCliResponse(reply, projects, readCliInputBody(request.body));
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/agent/events", async (request, reply) => {
@@ -323,7 +321,6 @@ async function createProjectCliResponse(
   reply: FastifyReply,
   projects: ProjectService,
   input: Record<string, unknown>,
-  headers: ManagedAgentHeaders,
 ) {
   const artifactType = normalizeArtifactType(input["artifact-type"] ?? input.artifactType);
   if (!artifactType) return sendCliError(reply, 400, "invalid_input", "artifactType must be deck or pptx");
@@ -331,7 +328,7 @@ async function createProjectCliResponse(
   const mode = normalizeAiMode(input.mode);
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
   try {
-    const runtimeProfileId = await runtimeProfileIdFromCliInput(input, projects, headers);
+    const runtimeProfileId = await runtimeProfileIdFromCliInput(input, projects);
     if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
     const result = await projects.createProject({
       title: typeof input.title === "string" ? input.title : undefined,
@@ -347,7 +344,7 @@ async function createProjectCliResponse(
           selectionType: "write",
           selectionPath: "",
           runtimeProfileId: runtimeProfileId.value,
-        }, headers)).run
+        })).run
       : null;
     return reply.send(cliJsonOutput({
       ok: true,
@@ -367,7 +364,6 @@ async function agentRunCliResponse(
   reply: FastifyReply,
   projects: ProjectService,
   input: Record<string, unknown>,
-  headers: ManagedAgentHeaders,
 ) {
   const projectId = requiredString(input, "project-id");
   const prompt = requiredString(input, "prompt");
@@ -376,7 +372,7 @@ async function agentRunCliResponse(
   if (!prompt) return sendCliError(reply, 400, "invalid_input", "prompt is required");
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
   try {
-    const runtimeProfileId = await runtimeProfileIdFromCliInput(input, projects, headers);
+    const runtimeProfileId = await runtimeProfileIdFromCliInput(input, projects);
     if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
     const { artifact } = await projects.getProject(projectId);
     const result = await projects.startAiEdit(projectId, {
@@ -389,7 +385,7 @@ async function agentRunCliResponse(
       selectionPath: "",
       sessionId: optionalString(input, "session-id"),
       runtimeProfileId: runtimeProfileId.value,
-    }, headers);
+    });
     return reply.send(cliJsonOutput({
       ...result,
       openTarget: projectOpenTarget(projectId),
@@ -417,7 +413,6 @@ function optionalString(input: Record<string, unknown>, key: string) {
 async function runtimeProfileIdFromCliInput(
   input: Record<string, unknown>,
   projects: ProjectService,
-  headers: ManagedAgentHeaders,
 ): Promise<{ value?: string; error?: string }> {
   const agentTargetId = optionalString(input, "agent-id");
   const provider = optionalString(input, "provider");
@@ -427,7 +422,7 @@ async function runtimeProfileIdFromCliInput(
   }
   if (runtimeProfileId) return { value: runtimeProfileId };
   if (!agentTargetId && !provider) return { value: undefined };
-  const { agents } = await projects.listLocalAgentTargets(headers);
+  const { agents } = await projects.listLocalAgentTargets();
   const target = resolveAgentTargetFromCatalog({ agents, agentTargetId, legacyProvider: provider, useDefault: false });
   if (target.error || !target.value) return { error: target.error ?? "agent-id is required" };
   return runtimeProfileIdFromAgentTarget(target.value.agentTargetId);

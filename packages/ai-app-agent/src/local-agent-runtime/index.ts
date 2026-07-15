@@ -3,7 +3,6 @@ import { dirname, join } from "node:path";
 import {
   createDefaultLocalAgentProviderPlugins,
   createDefaultLocalAgentRuntime,
-  createManagedAgentDetectContextFromHeaders,
   type AgentEvent,
   type DetectContext,
   type LocalAgentProviderPlugin,
@@ -109,7 +108,7 @@ export class LocalAgentRuntimeProvider<
     const env = context && workspaceRoot ? await this.options.buildEnv?.(context, workspaceRoot) : undefined;
     const detectContext: DetectContext | undefined = context?.agentDetectContext ?? (workspaceRoot || env
       ? {
-          ...(workspaceRoot ? { cwd: context?.managedAgent?.cwd ?? workspaceRoot } : {}),
+          ...(workspaceRoot ? { cwd: workspaceRoot } : {}),
           ...(env ? { env } : {}),
         }
       : undefined);
@@ -125,7 +124,7 @@ export class LocalAgentRuntimeProvider<
     const env = context && workspaceRoot ? await this.options.buildEnv?.(context, workspaceRoot) : undefined;
     const detectionContext: DetectContext | undefined = context?.agentDetectContext ?? (context
       ? {
-          ...(workspaceRoot ? { cwd: context.managedAgent?.cwd ?? workspaceRoot } : {}),
+          ...(workspaceRoot ? { cwd: workspaceRoot } : {}),
           ...(env ? { env } : {}),
         }
       : undefined);
@@ -143,17 +142,11 @@ export class LocalAgentRuntimeProvider<
     return { available: true };
   }
 
-  async listLocalAgentTargets(
-    headers?: Record<string, string | string[] | undefined>,
-    refresh = false,
-  ): Promise<LocalAgentTargetStatus[]> {
+  async listLocalAgentTargets(refresh = false): Promise<LocalAgentTargetStatus[]> {
     const cwd = configuredWorkspaceRoot();
-    const managedContext = createManagedAgentDetectContextFromHeaders(headers, cwd ? { cwd } : undefined);
-    const detectionContext: DetectContext | undefined = managedContext
-      ? { ...managedContext, ...(refresh ? { refresh: true } : {}) }
-      : cwd || refresh
-        ? { ...(cwd ? { cwd } : {}), ...(refresh ? { refresh: true } : {}) }
-        : undefined;
+    const detectionContext: DetectContext | undefined = cwd || refresh
+      ? { ...(cwd ? { cwd } : {}), ...(refresh ? { refresh: true } : {}) }
+      : undefined;
     return this.loadAgentTargets(detectionContext);
   }
 
@@ -165,7 +158,7 @@ export class LocalAgentRuntimeProvider<
     this.controllers.set(context.run.id, controller);
 
     try {
-      const agentCwd = context.managedAgent?.cwd ?? workspaceRoot;
+      const agentCwd = workspaceRoot;
       const composer = await loadTuttiAgentComposerOptions({
         runtime: this.localAgentRuntime,
         agentTargetId,
@@ -252,7 +245,7 @@ export class LocalAgentRuntimeProvider<
   }) {
     const { context, controller, persistProviderSession, agentTargetId, provider, composer, resume, sessionStore, workspaceRoot } = input;
     let lastError: Extract<AgentEvent, { type: "error" }> | undefined;
-    const agentCwd = context.managedAgent?.cwd ?? workspaceRoot;
+    const agentCwd = workspaceRoot;
     const skillContext = normalizeSkillManifestResult(await this.options.buildSkillManifest?.(context, workspaceRoot));
     const systemPrompt = await this.options.buildSystemPrompt(context, workspaceRoot, skillContext);
     const conversationId = context.conversation?.conversationId ?? context.project.id;
@@ -276,7 +269,6 @@ export class LocalAgentRuntimeProvider<
       mcpServers: this.options.buildMcpServers?.(context) ?? [],
       skillManifest: skillContext.skills,
       env: (await this.options.buildEnv?.(context, workspaceRoot)) ?? {},
-      ...(context.managedAgent ? { managedAgentInvocation: context.managedAgent.managedAgentInvocation } : {}),
       timeoutMs: this.options.timeoutMs?.() ?? DEFAULT_TIMEOUT_MS,
       extraAllowedDirs: this.options.extraAllowedDirs?.(context, workspaceRoot) ?? [workspaceRoot],
       resume,

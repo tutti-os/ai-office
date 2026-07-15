@@ -27,6 +27,14 @@ try {
     AI_APP_TOOL_TOKEN: "test-token",
   });
 
+  const localConfig = appToolMcpServerConfig({
+    gatewayBaseUrl: "http://127.0.0.1:8791/api/agent-tools",
+    token: "test-token",
+    serverDir,
+  });
+  assert.equal(localConfig.command, process.execPath);
+  assert.deepEqual(localConfig.args, [bundledEntry]);
+
   assert.throws(
     () =>
       appToolMcpServerConfig({
@@ -40,11 +48,12 @@ try {
 
   const runtimeSource = readSource("packages/ai-app-agent/src/local-agent-runtime/index.ts");
   assert.match(runtimeSource, /mcpServers: this\.options\.buildMcpServers\?\.\(context\) \?\? \[\]/);
-  assert.doesNotMatch(runtimeSource, /mcpServers: context\.managedAgent \? \[\]/);
+  assert.doesNotMatch(runtimeSource, /managedAgent/i);
 
   for (const app of ["doc", "slide", "sheet"]) {
     const toolSource = readSource(`apps/${app}/server/src/agent-tools.ts`);
-    assert.match(toolSource, /requireSandboxEntrypoint: Boolean\(context\.managedAgent\)/);
+    assert.doesNotMatch(toolSource, /requireSandboxEntrypoint/);
+    assert.doesNotMatch(toolSource, /managedAgent/i);
 
     const providerSource = readSource(`apps/${app}/server/src/runtimes/local-agent-provider.ts`);
     assert.doesNotMatch(providerSource, /AI_APP_TOOL_(?:GATEWAY_URL|TOKEN)/);
@@ -63,7 +72,7 @@ try {
     assert.match(packagerSource, /agent-tools-mcp\.js/);
   }
 
-  console.log("Managed app-tool MCP checks passed.");
+  console.log("App-tool MCP checks passed.");
 } finally {
   rmSync(fixtureRoot, { force: true, recursive: true });
 }
