@@ -30,6 +30,7 @@ export TUTTI_APP_ID="\${TUTTI_APP_ID:-ai-doc}"
 export AI_DOC_APP_VERSION="${version}"
 export AI_DOC_WEB_DIST="$package_dir/dist"
 export AI_DOC_HOME="\${TUTTI_APP_DATA_DIR:-$package_dir/.data}"
+export TUTTI_APP_DATABASE_DIR="\${TUTTI_APP_DATABASE_DIR:-$AI_DOC_HOME/data}"
 export AI_DOC_RUNTIME_ROOT="\${TUTTI_APP_RUNTIME_DIR:-$AI_DOC_HOME/.runtime}"
 export AI_DOC_LOG_ROOT="\${TUTTI_APP_LOG_DIR:-$AI_DOC_RUNTIME_ROOT/logs}"
 export AI_DOC_WORKSPACE_ROOT="\${TUTTI_WORKSPACE_ROOT:-$AI_DOC_HOME}"
@@ -40,7 +41,20 @@ base_url="\${TUTTI_APP_BASE_URL:-http://$HOST:$PORT}"
 export AI_DOC_SERVER_URL="$base_url"
 
 node_bin="\${TUTTI_APP_NODE:-node}"
-mkdir -p "$AI_DOC_HOME" "$AI_DOC_RUNTIME_ROOT" "$AI_DOC_LOG_ROOT"
+mkdir -p "$AI_DOC_HOME" "$TUTTI_APP_DATABASE_DIR" "$AI_DOC_RUNTIME_ROOT" "$AI_DOC_LOG_ROOT"
+legacy_db="$AI_DOC_HOME/data/ai-doc.db"
+database_db="$TUTTI_APP_DATABASE_DIR/ai-doc.db"
+if [ "$legacy_db" != "$database_db" ] && [ ! -e "$database_db" ] && [ -f "$legacy_db" ]; then
+  database_tmp="$database_db.migrate-$$"
+  wal_tmp="$database_db-wal.migrate-$$"
+  rm -f "$database_tmp" "$wal_tmp"
+  if [ -f "$legacy_db-wal" ]; then
+    cp "$legacy_db-wal" "$wal_tmp"
+    mv "$wal_tmp" "$database_db-wal"
+  fi
+  cp "$legacy_db" "$database_tmp"
+  mv "$database_tmp" "$database_db"
+fi
 
 exec "$node_bin" "$package_dir/server/server.js"
 `;
@@ -66,6 +80,7 @@ This package runs AI Doc as a local Tutti workspace app.
 - \`tutti.app.json\` declares the app runtime, localized metadata, CLI surface, and references endpoints.
 - \`tutti.cli.json\` exposes project commands such as \`doc projects list\`, \`doc projects get\`, and \`doc projects create\` for other Tutti apps and agents.
 - Durable app data is stored under \`AI_DOC_HOME\`, which defaults to \`TUTTI_APP_DATA_DIR\`.
+- Active SQLite database and WAL files use \`TUTTI_APP_DATABASE_DIR\` when provided.
 - Runtime scratch data is stored under \`AI_DOC_RUNTIME_ROOT\`, which defaults to \`TUTTI_APP_RUNTIME_DIR\`.
 - Backend logs, if added later, must stay under \`AI_DOC_LOG_ROOT\`, which defaults to \`TUTTI_APP_LOG_DIR\`.
 - OfficeCLI auto-install uses the shared AI Office toolchain cache, not \`AI_DOC_HOME\`; override with \`AI_DOC_OFFICECLI_PATH\`, \`TUTTI_APP_OFFICECLI_PATH\`, or an \`*_OFFICECLI_INSTALL_ROOT\` env var.
