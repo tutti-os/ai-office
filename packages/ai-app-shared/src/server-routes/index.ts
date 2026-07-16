@@ -6,7 +6,8 @@ export type ArtifactAppRouteService<
   TAiEditInput = unknown,
 > = {
   bootstrap(): unknown | Promise<unknown>;
-  listLocalAgentTargets(): unknown | Promise<unknown>;
+  listLocalAgentTargets(refresh?: boolean): unknown | Promise<unknown>;
+  selectLocalAgentRuntimeProfile(profileId: string): unknown | Promise<unknown>;
   listProjects(): unknown | Promise<unknown>;
   createProject(input: TCreateProjectInput): unknown | Promise<unknown>;
   clearProjectHistory(): unknown | Promise<unknown>;
@@ -94,9 +95,10 @@ export class ArtifactAppHttpRoutes<
     server.get("/api/health", async () => ({ ok: true, app: this.input.appId }));
     server.get("/api/bootstrap", async () => this.input.service.bootstrap());
     server.get("/api/templates", async () => ({ templates: await this.input.listTemplates() }));
-    server.get("/api/local-agent/targets", async () => {
+    server.get("/api/local-agent/targets", async (request: { query?: { refresh?: string | boolean } }) => {
       try {
-        const result = await this.input.service.listLocalAgentTargets();
+        const refresh = request.query?.refresh === true || request.query?.refresh === "1" || request.query?.refresh === "true";
+        const result = await this.input.service.listLocalAgentTargets(refresh);
         const agents = isAgentTargetResponse(result) ? result.agents : [];
         console.info(JSON.stringify({
           event: "ai_app.local_agent.targets.loaded",
@@ -113,6 +115,18 @@ export class ArtifactAppHttpRoutes<
           message: typeof candidate?.message === "string" ? candidate.message : "Unable to load local Agent Targets",
         }));
         throw error;
+      }
+    });
+    server.post("/api/local-agent/selection", async (
+      request: ArtifactRouteRequest<Record<string, string>, { profileId?: string }>,
+      reply: ArtifactRouteReply,
+    ) => {
+      const profileId = request.body?.profileId?.trim() ?? "";
+      if (!profileId) return reply.code(400).send({ error: "profileId is required" });
+      try {
+        return await this.input.service.selectLocalAgentRuntimeProfile(profileId);
+      } catch (error) {
+        return sendError(reply, error, "Unable to select Local Agent runtime profile", 400);
       }
     });
   }

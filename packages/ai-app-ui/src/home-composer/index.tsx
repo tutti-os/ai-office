@@ -1,6 +1,6 @@
 import { useRef, type ChangeEvent, type ReactNode } from "react";
 import { resolveAgentMenuProfiles } from "@ai-app/shared/agent-providers";
-import { Check, ChevronDown, Download, File, FileImage, Loader2, Plus, Wand2, X } from "lucide-react";
+import { Check, ChevronDown, Download, File, FileImage, Loader2, Plus, RefreshCw, Wand2, X } from "lucide-react";
 import { AgentSelectShell, appShell, cx, formatOptionClass, formatOptionIconClass } from "../app-shell/index.js";
 import { PromptComposer, type PromptComposerInputRenderProps } from "../prompt-composer/index.js";
 
@@ -96,6 +96,7 @@ export function ArtifactHomeComposer<T extends string>(props: {
   agentProfiles: ArtifactHomeAgentProfile[];
   agentTargets: ArtifactHomeAgentTarget[];
   agentUnavailableLabel: string;
+  agentCatalogLoading?: boolean;
   acceptedFileTypes?: string;
   attachments: ArtifactHomeAttachment[];
   canSubmit: boolean;
@@ -108,6 +109,9 @@ export function ArtifactHomeComposer<T extends string>(props: {
   selectedAgentId: string;
   selectedFormatId: T;
   selectAgentLabel: string;
+  loadingAgentsLabel?: string;
+  refreshAgentsLabel?: string;
+  refreshingAgents?: boolean;
   submitLabel: string;
   renderPromptInput?: (props: PromptComposerInputRenderProps) => ReactNode;
   onAddFiles: (files: File[]) => void;
@@ -115,6 +119,7 @@ export function ArtifactHomeComposer<T extends string>(props: {
   onPromptChange: (value: string) => void;
   onRemoveAttachment: (id: string) => void;
   onSelectedAgentChange: (value: string) => void;
+  onRefreshAgents?: () => void;
   onSubmit: () => void;
 }) {
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -190,10 +195,24 @@ export function ArtifactHomeComposer<T extends string>(props: {
                 agentTargets={props.agentTargets}
                 agentProfiles={props.agentProfiles}
                 agentUnavailableLabel={props.agentUnavailableLabel}
+                loading={props.agentCatalogLoading}
+                loadingLabel={props.loadingAgentsLabel}
                 selectedAgentId={props.selectedAgentId}
                 selectAgentLabel={props.selectAgentLabel}
                 onChange={props.onSelectedAgentChange}
               />
+              {props.onRefreshAgents ? (
+                <button
+                  className={appShell.iconAction}
+                  type="button"
+                  title={props.refreshAgentsLabel ?? "Refresh Agents"}
+                  aria-label={props.refreshAgentsLabel ?? "Refresh Agents"}
+                  disabled={props.loading || props.refreshingAgents}
+                  onClick={props.onRefreshAgents}
+                >
+                  <RefreshCw className={props.refreshingAgents ? "animate-spin" : ""} size={17} />
+                </button>
+              ) : null}
             </>
           }
           trailingActions={
@@ -290,6 +309,8 @@ function AgentMenu(props: {
   agentProfiles: ArtifactHomeAgentProfile[];
   agentTargets: ArtifactHomeAgentTarget[];
   agentUnavailableLabel: string;
+  loading?: boolean;
+  loadingLabel?: string;
   selectedAgentId: string;
   selectAgentLabel: string;
   onChange: (value: string) => void;
@@ -303,10 +324,11 @@ function AgentMenu(props: {
         className="h-full min-w-0 w-full appearance-none truncate rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6]/70 px-4 pr-9 text-[13px] font-medium text-[#2A2620] outline-none hover:border-[#B8A07C]/30 hover:text-[#5C6B50]"
         value={hasSelectedAgent ? props.selectedAgentId : placeholderValue}
         aria-label={props.selectAgentLabel}
+        disabled={props.loading}
         onChange={(event) => props.onChange(event.currentTarget.value)}
       >
         <option disabled value={placeholderValue}>
-          {props.selectAgentLabel}
+          {props.loading ? props.loadingLabel ?? "Loading Agents…" : props.selectAgentLabel}
         </option>
         {menuProfiles.map((profile) => {
           const status = profile.kind === "local-agent" ? props.agentTargets.find((target) => target.agentTargetId === profile.agentTargetId) : null;

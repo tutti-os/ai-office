@@ -42,6 +42,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     loadTemplate,
     loading,
     localAgentTargets,
+    localAgentTargetsLoaded,
     markdownRuntime,
     markdownSaveState,
     officeCliInstalling,
@@ -56,6 +57,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     requestHomeRoute,
     runtime,
     runtimeProfiles,
+    refreshLocalAgentCatalog,
     saveState,
     selectedRuntimeProfileId,
     selectedTemplateCategory,
@@ -96,6 +98,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           activePanel={homePanel}
           historyProjects={historyProjects}
           localAgentTargets={localAgentTargets}
+          localAgentTargetsLoaded={localAgentTargetsLoaded}
           officeCliInstalling={officeCliInstalling}
           officeCliStatus={officeCliStatus}
           outputType={outputType}
@@ -121,6 +124,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           onOutputTypeChange={setOutputType}
           onRemoveAttachment={homeAttachments.removeAttachment}
           onRuntimeProfileChange={setSelectedRuntimeProfileId}
+          onRefreshAgents={() => void refreshLocalAgentCatalog()}
           onSelectTemplate={loadTemplate}
         />
       ) : currentDocumentType === "markdown" && markdownRuntime ? (

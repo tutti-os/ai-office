@@ -68,8 +68,15 @@ export async function fetchOfficeCliStatus() {
   return requestJson<OfficeCliStatusResponse>("/api/toolchains/officecli");
 }
 
-export async function fetchLocalAgentTargets() {
-  return requestJson<LocalAgentTargetStatusResponse>("/api/local-agent/targets");
+export async function fetchLocalAgentTargets(refresh = false) {
+  return requestJson<LocalAgentTargetStatusResponse>(`/api/local-agent/targets${refresh ? "?refresh=1" : ""}`);
+}
+
+export async function persistLocalAgentSelection(profileId: string) {
+  return requestJson<LocalAgentTargetStatusResponse>("/api/local-agent/selection", {
+    method: "POST",
+    body: JSON.stringify({ profileId }),
+  });
 }
 
 export async function installOfficeCli() {

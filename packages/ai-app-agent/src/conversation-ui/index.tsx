@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   File,
   Loader2,
+  RefreshCw,
   WandSparkles,
   XCircle,
 } from "lucide-react";
@@ -87,11 +88,14 @@ export type AgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent e
   uiCopy?: Partial<Omit<AgentConversationUiCopy, "tool">> & { tool?: Partial<ConversationToolCopy> };
   quickPromptsVisible?: boolean;
   selectedAgentId?: string;
+  refreshAgentsLabel?: string;
+  refreshingAgents?: boolean;
   renderComposerInput?: (props: AgentComposerInputRenderProps) => ReactNode;
   formatRunAgentLabel?: (run: TRun) => string;
   renderUserMessageText?: (props: AgentUserMessageTextRenderProps) => ReactNode;
   onBackHome: () => void;
   onAgentChange?: (agentId: string) => void;
+  onRefreshAgents?: () => void;
   onCancel?: (runId: string) => Promise<void>;
   onSend: (prompt: string) => Promise<void>;
 };
@@ -265,21 +269,35 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
           )}
           <div className={cx.composerFooter}>
             {props.agentOptions?.length ? (
-              <div className={cx.agentSelectWrap}>
-                <select
-                  className={cx.agentSelect}
-                  value={props.selectedAgentId ?? props.agentOptions[0]?.id ?? ""}
-                  aria-label={uiCopy.selectAgent}
-                  disabled={props.sending}
-                  onChange={(event) => props.onAgentChange?.(event.currentTarget.value)}
-                >
-                  {props.agentOptions.map((option) => (
-                    <option disabled={option.disabled} key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className={cx.agentSelectChevron} size={15} />
+              <div className="flex min-w-0 items-center gap-1.5">
+                <div className={cx.agentSelectWrap}>
+                  <select
+                    className={cx.agentSelect}
+                    value={props.selectedAgentId ?? props.agentOptions[0]?.id ?? ""}
+                    aria-label={uiCopy.selectAgent}
+                    disabled={props.sending}
+                    onChange={(event) => props.onAgentChange?.(event.currentTarget.value)}
+                  >
+                    {props.agentOptions.map((option) => (
+                      <option disabled={option.disabled} key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className={cx.agentSelectChevron} size={15} />
+                </div>
+                {props.onRefreshAgents ? (
+                  <button
+                    className={cx.quickButton}
+                    type="button"
+                    title={props.refreshAgentsLabel ?? "Refresh Agents"}
+                    aria-label={props.refreshAgentsLabel ?? "Refresh Agents"}
+                    disabled={props.sending || props.refreshingAgents}
+                    onClick={props.onRefreshAgents}
+                  >
+                    <RefreshCw className={props.refreshingAgents ? cx.spin : ""} size={13} />
+                  </button>
+                ) : null}
               </div>
             ) : (
               <div />

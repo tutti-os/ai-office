@@ -29,6 +29,7 @@ export function HomePage(props: {
   categories: string[];
   historyProjects: DocumentProject[];
   localAgentTargets: LocalAgentTargetStatus[];
+  localAgentTargetsLoaded: boolean;
   officeCliInstalling: boolean;
   officeCliStatus: OfficeCliStatus | null;
   outputType: DocumentType;
@@ -54,6 +55,7 @@ export function HomePage(props: {
   onPromptChange: (value: string) => void;
   onRemoveAttachment: (id: string) => void;
   onRuntimeProfileChange: (profileId: string) => void;
+  onRefreshAgents: () => void;
   onSelectTemplate: (template: TuttiTemplate) => void;
 }) {
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -92,6 +94,7 @@ export function HomePage(props: {
             error={props.error}
             loading={props.loading}
             localAgentTargets={props.localAgentTargets}
+            localAgentTargetsLoaded={props.localAgentTargetsLoaded}
             officeCliInstalling={props.officeCliInstalling}
             officeCliStatus={props.officeCliStatus}
             outputType={props.outputType}
@@ -105,6 +108,7 @@ export function HomePage(props: {
             onPromptChange={props.onPromptChange}
             onRemoveAttachment={props.onRemoveAttachment}
             onRuntimeProfileChange={props.onRuntimeProfileChange}
+            onRefreshAgents={props.onRefreshAgents}
           />
         </section>
 

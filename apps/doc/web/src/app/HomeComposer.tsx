@@ -10,6 +10,7 @@ export function HomeComposer(props: {
   error: string;
   loading: boolean;
   localAgentTargets: LocalAgentTargetStatus[];
+  localAgentTargetsLoaded: boolean;
   officeCliInstalling: boolean;
   officeCliStatus: OfficeCliStatus | null;
   outputType: DocumentType;
@@ -23,6 +24,7 @@ export function HomeComposer(props: {
   onPromptChange: (value: string) => void;
   onRemoveAttachment: (id: string) => void;
   onRuntimeProfileChange: (profileId: string) => void;
+  onRefreshAgents: () => void;
 }) {
   const { t } = useI18n();
   const docxAvailable = props.officeCliStatus?.available === true;
@@ -36,6 +38,8 @@ export function HomeComposer(props: {
       agentProfiles={props.runtimeProfiles}
       agentTargets={props.localAgentTargets}
       agentUnavailableLabel={t("composer.agentUnavailable")}
+      agentCatalogLoading={!props.localAgentTargetsLoaded}
+      loadingAgentsLabel="Loading Agents…"
       acceptedFileTypes={contextAttachmentFileAccept}
       attachments={props.attachments}
       canSubmit={canSubmit}
@@ -53,6 +57,7 @@ export function HomeComposer(props: {
       selectedAgentId={props.selectedRuntimeProfileId}
       selectedFormatId={props.outputType}
       selectAgentLabel={t("composer.selectAgent")}
+      refreshAgentsLabel="Refresh Agents"
       submitLabel={t("composer.create")}
       renderPromptInput={(inputProps) => (
         <AgentPromptRichTextInput
@@ -65,6 +70,7 @@ export function HomeComposer(props: {
       onPromptChange={props.onPromptChange}
       onRemoveAttachment={props.onRemoveAttachment}
       onSelectedAgentChange={props.onRuntimeProfileChange}
+      onRefreshAgents={props.onRefreshAgents}
       onSubmit={props.onCreateFromPrompt}
     />
   );

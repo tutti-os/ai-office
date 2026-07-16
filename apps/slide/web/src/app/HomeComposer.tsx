@@ -11,6 +11,7 @@ export function HomeComposer(props: {
   creating: boolean;
   error: string;
   localAgentTargets: LocalAgentTargetStatus[];
+  localAgentTargetsLoaded: boolean;
   officeCliInstalling: boolean;
   officeCliStatus: OfficeCliStatus | null;
   outputType: OutputType;
@@ -24,6 +25,7 @@ export function HomeComposer(props: {
   onPromptChange: (value: string) => void;
   onRemoveAttachment: (id: string) => void;
   onSelectedAgentChange: (value: string) => void;
+  onRefreshAgents: () => void;
 }) {
   const { t } = useI18n();
   const pptxAvailable = props.officeCliStatus?.available === true;
@@ -37,6 +39,8 @@ export function HomeComposer(props: {
       agentProfiles={props.runtimeProfiles}
       agentTargets={props.localAgentTargets}
       agentUnavailableLabel={t("composer.agentUnavailable")}
+      agentCatalogLoading={!props.localAgentTargetsLoaded}
+      loadingAgentsLabel="Loading Agents…"
       acceptedFileTypes={contextAttachmentFileAccept}
       attachments={props.attachments}
       canSubmit={canSubmit}
@@ -54,6 +58,7 @@ export function HomeComposer(props: {
       selectedAgentId={props.selectedAgent}
       selectedFormatId={props.outputType}
       selectAgentLabel={t("composer.selectAgent")}
+      refreshAgentsLabel="Refresh Agents"
       submitLabel={t("composer.create")}
       renderPromptInput={(inputProps) => (
         <AgentPromptRichTextInput
@@ -66,6 +71,7 @@ export function HomeComposer(props: {
       onPromptChange={props.onPromptChange}
       onRemoveAttachment={props.onRemoveAttachment}
       onSelectedAgentChange={props.onSelectedAgentChange}
+      onRefreshAgents={props.onRefreshAgents}
       onSubmit={props.onCreate}
     />
   );

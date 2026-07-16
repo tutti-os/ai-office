@@ -2,6 +2,7 @@ import type {
   AiEditMode,
   Id,
   LocalAgentTargetStatus,
+  LocalAgentCatalogResponse,
   ReasoningEffort,
   RunEventType,
   RunStatus,
@@ -17,6 +18,7 @@ export type {
   Id,
   LocalAgentTargetModel,
   LocalAgentTargetStatus,
+  LocalAgentCatalogResponse,
   ReasoningEffort,
   RunEventType,
   RunStatus,
@@ -165,6 +167,7 @@ export interface TemplatesResponse {
 export interface AppSnapshot {
   projects: DocumentProject[];
   runtimeProfiles: RuntimeProfile[];
+  localAgentCatalog: LocalAgentCatalogResponse;
   activeRuns: DocumentRun[];
   runEvents: DocumentRunEvent[];
   templates: DocumentTemplate[];
@@ -247,9 +250,7 @@ export interface ProjectAssetUploadResponse {
   sizeBytes: number;
 }
 
-export interface LocalAgentTargetStatusResponse {
-  agents: LocalAgentTargetStatus[];
-}
+export interface LocalAgentTargetStatusResponse extends LocalAgentCatalogResponse {}
 
 export type OfficeCliSource = "env" | "bundled" | "tutti" | "missing";
 

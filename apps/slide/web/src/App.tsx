@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hasActiveAgentRun } from "@ai-app/agent/conversation";
-import { isAvailableLocalAgentRuntimeProfileId, mergeLocalAgentRuntimeProfiles, resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
+import { applyLocalAgentCatalogResponse } from "@ai-app/agent/local-agent-catalog";
 import {
   History,
   Upload,
@@ -14,7 +14,7 @@ import { reportUserActive } from "./app/tuttiActivity";
 import { pushHomeRoute, pushSlideRoute, readCurrentRoute, routePath, type AppRoute } from "./app/slideRoutes";
 import { useAgentConversation } from "./app/useAgentConversation";
 import { useHomeAttachments, type HomeAttachment } from "./app/useHomeAttachments";
-import { cancelRun, clearProjectHistory, createProject, deleteProject, fetchBootstrapSnapshot, fetchLocalAgentTargets, fetchOfficeCliStatus, getProject, importProjectFile, installOfficeCli, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
+import { cancelRun, clearProjectHistory, createProject, deleteProject, fetchBootstrapSnapshot, fetchLocalAgentTargets, fetchOfficeCliStatus, getProject, importProjectFile, installOfficeCli, listProjects, listTemplates, persistLocalAgentSelection, startAiEdit, updateDeckSlideHtml } from "./api/projects";
 import { DeckArtifactRuntimeAdapter, type DeckAgentRuntimeProvider } from "./artifact/deckArtifactAdapter";
 import { PptxArtifactRuntimeAdapter } from "./artifact/pptxArtifactAdapter";
 import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
@@ -45,7 +45,7 @@ export function App() {
   const [prompt, setPrompt] = useState("");
   const [outputType, setOutputType] = useState<OutputType>("html");
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [selectedAgent, setSelectedAgent] = useState("");
+  const [selectedAgent, setSelectedAgentState] = useState("");
   const [activePanel, setActivePanel] = useState<"templates" | "history">("templates");
   const [creating, setCreating] = useState(false);
   const [route, setRoute] = useState<AppRoute>(() => readCurrentRoute());
@@ -81,6 +81,37 @@ export function App() {
       setHistoryProjects((projects) => [detail.project, ...projects.filter((project) => project.id !== detail.project.id)]);
     },
   });
+
+  const applyAgentCatalog = useCallback((response: Awaited<ReturnType<typeof fetchLocalAgentTargets>>) => {
+    localAgentTargetsRef.current = response.agents;
+    setLocalAgentTargets(response.agents);
+    setLocalAgentTargetsLoaded(response.source !== "seed" || response.agents.length > 0);
+    setRuntimeProfiles((currentProfiles) => {
+      setSelectedAgentState((currentSelection) => {
+        const result = applyLocalAgentCatalogResponse({
+          currentProfiles,
+          currentSelectedRuntimeProfileId: currentSelection,
+          response,
+        });
+        if (result.notice) setError(result.notice);
+        return result.selectedRuntimeProfileId;
+      });
+      return response.runtimeProfiles;
+    });
+    if (response.error) setError(response.error);
+  }, []);
+  const setSelectedAgent = useCallback((profileId: string) => {
+    setSelectedAgentState(profileId);
+    void persistLocalAgentSelection(profileId).catch((cause) => {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    });
+  }, []);
+
+  const refreshLocalAgentCatalog = useCallback(() =>
+    fetchLocalAgentTargets(true).then(applyAgentCatalog).catch((cause) => {
+      setLocalAgentTargetsLoaded(true);
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }), [applyAgentCatalog]);
   const deckArtifactAdapter = useMemo(() => new DeckArtifactRuntimeAdapter(), []);
   const pptxArtifactAdapter = useMemo(() => new PptxArtifactRuntimeAdapter(), []);
   const {
@@ -152,49 +183,16 @@ export function App() {
   useEffect(() => {
     void fetchBootstrapSnapshot()
       .then((snapshot) => {
-        const enabledProfiles = snapshot.runtimeProfiles.filter((profile) => profile.enabled && profile.kind === "local-agent");
-        const mergedProfiles = mergeLocalAgentRuntimeProfiles(enabledProfiles, localAgentTargetsRef.current);
-        setRuntimeProfiles(mergedProfiles);
-        setSelectedAgent((current) => {
-          if (isAvailableLocalAgentRuntimeProfileId(current, mergedProfiles, localAgentTargetsRef.current)) return current;
-          return resolvePreferredLocalAgentRuntimeProfileId({
-            profiles: mergedProfiles,
-            agents: localAgentTargetsRef.current,
+        applyAgentCatalog({ ...snapshot.localAgentCatalog, runtimeProfiles: snapshot.runtimeProfiles });
+        void fetchLocalAgentTargets()
+          .then(applyAgentCatalog)
+          .catch((err) => {
+            setLocalAgentTargetsLoaded(true);
+            setError(err instanceof Error ? err.message : String(err));
           });
-        });
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchLocalAgentTargets()
-      .then((response) => {
-        if (cancelled) return;
-        localAgentTargetsRef.current = response.agents;
-        setLocalAgentTargets(response.agents);
-        setLocalAgentTargetsLoaded(true);
-        setRuntimeProfiles((current) => {
-          const merged = mergeLocalAgentRuntimeProfiles(current, response.agents);
-          setSelectedAgent((selected) => {
-            if (isAvailableLocalAgentRuntimeProfileId(selected, merged, response.agents)) return selected;
-            return resolvePreferredLocalAgentRuntimeProfileId({
-              profiles: merged,
-              agents: response.agents,
-            });
-          });
-          return merged;
-        });
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setLocalAgentTargetsLoaded(true);
-        setError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [applyAgentCatalog]);
 
   useEffect(() => {
     void fetchOfficeCliStatus()
@@ -523,6 +521,7 @@ export function App() {
             prompt={prompt}
             selectedAgent={selectedAgent}
             localAgentTargets={localAgentTargetsLoaded ? localAgentTargets : []}
+            localAgentTargetsLoaded={localAgentTargetsLoaded}
             runtimeProfiles={localAgentTargetsLoaded ? runtimeProfiles : []}
             onAddFiles={homeAttachments.addFiles}
             onCreate={createFromPrompt}
@@ -531,6 +530,7 @@ export function App() {
             onPromptChange={setPrompt}
             onRemoveAttachment={homeAttachments.removeAttachment}
             onSelectedAgentChange={setSelectedAgent}
+            onRefreshAgents={() => void refreshLocalAgentCatalog()}
           />
         </section>
 

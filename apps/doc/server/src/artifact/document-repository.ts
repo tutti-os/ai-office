@@ -36,6 +36,11 @@ export class DocumentRepository {
     this.runtimeProfiles.ensureSeedData();
   }
 
+  localAgentCatalogStore() {
+    this.ensureSeedData();
+    return this.runtimeProfiles;
+  }
+
   interruptActiveRuns(reason: string) {
     return this.runs.interruptActiveRuns(reason);
   }
@@ -293,20 +298,12 @@ export class DocumentRepository {
     return this.runtimeProfiles.get(profileId);
   }
 
-  getLocalAgentRuntimeProfileByTarget(agentTargetId: string) {
-    return this.runtimeProfiles.getLocalAgentByTarget(agentTargetId);
-  }
-
   getRuntimeProfileForRun(run: Pick<DocumentRun, "runtime" | "agentTargetId" | "provider" | "model">) {
     return this.runtimeProfiles.getForRun(run);
   }
 
   getDefaultRuntimeProfile() {
     return this.runtimeProfiles.getDefault();
-  }
-
-  syncLocalAgentRuntimeProfiles(agents: Array<{ agentTargetId: string; providerId: string; displayName: string; supported: boolean }>) {
-    this.runtimeProfiles.syncLocalAgentRuntimeProfiles(agents);
   }
 
   private materializeProject(project: DocumentProject) {

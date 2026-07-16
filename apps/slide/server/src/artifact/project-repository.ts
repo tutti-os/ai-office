@@ -72,6 +72,11 @@ export class ProjectRepository {
     this.runtimeProfiles.ensureSeedData();
   }
 
+  localAgentCatalogStore() {
+    this.ensureSeedData();
+    return this.runtimeProfiles;
+  }
+
   snapshot() {
     this.ensureSeedData();
     const db = getDb();
@@ -114,19 +119,9 @@ export class ProjectRepository {
     return this.runtimeProfiles.get(profileId);
   }
 
-  getLocalAgentRuntimeProfileByTarget(agentTargetId: string) {
-    this.ensureSeedData();
-    return this.runtimeProfiles.getLocalAgentByTarget(agentTargetId);
-  }
-
   getRuntimeProfileForRun(run: Pick<SlideRun, "runtime" | "agentTargetId" | "provider" | "model">) {
     this.ensureSeedData();
     return this.runtimeProfiles.getForRun(run);
-  }
-
-  syncLocalAgentRuntimeProfiles(agents: Array<{ agentTargetId: string; providerId: string; displayName: string; supported: boolean }>) {
-    this.ensureSeedData();
-    this.runtimeProfiles.syncLocalAgentRuntimeProfiles(agents);
   }
 
   async createProject(input: CreateProjectRequest) {

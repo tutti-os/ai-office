@@ -44,6 +44,21 @@ export interface LocalAgentTargetStatus {
   reason?: string;
 }
 
+export type LocalAgentCatalogSource = "seed" | "persisted" | "live" | "stale";
+
+export interface LocalAgentCatalogSnapshot {
+  agents: LocalAgentTargetStatus[];
+  selectedRuntimeProfileId: string;
+  observedAt: string | null;
+  source: LocalAgentCatalogSource;
+  stale: boolean;
+  error: string | null;
+}
+
+export interface LocalAgentCatalogResponse extends LocalAgentCatalogSnapshot {
+  runtimeProfiles: RuntimeProfile[];
+}
+
 export interface BaseRun {
   id: Id;
   projectId: Id;

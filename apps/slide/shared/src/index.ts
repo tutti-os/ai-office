@@ -2,6 +2,7 @@ import type {
   AiEditMode,
   Id,
   LocalAgentTargetStatus,
+  LocalAgentCatalogResponse,
   ReasoningEffort,
   RunEventType,
   RunStatus,
@@ -18,6 +19,7 @@ export type {
   Id,
   LocalAgentTargetModel,
   LocalAgentTargetStatus,
+  LocalAgentCatalogResponse,
   ReasoningEffort,
   RuntimeKind,
   RuntimeProfile,
@@ -203,6 +205,7 @@ export interface AppSnapshot {
   projects: SlideProject[];
   artifacts: SlideArtifact[];
   runtimeProfiles: RuntimeProfile[];
+  localAgentCatalog: LocalAgentCatalogResponse;
   activeRuns: SlideRun[];
   runEvents: SlideRunEvent[];
   lastSeq: number;
@@ -293,9 +296,7 @@ export interface ProjectRunsResponse {
   runs: SlideRunTimelineItem[];
 }
 
-export interface LocalAgentTargetStatusResponse {
-  agents: LocalAgentTargetStatus[];
-}
+export interface LocalAgentTargetStatusResponse extends LocalAgentCatalogResponse {}
 
 export type OfficeCliSource = "env" | "bundled" | "tutti" | "missing";
 

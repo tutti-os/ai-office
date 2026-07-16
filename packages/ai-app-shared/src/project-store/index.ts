@@ -2,14 +2,16 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
-  isPlaceholderRuntimeProfileModel,
-  localAgentProviderIdsMatch,
-  localAgentRuntimeProfileSeed,
   normalizeRuntimeProfileProviderId,
-  runtimeProfileModelForProvider,
-  stripRuntimeProfileModelPrefix,
 } from "../agent-providers/index.js";
-import type { AgentConversationMessage, AgentConversationRole, AgentConversationSession, BaseRun, BaseRunEvent, LocalAgentTargetStatus, RuntimeProfile } from "@ai-app/shared/types";
+import type { AgentConversationMessage, AgentConversationRole, AgentConversationSession, BaseRun, BaseRunEvent, LocalAgentCatalogSnapshot, LocalAgentTargetStatus, RuntimeProfile } from "@ai-app/shared/types";
+import {
+  ensureLocalAgentCatalogStateTable,
+  persistLocalAgentCatalog as persistLocalAgentCatalogState,
+  persistSelectedLocalAgentRuntimeProfile as persistSelectedLocalAgentRuntimeProfileState,
+  readLocalAgentCatalogSnapshot as readLocalAgentCatalogSnapshotState,
+} from "./local-agent-catalog-store.js";
+import { syncLocalAgentRuntimeProfiles as syncLocalAgentRuntimeProfilesState } from "./sync-local-agent-runtime-profiles.js";
 
 export type DatabaseMigrator = (database: DatabaseSync) => void;
 
@@ -73,6 +75,7 @@ export class RuntimeProfileStore {
 
   ensureSeedData() {
     const database = this.getDb();
+    ensureLocalAgentCatalogStateTable(database, this.tableName);
     const count = (database.prepare(`SELECT COUNT(*) AS count FROM ${this.tableName}`).get() as { count: number }).count;
     if (count === 0) this.insertDefaultProfiles(database);
     this.options.normalize?.(database);
@@ -144,67 +147,43 @@ export class RuntimeProfileStore {
     agents: readonly (Pick<LocalAgentTargetStatus, "agentTargetId" | "providerId" | "displayName" | "supported"> &
       Partial<Pick<LocalAgentTargetStatus, "defaultModelId" | "models">>)[],
   ) {
-    const existingProfiles = this.list();
-    const database = this.getDb();
-    const now = new Date().toISOString();
-    const allowedLocalAgentIds = new Set<string>();
-    const supportedAgentTargetIds = new Set(
-      agents.filter((candidate) => candidate.supported).map((candidate) => candidate.agentTargetId),
-    );
-    for (const agent of agents.filter((candidate) => candidate.supported)) {
-      const seed = localAgentRuntimeProfileSeed(agent.agentTargetId, agent.providerId, agent.displayName, agent);
-      allowedLocalAgentIds.add(seed.id);
-      const exactTargetMatches = existingProfiles.filter(
-        (profile) => profile.kind === "local-agent" && profile.agentTargetId === agent.agentTargetId,
-      );
-      const existing = exactTargetMatches.find((profile) => profile.id === seed.id);
-      const sameProviderTargets = agents.filter(
-        (candidate) => localAgentProviderIdsMatch(candidate.providerId, agent.providerId),
-      );
-      const legacyMatches = existingProfiles.filter(
-        (profile) =>
-          profile.kind === "local-agent" &&
-          !profile.agentTargetId &&
-          localAgentProviderIdsMatch(profile.provider, agent.providerId),
-      );
-      const migrationSource = exactTargetMatches.length === 1
-        ? exactTargetMatches[0]
-        : sameProviderTargets.length === 1 && legacyMatches.length === 1
-          ? legacyMatches[0]
-          : null;
-      if (!existing) {
-        const migratedModel = migrationSource
-          ? normalizeRuntimeProfileProviderId(migrationSource.provider) === seed.provider
-            ? migrationSource.model
-            : `${seed.provider}:${stripRuntimeProfileModelPrefix(migrationSource.model, migrationSource.provider)}`
-          : seed.model;
-        database
-          .prepare(
-            `INSERT INTO ${this.tableName} (id, kind, agent_target_id, provider, model, display_name, enabled, capabilities, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          )
-          .run(seed.id, seed.kind, seed.agentTargetId, seed.provider, migratedModel, seed.displayName, seed.enabled ? 1 : 0, json(seed.capabilities), now, now);
-        continue;
-      }
-      const providerChanged = normalizeRuntimeProfileProviderId(existing.provider) !== seed.provider;
-      const model = providerChanged
-        ? seed.model
-        : isPlaceholderRuntimeProfileModel(existing.model, agent.providerId)
-          ? runtimeProfileModelForProvider(agent.providerId, agent)
-          : existing.model;
-      database
-        .prepare(
-          `UPDATE ${this.tableName}
-           SET agent_target_id = ?, provider = ?, model = ?, display_name = ?, enabled = ?, capabilities = ?, updated_at = ?
-           WHERE id = ?`,
-        )
-        .run(seed.agentTargetId, seed.provider, model, seed.displayName, seed.enabled ? 1 : 0, json(seed.capabilities), now, seed.id);
-    }
-    for (const profile of existingProfiles) {
-      if (profile.kind !== "local-agent" || allowedLocalAgentIds.has(profile.id)) continue;
-      if (profile.agentTargetId && !supportedAgentTargetIds.has(profile.agentTargetId)) continue;
-      database.prepare(`DELETE FROM ${this.tableName} WHERE id = ?`).run(profile.id);
-    }
+    syncLocalAgentRuntimeProfilesState({
+      database: this.getDb(),
+      tableName: this.tableName,
+      existingProfiles: this.list(),
+      agents,
+    });
+  }
+
+  readLocalAgentCatalogSnapshot(): LocalAgentCatalogSnapshot {
+    this.ensureSeedData();
+    return readLocalAgentCatalogSnapshotState(this.getDb(), this.tableName);
+  }
+
+  persistLocalAgentCatalog(input: {
+    agents: LocalAgentTargetStatus[];
+    selectedRuntimeProfileId?: string;
+    observedAt: string;
+  }): LocalAgentCatalogSnapshot {
+    this.ensureSeedData();
+    return persistLocalAgentCatalogState({
+      database: this.getDb(),
+      tableName: this.tableName,
+      ...input,
+      syncProfiles: (agents) => this.syncLocalAgentRuntimeProfiles(agents),
+      listProfiles: () => this.list(),
+    });
+  }
+
+  persistSelectedLocalAgentRuntimeProfile(profileId: string): LocalAgentCatalogSnapshot {
+    const snapshot = this.readLocalAgentCatalogSnapshot();
+    return persistSelectedLocalAgentRuntimeProfileState({
+      database: this.getDb(),
+      tableName: this.tableName,
+      profileId,
+      profiles: this.list(),
+      snapshot,
+    });
   }
 
   private get tableName() {

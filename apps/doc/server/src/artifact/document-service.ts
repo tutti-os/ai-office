@@ -20,7 +20,7 @@ import {
   type UpdateProjectRequest,
 } from "@ai-doc/shared";
 import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
-import { resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
+import { ArtifactLocalAgentCatalog } from "@ai-app/agent/local-agent-catalog";
 import { projectAssetFileExtensions, projectAssetMimeTypes } from "@ai-app/shared/artifact-assets";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
 import { openPathInFileManager } from "@ai-app/shared/local-open";
@@ -40,11 +40,16 @@ export class DocumentService {
   private readonly cancelledRunIds = new Set<string>();
   private readonly runAssistantMessageIds = new Map<string, string>();
   private readonly runExecutor: RuntimeRunExecutor<DocumentRun, DocumentRunEvent, DocumentProject, AiEditRequest>;
+  private readonly localAgentCatalog: ArtifactLocalAgentCatalog;
 
   constructor(
     private readonly repo: DocumentRepository,
     private readonly events: EventHub,
   ) {
+    this.localAgentCatalog = new ArtifactLocalAgentCatalog({
+      load: (refresh) => this.runtimes.listLocalAgentTargets(refresh),
+      store: this.repo.localAgentCatalogStore(),
+    });
     this.runExecutor = new RuntimeRunExecutor({
       repo,
       events,
@@ -57,6 +62,7 @@ export class DocumentService {
     const snapshot = this.repo.snapshot();
     return {
       ...snapshot,
+      localAgentCatalog: this.localAgentCatalog.getResponse(),
       templates: documentTemplates,
     };
   }
@@ -65,10 +71,12 @@ export class DocumentService {
     return this.repo.interruptActiveRuns(reason);
   }
 
-  async listLocalAgentTargets() {
-    const agents = await this.runtimes.listLocalAgentTargets();
-    this.repo.syncLocalAgentRuntimeProfiles(agents);
-    return { agents };
+  async listLocalAgentTargets(refresh = false) {
+    return this.localAgentCatalog.list(refresh);
+  }
+
+  async selectLocalAgentRuntimeProfile(profileId: string) {
+    return this.localAgentCatalog.select(profileId);
   }
 
   listProjects() {
@@ -372,27 +380,7 @@ export class DocumentService {
   }
 
   private async resolveRuntimeProfile(runtimeProfileId: string | null | undefined) {
-    if (runtimeProfileId) {
-      const existing = this.repo.getRuntimeProfile(runtimeProfileId);
-      if (existing.id === runtimeProfileId && existing.kind !== "local-agent") return existing;
-      const agents = await this.runtimes.listLocalAgentTargets();
-      this.repo.syncLocalAgentRuntimeProfiles(agents);
-      const synced = this.repo.getRuntimeProfile(runtimeProfileId);
-      if (synced.id !== runtimeProfileId) throw new Error(`Runtime profile not found: ${runtimeProfileId}`);
-      if (!synced.agentTargetId || !agents.some((agent) => agent.agentTargetId === synced.agentTargetId && agent.supported)) {
-        throw new Error(`Agent Target is unavailable: ${synced.agentTargetId ?? runtimeProfileId}`);
-      }
-      return synced;
-    }
-    const agents = await this.runtimes.listLocalAgentTargets();
-    this.repo.syncLocalAgentRuntimeProfiles(agents);
-    const profiles = this.repo.snapshot().runtimeProfiles;
-    const preferredProfileId = resolvePreferredLocalAgentRuntimeProfileId({
-      profiles,
-      agents,
-    });
-    if (!preferredProfileId) throw new Error("No available Agent Target");
-    return this.repo.getRuntimeProfile(preferredProfileId);
+    return this.localAgentCatalog.resolveRuntimeProfile(runtimeProfileId);
   }
 
   private requireProjectSession(projectId: string, sessionId: string) {

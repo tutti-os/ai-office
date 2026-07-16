@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { isTuttiPdfExportAvailable } from "./tuttiPdfBridge";
 import { resolveDocumentActiveState } from "./documentActiveState";
 import { createDocumentRuntimeLoaders } from "./documentRuntimeLoaders";
@@ -28,6 +28,7 @@ import { useHomeAttachments } from "./useHomeAttachments";
 import { createHomeDocumentActions } from "./useHomeDocumentActions";
 import { useDocumentWorkbenchBootstrap } from "./useDocumentWorkbenchBootstrap";
 import { useI18n } from "../i18n";
+import { persistLocalAgentSelection } from "../api/runtime";
 import {
   defaultToolbarState,
   type EditorStats,
@@ -96,12 +97,13 @@ export function useRuntimeWorkbenchModel() {
   const [outputType, setOutputType] = useState<DocumentType>("html");
   const [runtimeProfiles, setRuntimeProfiles] = useState<RuntimeProfile[]>([]);
   const [localAgentTargets, setLocalAgentTargets] = useState<LocalAgentTargetStatus[]>([]);
+  const [localAgentTargetsLoaded, setLocalAgentTargetsLoaded] = useState(false);
   const [officeCliStatus, setOfficeCliStatus] = useState<OfficeCliStatus | null>(null);
   const [officeCliInstalling, setOfficeCliInstalling] = useState(false);
   const [sourceExporting, setSourceExporting] = useState(false);
   const [pdfExporting, setPdfExporting] = useState(false);
   const [exportNotice, setExportNotice] = useState("");
-  const [selectedRuntimeProfileId, setSelectedRuntimeProfileId] = useState("");
+  const [selectedRuntimeProfileId, setSelectedRuntimeProfileState] = useState("");
   const homeAttachments = useHomeAttachments();
   const [homePanel, setHomePanel] = useState<HomePanel>("templates");
   const [historyProjects, setHistoryProjects] = useState<DocumentProject[]>([]);
@@ -136,14 +138,22 @@ export function useRuntimeWorkbenchModel() {
     [selectedTemplateCategory, templates],
   );
 
-  useDocumentWorkbenchBootstrap({
+  const refreshLocalAgentCatalog = useDocumentWorkbenchBootstrap({
     setError,
     setLocalAgentTargets,
+    setLocalAgentTargetsLoaded,
     setOfficeCliStatus,
     setRuntimeProfiles,
-    setSelectedRuntimeProfileId,
+    setSelectedRuntimeProfileId: setSelectedRuntimeProfileState,
     setTemplates,
   });
+
+  const setSelectedRuntimeProfileId = useCallback((profileId: string) => {
+    setSelectedRuntimeProfileState(profileId);
+    void persistLocalAgentSelection(profileId).catch((cause) => {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    });
+  }, []);
 
   const { loadDocxDocument, loadHtmlDocument, loadMarkdownDocument } = createDocumentRuntimeLoaders({
     clearArtifact,
@@ -348,6 +358,7 @@ export function useRuntimeWorkbenchModel() {
     loadTemplate,
     loading,
     localAgentTargets,
+    localAgentTargetsLoaded,
     markdownRuntime,
     markdownSaveState,
     officeCliInstalling,
@@ -361,6 +372,7 @@ export function useRuntimeWorkbenchModel() {
     requestHomeRoute,
     runtime,
     runtimeProfiles,
+    refreshLocalAgentCatalog,
     saveState,
     selectedRuntimeProfileId,
     selectedTemplateCategory,

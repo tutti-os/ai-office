@@ -23,6 +23,7 @@ export function SheetHome(props: {
   loading: boolean;
   error: string;
   localAgentTargets: LocalAgentTargetStatus[];
+  localAgentTargetsLoaded: boolean;
   officeCliInstalling: boolean;
   officeCliStatus: OfficeCliStatus | null;
   prompt: string;
@@ -38,6 +39,7 @@ export function SheetHome(props: {
   onPromptChange: (value: string) => void;
   onRemoveAttachment: (id: string) => void;
   onRuntimeProfileChange: (profileId: string) => void;
+  onRefreshAgents: () => void;
 }) {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -76,6 +78,7 @@ export function SheetHome(props: {
             officeCliStatus={props.officeCliStatus}
             prompt={props.prompt}
             localAgentTargets={props.localAgentTargets}
+            localAgentTargetsLoaded={props.localAgentTargetsLoaded}
             runtimeProfiles={props.runtimeProfiles}
             selectedRuntimeProfileId={props.selectedRuntimeProfileId}
             onAddFiles={props.onAddFiles}
@@ -84,6 +87,7 @@ export function SheetHome(props: {
             onPromptChange={props.onPromptChange}
             onRemoveAttachment={props.onRemoveAttachment}
             onRuntimeProfileChange={props.onRuntimeProfileChange}
+            onRefreshAgents={props.onRefreshAgents}
           />
         </section>
 
@@ -122,6 +126,7 @@ function SheetComposer(props: {
   error: string;
   loading: boolean;
   localAgentTargets: LocalAgentTargetStatus[];
+  localAgentTargetsLoaded: boolean;
   officeCliInstalling: boolean;
   officeCliStatus: OfficeCliStatus | null;
   prompt: string;
@@ -133,6 +138,7 @@ function SheetComposer(props: {
   onPromptChange: (value: string) => void;
   onRemoveAttachment: (id: string) => void;
   onRuntimeProfileChange: (profileId: string) => void;
+  onRefreshAgents: () => void;
 }) {
   const { t } = useI18n();
   return (
@@ -141,6 +147,8 @@ function SheetComposer(props: {
       agentProfiles={props.runtimeProfiles}
       agentTargets={props.localAgentTargets}
       agentUnavailableLabel={t("composer.agentUnavailable")}
+      agentCatalogLoading={!props.localAgentTargetsLoaded}
+      loadingAgentsLabel="Loading Agents…"
       acceptedFileTypes={contextAttachmentFileAccept}
       attachments={props.attachments}
       canSubmit={props.canCreate}
@@ -159,12 +167,14 @@ function SheetComposer(props: {
       selectedAgentId={props.selectedRuntimeProfileId}
       selectedFormatId="xlsx"
       selectAgentLabel={t("composer.selectAgent")}
+      refreshAgentsLabel="Refresh Agents"
       submitLabel={t("composer.create")}
       onAddFiles={props.onAddFiles}
       onFormatChange={() => undefined}
       onPromptChange={props.onPromptChange}
       onRemoveAttachment={props.onRemoveAttachment}
       onSelectedAgentChange={props.onRuntimeProfileChange}
+      onRefreshAgents={props.onRefreshAgents}
       onSubmit={props.onCreate}
     />
   );
