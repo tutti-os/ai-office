@@ -5,14 +5,13 @@ import {
   createDefaultLocalAgentRuntime,
   type AgentEvent,
   type DetectContext,
+  type DetectedProvider,
   type LocalAgentProviderPlugin,
   type RawAgentEvent,
   type RawAgentStream,
   type SkillMaterializationRecord,
 } from "@tutti-os/agent-acp-kit";
 import {
-  loadTuttiAgentCatalog,
-  loadTuttiAgentComposerOptions,
   loadTuttiAgentSkillContext,
   type LoadTuttiAgentSkillContextInput,
   type TuttiRecommendedSystemPrompt,
@@ -21,7 +20,6 @@ import { localAgentModelIdForAcp, localAgentProviderIdsMatch, normalizeRuntimePr
 import type { BaseAiEditRequest, BaseRun, LocalAgentTargetStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { safePathSegment } from "@ai-app/shared/local-paths";
 import type { RuntimeEditContext, RuntimeProvider, RuntimeStreamEvent } from "@ai-app/agent/runtime";
-import { logAgentComposerOptionsFailure, projectAgentTargetModels } from "./agent-target-models.js";
 
 const DEFAULT_TIMEOUT_MS = 180_000;
 export type { SkillMaterializationFile, SkillMaterializationRecord } from "@tutti-os/agent-acp-kit";
@@ -144,8 +142,9 @@ export class LocalAgentRuntimeProvider<
 
   async listLocalAgentTargets(refresh = false): Promise<LocalAgentTargetStatus[]> {
     const cwd = configuredWorkspaceRoot();
-    const detectionContext: DetectContext | undefined = cwd || refresh
-      ? { ...(cwd ? { cwd } : {}), ...(refresh ? { refresh: true } : {}) }
+    const env = this.tuttiCliDetectionEnv();
+    const detectionContext: DetectContext | undefined = cwd || refresh || env
+      ? { ...(cwd ? { cwd } : {}), ...(env ? { env } : {}), ...(refresh ? { refresh: true } : {}) }
       : undefined;
     return this.loadAgentTargets(detectionContext);
   }
@@ -158,23 +157,7 @@ export class LocalAgentRuntimeProvider<
     this.controllers.set(context.run.id, controller);
 
     try {
-      const agentCwd = workspaceRoot;
-      const composer = await loadTuttiAgentComposerOptions({
-        runtime: this.localAgentRuntime,
-        agentTargetId,
-        cwd: agentCwd,
-        commandEnvNames: this.options.commandEnvNames,
-        detectContext: context.agentDetectContext ?? { cwd: agentCwd },
-        ...(isPlaceholderProfileModel(context.runtimeProfile.model, context.runtimeProfile.provider)
-          ? {}
-          : { model: localAgentModelIdForAcp(context.runtimeProfile.model, context.runtimeProfile.provider) }),
-        ...(context.request.reasoningEffort ? { reasoningEffort: context.request.reasoningEffort } : {}),
-        signal: controller.signal,
-      });
-      if (normalizeRuntimeProfileProviderId(composer.providerId) !== normalizeRuntimeProfileProviderId(context.runtimeProfile.provider)) {
-        throw new Error(`Agent Target provider metadata changed during execution: ${agentTargetId}`);
-      }
-      const provider = this.resolveProviderId(composer.providerId) ?? composer.providerId;
+      const provider = this.resolveProviderId(context.runtimeProfile.provider) ?? context.runtimeProfile.provider;
       const sessionStore = new LocalAgentSessionStore(workspaceRoot, this.options.sessionDirName ?? ".ai-app");
       const conversationSessionId = context.conversation?.sessionId ?? context.project.id;
       const providerResumeEnabled = this.options.useProviderResume?.(context) ?? true;
@@ -197,7 +180,6 @@ export class LocalAgentRuntimeProvider<
           context,
           controller,
           provider,
-          composer,
           agentTargetId,
           persistProviderSession: providerResumeEnabled,
           resume,
@@ -214,7 +196,6 @@ export class LocalAgentRuntimeProvider<
             context,
             controller,
             provider,
-            composer,
             agentTargetId,
             persistProviderSession: providerResumeEnabled,
             resume: { mode: "fresh" },
@@ -238,12 +219,11 @@ export class LocalAgentRuntimeProvider<
     persistProviderSession: boolean;
     agentTargetId: string;
     provider: string;
-    composer: Awaited<ReturnType<typeof loadTuttiAgentComposerOptions>>;
     resume: { mode: "provider"; providerSessionId?: string; resumeToken?: string } | { mode: "fresh" };
     sessionStore: LocalAgentSessionStore;
     workspaceRoot: string;
   }) {
-    const { context, controller, persistProviderSession, agentTargetId, provider, composer, resume, sessionStore, workspaceRoot } = input;
+    const { context, controller, persistProviderSession, agentTargetId, provider, resume, sessionStore, workspaceRoot } = input;
     let lastError: Extract<AgentEvent, { type: "error" }> | undefined;
     const agentCwd = workspaceRoot;
     const skillContext = normalizeSkillManifestResult(await this.options.buildSkillManifest?.(context, workspaceRoot));
@@ -251,9 +231,12 @@ export class LocalAgentRuntimeProvider<
     const conversationId = context.conversation?.conversationId ?? context.project.id;
     const sessionId = context.conversation?.sessionId ?? context.project.id;
     const model = isPlaceholderProfileModel(context.runtimeProfile.model, context.runtimeProfile.provider)
-      ? composer.modelConfig.currentValue || composer.modelConfig.defaultValue || undefined
+      ? undefined
       : localAgentModelIdForAcp(context.runtimeProfile.model, provider);
+    const appEnv = (await this.options.buildEnv?.(context, workspaceRoot)) ?? {};
+    const tuttiCliEnv = this.tuttiCliDetectionEnv();
     for await (const event of this.localAgentRuntime.run({
+      agentTargetId,
       runId: context.run.id,
       conversationId,
       sessionId,
@@ -268,7 +251,7 @@ export class LocalAgentRuntimeProvider<
       reasoning: context.request.reasoningEffort ?? undefined,
       mcpServers: this.options.buildMcpServers?.(context) ?? [],
       skillManifest: skillContext.skills,
-      env: (await this.options.buildEnv?.(context, workspaceRoot)) ?? {},
+      env: { ...appEnv, ...(tuttiCliEnv ?? {}) },
       timeoutMs: this.options.timeoutMs?.() ?? DEFAULT_TIMEOUT_MS,
       extraAllowedDirs: this.options.extraAllowedDirs?.(context, workspaceRoot) ?? [workspaceRoot],
       resume,
@@ -312,42 +295,17 @@ export class LocalAgentRuntimeProvider<
     return resolveRegisteredProviderId(provider, this.localAgentRuntime.listProviders().map((item: any) => String(item.id)));
   }
 
+  private tuttiCliDetectionEnv() {
+    if (process.env.TUTTI_CLI?.trim()) return undefined;
+    const configured = this.options.commandEnvNames
+      ?.map((name) => process.env[name]?.trim())
+      .find(Boolean);
+    return configured ? { TUTTI_CLI: configured } : undefined;
+  }
+
   private async loadAgentTargets(detectContext?: DetectContext): Promise<LocalAgentTargetStatus[]> {
-    const catalog = await loadTuttiAgentCatalog({
-      runtime: this.localAgentRuntime,
-      detectContext,
-      commandEnvNames: this.options.commandEnvNames,
-    });
-    const targets = catalog.agents.map((agent) => {
-      const supported = agent.runtimeSupported && agent.availability.status === "available";
-      return {
-        agentTargetId: agent.agentTargetId,
-        providerId: agent.providerId,
-        provider: agent.providerId,
-        displayName: agent.displayName,
-        supported,
-        authState: supported ? "ok" as const : "unknown" as const,
-        models: [],
-        ...(agent.agentTargetId === catalog.defaultAgentTargetId ? { isDefault: true as const } : {}),
-        ...(!supported ? { reason: agent.availability.detail || agent.availability.reasonCode || "Agent Target unavailable" } : {}),
-      };
-    });
-    return Promise.all(targets.map(async (target) => {
-      if (!target.supported) return target;
-      try {
-        const composer = await loadTuttiAgentComposerOptions({
-          runtime: this.localAgentRuntime,
-          agentTargetId: target.agentTargetId,
-          cwd: (detectContext?.cwd ?? configuredWorkspaceRoot()) || undefined,
-          commandEnvNames: this.options.commandEnvNames,
-          detectContext,
-        });
-        return { ...target, ...projectAgentTargetModels(composer) };
-      } catch (error) {
-        logAgentComposerOptionsFailure(error, target);
-        return target;
-      }
-    }));
+    const detections = await this.localAgentRuntime.detect(detectContext);
+    return projectDetectedAgentTargets(detections);
   }
 
   async cancel(runId: string) {
@@ -358,6 +316,26 @@ export class LocalAgentRuntimeProvider<
     this.controllers.delete(runId);
     return { cancelled: true };
   }
+}
+
+export function projectDetectedAgentTargets(
+  detections: DetectedProvider[],
+): LocalAgentTargetStatus[] {
+  const projected = detections.flatMap((detection) => detection.agentTargetId ? [{
+    agentTargetId: detection.agentTargetId,
+    providerId: String(detection.provider),
+    provider: String(detection.provider),
+    displayName: detection.displayName,
+    supported: detection.supported,
+    authState: detection.authState,
+    models: detection.models.map((model) => ({ id: model.id, label: model.label })),
+    ...(detection.defaultModelId ? { defaultModelId: detection.defaultModelId } : {}),
+    ...(detection.isDefault ? { isDefault: true as const } : {}),
+    ...(detection.reason ? { reason: detection.reason } : {}),
+  }] : []);
+  if (projected.some((target) => target.isDefault)) return projected;
+  const fallbackDefault = projected.find((target) => target.supported) ?? projected[0];
+  return projected.map((target) => target === fallbackDefault ? { ...target, isDefault: true as const } : target);
 }
 
 export function reconcileAgentTargetExecutionProfile(
