@@ -91,7 +91,11 @@ const runExecutorSource = readFileSync("packages/ai-app-agent/src/run-executor/i
 assert.doesNotMatch(runExecutorSource, /managedAgent/i);
 assert.doesNotMatch(runExecutorSource, /request\.headers/);
 const localRuntimeSource = readFileSync("packages/ai-app-agent/src/local-agent-runtime/index.ts", "utf8");
-assert.match(localRuntimeSource, /detectContext: context\.agentDetectContext/);
+assert.match(localRuntimeSource, /context\?\.agentDetectContext/);
+assert.match(localRuntimeSource, /localAgentRuntime\.detect\(detectContext\)/);
+assert.match(localRuntimeSource, /agentTargetId,/);
+assert.doesNotMatch(localRuntimeSource, /loadTuttiAgentCatalog/);
+assert.doesNotMatch(localRuntimeSource, /loadTuttiAgentComposerOptions/);
 assert.doesNotMatch(localRuntimeSource, /managedAgent/i);
 for (const file of [
   "apps/doc/server/src/runtimes/local-agent-provider.ts",
