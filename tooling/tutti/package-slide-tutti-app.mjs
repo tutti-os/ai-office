@@ -30,6 +30,7 @@ export TUTTI_APP_ID="\${TUTTI_APP_ID:-ai-slide}"
 export AI_SLIDE_APP_VERSION="${version}"
 export AI_SLIDE_WEB_DIST="$package_dir/dist"
 export AI_SLIDE_HOME="\${TUTTI_APP_DATA_DIR:-$package_dir/.data}"
+export TUTTI_APP_DATABASE_DIR="\${TUTTI_APP_DATABASE_DIR:-$AI_SLIDE_HOME/data}"
 export AI_SLIDE_RUNTIME_ROOT="\${TUTTI_APP_RUNTIME_DIR:-$AI_SLIDE_HOME/.runtime}"
 export AI_SLIDE_LOG_ROOT="\${TUTTI_APP_LOG_DIR:-$AI_SLIDE_RUNTIME_ROOT/logs}"
 export AI_SLIDE_WORKSPACE_ROOT="\${TUTTI_WORKSPACE_ROOT:-$AI_SLIDE_HOME}"
@@ -41,7 +42,20 @@ base_url="\${TUTTI_APP_BASE_URL:-http://$HOST:$PORT}"
 export AI_SLIDE_SERVER_URL="$base_url"
 
 node_bin="\${TUTTI_APP_NODE:-node}"
-mkdir -p "$AI_SLIDE_HOME" "$AI_SLIDE_RUNTIME_ROOT" "$AI_SLIDE_LOG_ROOT"
+mkdir -p "$AI_SLIDE_HOME" "$TUTTI_APP_DATABASE_DIR" "$AI_SLIDE_RUNTIME_ROOT" "$AI_SLIDE_LOG_ROOT"
+legacy_db="$AI_SLIDE_HOME/data/ai-slide.db"
+database_db="$TUTTI_APP_DATABASE_DIR/ai-slide.db"
+if [ "$legacy_db" != "$database_db" ] && [ ! -e "$database_db" ] && [ -f "$legacy_db" ]; then
+  database_tmp="$database_db.migrate-$$"
+  wal_tmp="$database_db-wal.migrate-$$"
+  rm -f "$database_tmp" "$wal_tmp"
+  if [ -f "$legacy_db-wal" ]; then
+    cp "$legacy_db-wal" "$wal_tmp"
+    mv "$wal_tmp" "$database_db-wal"
+  fi
+  cp "$legacy_db" "$database_tmp"
+  mv "$database_tmp" "$database_db"
+fi
 
 exec "$node_bin" "$package_dir/server/server.js"
 `;
@@ -67,6 +81,7 @@ This package runs AI Slide as a local Tutti workspace app.
 - \`tutti.app.json\` declares the app runtime, localized metadata, CLI surface, and references endpoints.
 - \`tutti.cli.json\` exposes project commands such as \`slide projects list\`, \`slide projects get\`, and \`slide projects create\` for other Tutti apps and agents.
 - Durable app data is stored under \`AI_SLIDE_HOME\`.
+- Active SQLite database and WAL files use \`TUTTI_APP_DATABASE_DIR\` when provided.
 - Runtime scratch data is stored under \`AI_SLIDE_RUNTIME_ROOT\`.
 - Backend logs, if added later, must stay under \`AI_SLIDE_LOG_ROOT\`.
 - Templates load from CloudFront by default at \`/office-templates/slide/template.json\`; set \`AI_SLIDE_TEMPLATE_PROVIDER=local\` to use \`AI_SLIDE_TEMPLATE_ROOT\` and \`AI_SLIDE_TEMPLATE_ASSET_ROOT\`.

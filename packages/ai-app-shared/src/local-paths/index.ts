@@ -18,11 +18,14 @@ export interface AppPaths {
 export function createAppPaths(options: AppPathOptions): AppPaths {
   const envHome = process.env[options.homeEnvVar];
   const root = envHome ? resolve(envHome) : join(homedir(), options.defaultHomeDirName);
+  const databaseRoot = process.env.TUTTI_APP_DATABASE_DIR?.trim()
+    ? resolve(process.env.TUTTI_APP_DATABASE_DIR)
+    : join(root, "data");
   return {
     root,
     dataDir: join(root, "data"),
     projectsDir: join(root, "projects"),
-    dbPath: join(root, "data", options.dbFileName ?? `${options.defaultHomeDirName.replace(/^\./, "")}.db`),
+    dbPath: join(databaseRoot, options.dbFileName ?? `${options.defaultHomeDirName.replace(/^\./, "")}.db`),
   };
 }
 

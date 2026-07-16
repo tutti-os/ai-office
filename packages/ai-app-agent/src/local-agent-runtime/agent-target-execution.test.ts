@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { RuntimeProfile } from "@ai-app/shared/types";
+import { projectAgentTargetModels } from "./agent-target-models.js";
 import { isPlaceholderProfileModel, LocalAgentRuntimeProvider, reconcileAgentTargetExecutionProfile, resolveRegisteredProviderId } from "./index.js";
 
 test("execution profile derives provider from exact target and resets cross-provider model", () => {
@@ -53,6 +54,28 @@ test("execution resolution discovers project-scoped targets with the workspace c
 test("placeholder model detection uses target metadata aliases instead of the resolved adapter id", () => {
   assert.equal(isPlaceholderProfileModel("claude-code:default", "claude-code"), true);
   assert.equal(isPlaceholderProfileModel("claude-code:default", "claude"), false);
+});
+
+test("agent target models use composer options and preserve the configured default", () => {
+  const projected = projectAgentTargetModels({
+    modelConfig: {
+      configurable: true,
+      currentValue: "gpt-5.1",
+      defaultValue: "gpt-5.2",
+      options: [
+        { id: "gpt-5.1", value: "gpt-5.1", label: "GPT-5.1" },
+        { id: "gpt-5.2", value: "gpt-5.2", label: "GPT-5.2" },
+        { id: "duplicate", value: "gpt-5.2", label: "Duplicate" },
+      ],
+    },
+  } as any);
+  assert.deepEqual(projected, {
+    defaultModelId: "gpt-5.2",
+    models: [
+      { id: "gpt-5.1", label: "GPT-5.1" },
+      { id: "gpt-5.2", label: "GPT-5.2" },
+    ],
+  });
 });
 
 function profile(agentTargetId: string, provider: string, model: string): RuntimeProfile {

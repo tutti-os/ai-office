@@ -94,7 +94,27 @@ export class ArtifactAppHttpRoutes<
     server.get("/api/health", async () => ({ ok: true, app: this.input.appId }));
     server.get("/api/bootstrap", async () => this.input.service.bootstrap());
     server.get("/api/templates", async () => ({ templates: await this.input.listTemplates() }));
-    server.get("/api/local-agent/targets", async (request: ArtifactRouteRequest) => this.input.service.listLocalAgentTargets(request.headers));
+    server.get("/api/local-agent/targets", async (request: ArtifactRouteRequest) => {
+      try {
+        const result = await this.input.service.listLocalAgentTargets(request.headers);
+        const agents = isAgentTargetResponse(result) ? result.agents : [];
+        console.info(JSON.stringify({
+          event: "ai_app.local_agent.targets.loaded",
+          agentCount: agents.length,
+          supportedCount: agents.filter((agent) => agent.supported).length,
+          modelCount: agents.reduce((total, agent) => total + agent.models.length, 0),
+        }));
+        return result;
+      } catch (error) {
+        const candidate = error as { code?: unknown; message?: unknown };
+        console.error(JSON.stringify({
+          event: "ai_app.local_agent.targets.failed",
+          code: typeof candidate?.code === "string" ? candidate.code : "unknown",
+          message: typeof candidate?.message === "string" ? candidate.message : "Unable to load local Agent Targets",
+        }));
+        throw error;
+      }
+    });
   }
 
   private registerToolchainRoutes(server: ArtifactRouteServer) {
@@ -202,6 +222,14 @@ export class ArtifactAppHttpRoutes<
       socket.on("close", dispose);
     });
   }
+}
+
+function isAgentTargetResponse(value: unknown): value is { agents: Array<{ supported: boolean; models: unknown[] }> } {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    Array.isArray((value as { agents?: unknown }).agents),
+  );
 }
 
 function sendError(reply: ArtifactRouteReply, error: unknown, fallback: string, statusCode: number) {

@@ -106,6 +106,7 @@ async function validateBootstrap(root) {
   const text = await readFile(bootstrapPath, "utf8").catch(() => "");
   if (!text.includes("TUTTI_APP_NODE")) errors.push("bootstrap.sh must use TUTTI_APP_NODE");
   if (!text.includes("TUTTI_APP_DATA_DIR")) errors.push("bootstrap.sh must use TUTTI_APP_DATA_DIR");
+  if (!text.includes("TUTTI_APP_DATABASE_DIR")) errors.push("bootstrap.sh must use TUTTI_APP_DATABASE_DIR");
   if (!text.includes("TUTTI_CLI")) errors.push("bootstrap.sh must pass through TUTTI_CLI");
 }
 
