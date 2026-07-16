@@ -8,12 +8,10 @@ import { getTuttiCliStatus, openTuttiAppRoute } from "./tutti-cli.js";
 import type { DocumentService } from "../artifact/document-service.js";
 import { installOfficeCli } from "../toolchains/officecli.js";
 
-type ManagedAgentHeaders = Record<string, string | string[] | undefined>;
-
 export function registerTuttiCliRoutes(server: FastifyInstance, documents: DocumentService) {
-  server.post("/tutti/cli/status", async (request, reply) => {
+  server.post("/tutti/cli/status", async (_request, reply) => {
     const projects = documents.listProjects().projects;
-    const agents = await documents.listLocalAgentTargets(request.headers).catch(() => ({ agents: [] }));
+    const agents = await documents.listLocalAgentTargets().catch(() => ({ agents: [] }));
     const latestProject = projects[0] ?? null;
     return reply.send(cliJsonOutput({
       ok: true,
@@ -44,7 +42,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/projects/create", async (request, reply) => {
-    return createProjectCliResponse(reply, documents, readCliInputBody(request.body), request.headers);
+    return createProjectCliResponse(reply, documents, readCliInputBody(request.body));
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/projects/open", async (request, reply) => {
@@ -141,11 +139,11 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/agent/run", async (request, reply) => {
-    return agentRunCliResponse(reply, documents, readCliInputBody(request.body), request.headers);
+    return agentRunCliResponse(reply, documents, readCliInputBody(request.body));
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/agent/edit", async (request, reply) => {
-    return agentRunCliResponse(reply, documents, readCliInputBody(request.body), request.headers);
+    return agentRunCliResponse(reply, documents, readCliInputBody(request.body));
   });
 
   server.post<{ Body: unknown }>("/tutti/cli/agent/events", async (request, reply) => {
@@ -239,7 +237,6 @@ async function createProjectCliResponse(
   reply: FastifyReply,
   documents: DocumentService,
   input: Record<string, unknown>,
-  headers: ManagedAgentHeaders,
 ) {
   if (Object.hasOwn(input, "content")) {
     return sendCliError(reply, 400, "invalid_input", "content is not supported; pass prompt to run the AI Doc app agent");
@@ -250,7 +247,7 @@ async function createProjectCliResponse(
   const mode = normalizeAiMode(input.mode);
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
   try {
-    const runtimeProfileId = await runtimeProfileIdFromCliInput(input, documents, headers);
+    const runtimeProfileId = await runtimeProfileIdFromCliInput(input, documents);
     if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
     const result = await documents.createProject({
       title: typeof input.title === "string" ? input.title : undefined,
@@ -266,7 +263,7 @@ async function createProjectCliResponse(
           userPrompt: prompt,
           mode,
           runtimeProfileId: runtimeProfileId.value,
-        }, headers)).run
+        })).run
       : null;
     return reply.send(cliJsonOutput({
       ok: true,
@@ -285,7 +282,6 @@ async function agentRunCliResponse(
   reply: FastifyReply,
   documents: DocumentService,
   input: Record<string, unknown>,
-  headers: ManagedAgentHeaders,
 ) {
   const projectId = requiredString(input, "project-id");
   const prompt = requiredString(input, "prompt");
@@ -294,7 +290,7 @@ async function agentRunCliResponse(
   if (!prompt) return sendCliError(reply, 400, "invalid_input", "prompt is required");
   if (!mode) return sendCliError(reply, 400, "invalid_input", "mode must be write or rewrite");
   try {
-    const runtimeProfileId = await runtimeProfileIdFromCliInput(input, documents, headers);
+    const runtimeProfileId = await runtimeProfileIdFromCliInput(input, documents);
     if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
     const { project } = documents.getProject(projectId);
     const result = await documents.startAiEdit(projectId, {
@@ -307,7 +303,7 @@ async function agentRunCliResponse(
       mode,
       sessionId: optionalString(input, "session-id"),
       runtimeProfileId: runtimeProfileId.value,
-    }, headers);
+    });
     return reply.send(cliJsonOutput({
       ...result,
       openTarget: projectOpenTarget(projectId),
@@ -335,7 +331,6 @@ function optionalString(input: Record<string, unknown>, key: string) {
 async function runtimeProfileIdFromCliInput(
   input: Record<string, unknown>,
   documents: DocumentService,
-  headers: ManagedAgentHeaders,
 ): Promise<{ value?: string; error?: string }> {
   const agentTargetId = optionalString(input, "agent-id");
   const provider = optionalString(input, "provider");
@@ -345,7 +340,7 @@ async function runtimeProfileIdFromCliInput(
   }
   if (runtimeProfileId) return { value: runtimeProfileId };
   if (!agentTargetId && !provider) return { value: undefined };
-  const { agents } = await documents.listLocalAgentTargets(headers);
+  const { agents } = await documents.listLocalAgentTargets();
   const target = resolveAgentTargetFromCatalog({ agents, agentTargetId, legacyProvider: provider, useDefault: false });
   if (target.error || !target.value) return { error: target.error ?? "agent-id is required" };
   return runtimeProfileIdFromAgentTarget(target.value.agentTargetId);

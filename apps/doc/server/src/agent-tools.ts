@@ -18,7 +18,6 @@ export function buildDocAppToolMcpServers(context: RuntimeEditContext) {
       gatewayBaseUrl: `${agentToolBaseUrl()}/api/agent-tools`,
       token,
       serverDir: resolve(dirname(fileURLToPath(import.meta.url)), ".."),
-      requireSandboxEntrypoint: Boolean(context.managedAgent),
     }),
   ];
 }

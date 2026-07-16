@@ -12,9 +12,6 @@
     "bootstrap": "bootstrap.sh",
     "healthcheckPath": "/api/health"
   },
-  "hostCompatibility": {
-    "requiredTuttiCapabilities": ["managed-model-cli-v1"]
-  },
   "cli": {
     "manifest": "tutti.cli.json"
   },

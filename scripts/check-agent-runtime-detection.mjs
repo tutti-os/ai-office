@@ -83,14 +83,16 @@ for (const file of [
   assert.match(source, /resolveAgentTargetFromCatalog/);
   assert.match(source, /optionalString\(input, "agent-id"\)/);
   assert.match(source, /legacyProvider: provider/);
-  assert.match(source, /headers: ManagedAgentHeaders/);
-  assert.match(source, /listLocalAgentTargets\(request\.headers\)/);
+  assert.doesNotMatch(source, /ManagedAgentHeaders/);
+  assert.doesNotMatch(source, /request\.headers/);
 }
 
-assert.doesNotMatch(readFileSync("packages/ai-app-agent/src/run-executor/index.ts", "utf8"), /managedAgentProviderId/);
+const runExecutorSource = readFileSync("packages/ai-app-agent/src/run-executor/index.ts", "utf8");
+assert.doesNotMatch(runExecutorSource, /managedAgent/i);
+assert.doesNotMatch(runExecutorSource, /request\.headers/);
 const localRuntimeSource = readFileSync("packages/ai-app-agent/src/local-agent-runtime/index.ts", "utf8");
 assert.match(localRuntimeSource, /detectContext: context\.agentDetectContext/);
-assert.doesNotMatch(localRuntimeSource, /detectContext:\s*context\.managedAgent/);
+assert.doesNotMatch(localRuntimeSource, /managedAgent/i);
 for (const file of [
   "apps/doc/server/src/runtimes/local-agent-provider.ts",
   "apps/slide/server/src/runtimes/local-agent-provider.ts",
@@ -98,11 +100,11 @@ for (const file of [
 ]) {
   const source = readFileSync(file, "utf8");
   assert.match(source, /detectContext: context\.agentDetectContext/);
-  assert.doesNotMatch(source, /detectContext:\s*context\.managedAgent/);
+  assert.doesNotMatch(source, /managedAgent/i);
 }
 for (const file of ["apps/doc/tutti.app.json", "apps/slide/tutti.app.json", "apps/sheet/tutti.app.json"]) {
   const manifest = JSON.parse(readFileSync(file, "utf8"));
-  assert.deepEqual(manifest.hostCompatibility?.requiredTuttiCapabilities, ["managed-model-cli-v1"]);
+  assert.ok(!manifest.hostCompatibility?.requiredTuttiCapabilities?.includes("managed-model-cli-v1"));
 }
 
 console.log("Agent Target runtime checks passed.");

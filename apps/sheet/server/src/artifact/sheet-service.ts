@@ -47,8 +47,8 @@ export class SheetService {
     return this.repo.snapshot();
   }
 
-  async listLocalAgentTargets(headers?: Record<string, string | string[] | undefined>) {
-    const agents = await this.runtimes.listLocalAgentTargets(headers);
+  async listLocalAgentTargets() {
+    const agents = await this.runtimes.listLocalAgentTargets();
     this.repo.syncLocalAgentRuntimeProfiles(agents);
     return { agents };
   }
@@ -208,14 +208,10 @@ export class SheetService {
     };
   }
 
-  async startAiEdit(
-    projectId: string,
-    request: AiEditRequest,
-    headers?: Record<string, string | string[] | undefined>,
-  ) {
+  async startAiEdit(projectId: string, request: AiEditRequest) {
     await requireOfficeCli();
     const runtimeProject = await this.createRuntimeProject(projectId);
-    const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId, headers);
+    const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);
     const session = this.resolveConversationSession(projectId, runtimeProject.title, request.sessionId);
@@ -252,7 +248,7 @@ export class SheetService {
     void this.executeRun(runtimeProject, runtimeProfile, { ...request, mode: request.mode ?? "write" }, run.id, {
       assistantMessageId: assistantMessage.id,
       sessionId: session.id,
-    }, headers);
+    });
     return { run };
   }
 
@@ -270,14 +266,11 @@ export class SheetService {
     return this.requireProjectSession(projectId, sessionId);
   }
 
-  private async resolveRuntimeProfile(
-    runtimeProfileId: string | null | undefined,
-    headers?: Record<string, string | string[] | undefined>,
-  ) {
+  private async resolveRuntimeProfile(runtimeProfileId: string | null | undefined) {
     if (runtimeProfileId) {
       const existing = this.repo.getRuntimeProfile(runtimeProfileId);
       if (existing.id === runtimeProfileId && existing.kind !== "local-agent") return existing;
-      const agents = await this.runtimes.listLocalAgentTargets(headers);
+      const agents = await this.runtimes.listLocalAgentTargets();
       this.repo.syncLocalAgentRuntimeProfiles(agents);
       const synced = this.repo.getRuntimeProfile(runtimeProfileId);
       if (synced.id !== runtimeProfileId) throw new Error(`Runtime profile not found: ${runtimeProfileId}`);
@@ -286,7 +279,7 @@ export class SheetService {
       }
       return synced;
     }
-    const agents = await this.runtimes.listLocalAgentTargets(headers);
+    const agents = await this.runtimes.listLocalAgentTargets();
     this.repo.syncLocalAgentRuntimeProfiles(agents);
     const profiles = this.repo.snapshot().runtimeProfiles;
     const preferredProfileId = resolvePreferredLocalAgentRuntimeProfileId({
@@ -377,7 +370,6 @@ export class SheetService {
     request: AiEditRequest,
     runId: string,
     conversation: { assistantMessageId: string; sessionId: string },
-    headers?: Record<string, string | string[] | undefined>,
   ) {
     let refreshedArtifact = false;
     let workspaceFingerprint = "";
@@ -386,7 +378,6 @@ export class SheetService {
       project: runtimeProject,
       request,
       runtimeProfile,
-      managedAgentHeaders: headers,
       runId,
       conversation: { conversationId: runtimeProject.id, sessionId: conversation.sessionId },
       history: this.repo.conversationHistory(conversation.sessionId, request.userPrompt),
