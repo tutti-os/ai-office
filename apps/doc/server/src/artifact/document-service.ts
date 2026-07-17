@@ -101,10 +101,11 @@ export class DocumentService {
     });
     if (type === "html" && templateId && templateProjectSeed) {
       await materializeTemplateAssetsToProject(templateId, join(projectWorkspaceRoot(project.id), "assets"), content);
-      await this.repo.syncProjectAgentInstructions(project.id, { force: true });
+      this.repo.invalidateAndStartAgentContext(project.id);
     }
-    this.events.emit({ type: "project.created", projectId: project.id, payload: { project } });
-    return { project };
+    const result = { project, preparation: this.repo.getProjectPreparation(project.id) };
+    this.events.emit({ type: "project.created", projectId: project.id, payload: result });
+    return result;
   }
 
   async importProjectFile(input: { fileName: string; mimeType: string; bytes: Buffer; title?: string }) {
@@ -317,7 +318,7 @@ export class DocumentService {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
     if (project.type === "docx") await requireOfficeCli();
-    await this.repo.syncProjectAgentInstructions(projectId);
+    await this.repo.ensureAgentContextReady(projectId);
     const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);

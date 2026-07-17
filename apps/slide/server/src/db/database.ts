@@ -8,7 +8,7 @@ export const getDb = createDatabaseProvider({
   migrate,
 });
 
-function migrate(database: DatabaseSync) {
+export function migrate(database: DatabaseSync) {
   database.exec(`
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
@@ -35,6 +35,24 @@ function migrate(database: DatabaseSync) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_artifacts_project ON artifacts(project_id, updated_at);
+
+    CREATE TABLE IF NOT EXISTS project_preparation (
+      project_id TEXT PRIMARY KEY,
+      core_state TEXT NOT NULL DEFAULT 'pending',
+      agent_context_state TEXT NOT NULL DEFAULT 'pending',
+      agent_context_generation INTEGER NOT NULL DEFAULT 0,
+      agent_context_version TEXT,
+      last_error_phase TEXT,
+      last_error_path TEXT,
+      last_error_code TEXT,
+      last_error_message TEXT,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    );
+
+    INSERT OR IGNORE INTO project_preparation
+      (project_id, core_state, agent_context_state, agent_context_generation, updated_at)
+    SELECT id, 'ready', 'pending', 0, updated_at FROM projects;
 
     CREATE TABLE IF NOT EXISTS runtime_profiles (
       id TEXT PRIMARY KEY,

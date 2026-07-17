@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import {
@@ -9,6 +8,7 @@ import {
   type SlideProject,
 } from "@ai-slide/shared";
 import { projectWorkspaceRoot } from "../local/paths.js";
+import { withProjectPreparationPhase } from "@ai-app/shared/project-preparation";
 import { loadTemplateDeckSource, localTemplateSourceRoots, type TemplateDeckSource } from "../templates/template-service.js";
 import { defaultDeckSkillFiles, defaultDeckSkillSlug } from "./default-deck-skill.js";
 import { mimeTypeForAssetFileName, projectAssetRelativePath } from "./project-file-names.js";
@@ -102,19 +102,19 @@ export async function requireTemplateDeckSource(templateId: string) {
 
 export function prepareProjectAgentFiles(projectRoot: string, project: SlideProject, artifact: SlideArtifact) {
   return Promise.all([
-    syncDefaultDeckSkill(projectRoot, project, artifact),
-    syncProjectTemplateSkill(projectRoot, project, artifact),
-    writeProjectAgentInstructions(projectRoot, artifact),
+    withProjectPreparationPhase("default_skill", join(projectRoot, ".ai-slide", "skills", defaultDeckSkillSlug), () => syncDefaultDeckSkill(projectRoot, project, artifact)),
+    withProjectPreparationPhase("template_skill", join(projectRoot, ".ai-slide", "skills", safeSkillSlug(project.templateId ?? "template")), () => syncProjectTemplateSkill(projectRoot, project, artifact)),
+    withProjectPreparationPhase("agent_instructions", join(projectRoot, "AGENTS.md"), () => writeProjectAgentInstructions(projectRoot, artifact)),
   ]);
 }
 
 export function projectAgentInstructionsVersion(project: SlideProject, artifact: SlideArtifact) {
-  return [project.updatedAt, project.templateId ?? "", artifact.id, artifact.revision, artifact.updatedAt].join(":");
+  return ["slide-agent-context-v2", project.templateId ?? "", artifact.id, artifact.type, artifact.fileRef].join(":");
 }
 
 export async function syncProjectTemplateSkill(projectRoot: string, project: SlideProject, artifact: SlideArtifact) {
   if (artifact.type !== "deck" || !project.templateId) return;
-  const sourceDir = readTemplateSkillSource(project.templateId);
+  const sourceDir = await readTemplateSkillSource(project.templateId);
   if (!sourceDir) return;
   const skillRoot = join(projectRoot, ".ai-slide", "skills", safeSkillSlug(project.templateId));
   await mkdir(skillRoot, { recursive: true });
@@ -240,12 +240,17 @@ async function projectAssetInstructions(projectId: string) {
 async function listProjectAssets(projectId: string) {
   const assetsDir = join(projectWorkspaceRoot(projectId), "assets");
   const entries = await readdir(assetsDir, { withFileTypes: true }).catch(() => []);
-  return Promise.all(entries.filter((entry) => entry.isFile()).map(async (entry) => ({
-    fileName: entry.name,
-    path: projectAssetRelativePath(entry.name),
-    mimeType: mimeTypeForAssetFileName(entry.name),
-    sizeBytes: (await stat(join(assetsDir, entry.name))).size,
-  })));
+  const files = entries.filter((entry) => entry.isFile()).sort((left, right) => left.name.localeCompare(right.name));
+  const assets = new Array<{ fileName: string; path: string; mimeType: string; sizeBytes: number }>(files.length);
+  await mapWithConcurrency(files.map((entry, index) => ({ entry, index })), fileWriteConcurrency, async ({ entry, index }) => {
+    assets[index] = {
+      fileName: entry.name,
+      path: projectAssetRelativePath(entry.name),
+      mimeType: mimeTypeForAssetFileName(entry.name),
+      sizeBytes: (await stat(join(assetsDir, entry.name))).size,
+    };
+  });
+  return assets;
 }
 
 const fileWriteConcurrency = 6;
@@ -285,11 +290,16 @@ async function mapWithConcurrency<T>(items: readonly T[], concurrency: number, w
   }));
 }
 
-function readTemplateSkillSource(templateId: string | null) {
+async function readTemplateSkillSource(templateId: string | null) {
   if (!templateId) return null;
-  const templateDir = localTemplateSourceRoots().map((root) => join(root, templateId)).find((candidate) => existsSync(candidate));
+  const candidates = localTemplateSourceRoots().map((root) => join(root, templateId));
+  const availability = await Promise.all(candidates.map(async (candidate) => ({
+    candidate,
+    available: await stat(join(candidate, "SKILL.md")).then((value) => value.isFile()).catch(() => false),
+  })));
+  const templateDir = availability.find((item) => item.available)?.candidate;
   if (!templateDir) return null;
-  return existsSync(join(templateDir, "SKILL.md")) ? templateDir : null;
+  return templateDir;
 }
 
 function safeTemplateProjectAssetPath(value: string) {

@@ -93,15 +93,13 @@ export async function materializeTemplateAssetsToProject(templateId: string, pro
   if (assetPaths.size === 0) return;
   const templateUrl = absoluteCloudUrl(template.documentUrl);
   const templateBaseUrl = templateUrl.slice(0, templateUrl.lastIndexOf("/") + 1);
-  await Promise.all(
-    Array.from(assetPaths, async (assetPath) => {
+  await mapWithConcurrency(Array.from(assetPaths), 6, async (assetPath) => {
       const response = await fetch(`${templateBaseUrl}assets/${encodeAssetPath(assetPath)}`);
       if (!response.ok) throw new Error(`Unable to fetch template asset ${assetPath}: ${response.status} ${response.statusText}`);
       const targetPath = join(projectAssetsDir, assetPath);
       await mkdir(dirname(targetPath), { recursive: true });
       await writeFile(targetPath, Buffer.from(await response.arrayBuffer()));
-    }),
-  );
+  });
 }
 
 async function getCloudTemplate(templateId: string) {
@@ -220,6 +218,17 @@ function extractCandidateUrls(html: string) {
     if (match[2]) urls.push(match[2]);
   }
   return urls;
+}
+
+async function mapWithConcurrency<T>(items: readonly T[], concurrency: number, work: (item: T) => Promise<void>) {
+  let nextIndex = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const item = items[nextIndex];
+      nextIndex += 1;
+      await work(item);
+    }
+  }));
 }
 
 function templateProviderKind(): TemplateProviderKind {

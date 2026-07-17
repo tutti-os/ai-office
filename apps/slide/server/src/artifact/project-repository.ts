@@ -18,10 +18,11 @@ import {
   type UpdateProjectRequest,
 } from "@ai-slide/shared";
 import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
+import { asProjectPreparationError } from "@ai-app/shared/project-preparation";
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
 import { getDb, rowOrNull, rows } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
-import { loadTemplateDeckSource, type TemplateDeckSource } from "../templates/template-service.js";
+import { loadTemplateDeckSource } from "../templates/template-service.js";
 import { writeDeckHtmlExportBundle } from "./deck-html-export.js";
 import {
   assertIndexedSlideNames,
@@ -39,18 +40,15 @@ import {
 import {
   isBlankDeckManifest,
   isGeneratedImageTemplateDeck,
-  materializeDeckProject,
-  materializePptxProject,
   materializeTemplateDeckSource,
-  prepareProjectAgentFiles,
-  projectAgentInstructionsVersion,
   requireTemplateDeckSource,
-  writeProjectAgentInstructions,
 } from "./project-materialization.js";
 import { importedProjectTitle, normalizedAssetFileName, normalizedExportFileName, projectAssetRelativePath, writeUniqueNamedFile } from "./project-file-names.js";
+import { insertProjectWithArtifact } from "./project-persistence.js";
+import { materializeSlideProjectCore, SlideProjectPreparation } from "./project-preparation.js";
 import { projectsWithArtifactTypeSql, rowToArtifact, rowToProject, type ArtifactRow, type ProjectRowWithArtifactType } from "./project-rows.js";
 export class ProjectRepository {
-  private readonly preparedAgentInstructions = new Map<string, string>();
+  private readonly preparation = new SlideProjectPreparation();
   private readonly conversations = new SqliteAgentConversationStore(getDb, {
     createSessionId: randomUUID,
     createMessageId: randomUUID,
@@ -103,6 +101,10 @@ export class ProjectRepository {
     return row ? rowToArtifact(row) : null;
   }
 
+  getProjectPreparation(projectId: string) {
+    return this.preparation.getStatus(projectId);
+  }
+
   getActiveArtifact(projectId: string) {
     const project = this.getProject(projectId);
     if (!project) return null;
@@ -138,20 +140,25 @@ export class ProjectRepository {
     const artifact = defaultArtifactInput({ projectId: id, type: artifactType, now });
     const db = getDb();
 
-    db.prepare(
-      `INSERT INTO projects (id, title, active_artifact_id, template_id, template_name, updated_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'system', ?, ?)`,
-    ).run(id, title, artifact.id, input.templateId ?? null, input.templateName ?? null, now, now);
-    db.prepare(
-      `INSERT INTO artifacts (id, project_id, type, file_ref, mime_type, revision, updated_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 1, 'system', ?, ?)`,
-    ).run(artifact.id, id, artifact.type, artifact.fileRef, artifact.mimeType, now, now);
+    insertProjectWithArtifact(db, {
+      project: { id, title, activeArtifactId: artifact.id, templateId: input.templateId ?? null, templateName: input.templateName ?? null },
+      artifact,
+      now,
+    });
 
     const project = this.getProject(id);
     const createdArtifact = this.getArtifact(artifact.id);
     if (!project || !createdArtifact) throw new Error("Unable to create project");
-    await this.materializeProject(project, createdArtifact, templateSource);
-    return { project, artifact: createdArtifact };
+    try {
+      await materializeSlideProjectCore(project, createdArtifact, templateSource);
+      this.preparation.markCore(project.id, "ready");
+    } catch (error) {
+      const failure = asProjectPreparationError(error, "core_materialization", createdArtifact.fileRef);
+      this.preparation.markCore(project.id, "failed", failure);
+      throw failure;
+    }
+    this.preparation.startAgentContext(project, createdArtifact);
+    return { project, artifact: createdArtifact, preparation: this.getProjectPreparation(project.id) };
   }
 
   async importPptxProjectFromFile(input: { sourcePath: string; title?: string }) {
@@ -454,7 +461,8 @@ export class ProjectRepository {
     const assetsDir = join(root, "assets");
     await mkdir(assetsDir, { recursive: true });
     const fileName = await writeUniqueNamedFile(assetsDir, normalizedAssetFileName(input.fileName, input.mimeType), input.bytes);
-    await writeProjectAgentInstructions(root, artifact);
+    this.preparation.invalidateAgentContext(projectId);
+    this.preparation.startAgentContext(project, artifact);
     return {
       path: projectAssetRelativePath(fileName),
       fileName,
@@ -575,29 +583,17 @@ export class ProjectRepository {
     return { artifact: updatedArtifact, manifest: nextManifest, changed: true };
   }
 
-  private async materializeProject(project: SlideProject, artifact: SlideArtifact, templateSource: TemplateDeckSource | null = null) {
-    const root = projectWorkspaceRoot(project.id);
-    await mkdir(root, { recursive: true });
-    await Promise.all([
-      artifact.type === "deck"
-        ? materializeDeckProject(root, project, artifact, templateSource)
-        : materializePptxProject(root, project, artifact),
-      prepareProjectAgentFiles(root, project, artifact),
-    ]);
-    this.preparedAgentInstructions.set(project.id, projectAgentInstructionsVersion(project, artifact));
-  }
-  async syncProjectAgentInstructions(projectId: string) {
+  async ensureAgentContextReady(projectId: string) {
     const project = this.getProject(projectId);
-    if (!project) return null;
+    if (!project) throw new Error("Project not found");
     const artifact = this.getArtifact(project.activeArtifactId);
-    if (!artifact) return null;
-    const version = projectAgentInstructionsVersion(project, artifact);
-    if (this.preparedAgentInstructions.get(project.id) === version) return { project, artifact };
-    const root = projectWorkspaceRoot(project.id);
-    await mkdir(root, { recursive: true });
-    await prepareProjectAgentFiles(root, project, artifact);
-    this.preparedAgentInstructions.set(project.id, version);
+    if (!artifact) throw new Error("Project artifact not found");
+    await this.preparation.ensureAgentContext(project, artifact);
     return { project, artifact };
+  }
+
+  async syncProjectAgentInstructions(projectId: string) {
+    return this.ensureAgentContextReady(projectId);
   }
 }
 function defaultArtifactInput(input: { projectId: string; type: SlideArtifactType; now: string }) {

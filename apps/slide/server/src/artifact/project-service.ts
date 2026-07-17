@@ -290,9 +290,11 @@ export class ProjectService {
   }
 
   async startAiEdit(projectId: string, request: AiEditRequest) {
+    // Join both durable core readiness and auxiliary context before reading the
+    // runtime project so a failed materialization cannot leak into an agent run.
+    await this.repo.ensureAgentContextReady(projectId);
     const runtimeProject = await this.createRuntimeProject(projectId);
     if (runtimeProject.artifact.type === "pptx") await requireOfficeCli();
-    await this.repo.syncProjectAgentInstructions(projectId);
     const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);
@@ -414,7 +416,13 @@ export class ProjectService {
       if (lastWorkspaceRefreshAt > 0 && now - lastWorkspaceRefreshAt < workspaceRefreshThrottleMs) {
         if (!trailingTimer) {
           const delay = workspaceRefreshThrottleMs - (now - lastWorkspaceRefreshAt);
-          trailingTimer = setTimeout(() => { trailingTimer = null; refreshWorkspace(); }, delay);
+          trailingTimer = setTimeout(() => {
+            trailingTimer = null;
+            // This refresh is advisory; the completion path performs a forced
+            // authoritative refresh. Always consume the timer promise so an IO
+            // failure cannot become an unhandled process rejection.
+            void refreshWorkspace().catch(() => undefined);
+          }, delay);
         }
         if (refreshInFlight) await refreshInFlight;
         return;
