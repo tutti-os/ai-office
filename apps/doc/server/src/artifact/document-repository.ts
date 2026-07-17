@@ -13,7 +13,7 @@ import { asProjectPreparationError, SqliteProjectPreparationCoordinator } from "
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
 import { getDb } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
-import { mimeTypeForAssetFileName, projectAssetRelativePath } from "./project-assets.js";
+import { invalidateProjectAssetCache, mimeTypeForAssetFileName, projectAssetRelativePath } from "./project-assets.js";
 import { insertDocumentProject } from "./document-persistence.js";
 import { materializeDocumentProjectCore, prepareDocumentAgentContext } from "./document-preparation.js";
 export class DocumentRepository {
@@ -95,6 +95,7 @@ export class DocumentRepository {
       DELETE FROM projects;
     `);
     rmSync(appPaths.projectsDir, { force: true, recursive: true });
+    invalidateProjectAssetCache();
     ensureBaseDirs();
     return { projects: [] as DocumentProject[] };
   }
@@ -117,6 +118,7 @@ export class DocumentRepository {
       throw error;
     }
     rmSync(projectWorkspaceRoot(projectId), { force: true, recursive: true });
+    invalidateProjectAssetCache(projectId);
     return { projects: this.listProjects() };
   }
 
@@ -176,6 +178,7 @@ export class DocumentRepository {
     await mkdir(assetsDir, { recursive: true });
     const fileName = uniqueAssetFileName(assetsDir, input.fileName, input.mimeType);
     await writeFile(join(assetsDir, fileName), input.bytes);
+    invalidateProjectAssetCache(projectId);
     this.preparation.invalidateAgentContext(projectId);
     this.startAgentContextPreparation(project);
     return {

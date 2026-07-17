@@ -53,24 +53,28 @@ async function buildSlideAgentSkillContext(
   context: RuntimeEditContext,
   workspaceRoot: string,
 ): Promise<LocalAgentSkillManifestResult> {
-  const projectSkills = await buildProjectSkillManifest(context, workspaceRoot);
-  try {
+  const projectSkillsPromise = buildProjectSkillManifest(context, workspaceRoot);
+  const tuttiContextPromise = (async () => {
     const cwd = tuttiWorkspaceCwd(workspaceRoot);
-    const tuttiContext = await loadTuttiLocalAgentSkillContext({
-      agentTargetId: context.runtimeProfile.agentTargetId!,
-      agentSessionId: context.run.id,
-      cwd,
-      detectContext: context.agentDetectContext ?? { cwd },
-      commandEnvNames: ["AI_SLIDE_TUTTI_CLI"],
-    });
-    return {
-      skills: [...tuttiContext.skills, ...projectSkills],
-      ...(tuttiContext.recommendedSystemPrompt ? { recommendedSystemPrompt: tuttiContext.recommendedSystemPrompt } : {}),
-    };
-  } catch (error) {
-    console.warn(`[ai-slide] Unable to load Tutti agent skill bundle: ${errorMessage(error)}`);
-    return projectSkills;
-  }
+    try {
+      return await loadTuttiLocalAgentSkillContext({
+        agentTargetId: context.runtimeProfile.agentTargetId!,
+        agentSessionId: context.run.id,
+        cwd,
+        detectContext: context.agentDetectContext ?? { cwd },
+        commandEnvNames: ["AI_SLIDE_TUTTI_CLI"],
+      });
+    } catch (error) {
+      console.warn(`[ai-slide] Unable to load Tutti agent skill bundle: ${errorMessage(error)}`);
+      return null;
+    }
+  })();
+  const [projectSkills, tuttiContext] = await Promise.all([projectSkillsPromise, tuttiContextPromise]);
+  if (!tuttiContext) return projectSkills;
+  return {
+    skills: [...tuttiContext.skills, ...projectSkills],
+    ...(tuttiContext.recommendedSystemPrompt ? { recommendedSystemPrompt: tuttiContext.recommendedSystemPrompt } : {}),
+  };
 }
 
 function tuttiWorkspaceCwd(fallback: string) {
@@ -90,63 +94,120 @@ function localAgentTimeoutMs() {
 
 async function buildProjectSkillManifest(context: RuntimeEditContext, workspaceRoot: string): Promise<SkillMaterializationRecord[]> {
   if (context.project.artifact.type !== "deck") return [];
+  const cacheKey = [workspaceRoot, context.project.artifact.id, context.project.templateId ?? "default"].join(":");
+  const cached = projectSkillManifestCache.get(cacheKey);
+  if (cached) {
+    projectSkillManifestCache.delete(cacheKey);
+    projectSkillManifestCache.set(cacheKey, cached);
+    return cached;
+  }
+  const loading = readProjectSkillManifest(workspaceRoot).catch((error) => {
+    projectSkillManifestCache.delete(cacheKey);
+    throw error;
+  });
+  projectSkillManifestCache.set(cacheKey, loading);
+  trimProjectSkillManifestCache();
+  return loading;
+}
+
+async function readProjectSkillManifest(workspaceRoot: string): Promise<SkillMaterializationRecord[]> {
   const skillsRoot = join(workspaceRoot, ".ai-slide", "skills");
   let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
   try {
     entries = await readdir(skillsRoot, { withFileTypes: true });
-  } catch {
-    return [];
+  } catch (error) {
+    if (isMissingFileError(error)) return [];
+    throw error;
   }
 
-  const skills: SkillMaterializationRecord[] = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+  const skillEntries = entries
+    .filter((entry) => entry.isDirectory())
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const skills = await mapWithConcurrency(skillEntries, skillReadConcurrency, async (entry) => {
     const slug = entry.name;
     const root = join(skillsRoot, slug);
     let content = "";
     try {
       content = await readFile(join(root, "SKILL.md"), "utf8");
-    } catch {
-      continue;
+    } catch (error) {
+      if (isMissingFileError(error)) return null;
+      throw error;
     }
-    skills.push({
+    return {
       skillId: slug === "deck-authoring" ? "ai-slide-default:deck-authoring" : `ai-slide-template:${slug}`,
       slug,
       content,
       deliveryMode: "materialized-files",
       materializedPath: join(".local-agent", "skills", slug),
       files: await readSkillMaterializationFiles(root),
-    });
-  }
-  return skills;
+    } satisfies SkillMaterializationRecord;
+  });
+  return skills.filter((skill) => skill !== null);
 }
+
+function trimProjectSkillManifestCache() {
+  while (projectSkillManifestCache.size > maxProjectSkillManifestCacheEntries) {
+    const oldest = projectSkillManifestCache.keys().next().value;
+    if (!oldest) return;
+    projectSkillManifestCache.delete(oldest);
+  }
+}
+
+const maxProjectSkillManifestCacheEntries = 128;
+const skillReadConcurrency = 6;
+const projectSkillManifestCache = new Map<string, Promise<SkillMaterializationRecord[]>>();
 
 async function readSkillMaterializationFiles(root: string): Promise<SkillMaterializationFile[]> {
   const files: SkillMaterializationFile[] = [];
-  await readSkillMaterializationFilesInto(root, root, files);
-  return files;
+  const pendingDirectories = [root];
+  while (pendingDirectories.length > 0) {
+    const directories = pendingDirectories.splice(0, skillReadConcurrency);
+    const directoryEntries = await Promise.all(directories.map(async (directory) => {
+      try {
+        return { directory, entries: await readdir(directory, { withFileTypes: true }) };
+      } catch (error) {
+        if (isMissingFileError(error)) return { directory, entries: [] };
+        throw error;
+      }
+    }));
+    const readableFiles: Array<{ absolutePath: string; relativePath: string }> = [];
+    for (const { directory, entries } of directoryEntries) {
+      for (const entry of entries) {
+        const absolutePath = join(directory, entry.name);
+        const relativePath = relative(root, absolutePath);
+        if (entry.isDirectory()) {
+          pendingDirectories.push(absolutePath);
+        } else if (entry.isFile() && relativePath !== "SKILL.md" && isTextSkillFile(entry.name)) {
+          readableFiles.push({ absolutePath, relativePath });
+        }
+      }
+    }
+    files.push(...await mapWithConcurrency(readableFiles, skillReadConcurrency, async (file) => ({
+      path: file.relativePath,
+      content: await readFile(file.absolutePath, "utf8"),
+    })));
+  }
+  return files.sort((left, right) => left.path.localeCompare(right.path));
 }
 
-async function readSkillMaterializationFilesInto(root: string, dir: string, files: SkillMaterializationFile[]) {
-  let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    const absolutePath = join(dir, entry.name);
-    const relativePath = relative(root, absolutePath);
-    if (entry.isDirectory()) {
-      await readSkillMaterializationFilesInto(root, absolutePath, files);
-      continue;
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await mapper(items[index]!);
     }
-    if (!entry.isFile() || relativePath === "SKILL.md" || !isTextSkillFile(entry.name)) continue;
-    files.push({
-      path: relativePath,
-      content: await readFile(absolutePath, "utf8"),
-    });
-  }
+  }));
+  return results;
+}
+
+function isMissingFileError(error: unknown) {
+  return (error as NodeJS.ErrnoException)?.code === "ENOENT";
 }
 
 function isTextSkillFile(fileName: string) {

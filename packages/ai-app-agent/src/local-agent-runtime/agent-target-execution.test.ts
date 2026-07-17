@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import type { RuntimeProfile } from "@ai-app/shared/types";
 import { isPlaceholderProfileModel, LocalAgentRuntimeProvider, projectDetectedAgentTargets, reconcileAgentTargetExecutionProfile, resolveRegisteredProviderId } from "./index.js";
@@ -85,6 +88,90 @@ test("detections without an exact target id fail closed", () => {
   assert.deepEqual(projectDetectedAgentTargets([
     detectedTarget(undefined, "codex", "Codex", false),
   ]), []);
+});
+
+test("run preparation overlaps skills, env, and session reads and consumes kit timing diagnostics", async (t) => {
+  t.mock.method(console, "info", () => undefined);
+  const workspaceRoot = await mkdtemp(join(tmpdir(), "ai-office-agent-prep-"));
+  let skillStarted = false;
+  let envStarted = false;
+  let releasePreparation!: () => void;
+  const preparationReleased = new Promise<void>((resolve) => {
+    releasePreparation = resolve;
+  });
+  let announceConcurrent!: () => void;
+  const concurrent = new Promise<void>((resolve) => {
+    announceConcurrent = resolve;
+  });
+  const markStarted = () => {
+    if (skillStarted && envStarted) announceConcurrent();
+  };
+  const provider = new LocalAgentRuntimeProvider({
+    workspaceRoot: () => workspaceRoot,
+    buildPrompt: () => "prompt",
+    buildSystemPrompt: () => "system",
+    buildSkillManifest: async () => {
+      skillStarted = true;
+      markStarted();
+      await preparationReleased;
+      return [];
+    },
+    buildEnv: async () => {
+      envStarted = true;
+      markStarted();
+      await preparationReleased;
+      return {};
+    },
+  });
+  let capturedInput: Record<string, unknown> | undefined;
+  (provider as any).localAgentRuntime = {
+    listProviders: () => [{ id: "codex" }],
+    async *run(input: Record<string, unknown>) {
+      capturedInput = input;
+      yield {
+        type: "status",
+        diagnostic: {
+          kind: "timing",
+          phase: "prepare",
+          stage: "provider_plan",
+          elapsedMs: 12,
+          totalElapsedMs: 20,
+        },
+      };
+      yield { type: "text_delta", text: "ready" };
+      yield { type: "done", status: "completed" };
+    },
+  };
+  const streamed: unknown[] = [];
+  const collecting = (async () => {
+    for await (const event of provider.streamEdit({
+      run: { ...run(), provider: "codex", model: "codex:default" },
+      project: { id: "project-1" },
+      runtimeProfile: profile("writer", "codex", "codex:default"),
+      request: { userPrompt: "Write", mode: "write" },
+    })) streamed.push(event);
+  })();
+
+  try {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        concurrent,
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error("preparation did not overlap")), 1_000);
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+    releasePreparation();
+    await collecting;
+    assert.deepEqual(streamed, [{ type: "text_delta", text: "ready" }]);
+    assert.deepEqual(capturedInput?.metadata, { timingDiagnostics: true });
+  } finally {
+    releasePreparation();
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
 });
 
 function detectedTarget(agentTargetId: string | undefined, provider: string, displayName: string, supported: boolean) {
