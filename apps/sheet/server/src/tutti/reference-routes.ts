@@ -89,22 +89,20 @@ export function registerTuttiReferenceRoutes(server: FastifyInstance) {
 async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]) {
   const entries = await safeReaddir(appPaths.projectsDir);
   const projectMetadata = loadProjectMetadata();
-  const groups: Array<GroupItem & { updatedAt: string }> = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+  const groups = (await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
     const projectId = entry.name;
     const displayName = projectDisplayName(projectId, projectMetadata);
     const references = await listReferencesForProject(projectId, timeRange, displayName);
-    if (references.length === 0) continue;
-    groups.push({
+    if (references.length === 0) return null;
+    return {
       type: "group",
       id: projectId,
       displayName,
       description: `${references.length} files`,
       referenceCount: references.length,
       updatedAt: projectUpdatedAt(projectId, projectMetadata),
-    });
-  }
+    } satisfies GroupItem & { updatedAt: string };
+  }))).filter((group) => group !== null);
   return groups
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id))
     .map(({ updatedAt: _updatedAt, ...group }) => group);
@@ -123,7 +121,13 @@ async function listAllReferences(timeRange: ReferenceSearchRequest["timeRange"])
 
 async function listReferencesForProject(projectId: string, timeRange: ReferenceListRequest["timeRange"], projectDisplayNameValue?: string) {
   const root = join(appPaths.projectsDir, projectId);
-  const files = await collectFiles(root);
+  const exportsRoot = join(root, "exports");
+  const exportEntries = await safeReaddir(exportsRoot);
+  const files = [
+    join(root, "workbook.xlsx"),
+    ...exportEntries.filter((entry) => entry.isFile() && extname(entry.name).toLowerCase() === ".xlsx")
+      .map((entry) => join(exportsRoot, entry.name)),
+  ];
   const items: ReferenceItem[] = [];
   const parentGroupLabel = projectDisplayNameValue ?? projectDisplayName(projectId, loadProjectMetadata());
   for (const file of files) {
@@ -151,20 +155,6 @@ async function listReferencesForProject(projectId: string, timeRange: ReferenceL
     });
   }
   return items.sort((left, right) => (right.reference.mtimeMs ?? 0) - (left.reference.mtimeMs ?? 0));
-}
-
-async function collectFiles(root: string) {
-  const entries = await safeReaddir(root);
-  const files: string[] = [];
-  for (const entry of entries) {
-    const filePath = join(root, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...await collectFiles(filePath));
-    } else if (entry.isFile()) {
-      files.push(filePath);
-    }
-  }
-  return files;
 }
 
 async function safeReaddir(root: string) {

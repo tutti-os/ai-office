@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   createDefaultLocalAgentProviderPlugins,
@@ -161,7 +161,7 @@ export class LocalAgentRuntimeProvider<
       const sessionStore = new LocalAgentSessionStore(workspaceRoot, this.options.sessionDirName ?? ".ai-app");
       const conversationSessionId = context.conversation?.sessionId ?? context.project.id;
       const providerResumeEnabled = this.options.useProviderResume?.(context) ?? true;
-      const previousSession = providerResumeEnabled ? sessionStore.read(conversationSessionId) : null;
+      const previousSession = providerResumeEnabled ? await sessionStore.read(conversationSessionId) : null;
       const sameTarget = previousSession?.agentTargetId === agentTargetId && previousSession.provider === provider;
       const providerSessionId = sameTarget ? previousSession?.providerSessionId : undefined;
       const resumeToken = sameTarget ? previousSession?.resumeToken : undefined;
@@ -191,7 +191,7 @@ export class LocalAgentRuntimeProvider<
         }
       } catch (error) {
         if (previousSession && !emittedEvent && isProviderResumeFailure(error)) {
-          sessionStore.remove(conversationSessionId);
+          await sessionStore.remove(conversationSessionId);
           for await (const runtimeEvent of this.runWithResume({
             context,
             controller,
@@ -268,7 +268,7 @@ export class LocalAgentRuntimeProvider<
       } else if ((event as any).type === "done") {
         const done = event as any;
         if (persistProviderSession && (done.sessionId || done.resumeToken)) {
-          sessionStore.write(sessionId, {
+          await sessionStore.write(sessionId, {
             agentTargetId,
             provider,
             providerSessionId: done.sessionId,
@@ -536,24 +536,24 @@ class LocalAgentSessionStore {
     this.sessionDirName = sessionDirName;
   }
 
-  read(projectId: string): StoredLocalAgentSession | null {
+  async read(projectId: string): Promise<StoredLocalAgentSession | null> {
     try {
-      const parsed = JSON.parse(readFileSync(this.pathFor(projectId), "utf8")) as StoredLocalAgentSession;
+      const parsed = JSON.parse(await readFile(this.pathFor(projectId), "utf8")) as StoredLocalAgentSession;
       return typeof parsed.agentTargetId === "string" && parsed.agentTargetId && typeof parsed.provider === "string" && parsed.provider ? parsed : null;
     } catch {
       return null;
     }
   }
 
-  write(projectId: string, session: Omit<StoredLocalAgentSession, "updatedAt">) {
+  async write(projectId: string, session: Omit<StoredLocalAgentSession, "updatedAt">) {
     const filePath = this.pathFor(projectId);
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, `${JSON.stringify({ ...session, updatedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, `${JSON.stringify({ ...session, updatedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
   }
 
-  remove(projectId: string) {
+  async remove(projectId: string) {
     try {
-      unlinkSync(this.pathFor(projectId));
+      await unlink(this.pathFor(projectId));
     } catch {
       // Missing session is equivalent to a fresh run.
     }

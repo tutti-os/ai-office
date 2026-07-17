@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { existsSync, rmSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, extname, join } from "node:path";
 import {
@@ -13,8 +13,9 @@ import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationSto
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
 import { getDb } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
-import { publishDocumentReferenceExports } from "./reference-exports.js";
+import { listProjectAssets, mimeTypeForAssetFileName, projectAssetRelativePath } from "./project-assets.js";
 export class DocumentRepository {
+  private readonly preparedAgentInstructions = new Map<string, string>();
   private readonly conversations = new SqliteAgentConversationStore(getDb, {
     createSessionId: randomUUID,
     createMessageId: randomUUID,
@@ -51,10 +52,9 @@ export class DocumentRepository {
     };
   }
 
-  createProject(input: { title: string; content: string; type: DocumentProject["type"]; templateId: string | null; templateName: string | null }) {
+  async createProject(input: { title: string; content: string; type: DocumentProject["type"]; templateId: string | null; templateName: string | null }) {
     const id = randomUUID();
     const now = new Date().toISOString();
-    ensureProjectDirs(id);
     getDb()
       .prepare(
         `INSERT INTO projects (id, title, type, content, template_id, template_name, updated_by, created_at, updated_at)
@@ -63,7 +63,7 @@ export class DocumentRepository {
       .run(id, input.title, input.type, input.content, input.templateId, input.templateName, now, now);
     const project = this.getProject(id);
     if (!project) throw new Error("Unable to create project");
-    this.materializeProject(project);
+    await this.materializeProject(project);
     return project;
   }
 
@@ -112,7 +112,7 @@ export class DocumentRepository {
     return row ? rowToProject(row) : null;
   }
 
-  updateProject(projectId: string, input: UpdateProjectRequest) {
+  async updateProject(projectId: string, input: UpdateProjectRequest) {
     const current = this.getProject(projectId);
     if (!current) return null;
     const now = new Date().toISOString();
@@ -130,7 +130,9 @@ export class DocumentRepository {
       )
       .run(next.title, next.type, next.content, next.updatedBy, now, projectId);
     const updated = this.getProject(projectId);
-    if (updated) this.materializeProject(updated);
+    if (updated && (next.content !== current.content || next.type !== current.type)) {
+      await this.materializeProject(updated);
+    }
     return updated;
   }
 
@@ -141,12 +143,13 @@ export class DocumentRepository {
   async writeProjectAsset(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
-    const root = ensureProjectDirs(projectId);
+    const root = projectWorkspaceRoot(projectId);
     const assetsDir = join(root, "assets");
-    mkdirSync(assetsDir, { recursive: true });
+    await mkdir(assetsDir, { recursive: true });
     const fileName = uniqueAssetFileName(assetsDir, input.fileName, input.mimeType);
-    writeFileSync(join(assetsDir, fileName), input.bytes);
-    this.writeProjectAgentInstructions(project);
+    await writeFile(join(assetsDir, fileName), input.bytes);
+    this.preparedAgentInstructions.delete(projectId);
+    await this.writeProjectAgentInstructions(project);
     return {
       path: projectAssetRelativePath(fileName),
       fileName,
@@ -158,18 +161,20 @@ export class DocumentRepository {
   async writeContextAttachment(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
-    return writeContextAttachmentFile(ensureProjectDirs(projectId), input);
+    const root = projectWorkspaceRoot(projectId);
+    await mkdir(root, { recursive: true });
+    return writeContextAttachmentFile(root, input);
   }
 
   async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
-    const root = ensureProjectDirs(projectId);
+    const root = projectWorkspaceRoot(projectId);
     const exportsDir = join(root, "exports");
-    mkdirSync(exportsDir, { recursive: true });
+    await mkdir(exportsDir, { recursive: true });
     const fileName = uniqueExportFileName(exportsDir, input.fileName, input.mimeType);
     const absolutePath = join(exportsDir, fileName);
-    writeFileSync(absolutePath, input.bytes);
+    await writeFile(absolutePath, input.bytes);
     return {
       path: absolutePath,
       absolutePath,
@@ -199,10 +204,11 @@ export class DocumentRepository {
     return join(ensureProjectDirs(projectId), "exports");
   }
 
-  syncProjectAgentInstructions(projectId: string) {
+  async syncProjectAgentInstructions(projectId: string, options: { force?: boolean } = {}) {
     const project = this.getProject(projectId);
     if (!project) return null;
-    this.writeProjectAgentInstructions(project);
+    if (options.force) this.preparedAgentInstructions.delete(projectId);
+    await this.writeProjectAgentInstructions(project);
     return project;
   }
 
@@ -309,31 +315,39 @@ export class DocumentRepository {
     this.runtimeProfiles.syncLocalAgentRuntimeProfiles(agents);
   }
 
-  private materializeProject(project: DocumentProject) {
-    const root = ensureProjectDirs(project.id);
+  private async materializeProject(project: DocumentProject) {
+    const root = projectWorkspaceRoot(project.id);
+    await mkdir(root, { recursive: true });
+    let documentWrite: Promise<void>;
     if (project.type === "docx") {
-      writeFileSync(join(root, "document.json"), project.content || JSON.stringify(createEmptyDocxDocumentManifest()), "utf8");
+      documentWrite = writeFile(join(root, "document.json"), project.content || JSON.stringify(createEmptyDocxDocumentManifest()), "utf8");
     } else if (project.type === "markdown") {
-      writeFileSync(join(root, "document.md"), project.content, "utf8");
+      documentWrite = writeFile(join(root, "document.md"), project.content, "utf8");
     } else {
-      writeFileSync(join(root, "document.html"), project.content, "utf8");
+      documentWrite = writeFile(join(root, "document.html"), project.content, "utf8");
     }
-    this.writeProjectAgentInstructions(project);
-    publishDocumentReferenceExports(project);
+    await Promise.all([documentWrite, this.writeProjectAgentInstructions(project)]);
   }
-  private writeProjectAgentInstructions(project: DocumentProject) {
-    const root = ensureProjectDirs(project.id);
-    writeFileSync(join(root, "AGENTS.md"), projectAgentInstructions(project), "utf8");
+  private async writeProjectAgentInstructions(project: DocumentProject) {
+    const preparationRevision = `${project.updatedAt}:${project.type}`;
+    if (this.preparedAgentInstructions.get(project.id) === preparationRevision) return;
+    const root = projectWorkspaceRoot(project.id);
+    await mkdir(root, { recursive: true });
+    const path = join(root, "AGENTS.md");
+    const content = await projectAgentInstructions(project);
+    const current = await readFile(path, "utf8").catch(() => null);
+    if (current !== content) await writeFile(path, content, "utf8");
+    this.preparedAgentInstructions.set(project.id, preparationRevision);
   }
 }
 
-function projectAgentInstructions(project: DocumentProject) {
+async function projectAgentInstructions(project: DocumentProject) {
   if (project.type === "docx") return docxProjectAgentInstructions(project);
   if (project.type === "markdown") return markdownProjectAgentInstructions(project);
   return htmlProjectAgentInstructions(project);
 }
 
-function htmlProjectAgentInstructions(project: DocumentProject) {
+async function htmlProjectAgentInstructions(project: DocumentProject) {
   const targetHtmlPath = join(projectWorkspaceRoot(project.id), "document.html");
   return [
     "# AI Doc Workspace",
@@ -343,11 +357,11 @@ function htmlProjectAgentInstructions(project: DocumentProject) {
     artifactIntentInstructions("document"),
     "When the current request calls for document changes, read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
     stagedProjectWriteInstructions("HTML"),
-    projectAssetInstructions(project.id),
+    await projectAssetInstructions(project.id),
   ].join("\n");
 }
 
-function markdownProjectAgentInstructions(project: DocumentProject) {
+async function markdownProjectAgentInstructions(project: DocumentProject) {
   const targetMarkdownPath = join(projectWorkspaceRoot(project.id), "document.md");
   return [
     "# AI Doc Workspace",
@@ -358,11 +372,11 @@ function markdownProjectAgentInstructions(project: DocumentProject) {
     artifactIntentInstructions("document"),
     "When the current request calls for document changes, read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
     stagedProjectWriteInstructions("Markdown"),
-    projectAssetInstructions(project.id),
+    await projectAssetInstructions(project.id),
   ].join("\n");
 }
 
-function docxProjectAgentInstructions(project: DocumentProject) {
+async function docxProjectAgentInstructions(project: DocumentProject) {
   const targetDocxPath = join(projectWorkspaceRoot(project.id), "document.docx");
   return [
     "# AI Doc Workspace",
@@ -372,7 +386,7 @@ function docxProjectAgentInstructions(project: DocumentProject) {
     artifactIntentInstructions("document"),
     "When the current request calls for creating or editing this Word doc, write the final result to the focused file with filesystem tools.",
     "The app watches that file and refreshes the preview when its content changes.",
-    projectAssetInstructions(project.id),
+    await projectAssetInstructions(project.id),
   ].join("\n");
 }
 
@@ -384,8 +398,8 @@ function artifactIntentInstructions(artifactLabel: string) {
   ].join("\n");
 }
 
-function projectAssetInstructions(projectId: string) {
-  const assets = listProjectAssets(projectId);
+async function projectAssetInstructions(projectId: string) {
+  const assets = await listProjectAssets(projectId);
   if (assets.length === 0) return "";
   return [
     "",
@@ -547,48 +561,6 @@ function normalizedExportExtension(fileName: string, mimeType: string) {
   if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return ".docx";
   if (mimeType === "application/pdf") return ".pdf";
   return ".html";
-}
-
-function mimeTypeForAssetFileName(fileName: string) {
-  const extension = extname(fileName).toLowerCase();
-  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
-  if (extension === ".png") return "image/png";
-  if (extension === ".gif") return "image/gif";
-  if (extension === ".webp") return "image/webp";
-  if (extension === ".svg") return "image/svg+xml";
-  if (extension === ".pdf") return "application/pdf";
-  if (extension === ".md" || extension === ".markdown") return "text/markdown";
-  if (extension === ".csv") return "text/csv";
-  if (extension === ".html" || extension === ".htm") return "text/html";
-  if (extension === ".json") return "application/json";
-  if (extension === ".rtf") return "application/rtf";
-  if (extension === ".doc") return "application/msword";
-  if (extension === ".docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-  if (extension === ".xls") return "application/vnd.ms-excel";
-  if (extension === ".xlsx") return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-  if (extension === ".ppt") return "application/vnd.ms-powerpoint";
-  if (extension === ".pptx") return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-  return "text/plain";
-}
-
-function listProjectAssets(projectId: string) {
-  const assetsDir = join(projectWorkspaceRoot(projectId), "assets");
-  if (!existsSync(assetsDir)) return [];
-  return readdirSync(assetsDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => {
-      const absolutePath = join(assetsDir, entry.name);
-      return {
-        fileName: entry.name,
-        path: projectAssetRelativePath(entry.name),
-        mimeType: mimeTypeForAssetFileName(entry.name),
-        sizeBytes: statSync(absolutePath).size,
-      };
-    });
-}
-
-function projectAssetRelativePath(fileName: string) {
-  return `./assets/${fileName}`;
 }
 
 function rows<TRow>(value: unknown): TRow[] {

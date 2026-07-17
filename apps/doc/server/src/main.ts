@@ -29,7 +29,6 @@ registerArtifactServerErrorHandlers(server, { appId: "ai-doc" });
 installArtifactProcessErrorHandlers({ appId: "ai-doc", logger: server.log });
 const events = new EventHub();
 const repo = new DocumentRepository();
-for (const project of repo.listProjects()) publishDocumentReferenceExports(project);
 const documents = new DocumentService(repo, events);
 
 addArtifactBufferContentTypeParsers(server, {
@@ -41,7 +40,12 @@ await server.register(fastifyWebsocket);
 registerDocAgentToolRoutes(server, documents);
 
 registerTuttiCliRoutes(server, documents);
-registerTuttiReferenceRoutes(server);
+registerTuttiReferenceRoutes(server, {
+  ensureProjectReferences: (projectId) => {
+    const project = repo.getProject(projectId);
+    if (project) publishDocumentReferenceExports(project);
+  },
+});
 
 if (existsSync(webDist)) {
   await server.register(fastifyStatic, {

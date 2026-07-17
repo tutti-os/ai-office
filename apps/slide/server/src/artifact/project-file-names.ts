@@ -1,11 +1,12 @@
 import { existsSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { pptxMimeType } from "@ai-slide/shared";
 
 const htmlMimeType = "text/html";
 
 export function uniqueAssetFileName(assetsDir: string, requestedName: string, mimeType: string) {
-  const parsed = safeAssetFileName(requestedName, mimeType);
+  const parsed = normalizedAssetFileName(requestedName, mimeType);
   const ext = extname(parsed);
   const stem = basename(parsed, ext);
   let candidate = parsed;
@@ -18,7 +19,7 @@ export function uniqueAssetFileName(assetsDir: string, requestedName: string, mi
 }
 
 export function uniqueExportFileName(exportsDir: string, requestedName: string, mimeType: string) {
-  const parsed = safeExportFileName(requestedName, mimeType);
+  const parsed = normalizedExportFileName(requestedName, mimeType);
   const ext = extname(parsed);
   const stem = basename(parsed, ext);
   let candidate = parsed;
@@ -38,6 +39,23 @@ export function importedProjectTitle(fileName: string) {
 
 export function projectAssetRelativePath(fileName: string) {
   return `./assets/${fileName}`;
+}
+
+export async function writeUniqueNamedFile(directory: string, requestedName: string, bytes: Buffer) {
+  const extension = extname(requestedName);
+  const stem = basename(requestedName, extension) || "file";
+  let candidate = requestedName;
+  let index = 2;
+  while (true) {
+    try {
+      await writeFile(join(directory, candidate), bytes, { flag: "wx" });
+      return candidate;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      candidate = `${stem}-${index}${extension}`;
+      index += 1;
+    }
+  }
 }
 
 export function mimeTypeForAssetFileName(fileName: string) {
@@ -63,7 +81,7 @@ export function mimeTypeForAssetFileName(fileName: string) {
   return "application/octet-stream";
 }
 
-function safeAssetFileName(fileName: string, mimeType: string) {
+export function normalizedAssetFileName(fileName: string, mimeType: string) {
   const fallbackExt = extensionForMimeType(mimeType);
   const clean = safeBaseName(fileName || "image");
   const ext = extname(clean) || fallbackExt;
@@ -71,7 +89,7 @@ function safeAssetFileName(fileName: string, mimeType: string) {
   return `${stem}${ext}`;
 }
 
-function safeExportFileName(fileName: string, mimeType: string) {
+export function normalizedExportFileName(fileName: string, mimeType: string) {
   const clean = safeBaseName(fileName || "slides");
   const cleanExt = extname(clean).toLowerCase();
   const ext = cleanExt === ".pptx" || cleanExt === ".pdf" ? cleanExt : extensionForExportMimeType(mimeType);

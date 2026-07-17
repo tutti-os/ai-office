@@ -27,10 +27,6 @@ registerArtifactServerErrorHandlers(server, { appId: "ai-slide" });
 installArtifactProcessErrorHandlers({ appId: "ai-slide", logger: server.log });
 const events = new EventHub();
 const repo = new ProjectRepository();
-for (const project of repo.listProjects()) {
-  const artifact = repo.getArtifact(project.activeArtifactId);
-  if (artifact) publishSlideReferenceExports(project, artifact);
-}
 const projects = new ProjectService(repo, events);
 
 addArtifactBufferContentTypeParsers(server, {
@@ -41,7 +37,13 @@ addArtifactBufferContentTypeParsers(server, {
 await server.register(fastifyWebsocket);
 await ensureTemplateDirs();
 registerTuttiCliRoutes(server, projects);
-registerTuttiReferenceRoutes(server);
+registerTuttiReferenceRoutes(server, {
+  ensureProjectReferences: (projectId) => {
+    const project = repo.getProject(projectId);
+    const artifact = project ? repo.getArtifact(project.activeArtifactId) : null;
+    return project && artifact ? publishSlideReferenceExports(project, artifact) : [];
+  },
+});
 
 if (existsSync(webDist)) {
   await server.register(fastifyStatic, {

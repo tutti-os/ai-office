@@ -50,7 +50,10 @@ type ProjectMetadata = {
   updatedAt: string;
 };
 
-export function registerTuttiReferenceRoutes(server: FastifyInstance) {
+export function registerTuttiReferenceRoutes(
+  server: FastifyInstance,
+  options: { ensureProjectReferences?: (projectId: string) => unknown | Promise<unknown> } = {},
+) {
   server.post<{ Body: ReferenceListRequest }>("/tutti/references/list", async (request) => {
     const body = request.body ?? {};
     const limit = clampLimit(body.limit);
@@ -60,12 +63,12 @@ export function registerTuttiReferenceRoutes(server: FastifyInstance) {
     const parentGroupId = sanitizeGroupId(body.parentGroupId);
 
     if (!parentGroupId) {
-      const groups = await listProjectGroups(timeRange);
+      const groups = await listProjectGroups(timeRange, options.ensureProjectReferences);
       const filtered = filter ? groups.filter((group) => matchesGroupSearch(group, filter)) : groups;
       return paged(filtered, offset, limit);
     }
 
-    const references = await listReferencesForProject(parentGroupId, timeRange);
+    const references = await listReferencesForProject(parentGroupId, timeRange, undefined, undefined, options.ensureProjectReferences);
     const filtered = filter ? references.filter((item) => item.reference.displayName.toLowerCase().includes(filter)) : references;
     return paged(filtered, offset, limit);
   });
@@ -76,7 +79,7 @@ export function registerTuttiReferenceRoutes(server: FastifyInstance) {
     const filters = new Set((body.filters ?? []).filter((filter): filter is string => typeof filter === "string"));
     const limit = clampLimit(body.limit);
     const offset = cursorOffset(body.cursor);
-    const references = await listAllReferences(body.timeRange);
+    const references = await listAllReferences(body.timeRange, options.ensureProjectReferences);
     const filtered = references
       .filter((item) => matchesFilter(item.reference.displayName, filters))
       .filter((item) => !query || matchesReferenceSearch(item, query))
@@ -92,7 +95,10 @@ export function registerTuttiReferenceRoutes(server: FastifyInstance) {
   });
 }
 
-async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]) {
+async function listProjectGroups(
+  timeRange: ReferenceListRequest["timeRange"],
+  ensureProjectReferences?: (projectId: string) => unknown | Promise<unknown>,
+) {
   const entries = await safeReaddir(appPaths.projectsDir);
   const projectMetadata = loadProjectMetadata();
   const groups: Array<GroupItem & { updatedAt: string }> = [];
@@ -102,7 +108,7 @@ async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]) {
     const metadata = projectMetadata.get(projectId);
     if (!metadata) continue;
     const displayName = projectDisplayName(projectId, projectMetadata);
-    const references = await listReferencesForProject(projectId, timeRange, displayName, metadata);
+    const references = await listReferencesForProject(projectId, timeRange, displayName, metadata, ensureProjectReferences);
     groups.push({
       type: "group",
       id: projectId,
@@ -117,7 +123,10 @@ async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]) {
     .map(({ updatedAt: _updatedAt, ...group }) => group);
 }
 
-async function listAllReferences(timeRange: ReferenceSearchRequest["timeRange"]) {
+async function listAllReferences(
+  timeRange: ReferenceSearchRequest["timeRange"],
+  ensureProjectReferences?: (projectId: string) => unknown | Promise<unknown>,
+) {
   const groups = await safeReaddir(appPaths.projectsDir);
   const projectMetadata = loadProjectMetadata();
   const nested = await Promise.all(
@@ -126,7 +135,7 @@ async function listAllReferences(timeRange: ReferenceSearchRequest["timeRange"])
       .map((entry) => {
         const metadata = projectMetadata.get(entry.name);
         if (!metadata) return [];
-        return listReferencesForProject(entry.name, timeRange, projectDisplayName(entry.name, projectMetadata), metadata);
+        return listReferencesForProject(entry.name, timeRange, projectDisplayName(entry.name, projectMetadata), metadata, ensureProjectReferences);
       }),
   );
   return nested.flat();
@@ -137,10 +146,12 @@ async function listReferencesForProject(
   timeRange: ReferenceListRequest["timeRange"],
   projectDisplayNameValue?: string,
   projectMetadataValue?: ProjectMetadata,
+  ensureProjectReferences?: (projectId: string) => unknown | Promise<unknown>,
 ) {
   const root = join(appPaths.projectsDir, projectId);
   const projectMetadata = projectMetadataValue ?? loadProjectMetadata().get(projectId);
   if (!projectMetadata) return [];
+  await ensureProjectReferences?.(projectId);
   const exportsRoot = join(root, "exports");
   const files = await collectFiles(exportsRoot);
   const latestByKind = new Map<string, ReferenceItem>();

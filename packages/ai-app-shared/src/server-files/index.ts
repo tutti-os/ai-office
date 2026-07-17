@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { contextAttachmentRelativePath, type ContextAttachmentUploadResponse } from "../context-attachments/index.js";
 
@@ -76,11 +76,10 @@ export function requestBytes(body: unknown) {
   return Buffer.from([]);
 }
 
-export function writeContextAttachmentFile(projectRoot: string, input: ArtifactUpload): ContextAttachmentUploadResponse {
+export async function writeContextAttachmentFile(projectRoot: string, input: ArtifactUpload): Promise<ContextAttachmentUploadResponse> {
   const attachmentsDir = join(projectRoot, "context", "attachments");
-  mkdirSync(attachmentsDir, { recursive: true });
-  const fileName = uniqueContextAttachmentFileName(attachmentsDir, input.fileName);
-  writeFileSync(join(attachmentsDir, fileName), input.bytes);
+  await mkdir(attachmentsDir, { recursive: true });
+  const fileName = await writeUniqueContextAttachment(attachmentsDir, input.fileName, input.bytes);
   return {
     path: contextAttachmentRelativePath(fileName),
     fileName,
@@ -103,17 +102,22 @@ function decodedHeader(value: string | string[] | undefined) {
   }
 }
 
-function uniqueContextAttachmentFileName(attachmentsDir: string, requestedName: string) {
+async function writeUniqueContextAttachment(attachmentsDir: string, requestedName: string, bytes: Buffer) {
   const safeName = safeContextAttachmentFileName(requestedName);
   const extension = extname(safeName);
   const stem = basename(safeName, extension) || "attachment";
   let candidate = safeName;
   let index = 2;
-  while (existsSync(join(attachmentsDir, candidate))) {
-    candidate = `${stem}-${index}${extension}`;
-    index += 1;
+  while (true) {
+    try {
+      await writeFile(join(attachmentsDir, candidate), bytes, { flag: "wx" });
+      return candidate;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      candidate = `${stem}-${index}${extension}`;
+      index += 1;
+    }
   }
-  return candidate;
 }
 
 function safeContextAttachmentFileName(fileName: string) {

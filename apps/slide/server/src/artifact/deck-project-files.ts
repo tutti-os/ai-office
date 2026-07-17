@@ -1,5 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join, normalize, sep } from "node:path";
 import {
@@ -38,20 +37,20 @@ export async function readPptxManifestFromFile(projectId: string, artifact: Slid
   }
 }
 
-export function readStoredPptxManifest(projectId: string, artifact: SlideArtifact) {
+export async function readStoredPptxManifest(projectId: string, artifact: SlideArtifact) {
   try {
-    return parsePptxManifest(readFileSync(pptxManifestPath(projectId, artifact), "utf8"));
+    return parsePptxManifest(await readFile(pptxManifestPath(projectId, artifact), "utf8"));
   } catch {
     return createEmptyPptxManifest();
   }
 }
 
 export function writeStoredPptxManifest(projectId: string, artifact: SlideArtifact, manifest: PptxManifest) {
-  writeFileSync(pptxManifestPath(projectId, artifact), `${serializePptxManifest(manifest)}\n`, "utf8");
+  return writeFile(pptxManifestPath(projectId, artifact), `${serializePptxManifest(manifest)}\n`, "utf8");
 }
 
 export function writeDeckManifest(projectId: string, artifact: SlideArtifact, manifest: DeckManifest) {
-  writeFileSync(join(projectWorkspaceRoot(projectId), artifact.fileRef, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  return writeFile(join(projectWorkspaceRoot(projectId), artifact.fileRef, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 }
 
 export function resolveDeckSlidePath(projectId: string, artifact: SlideArtifact, file: string) {

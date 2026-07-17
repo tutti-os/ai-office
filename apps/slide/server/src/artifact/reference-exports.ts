@@ -2,13 +2,17 @@ import { cpSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DeckManifest, SlideArtifact, SlideProject } from "@ai-slide/shared";
 import { pptxMimeType } from "@ai-slide/shared";
-import { replacePublishedReferenceExports, type ReferenceExportDescriptor } from "@ai-app/shared/reference-exports";
+import { readPublishedReferenceExports, replacePublishedReferenceExports, type ReferenceExportDescriptor } from "@ai-app/shared/reference-exports";
 import { ensureProjectDirs } from "../local/paths.js";
 import { writeDeckHtmlExportToDirectory } from "./deck-html-export.js";
 
 export function publishSlideReferenceExports(project: SlideProject, artifact: SlideArtifact) {
   const projectRoot = ensureProjectDirs(project.id);
   try {
+    const current = readPublishedReferenceExports(projectRoot, project.updatedAt);
+    if (current.length > 0) {
+      return current.map(({ kind, mimeType, path }) => ({ kind, mimeType, path }));
+    }
     return replacePublishedReferenceExports({
       projectRoot,
       sourceVersion: project.updatedAt,
