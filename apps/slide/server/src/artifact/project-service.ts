@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import {
   deckSlideDisplayName,
@@ -15,7 +15,7 @@ import {
   type UpdateDeckSlideHtmlRequest,
   type UpdateProjectRequest,
 } from "@ai-slide/shared";
-import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
+import { createDebouncedWorkspaceRefresh, RuntimeRunExecutor } from "@ai-app/agent/run-executor";
 import { resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
 import { projectAssetFileExtensions, projectAssetMimeTypes } from "@ai-app/shared/artifact-assets";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
@@ -31,6 +31,7 @@ export class ProjectService {
   private readonly runtimes = createRuntimeProviderRegistry();
   private readonly cancelledRunIds = new Set<string>();
   private readonly runAssistantMessageIds = new Map<string, string>();
+  private readonly runWorkspaceFlushes = new Map<string, () => Promise<void>>();
   private readonly runExecutor: RuntimeRunExecutor<SlideRun, SlideRunEvent, SlideRuntimeProject, AiEditRequest>;
 
   constructor(
@@ -382,6 +383,7 @@ export class ProjectService {
     if (!["accepted", "running"].includes(run.status)) return { run };
     this.cancelledRunIds.add(runId);
     await this.runtimes.getProviderForRuntime(run.runtime).cancel(runId).catch(() => undefined);
+    await this.runWorkspaceFlushes.get(runId)?.().catch(() => undefined);
     return this.finalizeCancellation(runId, "Cancelled by user");
   }
 
@@ -394,44 +396,14 @@ export class ProjectService {
   ) {
     let refreshedArtifact = false;
     let workspaceFingerprint = "";
-    let refreshInFlight: Promise<void> | null = null;
-    let lastWorkspaceRefreshAt = 0;
-    let trailingTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const doRefresh = async () => {
+    const workspaceRefresh = createDebouncedWorkspaceRefresh(async () => {
       const refresh = await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
       workspaceFingerprint = refresh.fingerprint;
       refreshedArtifact = refresh.changed || refreshedArtifact;
-    };
-
-    const refreshWorkspace = async (input: { force?: boolean } = {}) => {
-      if (input.force) {
-        if (trailingTimer) { clearTimeout(trailingTimer); trailingTimer = null; }
-        if (refreshInFlight) await refreshInFlight;
-        refreshInFlight = doRefresh().finally(() => { refreshInFlight = null; });
-        await refreshInFlight;
-        return;
-      }
-      const now = Date.now();
-      if (lastWorkspaceRefreshAt > 0 && now - lastWorkspaceRefreshAt < workspaceRefreshThrottleMs) {
-        if (!trailingTimer) {
-          const delay = workspaceRefreshThrottleMs - (now - lastWorkspaceRefreshAt);
-          trailingTimer = setTimeout(() => {
-            trailingTimer = null;
-            // This refresh is advisory; the completion path performs a forced
-            // authoritative refresh. Always consume the timer promise so an IO
-            // failure cannot become an unhandled process rejection.
-            void refreshWorkspace().catch(() => undefined);
-          }, delay);
-        }
-        if (refreshInFlight) await refreshInFlight;
-        return;
-      }
-      if (refreshInFlight) { await refreshInFlight; return; }
-      lastWorkspaceRefreshAt = Date.now();
-      refreshInFlight = doRefresh().finally(() => { refreshInFlight = null; });
-      await refreshInFlight;
-    };
+    }, workspaceRefreshDebounceMs);
+    let terminalFlush: Promise<void> | null = null;
+    const flushTerminalWorkspace = () => terminalFlush ??= workspaceRefresh.flush();
+    this.runWorkspaceFlushes.set(runId, flushTerminalWorkspace);
 
     await this.runExecutor.execute({
       project: runtimeProject,
@@ -441,15 +413,18 @@ export class ProjectService {
       conversation: { conversationId: runtimeProject.id, sessionId: conversation.sessionId },
       history: this.repo.conversationHistory(conversation.sessionId, request.userPrompt),
       isCancelled: () => this.cancelledRunIds.has(runId),
-      finalizeCancellation: (id, reason) => this.finalizeCancellation(id, reason),
+      finalizeCancellation: async (id, reason) => {
+        await flushTerminalWorkspace().catch(() => undefined);
+        return this.finalizeCancellation(id, reason);
+      },
       beforeRun: async () => {
         workspaceFingerprint = await this.workspaceFingerprint(runtimeProject.id);
       },
       onWorkspaceEvent: async () => {
-        await refreshWorkspace();
+        workspaceRefresh.schedule();
       },
       complete: async ({ generatedText }) => {
-        await refreshWorkspace({ force: true });
+        await flushTerminalWorkspace();
         const detail = await this.getProject(runtimeProject.id);
         const currentRun = this.repo.getRun(runId);
         if (currentRun && !["accepted", "running"].includes(currentRun.status)) return;
@@ -464,12 +439,15 @@ export class ProjectService {
         });
       },
       onFailure: async ({ error }) => {
+        await flushTerminalWorkspace().catch(() => undefined);
         this.repo.updateConversationMessage(conversation.assistantMessageId, {
           content: `Run failed: ${error}`,
           metadata: { status: "failed", runId },
         });
       },
       onFinally: () => {
+        workspaceRefresh.dispose();
+        this.runWorkspaceFlushes.delete(runId);
         this.cancelledRunIds.delete(runId);
         this.runAssistantMessageIds.delete(runId);
       },
@@ -489,7 +467,7 @@ export class ProjectService {
 
   private async readDeckSlideContext(projectId: string, manifest: SlideRuntimeProject["deckManifest"]) {
     if (!manifest?.slides.length) return [];
-    const slides = manifest.slides.slice(0, 30);
+    const slides = manifest.slides.slice(0, maxPromptSlidePreviews);
     return Promise.all(
       slides.map(async (slide, index) => {
         try {
@@ -570,7 +548,7 @@ export class ProjectService {
       });
     }
     const deckRoot = join(projectWorkspaceRoot(detail.project.id), detail.artifact.fileRef);
-    return `deck:${await hashDirectory(deckRoot)}`;
+    return `deck:${await hashDirectoryMetadata(deckRoot)}`;
   }
 
   private async finalizeCancellation(runId: string, reason: string) {
@@ -595,7 +573,8 @@ const maxContextAttachmentBytes = 30 * 1024 * 1024;
 const maxProjectAssetBytes = 30 * 1024 * 1024;
 const maxDeckExportBytes = 50 * 1024 * 1024;
 const maxPptxImportBytes = 50 * 1024 * 1024;
-const workspaceRefreshThrottleMs = 1500;
+const workspaceRefreshDebounceMs = 1_500;
+const maxPromptSlidePreviews = 4;
 const pdfMimeType = "application/pdf";
 const supportedProjectAssetMimeTypes = new Set<string>(projectAssetMimeTypes);
 const supportedProjectAssetExtensions = new Set<string>(projectAssetFileExtensions);
@@ -618,13 +597,13 @@ function isSupportedProjectAsset(fileName: string, mimeType: string) {
   return supportedProjectAssetExtensions.has(extname(fileName).toLowerCase());
 }
 
-async function hashDirectory(root: string) {
+async function hashDirectoryMetadata(root: string) {
   const hash = createHash("sha256");
-  await hashDirectoryInto(hash, root, "");
+  await hashDirectoryMetadataInto(hash, root, "");
   return hash.digest("hex");
 }
 
-async function hashDirectoryInto(hash: ReturnType<typeof createHash>, root: string, relativeDir: string) {
+async function hashDirectoryMetadataInto(hash: ReturnType<typeof createHash>, root: string, relativeDir: string) {
   let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }> = [];
   try {
     entries = await readdir(join(root, relativeDir), { withFileTypes: true });
@@ -635,11 +614,14 @@ async function hashDirectoryInto(hash: ReturnType<typeof createHash>, root: stri
   for (const entry of entries) {
     const relativePath = relativeDir ? join(relativeDir, entry.name) : entry.name;
     if (entry.isDirectory()) {
-      await hashDirectoryInto(hash, root, relativePath);
+      await hashDirectoryMetadataInto(hash, root, relativePath);
     } else if (entry.isFile()) {
+      const info = await stat(join(root, relativePath));
       hash.update(relativePath);
       hash.update("\0");
-      hash.update(await readFile(join(root, relativePath)));
+      hash.update(String(info.size));
+      hash.update("\0");
+      hash.update(String(info.mtimeMs));
       hash.update("\0");
     }
   }

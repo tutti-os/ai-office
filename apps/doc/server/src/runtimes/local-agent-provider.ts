@@ -1,5 +1,4 @@
-import { readdir, stat } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import {
   LocalAgentRuntimeProvider as SharedLocalAgentRuntimeProvider,
   loadTuttiLocalAgentSkillContext,
@@ -8,6 +7,7 @@ import {
 import type { AiEditRequest, DocumentProject, DocumentRun } from "@ai-doc/shared";
 import { buildDocAppToolMcpServers } from "../agent-tools.js";
 import { projectWorkspaceRoot } from "../local/paths.js";
+import { listProjectAssets } from "../artifact/project-assets.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
 import { tuttiCliEnv } from "../tutti/tutti-cli.js";
 import type { RuntimeEditContext } from "./runtime-provider.js";
@@ -76,7 +76,7 @@ function localAgentTimeoutMs() {
 
 async function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, skillContext: LocalAgentSkillContext) {
   const workspaceRoot = projectWorkspaceRoot(context.project.id);
-  const assetPrompt = await projectAssetPrompt(workspaceRoot);
+  const assetPrompt = await projectAssetPrompt(context.project.id, workspaceRoot);
 
   if (context.project.type === "docx") {
     return withTuttiSkillGuidance(
@@ -206,15 +206,9 @@ ${value}
 </${name}>`;
 }
 
-async function projectAssetPrompt(workspaceRoot: string) {
-  const assetsDir = resolve(workspaceRoot, "assets");
-  const entries = await readdir(assetsDir, { withFileTypes: true }).catch(() => []);
-  const assets = await Promise.all(entries
-    .filter((entry) => entry.isFile())
-    .map(async (entry) => {
-      const path = join(assetsDir, entry.name);
-      return `- ${entry.name} (${(await stat(path)).size} bytes): ${path}`;
-    }));
+async function projectAssetPrompt(projectId: string, workspaceRoot: string) {
+  const assets = (await listProjectAssets(projectId)).map((asset) =>
+    `- ${asset.fileName} (${asset.sizeBytes} bytes): ${resolve(workspaceRoot, asset.path)}`);
   if (assets.length === 0) return "No project context attachments are currently uploaded.";
   return [
     "Project context attachments are available in the workspace:",

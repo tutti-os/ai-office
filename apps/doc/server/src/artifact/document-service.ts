@@ -19,7 +19,7 @@ import {
   serializeDocxDocumentManifest,
   type UpdateProjectRequest,
 } from "@ai-doc/shared";
-import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
+import { createDebouncedWorkspaceRefresh, RuntimeRunExecutor } from "@ai-app/agent/run-executor";
 import { resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
 import { projectAssetFileExtensions, projectAssetMimeTypes } from "@ai-app/shared/artifact-assets";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
@@ -28,16 +28,18 @@ import { projectWorkspaceRoot } from "../local/paths.js";
 import { DocumentRepository } from "./document-repository.js";
 import { renderTemplateSeed } from "./document-template-renderer.js";
 import { mimeTypeForImportFileName, resolveImportSourcePath } from "./import-source.js";
-import { assistantConversationContent, previewText } from "./run-preview.js";
+import { assistantConversationContent, conversationMessageMetadata, previewText } from "./run-preview.js";
 import { documentTemplates, getTemplate } from "./templates.js";
 import { loadTemplateProjectSeed, materializeTemplateAssetsToProject } from "../templates/template-service.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
 import { EventHub } from "../ws/event-hub.js";
+import { invalidateProjectAssetCache } from "./project-assets.js";
 export class DocumentService {
   private readonly runtimes = createRuntimeProviderRegistry();
   private readonly cancelledRunIds = new Set<string>();
   private readonly runAssistantMessageIds = new Map<string, string>();
+  private readonly runWorkspaceFlushes = new Map<string, () => Promise<void>>();
   private readonly runExecutor: RuntimeRunExecutor<DocumentRun, DocumentRunEvent, DocumentProject, AiEditRequest>;
 
   constructor(
@@ -363,6 +365,7 @@ export class DocumentService {
     if (!["accepted", "running"].includes(run.status)) return { run };
     this.cancelledRunIds.add(runId);
     await this.runtimes.getProviderForRuntime(run.runtime).cancel(runId).catch(() => undefined);
+    await this.runWorkspaceFlushes.get(runId)?.().catch(() => undefined);
     return this.finalizeCancellation(runId, "Cancelled by user");
   }
 
@@ -411,7 +414,13 @@ export class DocumentService {
     conversation: { assistantMessageId: string; sessionId: string },
   ) {
     let refreshedFromWorkspace = false;
-
+    const workspaceRefresh = createDebouncedWorkspaceRefresh(async () => {
+      const refreshed = await this.refreshProjectFromWorkspace(initialProject.id, runId).finally(() => invalidateProjectAssetCache(initialProject.id));
+      refreshedFromWorkspace = Boolean(refreshed) || refreshedFromWorkspace;
+    }, workspaceRefreshDebounceMs);
+    let terminalFlush: Promise<void> | null = null;
+    const flushTerminalWorkspace = () => terminalFlush ??= workspaceRefresh.flush();
+    this.runWorkspaceFlushes.set(runId, flushTerminalWorkspace);
     await this.runExecutor.execute({
       project: initialProject,
       request,
@@ -420,12 +429,12 @@ export class DocumentService {
       conversation: { conversationId: initialProject.id, sessionId: conversation.sessionId },
       history: this.repo.conversationHistory(conversation.sessionId, request.userPrompt),
       isCancelled: () => this.cancelledRunIds.has(runId),
-      finalizeCancellation: (id, reason) => this.finalizeCancellation(id, reason),
+      finalizeCancellation: async (id, reason) => (await flushTerminalWorkspace().catch(() => undefined), this.finalizeCancellation(id, reason)),
       onWorkspaceEvent: async () => {
-        refreshedFromWorkspace = Boolean(await this.refreshProjectFromWorkspace(initialProject.id, runId)) || refreshedFromWorkspace;
+        workspaceRefresh.schedule();
       },
       complete: async ({ generatedText }) => {
-        refreshedFromWorkspace = Boolean(await this.refreshProjectFromWorkspace(initialProject.id, runId)) || refreshedFromWorkspace;
+        await flushTerminalWorkspace();
         const finalRun = await this.completeRun(initialProject, runtimeProfile, runId, generatedText, refreshedFromWorkspace);
         this.repo.updateConversationMessage(conversation.assistantMessageId, {
           content: assistantConversationContent(runtimeProfile, generatedText, finalRun?.resultPreview ?? ""),
@@ -433,12 +442,15 @@ export class DocumentService {
         });
       },
       onFailure: async ({ error }) => {
+        await flushTerminalWorkspace().catch(() => undefined);
         this.repo.updateConversationMessage(conversation.assistantMessageId, {
           content: `Run failed: ${error}`,
           metadata: { status: "failed", runId },
         });
       },
       onFinally: () => {
+        workspaceRefresh.dispose();
+        this.runWorkspaceFlushes.delete(runId);
         this.cancelledRunIds.delete(runId);
         this.runAssistantMessageIds.delete(runId);
       },
@@ -610,6 +622,7 @@ const docxFileName = "document.docx";
 const docxMimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const pdfMimeType = "application/pdf";
 const maxContextAttachmentBytes = 30 * 1024 * 1024;
+const workspaceRefreshDebounceMs = 1_500;
 const maxProjectAssetBytes = 30 * 1024 * 1024;
 const maxProjectExportBytes = 20 * 1024 * 1024;
 const maxProjectImportBytes = 30 * 1024 * 1024;
@@ -671,13 +684,4 @@ function docxRunPreview(content: string) {
   const manifest = parseDocxDocumentManifest(content);
   if (!manifest.sha256) return "DOCX run completed. No document.docx change was detected.";
   return `DOCX preview refreshed: ${manifest.sizeBytes} bytes`;
-}
-
-function conversationMessageMetadata(request: AiEditRequest) {
-  return {
-    mode: request.mode,
-    selectionPath: request.selectionPath ?? "",
-    selectionType: request.selectionType ?? "write",
-    selectedText: request.selectedText ?? "",
-  };
 }

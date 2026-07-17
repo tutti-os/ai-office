@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/conversation-ui/agent-label.test.ts src/local-agent-runtime/agent-target-execution.test.ts src/run-executor/agent-target-resolution.test.ts src/runtime/runtime-provider-registry.test.ts"
+    "test": "tsx --test src/conversation-ui/agent-label.test.ts src/local-agent-runtime/agent-target-execution.test.ts src/run-executor/agent-target-resolution.test.ts src/run-executor/workspace-refresh.test.ts src/runtime/runtime-provider-registry.test.ts"
   },
   "dependencies": {
     "@ai-app/shared": "workspace:*",

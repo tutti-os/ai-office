@@ -1,5 +1,5 @@
 import { openPathInFileManager } from "@ai-app/shared/local-open";
-import { RuntimeRunExecutor } from "@ai-app/agent/run-executor";
+import { createDebouncedWorkspaceRefresh, RuntimeRunExecutor } from "@ai-app/agent/run-executor";
 import { resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
 import { resolveWorkspaceImportSourcePath } from "@ai-app/shared/import-source";
@@ -20,6 +20,7 @@ import { projectWorkspaceRoot } from "../local/paths.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
 import type { SheetRuntimeProject } from "../runtimes/runtime-provider.js";
 import { EventHub } from "../ws/event-hub.js";
+import { withProjectImportCleanup } from "./project-import.js";
 import { SheetRepository } from "./sheet-repository.js";
 import { XlsxStorageAdapter } from "./xlsx-storage-adapter.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
@@ -29,6 +30,7 @@ export class SheetService {
   private readonly runtimes = createRuntimeProviderRegistry();
   private readonly cancelledRunIds = new Set<string>();
   private readonly runAssistantMessageIds = new Map<string, string>();
+  private readonly runWorkspaceFlushes = new Map<string, () => Promise<void>>();
   private readonly runExecutor: RuntimeRunExecutor<SheetRun, SheetRunEvent, SheetRuntimeProject, AiEditRequest>;
 
   constructor(
@@ -72,6 +74,7 @@ export class SheetService {
       await this.storage.createBlankWorkbook({
         workbookPath: this.repo.xlsxFilePath(result.project.id),
       });
+      this.repo.markProjectCoreReady(result.project.id);
       const refresh = await this.repo.refreshXlsxArtifactFromFile(result.project.id, "system");
       const detail = {
         ...result,
@@ -79,6 +82,7 @@ export class SheetService {
         xlsxManifest: refresh.manifest,
       };
       this.events.emit({ type: "project.created", projectId: result.project.id, payload: detail });
+      this.repo.startAgentContextPreparation(result.project);
       return detail;
     } catch (error) {
       this.repo.deleteProject(result.project.id);
@@ -96,21 +100,33 @@ export class SheetService {
       sourcePath,
       title: input.title,
     });
-    const calc = await this.recalculateProjectWorkbook(result.project.id, { forceFullRecalc: true });
-    const refresh = await this.repo.refreshXlsxArtifactFromFile(result.project.id, "system");
-    const payload = { ...this.projectDetail(result.project.id, refresh.manifest), sourcePath, calc };
-    this.events.emit({ type: "project.created", projectId: result.project.id, payload });
-    return payload;
+    return withProjectImportCleanup({
+      cleanup: () => { this.repo.deleteProject(result.project.id); },
+      importProject: async () => {
+        const calc = await this.recalculateProjectWorkbook(result.project.id, { forceFullRecalc: true });
+        const refresh = await this.repo.refreshXlsxArtifactFromFile(result.project.id, "system");
+        const payload = { ...this.projectDetail(result.project.id, refresh.manifest), sourcePath, calc };
+        this.events.emit({ type: "project.created", projectId: result.project.id, payload });
+        this.repo.startAgentContextPreparation(result.project);
+        return payload;
+      },
+    });
   }
 
   async importXlsxProjectFile(input: { fileName: string; bytes: Buffer; title?: string }) {
     await requireOfficeCli();
     const result = await this.repo.importXlsxProjectFromBytes(input);
-    const calc = await this.recalculateProjectWorkbook(result.project.id, { forceFullRecalc: true });
-    const refresh = await this.repo.refreshXlsxArtifactFromFile(result.project.id, "system");
-    const payload = { ...this.projectDetail(result.project.id, refresh.manifest), calc };
-    this.events.emit({ type: "project.created", projectId: result.project.id, payload });
-    return payload;
+    return withProjectImportCleanup({
+      cleanup: () => { this.repo.deleteProject(result.project.id); },
+      importProject: async () => {
+        const calc = await this.recalculateProjectWorkbook(result.project.id, { forceFullRecalc: true });
+        const refresh = await this.repo.refreshXlsxArtifactFromFile(result.project.id, "system");
+        const payload = { ...this.projectDetail(result.project.id, refresh.manifest), calc };
+        this.events.emit({ type: "project.created", projectId: result.project.id, payload });
+        this.repo.startAgentContextPreparation(result.project);
+        return payload;
+      },
+    });
   }
 
   async getProject(projectId: string, options: { recalculate?: boolean } = {}) {
@@ -206,6 +222,7 @@ export class SheetService {
 
   async startAiEdit(projectId: string, request: AiEditRequest) {
     await requireOfficeCli();
+    await this.repo.ensureAgentContextReady(projectId);
     const runtimeProject = await this.createRuntimeProject(projectId);
     const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);
@@ -254,6 +271,7 @@ export class SheetService {
     if (!["accepted", "running"].includes(run.status)) return { run };
     this.cancelledRunIds.add(runId);
     await this.runtimes.getProviderForRuntime(run.runtime).cancel(runId).catch(() => undefined);
+    await this.runWorkspaceFlushes.get(runId)?.().catch(() => undefined);
     return this.finalizeCancellation(runId, "Cancelled by user");
   }
 
@@ -369,6 +387,21 @@ export class SheetService {
     let refreshedArtifact = false;
     let lastManifest = runtimeProject.xlsxManifest;
     let workspaceFingerprint = fingerprintForManifest(lastManifest);
+    let forceFullRecalc = false;
+    const workspaceRefresh = createDebouncedWorkspaceRefresh(async () => {
+      const fullRecalc = forceFullRecalc;
+      forceFullRecalc = false;
+      const refresh = await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint, fullRecalc);
+      workspaceFingerprint = refresh.fingerprint;
+      lastManifest = refresh.manifest;
+      refreshedArtifact = refresh.changed || refreshedArtifact;
+    }, workspaceRefreshDebounceMs);
+    let terminalFlush: Promise<void> | null = null;
+    const flushTerminalWorkspace = (fullRecalc: boolean) => {
+      forceFullRecalc = forceFullRecalc || fullRecalc;
+      return terminalFlush ??= workspaceRefresh.flush();
+    };
+    this.runWorkspaceFlushes.set(runId, () => flushTerminalWorkspace(false));
 
     await this.runExecutor.execute({
       project: runtimeProject,
@@ -378,19 +411,16 @@ export class SheetService {
       conversation: { conversationId: runtimeProject.id, sessionId: conversation.sessionId },
       history: this.repo.conversationHistory(conversation.sessionId, request.userPrompt),
       isCancelled: () => this.cancelledRunIds.has(runId),
-      finalizeCancellation: (id, reason) => this.finalizeCancellation(id, reason),
+      finalizeCancellation: async (id, reason) => {
+        await flushTerminalWorkspace(false).catch(() => undefined);
+        return this.finalizeCancellation(id, reason);
+      },
       beforeRun: async () => undefined,
       onWorkspaceEvent: async () => {
-        const refresh = await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
-        workspaceFingerprint = refresh.fingerprint;
-        lastManifest = refresh.manifest;
-        refreshedArtifact = refresh.changed || refreshedArtifact;
+        workspaceRefresh.schedule();
       },
       complete: async ({ generatedText }) => {
-        if (!refreshedArtifact) {
-          const refresh = await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
-          lastManifest = refresh.manifest;
-        }
+        await flushTerminalWorkspace(true);
         const currentRun = this.repo.getRun(runId);
         if (currentRun && !["accepted", "running"].includes(currentRun.status)) return;
         const finalRun = this.repo.updateRun(runId, {
@@ -404,12 +434,15 @@ export class SheetService {
         });
       },
       onFailure: async ({ error }) => {
+        await flushTerminalWorkspace(false).catch(() => undefined);
         this.repo.updateConversationMessage(conversation.assistantMessageId, {
           content: `Run failed: ${error}`,
           metadata: { status: "failed", runId },
         });
       },
       onFinally: () => {
+        workspaceRefresh.dispose();
+        this.runWorkspaceFlushes.delete(runId);
         this.cancelledRunIds.delete(runId);
         this.runAssistantMessageIds.delete(runId);
       },
@@ -425,8 +458,15 @@ export class SheetService {
     };
   }
 
-  private async refreshArtifactFromWorkspace(projectId: string, runId: string | undefined, previousFingerprint: string) {
-    const calc = await this.recalculateProjectWorkbook(projectId, { forceFullRecalc: true });
+  private async refreshArtifactFromWorkspace(
+    projectId: string,
+    runId: string | undefined,
+    previousFingerprint: string,
+    forceFullRecalc: boolean,
+  ) {
+    const calc = forceFullRecalc
+      ? await this.recalculateProjectWorkbook(projectId, { forceFullRecalc: true })
+      : null;
     const refresh = await this.repo.refreshXlsxArtifactFromFile(projectId, "ai", {
       previousManifest: xlsxManifestFromFingerprint(previousFingerprint),
     });
@@ -435,7 +475,7 @@ export class SheetService {
       return { changed: false, fingerprint, manifest: refresh.manifest };
     }
     const updated = this.projectDetail(projectId, refresh.manifest);
-    this.events.emit({ type: "project.updated", projectId, runId, payload: { ...updated, calc } });
+    this.events.emit({ type: "project.updated", projectId, runId, payload: { ...updated, ...(calc ? { calc } : {}) } });
     return { changed: true, fingerprint, manifest: refresh.manifest };
   }
 
@@ -530,6 +570,7 @@ function runPreview(manifest: { exists: boolean; sizeBytes: number } | null | un
 }
 
 const maxContextAttachmentBytes = 30 * 1024 * 1024;
+const workspaceRefreshDebounceMs = 1_500;
 
 function previewText(value: string) {
   const text = value

@@ -284,3 +284,52 @@ function previewText(value: string) {
     .trim();
   return text.length > 280 ? `${text.slice(0, 280)}...` : text;
 }
+
+export function createDebouncedWorkspaceRefresh(work: () => Promise<void>, debounceMs: number) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let tail = Promise.resolve();
+  let dirty = false;
+  let flushing = false;
+  let flushPromise: Promise<void> | null = null;
+
+  const enqueue = () => {
+    const next = tail.catch(() => undefined).then(work);
+    tail = next;
+    return next;
+  };
+
+  return {
+    schedule() {
+      dirty = true;
+      if (flushing) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        dirty = false;
+        void enqueue().catch(() => undefined);
+      }, debounceMs);
+    },
+    flush() {
+      dirty = true;
+      if (flushPromise) return flushPromise;
+      if (timer) clearTimeout(timer);
+      timer = null;
+      flushing = true;
+      flushPromise = (async () => {
+        while (dirty) {
+          dirty = false;
+          await tail.catch(() => undefined);
+          await enqueue();
+        }
+      })().finally(() => {
+        flushing = false;
+        flushPromise = null;
+      });
+      return flushPromise;
+    },
+    dispose() {
+      if (timer) clearTimeout(timer);
+      timer = null;
+    },
+  };
+}

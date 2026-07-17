@@ -3,6 +3,8 @@ import { extname, join } from "node:path";
 import { projectWorkspaceRoot } from "../local/paths.js";
 
 export async function listProjectAssets(projectId: string) {
+  const cached = projectAssetCache.get(projectId);
+  if (cached && cached.expiresAt > Date.now()) return cached.assets;
   const assetsDir = join(projectWorkspaceRoot(projectId), "assets");
   const entries = await readdir(assetsDir, { withFileTypes: true }).catch(() => []);
   const files = entries.filter((entry) => entry.isFile()).sort((left, right) => left.name.localeCompare(right.name));
@@ -15,7 +17,13 @@ export async function listProjectAssets(projectId: string) {
       sizeBytes: (await stat(join(assetsDir, entry.name))).size,
     };
   });
+  projectAssetCache.set(projectId, { expiresAt: Date.now() + projectAssetCacheTtlMs, assets });
   return assets;
+}
+
+export function invalidateProjectAssetCache(projectId?: string) {
+  if (projectId) projectAssetCache.delete(projectId);
+  else projectAssetCache.clear();
 }
 
 async function mapWithConcurrency<T>(items: readonly T[], concurrency: number, work: (item: T) => Promise<void>) {
@@ -54,3 +62,9 @@ export function mimeTypeForAssetFileName(fileName: string) {
 export function projectAssetRelativePath(fileName: string) {
   return `./assets/${fileName}`;
 }
+
+const projectAssetCacheTtlMs = 2_000;
+const projectAssetCache = new Map<string, {
+  expiresAt: number;
+  assets: Array<{ fileName: string; path: string; mimeType: string; sizeBytes: number }>;
+}>();

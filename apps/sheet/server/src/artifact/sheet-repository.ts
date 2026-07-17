@@ -16,10 +16,13 @@ import {
 } from "@ai-sheet/shared";
 import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
+import { SqliteProjectPreparationCoordinator } from "@ai-app/shared/project-preparation";
 import { getDb, rowOrNull, rows } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
+import { withProjectImportCleanup } from "./project-import.js";
 
 export class SheetRepository {
+  private readonly preparation = new SqliteProjectPreparationCoordinator(getDb, "ai-sheet");
   private readonly conversations = new SqliteAgentConversationStore(getDb, {
     createSessionId: randomUUID,
     createMessageId: randomUUID,
@@ -104,6 +107,11 @@ export class SheetRepository {
          VALUES (?, ?, ?, NULL, NULL, 'system', ?, ?)`,
       )
       .run(id, title, artifactId, now, now);
+    getDb().prepare(
+      `INSERT OR IGNORE INTO project_preparation
+       (project_id, core_state, agent_context_state, agent_context_generation, updated_at)
+       VALUES (?, 'preparing', 'pending', 0, ?)`,
+    ).run(id, now);
     getDb()
       .prepare(
         `INSERT INTO artifacts (id, project_id, type, file_ref, mime_type, revision, updated_by, created_at, updated_at)
@@ -113,7 +121,6 @@ export class SheetRepository {
     const project = this.getProject(id);
     const artifact = this.getArtifact(artifactId);
     if (!project || !artifact) throw new Error("Unable to create project");
-    await this.writeProjectAgentInstructions(project);
     return { project, artifact };
   }
 
@@ -125,15 +132,18 @@ export class SheetRepository {
     const created = await this.createProject({
       title: input.title?.trim() || basename(sourcePath, extname(sourcePath)),
     });
-    await copyFile(sourcePath, xlsxFilePath(created.project.id));
-    const project = this.getProject(created.project.id);
-    const artifact = this.getArtifact(created.artifact.id);
-    if (!project || !artifact) throw new Error("Unable to import XLSX project");
-    return {
-      project,
-      artifact,
-      xlsxManifest: await readXlsxManifestFromFile(project.id),
-    };
+    return withProjectImportCleanup({
+      cleanup: () => { this.deleteProject(created.project.id); },
+      importProject: async () => {
+        await copyFile(sourcePath, xlsxFilePath(created.project.id));
+        const xlsxManifest = await readXlsxManifestFromFile(created.project.id);
+        const project = this.getProject(created.project.id);
+        const artifact = this.getArtifact(created.artifact.id);
+        if (!project || !artifact) throw new Error("Unable to import XLSX project");
+        this.markProjectCoreReady(project.id);
+        return { project, artifact, xlsxManifest };
+      },
+    });
   }
 
   async importXlsxProjectFromBytes(input: { title?: string; fileName: string; bytes: Buffer }) {
@@ -142,11 +152,15 @@ export class SheetRepository {
     const created = await this.createProject({
       title: input.title?.trim() || importedProjectTitle(input.fileName),
     });
-    await writeFile(xlsxFilePath(created.project.id), input.bytes);
-    return {
-      ...created,
-      xlsxManifest: await readXlsxManifestFromFile(created.project.id),
-    };
+    return withProjectImportCleanup({
+      cleanup: () => { this.deleteProject(created.project.id); },
+      importProject: async () => {
+        await writeFile(xlsxFilePath(created.project.id), input.bytes);
+        const xlsxManifest = await readXlsxManifestFromFile(created.project.id);
+        this.markProjectCoreReady(created.project.id);
+        return { ...created, xlsxManifest };
+      },
+    });
   }
 
   updateProject(projectId: string, input: UpdateProjectRequest) {
@@ -163,6 +177,33 @@ export class SheetRepository {
       )
       .run(input.title?.trim() || current.title, activeArtifactId, input.updatedBy ?? "human", now, projectId);
     return this.getProject(projectId);
+  }
+
+  getProjectPreparation(projectId: string) {
+    return this.preparation.getStatus(projectId);
+  }
+
+  markProjectCoreReady(projectId: string) {
+    this.preparation.markCore(projectId, "ready");
+  }
+
+  async ensureAgentContextReady(projectId: string) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    await this.preparation.ensureAgentContext({
+      projectId,
+      baseVersion: sheetAgentContextVersion,
+      prepare: () => this.writeProjectAgentInstructions(project),
+    });
+  }
+
+  startAgentContextPreparation(project: SheetProject) {
+    this.preparation.startAgentContext({
+      projectId: project.id,
+      baseVersion: sheetAgentContextVersion,
+      fallbackPath: projectWorkspaceRoot(project.id),
+      prepare: () => this.writeProjectAgentInstructions(project),
+    });
   }
 
   clearProjectHistory() {
@@ -439,6 +480,7 @@ function xlsxFilePath(projectId: string) {
 }
 
 const xlsxManifestCache = new Map<string, { mtimeMs: number; sizeBytes: number; manifest: XlsxManifest }>();
+const sheetAgentContextVersion = "ai-sheet-agent-context-v1";
 
 function sheetProjectAgentInstructions(project: SheetProject) {
   const targetXlsxPath = join(projectWorkspaceRoot(project.id), xlsxArtifactFileRef);

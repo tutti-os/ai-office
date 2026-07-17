@@ -90,12 +90,30 @@ function localAgentTimeoutMs() {
 
 async function buildProjectSkillManifest(context: RuntimeEditContext, workspaceRoot: string): Promise<SkillMaterializationRecord[]> {
   if (context.project.artifact.type !== "deck") return [];
+  const cacheKey = [workspaceRoot, context.project.artifact.id, context.project.templateId ?? "default"].join(":");
+  const cached = projectSkillManifestCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.promise;
+  projectSkillManifestCache.delete(cacheKey);
+  const loading = readProjectSkillManifest(workspaceRoot).catch((error) => {
+    projectSkillManifestCache.delete(cacheKey);
+    throw error;
+  });
+  projectSkillManifestCache.set(cacheKey, {
+    expiresAt: Date.now() + projectSkillManifestCacheTtlMs,
+    promise: loading,
+  });
+  trimProjectSkillManifestCache();
+  return loading;
+}
+
+async function readProjectSkillManifest(workspaceRoot: string): Promise<SkillMaterializationRecord[]> {
   const skillsRoot = join(workspaceRoot, ".ai-slide", "skills");
   let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
   try {
     entries = await readdir(skillsRoot, { withFileTypes: true });
-  } catch {
-    return [];
+  } catch (error) {
+    if (isMissingFileError(error)) return [];
+    throw error;
   }
 
   const skills: SkillMaterializationRecord[] = [];
@@ -106,8 +124,9 @@ async function buildProjectSkillManifest(context: RuntimeEditContext, workspaceR
     let content = "";
     try {
       content = await readFile(join(root, "SKILL.md"), "utf8");
-    } catch {
-      continue;
+    } catch (error) {
+      if (isMissingFileError(error)) continue;
+      throw error;
     }
     skills.push({
       skillId: slug === "deck-authoring" ? "ai-slide-default:deck-authoring" : `ai-slide-template:${slug}`,
@@ -121,6 +140,21 @@ async function buildProjectSkillManifest(context: RuntimeEditContext, workspaceR
   return skills;
 }
 
+function trimProjectSkillManifestCache() {
+  while (projectSkillManifestCache.size > maxProjectSkillManifestCacheEntries) {
+    const oldest = projectSkillManifestCache.keys().next().value;
+    if (!oldest) return;
+    projectSkillManifestCache.delete(oldest);
+  }
+}
+
+const maxProjectSkillManifestCacheEntries = 128;
+const projectSkillManifestCacheTtlMs = 2_000;
+const projectSkillManifestCache = new Map<string, {
+  expiresAt: number;
+  promise: Promise<SkillMaterializationRecord[]>;
+}>();
+
 async function readSkillMaterializationFiles(root: string): Promise<SkillMaterializationFile[]> {
   const files: SkillMaterializationFile[] = [];
   await readSkillMaterializationFilesInto(root, root, files);
@@ -131,8 +165,9 @@ async function readSkillMaterializationFilesInto(root: string, dir: string, file
   let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
   try {
     entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return;
+  } catch (error) {
+    if (isMissingFileError(error)) return;
+    throw error;
   }
   for (const entry of entries) {
     const absolutePath = join(dir, entry.name);
@@ -147,6 +182,10 @@ async function readSkillMaterializationFilesInto(root: string, dir: string, file
       content: await readFile(absolutePath, "utf8"),
     });
   }
+}
+
+function isMissingFileError(error: unknown) {
+  return (error as NodeJS.ErrnoException)?.code === "ENOENT";
 }
 
 function isTextSkillFile(fileName: string) {
