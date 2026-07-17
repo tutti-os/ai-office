@@ -67,18 +67,16 @@ export class SheetService {
 
   async createProject(input: CreateProjectRequest) {
     await requireOfficeCli();
-    const result = this.repo.createProject(input);
+    const result = await this.repo.createProject(input);
     try {
       await this.storage.createBlankWorkbook({
         workbookPath: this.repo.xlsxFilePath(result.project.id),
       });
-      const calc = await this.recalculateProjectWorkbook(result.project.id, { forceFullRecalc: true });
       const refresh = await this.repo.refreshXlsxArtifactFromFile(result.project.id, "system");
       const detail = {
         ...result,
         artifact: refresh.artifact,
         xlsxManifest: refresh.manifest,
-        calc,
       };
       this.events.emit({ type: "project.created", projectId: result.project.id, payload: detail });
       return detail;
@@ -99,9 +97,8 @@ export class SheetService {
       title: input.title,
     });
     const calc = await this.recalculateProjectWorkbook(result.project.id, { forceFullRecalc: true });
-    await this.repo.refreshXlsxArtifactFromFile(result.project.id, "system");
-    const refreshed = await this.getProject(result.project.id, { recalculate: false });
-    const payload = { ...refreshed, sourcePath, calc };
+    const refresh = await this.repo.refreshXlsxArtifactFromFile(result.project.id, "system");
+    const payload = { ...this.projectDetail(result.project.id, refresh.manifest), sourcePath, calc };
     this.events.emit({ type: "project.created", projectId: result.project.id, payload });
     return payload;
   }
@@ -110,15 +107,14 @@ export class SheetService {
     await requireOfficeCli();
     const result = await this.repo.importXlsxProjectFromBytes(input);
     const calc = await this.recalculateProjectWorkbook(result.project.id, { forceFullRecalc: true });
-    await this.repo.refreshXlsxArtifactFromFile(result.project.id, "system");
-    const refreshed = await this.getProject(result.project.id, { recalculate: false });
-    const payload = { ...refreshed, calc };
+    const refresh = await this.repo.refreshXlsxArtifactFromFile(result.project.id, "system");
+    const payload = { ...this.projectDetail(result.project.id, refresh.manifest), calc };
     this.events.emit({ type: "project.created", projectId: result.project.id, payload });
     return payload;
   }
 
   async getProject(projectId: string, options: { recalculate?: boolean } = {}) {
-    const calc = options.recalculate === false ? null : await this.recalculateProjectWorkbook(projectId, { forceFullRecalc: true });
+    const calc = options.recalculate === true ? await this.recalculateProjectWorkbook(projectId, { forceFullRecalc: true }) : null;
     if (calc?.changed) await this.repo.refreshXlsxArtifactFromFile(projectId, "system");
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
@@ -353,9 +349,8 @@ export class SheetService {
       dirtyCells: dirtyCellsFromCommands(input.commands),
     });
     const refresh = await this.repo.refreshXlsxArtifactFromFile(projectId, "human");
-    const updated = await this.getProject(projectId, { recalculate: false });
     const result = {
-      ...updated,
+      ...this.projectDetail(projectId, refresh.manifest),
       applied: input.commands.length,
       xlsxManifest: refresh.manifest,
       calc,
@@ -372,7 +367,8 @@ export class SheetService {
     conversation: { assistantMessageId: string; sessionId: string },
   ) {
     let refreshedArtifact = false;
-    let workspaceFingerprint = "";
+    let lastManifest = runtimeProject.xlsxManifest;
+    let workspaceFingerprint = fingerprintForManifest(lastManifest);
 
     await this.runExecutor.execute({
       project: runtimeProject,
@@ -383,22 +379,23 @@ export class SheetService {
       history: this.repo.conversationHistory(conversation.sessionId, request.userPrompt),
       isCancelled: () => this.cancelledRunIds.has(runId),
       finalizeCancellation: (id, reason) => this.finalizeCancellation(id, reason),
-      beforeRun: async () => {
-        workspaceFingerprint = await this.workspaceFingerprint(runtimeProject.id);
-      },
+      beforeRun: async () => undefined,
       onWorkspaceEvent: async () => {
         const refresh = await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
         workspaceFingerprint = refresh.fingerprint;
+        lastManifest = refresh.manifest;
         refreshedArtifact = refresh.changed || refreshedArtifact;
       },
       complete: async ({ generatedText }) => {
-        if (!refreshedArtifact) await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
-        const detail = await this.getProject(runtimeProject.id, { recalculate: false });
+        if (!refreshedArtifact) {
+          const refresh = await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
+          lastManifest = refresh.manifest;
+        }
         const currentRun = this.repo.getRun(runId);
         if (currentRun && !["accepted", "running"].includes(currentRun.status)) return;
         const finalRun = this.repo.updateRun(runId, {
           status: "completed",
-          resultPreview: previewText(generatedText || runPreview(detail.xlsxManifest)),
+          resultPreview: previewText(generatedText || runPreview(lastManifest)),
         });
         this.events.emit({ type: "run.completed", projectId: runtimeProject.id, runId, payload: { run: finalRun } });
         this.repo.updateConversationMessage(conversation.assistantMessageId, {
@@ -420,7 +417,7 @@ export class SheetService {
   }
 
   private async createRuntimeProject(projectId: string): Promise<SheetRuntimeProject> {
-    const detail = await this.getProject(projectId);
+    const detail = await this.getProject(projectId, { recalculate: false });
     return {
       ...detail.project,
       artifact: detail.artifact,
@@ -433,11 +430,13 @@ export class SheetService {
     const refresh = await this.repo.refreshXlsxArtifactFromFile(projectId, "ai", {
       previousManifest: xlsxManifestFromFingerprint(previousFingerprint),
     });
-    const fingerprint = await this.workspaceFingerprint(projectId);
-    if (!refresh.changed && fingerprint === previousFingerprint) return { changed: false, fingerprint };
-    const updated = await this.getProject(projectId, { recalculate: false });
+    const fingerprint = fingerprintForManifest(refresh.manifest);
+    if (!refresh.changed && fingerprint === previousFingerprint) {
+      return { changed: false, fingerprint, manifest: refresh.manifest };
+    }
+    const updated = this.projectDetail(projectId, refresh.manifest);
     this.events.emit({ type: "project.updated", projectId, runId, payload: { ...updated, calc } });
-    return { changed: true, fingerprint };
+    return { changed: true, fingerprint, manifest: refresh.manifest };
   }
 
   private async recalculateProjectWorkbook(projectId: string, options: { dirtyCells?: XlsxDirtyCell[]; forceFullRecalc?: boolean }) {
@@ -450,13 +449,12 @@ export class SheetService {
     return calc;
   }
 
-  private async workspaceFingerprint(projectId: string) {
-    const manifest = await this.repo.readXlsxManifest(projectId);
-    return JSON.stringify({
-      exists: Boolean(manifest?.exists),
-      sha256: manifest?.sha256 ?? "",
-      sizeBytes: manifest?.sizeBytes ?? 0,
-    });
+  private projectDetail(projectId: string, xlsxManifest: XlsxManifest) {
+    const project = this.repo.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    const artifact = this.repo.getArtifact(project.activeArtifactId);
+    if (!artifact) throw new Error("Active artifact not found");
+    return { project, artifact, xlsxManifest };
   }
 
   private async finalizeCancellation(runId: string, reason: string) {
@@ -511,6 +509,14 @@ function xlsxManifestFromFingerprint(value: string): Pick<XlsxManifest, "exists"
   } catch {
     return undefined;
   }
+}
+
+function fingerprintForManifest(manifest: Pick<XlsxManifest, "exists" | "sha256" | "sizeBytes"> | null | undefined) {
+  return JSON.stringify({
+    exists: Boolean(manifest?.exists),
+    sha256: manifest?.sha256 ?? "",
+    sizeBytes: manifest?.sizeBytes ?? 0,
+  });
 }
 
 function assistantConversationContent(runtimeProfile: RuntimeProfile, generatedText: string, resultPreview: string) {

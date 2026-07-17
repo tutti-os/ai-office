@@ -28,7 +28,6 @@ import { projectWorkspaceRoot } from "../local/paths.js";
 import { DocumentRepository } from "./document-repository.js";
 import { renderTemplateSeed } from "./document-template-renderer.js";
 import { mimeTypeForImportFileName, resolveImportSourcePath } from "./import-source.js";
-import { publishDocumentReferenceExports } from "./reference-exports.js";
 import { assistantConversationContent, previewText } from "./run-preview.js";
 import { documentTemplates, getTemplate } from "./templates.js";
 import { loadTemplateProjectSeed, materializeTemplateAssetsToProject } from "../templates/template-service.js";
@@ -93,7 +92,7 @@ export class DocumentService {
     const content = input.content ?? templateProjectSeed?.content ?? defaultProjectContent(type, template);
     const templateId = input.templateId ?? (template.id === "blank" ? null : template.id);
     const templateName = input.templateName ?? templateProjectSeed?.name ?? (template.id === "blank" ? null : template.name);
-    const project = this.repo.createProject({
+    const project = await this.repo.createProject({
       title: input.title?.trim() || input.templateName?.trim() || templateProjectSeed?.name || template.name || "Untitled Doc",
       content,
       type,
@@ -102,6 +101,7 @@ export class DocumentService {
     });
     if (type === "html" && templateId && templateProjectSeed) {
       await materializeTemplateAssetsToProject(templateId, join(projectWorkspaceRoot(project.id), "assets"), content);
+      await this.repo.syncProjectAgentInstructions(project.id, { force: true });
     }
     this.events.emit({ type: "project.created", projectId: project.id, payload: { project } });
     return { project };
@@ -122,7 +122,7 @@ export class DocumentService {
         updatedAt: now,
       })
       : input.bytes.toString("utf8");
-    const project = this.repo.createProject({
+    const project = await this.repo.createProject({
       title: input.title?.trim() || importedProjectTitle(input.fileName),
       content,
       type,
@@ -131,7 +131,6 @@ export class DocumentService {
     });
     if (type === "docx") {
       await writeFile(docxFilePath(project.id), input.bytes);
-      publishDocumentReferenceExports(project);
     }
     this.events.emit({ type: "project.created", projectId: project.id, payload: { project } });
     return { project };
@@ -239,15 +238,15 @@ export class DocumentService {
     };
   }
 
-  updateProject(projectId: string, input: UpdateProjectRequest) {
-    const project = this.repo.updateProject(projectId, input);
+  async updateProject(projectId: string, input: UpdateProjectRequest) {
+    const project = await this.repo.updateProject(projectId, input);
     if (!project) return null;
     this.events.emit({ type: "project.updated", projectId, payload: { project } });
     return { project };
   }
 
-  setProjectTitle(projectId: string, title: string, updatedBy: DocumentProject["updatedBy"] = "ai") {
-    const project = this.repo.updateProject(projectId, { title, updatedBy });
+  async setProjectTitle(projectId: string, title: string, updatedBy: DocumentProject["updatedBy"] = "ai") {
+    const project = await this.repo.updateProject(projectId, { title, updatedBy });
     if (!project) throw new Error("Project not found");
     this.repo.updateProjectSessionTitle(projectId, project.title);
     const result = { project };
@@ -318,7 +317,7 @@ export class DocumentService {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
     if (project.type === "docx") await requireOfficeCli();
-    this.repo.syncProjectAgentInstructions(projectId);
+    await this.repo.syncProjectAgentInstructions(projectId);
     const runtimeProfile = await this.resolveRuntimeProfile(request.runtimeProfileId);
     const provider = this.runtimes.getProvider(runtimeProfile);
     const descriptor = provider.describeRun(runtimeProfile);
@@ -471,11 +470,11 @@ export class DocumentService {
     return this.completeHtmlRun(initialProject, runId, generatedText, refreshedFromWorkspace);
   }
 
-  private completeMarkdownRun(initialProject: DocumentProject, runId: string, generatedText: string, refreshedFromWorkspace: boolean) {
+  private async completeMarkdownRun(initialProject: DocumentProject, runId: string, generatedText: string, refreshedFromWorkspace: boolean) {
     const finalMarkdown = extractMarkdownDocument(generatedText);
     let project = this.repo.getProject(initialProject.id);
     if (!refreshedFromWorkspace && finalMarkdown) {
-      project = this.repo.updateProject(initialProject.id, {
+      project = await this.repo.updateProject(initialProject.id, {
         content: finalMarkdown,
         type: "markdown",
         updatedBy: "ai",
@@ -487,11 +486,11 @@ export class DocumentService {
     return this.emitRunCompleted(initialProject.id, runId, previewText(finalMarkdown || project?.content || ""));
   }
 
-  private completeHtmlRun(initialProject: DocumentProject, runId: string, generatedText: string, refreshedFromWorkspace: boolean) {
+  private async completeHtmlRun(initialProject: DocumentProject, runId: string, generatedText: string, refreshedFromWorkspace: boolean) {
     const finalHtml = extractHtmlDocument(generatedText);
     let project = this.repo.getProject(initialProject.id);
     if (!refreshedFromWorkspace && finalHtml) {
-      project = this.repo.updateProject(initialProject.id, {
+      project = await this.repo.updateProject(initialProject.id, {
         content: finalHtml,
         updatedBy: "ai",
       });
@@ -542,7 +541,7 @@ export class DocumentService {
       return null;
     }
     if (content === project.content) return null;
-    const updated = this.repo.updateProject(project.id, {
+    const updated = await this.repo.updateProject(project.id, {
       content,
       type: project.type,
       updatedBy: "ai",
@@ -559,7 +558,7 @@ export class DocumentService {
     if (currentManifest.sha256 === nextManifest.sha256 && currentManifest.sizeBytes === nextManifest.sizeBytes) {
       return null;
     }
-    const updated = this.repo.updateProject(project.id, {
+    const updated = await this.repo.updateProject(project.id, {
       content: serializeDocxDocumentManifest(nextManifest),
       type: "docx",
       updatedBy: "ai",

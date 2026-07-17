@@ -1,7 +1,7 @@
-import { copyFile, readFile, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { basename, extname, join, resolve } from "node:path";
-import { existsSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import {
   createEmptyXlsxManifest,
   type CreateProjectRequest,
@@ -92,12 +92,12 @@ export class SheetRepository {
     this.runtimeProfiles.syncLocalAgentRuntimeProfiles(agents);
   }
 
-  createProject(input: CreateProjectRequest = {}) {
+  async createProject(input: CreateProjectRequest = {}) {
     const id = randomUUID();
     const artifactId = randomUUID();
     const now = new Date().toISOString();
     const title = input.title?.trim() || "Untitled Workbook";
-    ensureProjectDirs(id);
+    await mkdir(projectWorkspaceRoot(id), { recursive: true });
     getDb()
       .prepare(
         `INSERT INTO projects (id, title, active_artifact_id, template_id, template_name, updated_by, created_at, updated_at)
@@ -113,7 +113,7 @@ export class SheetRepository {
     const project = this.getProject(id);
     const artifact = this.getArtifact(artifactId);
     if (!project || !artifact) throw new Error("Unable to create project");
-    this.writeProjectAgentInstructions(project);
+    await this.writeProjectAgentInstructions(project);
     return { project, artifact };
   }
 
@@ -122,32 +122,30 @@ export class SheetRepository {
     const sourceStat = await stat(sourcePath);
     if (!sourceStat.isFile()) throw new Error("XLSX source is not a file");
     if (extname(sourcePath).toLowerCase() !== ".xlsx") throw new Error("XLSX source must end with .xlsx");
-    const created = this.createProject({
+    const created = await this.createProject({
       title: input.title?.trim() || basename(sourcePath, extname(sourcePath)),
     });
     await copyFile(sourcePath, xlsxFilePath(created.project.id));
-    const refresh = await this.refreshXlsxArtifactFromFile(created.project.id, "human");
     const project = this.getProject(created.project.id);
     const artifact = this.getArtifact(created.artifact.id);
     if (!project || !artifact) throw new Error("Unable to import XLSX project");
     return {
       project,
       artifact,
-      xlsxManifest: refresh?.manifest ?? (await readXlsxManifestFromFile(project.id)),
+      xlsxManifest: await readXlsxManifestFromFile(project.id),
     };
   }
 
   async importXlsxProjectFromBytes(input: { title?: string; fileName: string; bytes: Buffer }) {
     if (input.bytes.byteLength === 0) throw new Error("XLSX file is empty");
     if (input.bytes.byteLength > maxXlsxImportBytes) throw new Error("XLSX file is too large");
-    const created = this.createProject({
+    const created = await this.createProject({
       title: input.title?.trim() || importedProjectTitle(input.fileName),
     });
     await writeFile(xlsxFilePath(created.project.id), input.bytes);
-    const refresh = await this.refreshXlsxArtifactFromFile(created.project.id, "human");
     return {
       ...created,
-      xlsxManifest: refresh?.manifest ?? (await readXlsxManifestFromFile(created.project.id)),
+      xlsxManifest: await readXlsxManifestFromFile(created.project.id),
     };
   }
 
@@ -344,9 +342,13 @@ export class SheetRepository {
     return this.conversations.updateProjectSessionTitle(projectId, title);
   }
 
-  private writeProjectAgentInstructions(project: SheetProject) {
-    const root = ensureProjectDirs(project.id);
-    writeFileSync(join(root, "AGENTS.md"), sheetProjectAgentInstructions(project), "utf8");
+  private async writeProjectAgentInstructions(project: SheetProject) {
+    const root = projectWorkspaceRoot(project.id);
+    await mkdir(root, { recursive: true });
+    const path = join(root, "AGENTS.md");
+    const content = sheetProjectAgentInstructions(project);
+    const current = await readFile(path, "utf8").catch(() => null);
+    if (current !== content) await writeFile(path, content, "utf8");
   }
 }
 
@@ -409,24 +411,33 @@ function xlsxManifestChanged(
 
 async function readXlsxManifestFromFile(projectId: string): Promise<XlsxManifest> {
   try {
-    const bytes = await readFile(xlsxFilePath(projectId));
-    const info = await stat(xlsxFilePath(projectId));
-    return {
+    const path = xlsxFilePath(projectId);
+    const info = await stat(path);
+    const cached = xlsxManifestCache.get(path);
+    if (cached && cached.mtimeMs === info.mtimeMs && cached.sizeBytes === info.size) {
+      return cached.manifest;
+    }
+    const bytes = await readFile(path);
+    const manifest = {
       kind: "xlsx",
       fileName: xlsxArtifactFileRef,
       exists: true,
       sha256: createHash("sha256").update(bytes).digest("hex"),
       sizeBytes: bytes.byteLength,
       updatedAt: info.mtime.toISOString(),
-    };
+    } satisfies XlsxManifest;
+    xlsxManifestCache.set(path, { mtimeMs: info.mtimeMs, sizeBytes: info.size, manifest });
+    return manifest;
   } catch {
     return createEmptyXlsxManifest();
   }
 }
 
 function xlsxFilePath(projectId: string) {
-  return join(ensureProjectDirs(projectId), xlsxArtifactFileRef);
+  return join(projectWorkspaceRoot(projectId), xlsxArtifactFileRef);
 }
+
+const xlsxManifestCache = new Map<string, { mtimeMs: number; sizeBytes: number; manifest: XlsxManifest }>();
 
 function sheetProjectAgentInstructions(project: SheetProject) {
   const targetXlsxPath = join(projectWorkspaceRoot(project.id), xlsxArtifactFileRef);
