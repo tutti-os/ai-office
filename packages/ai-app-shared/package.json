@@ -10,6 +10,7 @@
     "./local-open": "./src/local-open/index.ts",
     "./event-hub": "./src/event-hub/index.ts",
     "./project-store": "./src/project-store/index.ts",
+    "./project-preparation": "./src/project-preparation/index.ts",
     "./agent-providers": "./src/agent-providers/index.ts",
     "./agent-tools": "./src/agent-tools/index.ts",
     "./agent-tools/mcp-server": "./src/agent-tools/mcp-server.ts",
@@ -27,7 +28,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/agent-providers/agent-targets.test.ts src/local-paths/local-paths.test.ts src/reference-exports/reference-exports.test.ts"
+    "test": "tsx --test src/agent-providers/agent-targets.test.ts src/local-paths/local-paths.test.ts src/project-preparation/project-preparation.test.ts src/reference-exports/reference-exports.test.ts"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

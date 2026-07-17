@@ -5,12 +5,28 @@ import { projectWorkspaceRoot } from "../local/paths.js";
 export async function listProjectAssets(projectId: string) {
   const assetsDir = join(projectWorkspaceRoot(projectId), "assets");
   const entries = await readdir(assetsDir, { withFileTypes: true }).catch(() => []);
-  return Promise.all(entries.filter((entry) => entry.isFile()).map(async (entry) => ({
-    fileName: entry.name,
-    path: projectAssetRelativePath(entry.name),
-    mimeType: mimeTypeForAssetFileName(entry.name),
-    sizeBytes: (await stat(join(assetsDir, entry.name))).size,
-  })));
+  const files = entries.filter((entry) => entry.isFile()).sort((left, right) => left.name.localeCompare(right.name));
+  const assets = new Array<{ fileName: string; path: string; mimeType: string; sizeBytes: number }>(files.length);
+  await mapWithConcurrency(files.map((entry, index) => ({ entry, index })), 6, async ({ entry, index }) => {
+    assets[index] = {
+      fileName: entry.name,
+      path: projectAssetRelativePath(entry.name),
+      mimeType: mimeTypeForAssetFileName(entry.name),
+      sizeBytes: (await stat(join(assetsDir, entry.name))).size,
+    };
+  });
+  return assets;
+}
+
+async function mapWithConcurrency<T>(items: readonly T[], concurrency: number, work: (item: T) => Promise<void>) {
+  let nextIndex = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const item = items[nextIndex];
+      nextIndex += 1;
+      await work(item);
+    }
+  }));
 }
 
 export function mimeTypeForAssetFileName(fileName: string) {

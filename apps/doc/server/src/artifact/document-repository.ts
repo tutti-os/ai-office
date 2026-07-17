@@ -3,19 +3,21 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, extname, join } from "node:path";
 import {
-  createEmptyDocxDocumentManifest,
   type DocumentProject,
   type DocumentRun,
   type DocumentRunEvent,
   type UpdateProjectRequest,
 } from "@ai-doc/shared";
 import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
+import { asProjectPreparationError, SqliteProjectPreparationCoordinator } from "@ai-app/shared/project-preparation";
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
 import { getDb } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
-import { listProjectAssets, mimeTypeForAssetFileName, projectAssetRelativePath } from "./project-assets.js";
+import { mimeTypeForAssetFileName, projectAssetRelativePath } from "./project-assets.js";
+import { insertDocumentProject } from "./document-persistence.js";
+import { materializeDocumentProjectCore, prepareDocumentAgentContext } from "./document-preparation.js";
 export class DocumentRepository {
-  private readonly preparedAgentInstructions = new Map<string, string>();
+  private readonly preparation = new SqliteProjectPreparationCoordinator(getDb, "ai-doc");
   private readonly conversations = new SqliteAgentConversationStore(getDb, {
     createSessionId: randomUUID,
     createMessageId: randomUUID,
@@ -55,15 +57,26 @@ export class DocumentRepository {
   async createProject(input: { title: string; content: string; type: DocumentProject["type"]; templateId: string | null; templateName: string | null }) {
     const id = randomUUID();
     const now = new Date().toISOString();
-    getDb()
-      .prepare(
-        `INSERT INTO projects (id, title, type, content, template_id, template_name, updated_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'system', ?, ?)`,
-      )
-      .run(id, input.title, input.type, input.content, input.templateId, input.templateName, now, now);
+    insertDocumentProject(getDb(), {
+      id,
+      title: input.title,
+      type: input.type,
+      content: input.content,
+      templateId: input.templateId,
+      templateName: input.templateName,
+      now,
+    });
     const project = this.getProject(id);
     if (!project) throw new Error("Unable to create project");
-    await this.materializeProject(project);
+    try {
+      await this.materializeProjectCore(project);
+      this.preparation.markCore(project.id, "ready");
+    } catch (error) {
+      const failure = asProjectPreparationError(error, "core_materialization", this.documentPath(project));
+      this.preparation.markCore(project.id, "failed", failure);
+      throw failure;
+    }
+    this.startAgentContextPreparation(project);
     return project;
   }
 
@@ -112,6 +125,10 @@ export class DocumentRepository {
     return row ? rowToProject(row) : null;
   }
 
+  getProjectPreparation(projectId: string) {
+    return this.preparation.getStatus(projectId);
+  }
+
   async updateProject(projectId: string, input: UpdateProjectRequest) {
     const current = this.getProject(projectId);
     if (!current) return null;
@@ -130,8 +147,19 @@ export class DocumentRepository {
       )
       .run(next.title, next.type, next.content, next.updatedBy, now, projectId);
     const updated = this.getProject(projectId);
-    if (updated && (next.content !== current.content || next.type !== current.type)) {
-      await this.materializeProject(updated);
+    const coreNeedsRepair = this.preparation.getStatus(projectId)?.coreState !== "ready";
+    if (updated && (next.content !== current.content || next.type !== current.type || coreNeedsRepair)) {
+      this.preparation.markCore(projectId, "preparing");
+      try {
+        await this.materializeProjectCore(updated);
+        this.preparation.markCore(projectId, "ready");
+      } catch (error) {
+        const failure = asProjectPreparationError(error, "core_materialization", this.documentPath(updated));
+        this.preparation.markCore(projectId, "failed", failure);
+        throw failure;
+      }
+      this.preparation.invalidateAgentContext(projectId);
+      this.startAgentContextPreparation(updated);
     }
     return updated;
   }
@@ -148,8 +176,8 @@ export class DocumentRepository {
     await mkdir(assetsDir, { recursive: true });
     const fileName = uniqueAssetFileName(assetsDir, input.fileName, input.mimeType);
     await writeFile(join(assetsDir, fileName), input.bytes);
-    this.preparedAgentInstructions.delete(projectId);
-    await this.writeProjectAgentInstructions(project);
+    this.preparation.invalidateAgentContext(projectId);
+    this.startAgentContextPreparation(project);
     return {
       path: projectAssetRelativePath(fileName),
       fileName,
@@ -207,9 +235,27 @@ export class DocumentRepository {
   async syncProjectAgentInstructions(projectId: string, options: { force?: boolean } = {}) {
     const project = this.getProject(projectId);
     if (!project) return null;
-    if (options.force) this.preparedAgentInstructions.delete(projectId);
-    await this.writeProjectAgentInstructions(project);
+    if (options.force) this.preparation.invalidateAgentContext(projectId);
+    await this.ensureAgentContextReady(projectId);
     return project;
+  }
+
+  async ensureAgentContextReady(projectId: string) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    await this.preparation.ensureAgentContext({
+      projectId,
+      baseVersion: this.agentContextBaseVersion(project),
+      prepare: () => this.writeProjectAgentInstructions(project),
+    });
+    return project;
+  }
+
+  invalidateAndStartAgentContext(projectId: string) {
+    const project = this.getProject(projectId);
+    if (!project) return;
+    this.preparation.invalidateAgentContext(projectId);
+    this.startAgentContextPreparation(project);
   }
 
   setProjectTemplate(projectId: string, template: { id: string; name: string }) {
@@ -315,106 +361,32 @@ export class DocumentRepository {
     this.runtimeProfiles.syncLocalAgentRuntimeProfiles(agents);
   }
 
-  private async materializeProject(project: DocumentProject) {
+  private async materializeProjectCore(project: DocumentProject) {
     const root = projectWorkspaceRoot(project.id);
-    await mkdir(root, { recursive: true });
-    let documentWrite: Promise<void>;
-    if (project.type === "docx") {
-      documentWrite = writeFile(join(root, "document.json"), project.content || JSON.stringify(createEmptyDocxDocumentManifest()), "utf8");
-    } else if (project.type === "markdown") {
-      documentWrite = writeFile(join(root, "document.md"), project.content, "utf8");
-    } else {
-      documentWrite = writeFile(join(root, "document.html"), project.content, "utf8");
-    }
-    await Promise.all([documentWrite, this.writeProjectAgentInstructions(project)]);
+    await materializeDocumentProjectCore(root, project);
   }
   private async writeProjectAgentInstructions(project: DocumentProject) {
-    const preparationRevision = `${project.updatedAt}:${project.type}`;
-    if (this.preparedAgentInstructions.get(project.id) === preparationRevision) return;
     const root = projectWorkspaceRoot(project.id);
-    await mkdir(root, { recursive: true });
-    const path = join(root, "AGENTS.md");
-    const content = await projectAgentInstructions(project);
-    const current = await readFile(path, "utf8").catch(() => null);
-    if (current !== content) await writeFile(path, content, "utf8");
-    this.preparedAgentInstructions.set(project.id, preparationRevision);
+    await prepareDocumentAgentContext(root, project);
   }
-}
 
-async function projectAgentInstructions(project: DocumentProject) {
-  if (project.type === "docx") return docxProjectAgentInstructions(project);
-  if (project.type === "markdown") return markdownProjectAgentInstructions(project);
-  return htmlProjectAgentInstructions(project);
-}
+  private startAgentContextPreparation(project: DocumentProject) {
+    this.preparation.startAgentContext({
+      projectId: project.id,
+      baseVersion: this.agentContextBaseVersion(project),
+      fallbackPath: projectWorkspaceRoot(project.id),
+      prepare: () => this.writeProjectAgentInstructions(project),
+    });
+  }
 
-async function htmlProjectAgentInstructions(project: DocumentProject) {
-  const targetHtmlPath = join(projectWorkspaceRoot(project.id), "document.html");
-  return [
-    "# AI Doc Workspace",
-    "",
-    "You are editing a rich HTML doc with the local AI Doc app.",
-    `Current focused file: ${targetHtmlPath}`,
-    artifactIntentInstructions("document"),
-    "When the current request calls for document changes, read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
-    stagedProjectWriteInstructions("HTML"),
-    await projectAssetInstructions(project.id),
-  ].join("\n");
-}
+  private documentPath(project: DocumentProject) {
+    const fileName = project.type === "docx" ? "document.json" : project.type === "markdown" ? "document.md" : "document.html";
+    return join(projectWorkspaceRoot(project.id), fileName);
+  }
 
-async function markdownProjectAgentInstructions(project: DocumentProject) {
-  const targetMarkdownPath = join(projectWorkspaceRoot(project.id), "document.md");
-  return [
-    "# AI Doc Workspace",
-    "",
-    "You are editing a Markdown doc with the local AI Doc app.",
-    `Current focused file: ${targetMarkdownPath}`,
-    `Place local image assets under ${join(projectWorkspaceRoot(project.id), "assets")} and reference them from Markdown as ./assets/<file-name>.`,
-    artifactIntentInstructions("document"),
-    "When the current request calls for document changes, read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
-    stagedProjectWriteInstructions("Markdown"),
-    await projectAssetInstructions(project.id),
-  ].join("\n");
-}
-
-async function docxProjectAgentInstructions(project: DocumentProject) {
-  const targetDocxPath = join(projectWorkspaceRoot(project.id), "document.docx");
-  return [
-    "# AI Doc Workspace",
-    "",
-    "You are editing a Word doc project with the local AI Doc app.",
-    `Current focused file: ${targetDocxPath}`,
-    artifactIntentInstructions("document"),
-    "When the current request calls for creating or editing this Word doc, write the final result to the focused file with filesystem tools.",
-    "The app watches that file and refreshes the preview when its content changes.",
-    await projectAssetInstructions(project.id),
-  ].join("\n");
-}
-
-function artifactIntentInstructions(artifactLabel: string) {
-  return [
-    `Treat the focused ${artifactLabel} as a workspace resource, not as an obligation to produce placeholder content.`,
-    `Create or modify it only when the user's current request asks this app to produce, edit, convert, import into, export from, or otherwise update that artifact.`,
-    "If the request is mainly to coordinate with tools or other apps, inspect context, answer a question, or continue work elsewhere, complete that request without changing the focused artifact just to leave something behind.",
-  ].join("\n");
-}
-
-async function projectAssetInstructions(projectId: string) {
-  const assets = await listProjectAssets(projectId);
-  if (assets.length === 0) return "";
-  return [
-    "",
-    "Project context attachments:",
-    ...assets.map((asset) => `- ${asset.fileName} (${asset.mimeType}, ${asset.sizeBytes} bytes): ${asset.path}`),
-    "Use these files as source context when they are relevant to the user's request.",
-  ].join("\n");
-}
-
-function stagedProjectWriteInstructions(format: "HTML" | "Markdown") {
-  const validity =
-    format === "HTML"
-      ? "Keep each saved intermediate version valid, self-contained, and previewable."
-      : "Keep each saved intermediate version coherent, with balanced code fences, valid tables, and no dangling partial sections.";
-  return `For large generations or broad rewrites, save useful progress in stages: write an initial scaffold or first complete sections, then continue expanding the focused file so progress is visible in the working file. ${validity}`;
+  private agentContextBaseVersion(project: DocumentProject) {
+    return ["doc-agent-context-v2", project.type].join(":");
+  }
 }
 
 interface ProjectRow {
