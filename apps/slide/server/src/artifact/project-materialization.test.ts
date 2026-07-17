@@ -121,6 +121,14 @@ test("template materialization restores a missing file without deleting its comp
     assert.deepEqual(repairedManifest.slides, manifest.slides);
     assert.equal(await readFile(join(deckRoot, "slides", "01-cover.html"), "utf8"), source.slides[0]!.html);
     assert.equal(await readFile(join(deckRoot, "assets", "images", "hero.txt"), "utf8"), "hero");
+
+    // Recovery is allowed to fill in missing files, but it must never replace
+    // edits that have already been persisted for this project.
+    await writeFile(join(deckRoot, "slides", "01-cover.html"), "<section>User edit</section>");
+    await writeFile(join(deckRoot, "assets", "images", "hero.txt"), "user asset");
+    await materializeTemplateDeckSource(deckRoot, project, source);
+    assert.equal(await readFile(join(deckRoot, "slides", "01-cover.html"), "utf8"), "<section>User edit</section>");
+    assert.equal(await readFile(join(deckRoot, "assets", "images", "hero.txt"), "utf8"), "user asset");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

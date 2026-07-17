@@ -83,11 +83,11 @@ export async function materializeTemplateDeckSource(deckRoot: string, project: S
           const assetPath = safeTemplateProjectAssetPath(asset.path);
           const targetPath = join(deckRoot, "assets", assetPath);
           await mkdir(dirname(targetPath), { recursive: true });
-          await writeFile(targetPath, asset.bytes);
+          await writeFileIfMissing(targetPath, asset.bytes);
         }),
         ...source.slides.map((slide) => async () => {
           const destinationFile = slide.fileName.replace(/[\\/]/g, "-");
-          await writeFile(join(deckRoot, "slides", destinationFile), slide.html || missingTemplateSlideHtml(project.title, slide.fileName), "utf8");
+          await writeFileIfMissing(join(deckRoot, "slides", destinationFile), slide.html || missingTemplateSlideHtml(project.title, slide.fileName));
         }),
       ];
       await mapWithConcurrency(fileWrites, templateFileWriteConcurrency, (write) => write());
@@ -101,7 +101,10 @@ export async function materializeTemplateDeckSource(deckRoot: string, project: S
         createdAt: project.createdAt,
         updatedAt: new Date().toISOString(),
       };
-      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+      // This function is also used to recover a partial remote write. Never
+      // replace a completed user file during recovery; only missing or zero-byte
+      // files are safe to repair.
+      await writeFileIfMissing(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
       await verifyNonEmptyFiles([manifestPath, ...slides.map((slide) => join(deckRoot, slide.file))]);
       return true;
     },
@@ -160,7 +163,9 @@ export async function isBlankDeckManifest(manifestPath: string) {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Partial<DeckManifest>;
     return manifest.schemaVersion === "ai-slide.deck.v1" && manifest.slides?.length === 1 && manifest.slides[0]?.file === "slides/01-cover.html";
   } catch {
-    return true;
+    // A transient FabricFS read or parse failure is not proof that this is a
+    // blank deck. Treat it as unknown so callers do not rewrite user content.
+    return false;
   }
 }
 
