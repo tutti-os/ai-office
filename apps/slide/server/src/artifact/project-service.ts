@@ -400,7 +400,11 @@ export class ProjectService {
       const refresh = await this.refreshArtifactFromWorkspace(runtimeProject.id, runId, workspaceFingerprint);
       workspaceFingerprint = refresh.fingerprint;
       refreshedArtifact = refresh.changed || refreshedArtifact;
-    }, workspaceRefreshDebounceMs);
+    }, workspaceRefreshDebounceMs, {
+      runId,
+      provider: runtimeProfile.provider,
+      agentTargetId: runtimeProfile.agentTargetId ?? "unknown",
+    });
     let terminalFlush: Promise<void> | null = null;
     const flushTerminalWorkspace = () => terminalFlush ??= workspaceRefresh.flush();
     this.runWorkspaceFlushes.set(runId, flushTerminalWorkspace);

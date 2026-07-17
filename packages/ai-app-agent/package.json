@@ -6,6 +6,7 @@
   "exports": {
     "./runtime": "./src/runtime/index.ts",
     "./run-executor": "./src/run-executor/index.ts",
+    "./agent-run-timing": "./src/agent-run-timing/index.ts",
     "./local-agent-runtime": "./src/local-agent-runtime/index.ts",
     "./conversation": "./src/conversation/index.ts",
     "./conversation-hooks": "./src/conversation-hooks/index.ts",
@@ -14,7 +15,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/conversation-ui/agent-label.test.ts src/local-agent-runtime/agent-target-execution.test.ts src/run-executor/agent-target-resolution.test.ts src/run-executor/workspace-refresh.test.ts src/runtime/runtime-provider-registry.test.ts"
+    "test": "tsx --test src/agent-run-timing/agent-run-timing.test.ts src/conversation-ui/agent-label.test.ts src/local-agent-runtime/agent-target-execution.test.ts src/run-executor/agent-target-resolution.test.ts src/run-executor/workspace-refresh.test.ts src/runtime/runtime-provider-registry.test.ts"
   },
   "dependencies": {
     "@ai-app/shared": "workspace:*",

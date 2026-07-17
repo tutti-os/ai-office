@@ -417,7 +417,7 @@ export class DocumentService {
     const workspaceRefresh = createDebouncedWorkspaceRefresh(async () => {
       const refreshed = await this.refreshProjectFromWorkspace(initialProject.id, runId).finally(() => invalidateProjectAssetCache(initialProject.id));
       refreshedFromWorkspace = Boolean(refreshed) || refreshedFromWorkspace;
-    }, workspaceRefreshDebounceMs);
+    }, workspaceRefreshDebounceMs, { runId, provider: runtimeProfile.provider, agentTargetId: runtimeProfile.agentTargetId ?? "unknown" });
     let terminalFlush: Promise<void> | null = null;
     const flushTerminalWorkspace = () => terminalFlush ??= workspaceRefresh.flush();
     this.runWorkspaceFlushes.set(runId, flushTerminalWorkspace);

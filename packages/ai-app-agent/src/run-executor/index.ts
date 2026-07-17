@@ -1,4 +1,5 @@
 import type { BaseAiEditRequest, BaseRun, BaseRunEvent, RuntimeProfile } from "@ai-app/shared/types";
+import { createAgentRunTimingLogger } from "@ai-app/agent/agent-run-timing";
 import type { RuntimeConversationMessage, RuntimeProviderRegistry, RuntimeStreamEvent } from "@ai-app/agent/runtime";
 
 export type RunEventInput<TEvent extends BaseRunEvent> = {
@@ -69,19 +70,27 @@ export class RuntimeRunExecutor<
     if (!run) return;
     const recorder = new RuntimeRunRecorder(this.input.repo, this.input.events, input.project.id, input.runId);
     let generatedText = "";
+    const timing = createAgentRunTimingLogger({
+      runId: input.runId,
+      provider: input.runtimeProfile.provider,
+      agentTargetId: input.runtimeProfile.agentTargetId ?? "unknown",
+      scope: "agent.executor",
+    });
+    timing.emit("agent_executor_started");
 
     try {
-      const runtimeProfile = await this.input.runtimes.resolveExecutionProfile(input.runtimeProfile, {
-        run,
-        project: input.project,
-        runtimeProfile: input.runtimeProfile,
-        request: input.request,
-        conversation: input.conversation,
-        history: input.history,
-      });
+      const runtimeProfile = await timing.measure("prepare", "execution_profile", () =>
+        this.input.runtimes.resolveExecutionProfile(input.runtimeProfile, {
+          run,
+          project: input.project,
+          runtimeProfile: input.runtimeProfile,
+          request: input.request,
+          conversation: input.conversation,
+          history: input.history,
+        }));
       const provider = this.input.runtimes.getProvider(runtimeProfile);
       const descriptor = provider.describeRun(runtimeProfile);
-      await input.beforeRun?.();
+      if (input.beforeRun) await timing.measure("prepare", "before_run", input.beforeRun);
       const resolvedRun = this.input.repo.updateRun(input.runId, {
         status: "running",
         agentTargetId: descriptor.agentTargetId,
@@ -108,6 +117,7 @@ export class RuntimeRunExecutor<
         if (!readiness.available) throw new Error(readiness.reason ?? "Runtime provider is unavailable");
       }
 
+      const providerStreamStartedAt = Date.now();
       for await (const rawEvent of provider.streamEdit(runtimeContext)) {
         if (input.isCancelled()) {
           await this.finalizeCancellation(input, "Cancelled by user");
@@ -116,15 +126,22 @@ export class RuntimeRunExecutor<
         const event = typeof rawEvent === "string" ? ({ type: "text_delta", text: rawEvent } as const) : rawEvent;
         if (event.type === "text_delta") generatedText += event.text;
         recorder.record(event);
-        if (event.type === "tool_result" || event.type === "file_write") await input.onWorkspaceEvent?.(event, input.runId);
+        if ((event.type === "tool_result" || event.type === "file_write") && input.onWorkspaceEvent) {
+          await timing.measure("projection", "workspace_event_dispatch", () => input.onWorkspaceEvent!(event, input.runId));
+        }
       }
+      timing.emit("agent_provider_stream_done", {
+        phase: "run",
+        elapsed_ms: Date.now() - providerStreamStartedAt,
+      });
 
       if (input.isCancelled()) {
         await this.finalizeCancellation(input, "Cancelled by user");
         return;
       }
 
-      await input.complete({ generatedText, run: resolvedRun });
+      await timing.measure("projection", "completion_projection", () =>
+        input.complete({ generatedText, run: resolvedRun }));
     } catch (error) {
       if (input.isCancelled()) {
         await this.finalizeCancellation(input, "Cancelled by user");
@@ -133,6 +150,10 @@ export class RuntimeRunExecutor<
       const message = error instanceof Error ? error.message : "AI edit failed";
       const currentRun = this.safeGetRun(input.runId);
       if (!currentRun) return;
+      timing.emit("agent_executor_error", {
+        phase: "run",
+        error_name: error instanceof Error ? error.name : "unknown",
+      }, "ERROR");
       await this.recordFailure(input, recorder, currentRun, message);
     } finally {
       try {
@@ -140,6 +161,10 @@ export class RuntimeRunExecutor<
       } catch {
         // Cleanup hooks are best-effort for background runs.
       }
+      timing.emit("agent_executor_done", {
+        phase: "cleanup",
+        outcome: this.safeGetRun(input.runId)?.status ?? "missing",
+      });
     }
   }
 
@@ -285,15 +310,30 @@ function previewText(value: string) {
   return text.length > 280 ? `${text.slice(0, 280)}...` : text;
 }
 
-export function createDebouncedWorkspaceRefresh(work: () => Promise<void>, debounceMs: number) {
+export function createDebouncedWorkspaceRefresh(
+  work: () => Promise<void>,
+  debounceMs: number,
+  diagnostics?: {
+    runId: string;
+    provider: string;
+    agentTargetId: string;
+  },
+) {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let tail = Promise.resolve();
   let dirty = false;
   let flushing = false;
   let flushPromise: Promise<void> | null = null;
+  const timing = diagnostics ? createAgentRunTimingLogger({
+    ...diagnostics,
+    scope: "agent.workspace",
+  }) : null;
 
-  const enqueue = () => {
-    const next = tail.catch(() => undefined).then(work);
+  const enqueue = (trigger: "scheduled" | "flush") => {
+    const next = tail.catch(() => undefined).then(() =>
+      timing
+        ? timing.measure("projection", "workspace_refresh", work, { trigger })
+        : work());
     tail = next;
     return next;
   };
@@ -306,7 +346,7 @@ export function createDebouncedWorkspaceRefresh(work: () => Promise<void>, debou
       timer = setTimeout(() => {
         timer = null;
         dirty = false;
-        void enqueue().catch(() => undefined);
+        void enqueue("scheduled").catch(() => undefined);
       }, debounceMs);
     },
     flush() {
@@ -319,8 +359,9 @@ export function createDebouncedWorkspaceRefresh(work: () => Promise<void>, debou
         while (dirty) {
           dirty = false;
           await tail.catch(() => undefined);
-          await enqueue();
+          await enqueue("flush");
         }
+        timing?.emit("workspace_flush_done", { phase: "projection" });
       })().finally(() => {
         flushing = false;
         flushPromise = null;

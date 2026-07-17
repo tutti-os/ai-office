@@ -395,7 +395,11 @@ export class SheetService {
       workspaceFingerprint = refresh.fingerprint;
       lastManifest = refresh.manifest;
       refreshedArtifact = refresh.changed || refreshedArtifact;
-    }, workspaceRefreshDebounceMs);
+    }, workspaceRefreshDebounceMs, {
+      runId,
+      provider: runtimeProfile.provider,
+      agentTargetId: runtimeProfile.agentTargetId ?? "unknown",
+    });
     let terminalFlush: Promise<void> | null = null;
     const flushTerminalWorkspace = (fullRecalc: boolean) => {
       forceFullRecalc = forceFullRecalc || fullRecalc;

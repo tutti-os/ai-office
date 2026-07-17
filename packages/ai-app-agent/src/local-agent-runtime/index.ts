@@ -14,12 +14,20 @@ import {
 import {
   loadTuttiAgentSkillContext,
   type LoadTuttiAgentSkillContextInput,
-  type TuttiRecommendedSystemPrompt,
 } from "@tutti-os/agent-acp-kit/tutti";
 import { localAgentModelIdForAcp, localAgentProviderIdsMatch, normalizeRuntimeProfileProviderId } from "@ai-app/shared/agent-providers";
 import type { BaseAiEditRequest, BaseRun, LocalAgentTargetStatus, RuntimeProfile } from "@ai-app/shared/types";
 import { safePathSegment } from "@ai-app/shared/local-paths";
-import type { RuntimeEditContext, RuntimeProvider, RuntimeStreamEvent } from "@ai-app/agent/runtime";
+import { createAgentRunTimingLogger, type AgentRunTimingLogger } from "@ai-app/agent/agent-run-timing";
+import type { RuntimeEditContext, RuntimeProvider } from "@ai-app/agent/runtime";
+import { createAgentRunObserver } from "./agent-run-observer.js";
+import { toRuntimeStreamEvent } from "./event-projection.js";
+import {
+  prepareLocalAgentRun,
+  type LocalAgentSkillContext,
+  type LocalAgentSkillManifestResult,
+  type PreparedLocalAgentRun,
+} from "./prepare-run.js";
 
 const DEFAULT_TIMEOUT_MS = 180_000;
 export type { SkillMaterializationFile, SkillMaterializationRecord } from "@tutti-os/agent-acp-kit";
@@ -32,12 +40,8 @@ export type LocalAgentMcpServer = {
   startupTimeoutMs?: number;
   toolTimeoutMs?: number;
 };
-export type LocalAgentSkillContext = {
-  skills: SkillMaterializationRecord[];
-  recommendedSystemPrompt?: TuttiRecommendedSystemPrompt;
-};
-
-export type LocalAgentSkillManifestResult = SkillMaterializationRecord[] | Partial<LocalAgentSkillContext>;
+export type { LocalAgentSkillContext, LocalAgentSkillManifestResult } from "./prepare-run.js";
+export { toRuntimeStreamEvent } from "./event-projection.js";
 
 export type LoadTuttiLocalAgentSkillContextInput = LoadTuttiAgentSkillContextInput;
 
@@ -155,13 +159,38 @@ export class LocalAgentRuntimeProvider<
     const workspaceRoot = this.options.workspaceRoot(context);
     const controller = new AbortController();
     this.controllers.set(context.run.id, controller);
+    const provider = this.resolveProviderId(context.runtimeProfile.provider) ?? context.runtimeProfile.provider;
+    const timing = createAgentRunTimingLogger({
+      runId: context.run.id,
+      provider,
+      agentTargetId,
+      scope: "agent.runtime",
+    });
+    timing.emit("agent_prepare_started");
+    let runOutcome: "completed" | "failed" | "canceled" = "failed";
 
     try {
-      const provider = this.resolveProviderId(context.runtimeProfile.provider) ?? context.runtimeProfile.provider;
       const sessionStore = new LocalAgentSessionStore(workspaceRoot, this.options.sessionDirName ?? ".ai-app");
       const conversationSessionId = context.conversation?.sessionId ?? context.project.id;
       const providerResumeEnabled = this.options.useProviderResume?.(context) ?? true;
-      const previousSession = providerResumeEnabled ? await sessionStore.read(conversationSessionId) : null;
+      const [previousSession, prepared] = await Promise.all([
+        providerResumeEnabled
+          ? timing.measure("prepare", "provider_session", () => sessionStore.read(conversationSessionId))
+          : Promise.resolve(null),
+        prepareLocalAgentRun({
+          context,
+          workspaceRoot,
+          timing,
+          buildSkillManifest: this.options.buildSkillManifest,
+          buildEnv: this.options.buildEnv,
+          buildSystemPrompt: this.options.buildSystemPrompt,
+        }),
+      ]);
+      timing.emit("agent_prepare_done", {
+        phase: "prepare",
+        skill_count: prepared.skillContext.skills.length,
+        resume_available: previousSession != null,
+      });
       const sameTarget = previousSession?.agentTargetId === agentTargetId && previousSession.provider === provider;
       const providerSessionId = sameTarget ? previousSession?.providerSessionId : undefined;
       const resumeToken = sameTarget ? previousSession?.resumeToken : undefined;
@@ -185,10 +214,13 @@ export class LocalAgentRuntimeProvider<
           resume,
           sessionStore,
           workspaceRoot,
+          prepared,
+          timing,
         })) {
           emittedEvent = true;
           yield runtimeEvent;
         }
+        runOutcome = "completed";
       } catch (error) {
         if (previousSession && !emittedEvent && isProviderResumeFailure(error)) {
           await sessionStore.remove(conversationSessionId);
@@ -201,15 +233,25 @@ export class LocalAgentRuntimeProvider<
             resume: { mode: "fresh" },
             sessionStore,
             workspaceRoot,
+            prepared,
+            timing,
           })) {
             yield runtimeEvent;
           }
+          runOutcome = "completed";
           return;
         }
         throw error;
       }
+    } catch (error) {
+      runOutcome = controller.signal.aborted ? "canceled" : "failed";
+      throw error;
     } finally {
       this.controllers.delete(context.run.id);
+      timing.emit("agent_run_done", {
+        phase: "cleanup",
+        outcome: runOutcome,
+      });
     }
   }
 
@@ -222,72 +264,93 @@ export class LocalAgentRuntimeProvider<
     resume: { mode: "provider"; providerSessionId?: string; resumeToken?: string } | { mode: "fresh" };
     sessionStore: LocalAgentSessionStore;
     workspaceRoot: string;
+    prepared: PreparedLocalAgentRun;
+    timing: AgentRunTimingLogger;
   }) {
-    const { context, controller, persistProviderSession, agentTargetId, provider, resume, sessionStore, workspaceRoot } = input;
+    const {
+      context,
+      controller,
+      persistProviderSession,
+      agentTargetId,
+      provider,
+      resume,
+      sessionStore,
+      workspaceRoot,
+      prepared,
+      timing,
+    } = input;
     let lastError: Extract<AgentEvent, { type: "error" }> | undefined;
     const agentCwd = workspaceRoot;
-    const skillContext = normalizeSkillManifestResult(await this.options.buildSkillManifest?.(context, workspaceRoot));
-    const systemPrompt = await this.options.buildSystemPrompt(context, workspaceRoot, skillContext);
     const conversationId = context.conversation?.conversationId ?? context.project.id;
     const sessionId = context.conversation?.sessionId ?? context.project.id;
     const model = isPlaceholderProfileModel(context.runtimeProfile.model, context.runtimeProfile.provider)
       ? undefined
       : localAgentModelIdForAcp(context.runtimeProfile.model, provider);
-    const appEnv = (await this.options.buildEnv?.(context, workspaceRoot)) ?? {};
     const tuttiCliEnv = this.tuttiCliDetectionEnv();
-    for await (const event of this.localAgentRuntime.run({
-      agentTargetId,
-      runId: context.run.id,
-      conversationId,
-      sessionId,
-      provider,
-      runtimeKind: "local-agent",
-      runtimeProvider: provider,
-      cwd: agentCwd,
-      prompt: this.options.buildPrompt(context),
-      systemPrompt,
-      history: context.history ?? [],
-      model,
-      reasoning: context.request.reasoningEffort ?? undefined,
-      mcpServers: this.options.buildMcpServers?.(context) ?? [],
-      skillManifest: skillContext.skills,
-      env: { ...appEnv, ...(tuttiCliEnv ?? {}) },
-      timeoutMs: this.options.timeoutMs?.() ?? DEFAULT_TIMEOUT_MS,
-      extraAllowedDirs: this.options.extraAllowedDirs?.(context, workspaceRoot) ?? [workspaceRoot],
-      resume,
-      signal: controller.signal,
-    } as any)) {
-      const runtimeEvent = toRuntimeStreamEvent(event as AgentEvent);
-      if ((event as AgentEvent).type === "error") {
-        lastError = event as Extract<AgentEvent, { type: "error" }>;
+    const observer = createAgentRunObserver({
+      timing,
+      model: model ?? "default",
+      resumeMode: resume.mode,
+      isAborted: () => controller.signal.aborted,
+    });
+    try {
+      for await (const event of this.localAgentRuntime.run({
+        agentTargetId,
+        runId: context.run.id,
+        conversationId,
+        sessionId,
+        provider,
+        runtimeKind: "local-agent",
+        runtimeProvider: provider,
+        cwd: agentCwd,
+        prompt: this.options.buildPrompt(context),
+        systemPrompt: prepared.systemPrompt,
+        history: context.history ?? [],
+        model,
+        reasoning: context.request.reasoningEffort ?? undefined,
+        mcpServers: this.options.buildMcpServers?.(context) ?? [],
+        skillManifest: prepared.skillContext.skills,
+        env: { ...prepared.appEnv, ...(tuttiCliEnv ?? {}) },
+        timeoutMs: this.options.timeoutMs?.() ?? DEFAULT_TIMEOUT_MS,
+        extraAllowedDirs: this.options.extraAllowedDirs?.(context, workspaceRoot) ?? [workspaceRoot],
+        resume,
+        signal: controller.signal,
+        metadata: { timingDiagnostics: true },
+      } as any)) {
+        const agentEvent = event as AgentEvent;
+        if (observer.observe(agentEvent)) continue;
+        if (agentEvent.type === "error") lastError = agentEvent;
+        const runtimeEvent = toRuntimeStreamEvent(agentEvent);
+        if (runtimeEvent) {
+          yield runtimeEvent;
+        } else if (agentEvent.type === "error") {
+          throw new Error(agentEvent.message);
+        } else if (agentEvent.type === "done") {
+          const done = agentEvent;
+          if (persistProviderSession && (done.sessionId || done.resumeToken)) {
+            await timing.measure("cleanup", "provider_session_persist", () => sessionStore.write(sessionId, {
+              agentTargetId,
+              provider,
+              providerSessionId: done.sessionId,
+              resumeToken: done.resumeToken,
+            }));
+          }
+          const terminalStatus = done.status
+            ?? (done.reason === "cancelled" ? "canceled" : done.reason === "error" ? "failed" : "completed");
+          if (terminalStatus === "failed") {
+            throw new Error(
+              lastError?.message
+                ?? `local-agent ${provider} failed${typeof done.exitCode === "number" ? ` with exit code ${done.exitCode}` : ""}`,
+            );
+          }
+          if (terminalStatus === "canceled") throw new Error(`local-agent ${provider} was canceled`);
+        }
       }
-      if (runtimeEvent) {
-        yield runtimeEvent;
-      } else if ((event as any).type === "error") {
-        throw new Error((event as any).message);
-      } else if ((event as any).type === "done") {
-        const done = event as any;
-        if (persistProviderSession && (done.sessionId || done.resumeToken)) {
-          await sessionStore.write(sessionId, {
-            agentTargetId,
-            provider,
-            providerSessionId: done.sessionId,
-            resumeToken: done.resumeToken,
-          });
-        }
-        const terminalStatus =
-          done.status ??
-          (done.reason === "cancelled" ? "canceled" : done.reason === "error" ? "failed" : "completed");
-        if (terminalStatus === "failed") {
-          throw new Error(
-            lastError?.message ??
-              `local-agent ${provider} failed${typeof done.exitCode === "number" ? ` with exit code ${done.exitCode}` : ""}`,
-          );
-        }
-        if (terminalStatus === "canceled") {
-          throw new Error(`local-agent ${provider} was canceled`);
-        }
-      }
+    } catch (error) {
+      observer.fail(error);
+      throw error;
+    } finally {
+      observer.close();
     }
   }
 
@@ -365,15 +428,6 @@ export function resolveRegisteredProviderId(provider: string, registeredProvider
   if (legacyMatches.length === 1) return legacyMatches[0];
   if (legacyMatches.length > 1) throw new Error(`Provider adapter is ambiguous: ${provider}`);
   return undefined;
-}
-
-function normalizeSkillManifestResult(value: LocalAgentSkillManifestResult | undefined): LocalAgentSkillContext {
-  if (!value) return { skills: [] };
-  if (Array.isArray(value)) return { skills: value };
-  return {
-    skills: value.skills ?? [],
-    ...(value.recommendedSystemPrompt ? { recommendedSystemPrompt: value.recommendedSystemPrompt } : {}),
-  };
 }
 
 function createAiAppLocalAgentProviderPlugins(): LocalAgentProviderPlugin[] {
@@ -475,35 +529,6 @@ function withClaudeStreamCompatibility(provider: LocalAgentProviderPlugin): Loca
 function isProviderResumeFailure(error: unknown) {
   const message = error instanceof Error ? error.message : String(error ?? "");
   return /thread\/resume|resume failed|no rollout found|providerSessionId|resumeToken/i.test(message);
-}
-
-export function toRuntimeStreamEvent(event: AgentEvent): RuntimeStreamEvent | null {
-  const item = event as any;
-  if (item.type === "text_delta") return { type: "text_delta", text: item.text };
-  if ((item.type === "assistant" || item.type === "agent_message" || item.type === "message") && typeof item.text === "string") {
-    return { type: "text_delta", text: item.text };
-  }
-  if (item.type === "result" && item.is_error !== true && typeof item.result === "string") {
-    return { type: "text_delta", text: item.result };
-  }
-  if (item.type === "thinking" || item.type === "thinking_delta") return { type: "thinking_delta", text: item.text };
-  if (item.type === "tool_call") return { type: "tool_call", id: item.id, name: item.name || "unknown_tool", input: item.input };
-  if (item.type === "tool_result") {
-    return {
-      type: "tool_result",
-      id: item.id,
-      name: item.name || "unknown_tool",
-      status: item.status,
-      output: item.output,
-      summary: item.summary,
-      error: item.error,
-      isError: item.isError,
-    };
-  }
-  if (item.type === "status") return { type: "status", status: item.status ?? item.stage, message: item.message };
-  if (item.type === "file_write") return { type: "file_write", path: item.path };
-  if (item.type === "stderr") return { type: "stderr", text: item.text };
-  return null;
 }
 
 export function stripProviderPrefix(model: string, provider: string) {
