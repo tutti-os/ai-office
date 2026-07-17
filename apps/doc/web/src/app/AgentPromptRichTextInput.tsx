@@ -1,19 +1,13 @@
 import { useMemo, type KeyboardEvent } from "react";
 import { RichTextTriggerEditor, type RichTextTriggerEditorProps } from "@tutti-os/ui-rich-text/editor";
 import type { AgentComposerInputRenderProps } from "@ai-app/agent/conversation-ui";
-import type { RichTextTriggerProvider } from "@tutti-os/ui-rich-text/types";
 import { useI18n } from "../i18n";
-import { createTuttiExternalAgentContextMentionProviders } from "./tuttiAtMentions";
 
 const appMentionProviderIds = ["workspace-app"] as const;
 const agentMentionProviderIds = ["agent-target"] as const;
 
 export function AgentPromptRichTextInput(props: AgentComposerInputRenderProps) {
   const { t } = useI18n();
-  const triggerProviders = useMemo<readonly RichTextTriggerProvider<any>[]>(
-    () => createTuttiExternalAgentContextMentionProviders(),
-    [],
-  );
   const palette = useMemo<NonNullable<RichTextTriggerEditorProps["palette"]>>(
     () => ({
       categories: [
@@ -67,7 +61,6 @@ export function AgentPromptRichTextInput(props: AgentComposerInputRenderProps) {
           noMatchesLabel: t("agent.mentionEmpty"),
           removeReferenceActionLabel: t("agent.mentionRemove"),
         }}
-        triggerProviders={triggerProviders}
         value={props.value}
         onChange={props.onChange}
       />

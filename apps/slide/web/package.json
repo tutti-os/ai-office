@@ -7,6 +7,7 @@
     "copy:office-preview-assets": "node scripts/copy-office-preview-assets.mjs",
     "dev": "pnpm run copy:office-preview-assets && vite --host 127.0.0.1 --port 5175",
     "build": "pnpm run copy:office-preview-assets && tsc -p tsconfig.json --noEmit && vite build",
+    "test": "tsx --test src/app/tuttiMentionService.test.ts",
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -16,9 +17,9 @@
     "@ai-slide/shared": "workspace:*",
     "@floating-ui/dom": "^1.7.6",
     "@tutti-os/office-preview": "0.0.0-test.20260706055103.ad1e4504c24a",
-    "@tutti-os/ui-rich-text": "0.0.54",
+    "@tutti-os/ui-rich-text": "0.0.125",
     "@tutti-os/ui-system": "0.0.54",
-    "@tutti-os/workspace-external-core": "0.0.54",
+    "@tutti-os/workspace-external-core": "0.0.125",
     "@vitejs/plugin-react": "^5.1.1",
     "lucide-react": "^0.562.0",
     "react": "^19.2.3",
