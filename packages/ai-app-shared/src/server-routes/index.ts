@@ -141,10 +141,14 @@ export class ArtifactAppHttpRoutes<
   private registerProjectRoutes(server: ArtifactRouteServer) {
     server.get("/api/projects", async () => this.input.service.listProjects());
     server.post("/api/projects", async (request: ArtifactRouteRequest<Record<string, string>, TCreateProjectInput>, reply: ArtifactRouteReply) => {
+      const startedAt = Date.now();
       try {
-        return await this.input.service.createProject(request.body ?? ({} as TCreateProjectInput));
+        const result = await this.input.service.createProject(request.body ?? ({} as TCreateProjectInput));
+        logProjectCreate(this.input.appId, "succeeded", result, Date.now() - startedAt);
+        return result;
       } catch (error) {
-        return sendError(reply, error, "Unable to create project", 400);
+        logProjectCreate(this.input.appId, "failed", error, Date.now() - startedAt);
+        return sendError(reply, error, "Unable to create project");
       }
     });
     server.delete("/api/projects", async () => this.input.service.clearProjectHistory());
@@ -232,7 +236,32 @@ function isAgentTargetResponse(value: unknown): value is { agents: Array<{ suppo
   );
 }
 
-function sendError(reply: ArtifactRouteReply, error: unknown, fallback: string, statusCode: number) {
+function sendError(reply: ArtifactRouteReply, error: unknown, fallback: string, fallbackStatusCode?: number) {
   const response = artifactErrorResponse(error, fallback);
-  return reply.code(response.statusCode === 500 ? statusCode : response.statusCode).send(response.body);
+  const statusCode = response.statusCode === 500 && fallbackStatusCode !== undefined
+    ? fallbackStatusCode
+    : response.statusCode;
+  return reply.code(statusCode).send(response.body);
+}
+
+function logProjectCreate(appId: string, outcome: "succeeded" | "failed", value: unknown, elapsedMs: number) {
+  const candidate = value && typeof value === "object" ? value as {
+    project?: { id?: unknown };
+    phase?: unknown;
+    path?: unknown;
+    code?: unknown;
+    message?: unknown;
+  } : {};
+  const entry = {
+    event: "ai_app.project.create",
+    appId,
+    outcome,
+    elapsed_ms: elapsedMs,
+    ...(typeof candidate.project?.id === "string" ? { projectId: candidate.project.id } : {}),
+    ...(typeof candidate.phase === "string" ? { phase: candidate.phase } : {}),
+    ...(typeof candidate.path === "string" ? { path: candidate.path } : {}),
+    ...(typeof candidate.code === "string" ? { fsCode: candidate.code } : {}),
+    ...(outcome === "failed" && typeof candidate.message === "string" ? { message: candidate.message } : {}),
+  };
+  (outcome === "failed" ? console.error : console.info)(JSON.stringify(entry));
 }

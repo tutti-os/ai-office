@@ -30,15 +30,22 @@ export class ArtifactAppError extends Error {
 export type ArtifactErrorResponse = {
   error: string;
   code: ArtifactAppErrorCode;
+  details?: {
+    phase: string;
+    fsCode: string;
+    retryable: boolean;
+  };
 };
 
 export function artifactErrorResponse(error: unknown, fallback = "Unexpected server error") {
   const statusCode = statusForError(error);
+  const details = projectPreparationDetails(error);
   return {
     statusCode,
     body: {
       error: messageForError(error, fallback, statusCode),
       code: codeForError(error),
+      ...(details ? { details } : {}),
     } satisfies ArtifactErrorResponse,
   };
 }
@@ -86,6 +93,12 @@ export function notFoundOrBadRequest(error: unknown) {
 export function statusForError(error: unknown) {
   if (error instanceof ArtifactAppError) return error.statusCode;
   if (isErrorWithStatusCode(error)) return error.statusCode;
+  const preparation = projectPreparationDetails(error);
+  if (preparation) {
+    if (preparation.fsCode === "EACCES" || preparation.fsCode === "EPERM") return 403;
+    if (preparation.fsCode === "ESTALE" || preparation.fsCode === "EBUSY") return 409;
+    if (preparation.fsCode === "EIO" || preparation.fsCode === "ETIMEDOUT") return 503;
+  }
   const message = rawMessageForError(error).toLowerCase();
   if (message.includes("stale")) return 409;
   if (message.includes("officecli")) return 503;
@@ -107,6 +120,12 @@ export function codeForError(error: unknown): ArtifactAppErrorCode {
 
 export function messageForError(error: unknown, fallback: string, statusCode?: number) {
   const resolvedStatusCode = statusCode ?? statusForError(error);
+  const preparation = projectPreparationDetails(error);
+  if (preparation) {
+    return resolvedStatusCode >= 500
+      ? fallback
+      : `Project preparation failed during ${preparation.phase}.`;
+  }
   if (error instanceof ArtifactAppError) return error.expose ? error.message : fallback;
   if (error instanceof Error && resolvedStatusCode < 500) return error.message;
   if (typeof error === "string" && resolvedStatusCode < 500) return error;
@@ -140,4 +159,19 @@ function statusForCode(code: ArtifactAppErrorCode) {
 
 function isErrorWithStatusCode(error: unknown): error is { statusCode: number } {
   return Boolean(error && typeof error === "object" && "statusCode" in error && typeof (error as { statusCode?: unknown }).statusCode === "number");
+}
+
+function projectPreparationDetails(error: unknown): ArtifactErrorResponse["details"] | null {
+  if (!error || typeof error !== "object") return null;
+  const candidate = error as { name?: unknown; phase?: unknown; code?: unknown };
+  if (
+    candidate.name !== "ProjectPreparationError"
+    || typeof candidate.phase !== "string"
+    || typeof candidate.code !== "string"
+  ) return null;
+  return {
+    phase: candidate.phase,
+    fsCode: candidate.code,
+    retryable: new Set(["ESTALE", "EIO", "EBUSY", "ETIMEDOUT"]).has(candidate.code),
+  };
 }

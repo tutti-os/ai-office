@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createEmptyDocxDocumentManifest, type DocumentProject } from "@ai-doc/shared";
-import { withProjectPreparationPhase } from "@ai-app/shared/project-preparation";
+import { retryProjectPreparationOperation, withProjectPreparationPhase } from "@ai-app/shared/project-preparation";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { listProjectAssets } from "./project-assets.js";
 
@@ -11,7 +11,11 @@ export async function materializeDocumentProjectCore(root: string, project: Docu
   const content = project.type === "docx"
     ? project.content || JSON.stringify(createEmptyDocxDocumentManifest())
     : project.content;
-  await withProjectPreparationPhase("core_document", path, () => writeFile(path, content, "utf8"));
+  await retryProjectPreparationOperation({
+    phase: "core_document",
+    path,
+    work: () => withProjectPreparationPhase("core_document", path, () => writeFile(path, content, "utf8")),
+  });
 }
 
 export async function prepareDocumentAgentContext(root: string, project: DocumentProject) {

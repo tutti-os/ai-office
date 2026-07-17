@@ -81,10 +81,10 @@ test("agent context preparation retries transient errors and preserves terminal 
       version: "v1",
       prepare: async () => {
         calls += 1;
-        throw new ProjectPreparationError({ phase: "agents_write", path: "AGENTS.md", code: "EACCES", message: "denied" });
+        throw new ProjectPreparationError({ phase: "agents_write", path: "AGENTS.md", code: "EIO", message: "I/O failed" });
       },
     }),
-    (error: ProjectPreparationError) => error.phase === "agents_write" && error.path === "AGENTS.md" && error.code === "EACCES",
+    (error: ProjectPreparationError) => error.phase === "agents_write" && error.path === "AGENTS.md" && error.code === "EIO",
   );
   assert.equal(calls, 2);
   assert.deepEqual(
@@ -94,7 +94,7 @@ test("agent context preparation retries transient errors and preserves terminal 
       code: (failure as ProjectPreparationError).code,
       message: (failure as ProjectPreparationError).message,
     },
-    { phase: "agents_write", path: "AGENTS.md", code: "EACCES", message: "denied" },
+    { phase: "agents_write", path: "AGENTS.md", code: "EIO", message: "I/O failed" },
   );
 });
 

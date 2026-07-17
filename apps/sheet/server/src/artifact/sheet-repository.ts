@@ -16,7 +16,7 @@ import {
 } from "@ai-sheet/shared";
 import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
-import { SqliteProjectPreparationCoordinator } from "@ai-app/shared/project-preparation";
+import { retryProjectPreparationOperation, SqliteProjectPreparationCoordinator } from "@ai-app/shared/project-preparation";
 import { getDb, rowOrNull, rows } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
 import { withProjectImportCleanup } from "./project-import.js";
@@ -135,7 +135,12 @@ export class SheetRepository {
     return withProjectImportCleanup({
       cleanup: () => { this.deleteProject(created.project.id); },
       importProject: async () => {
-        await copyFile(sourcePath, xlsxFilePath(created.project.id));
+        const targetPath = xlsxFilePath(created.project.id);
+        await retryProjectPreparationOperation({
+          phase: "import_workbook",
+          path: targetPath,
+          work: () => copyFile(sourcePath, targetPath),
+        });
         const xlsxManifest = await readXlsxManifestFromFile(created.project.id);
         const project = this.getProject(created.project.id);
         const artifact = this.getArtifact(created.artifact.id);
@@ -155,7 +160,12 @@ export class SheetRepository {
     return withProjectImportCleanup({
       cleanup: () => { this.deleteProject(created.project.id); },
       importProject: async () => {
-        await writeFile(xlsxFilePath(created.project.id), input.bytes);
+        const targetPath = xlsxFilePath(created.project.id);
+        await retryProjectPreparationOperation({
+          phase: "import_workbook",
+          path: targetPath,
+          work: () => writeFile(targetPath, input.bytes),
+        });
         const xlsxManifest = await readXlsxManifestFromFile(created.project.id);
         this.markProjectCoreReady(created.project.id);
         return { ...created, xlsxManifest };
