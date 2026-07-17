@@ -1,4 +1,5 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import {
   createBlankDeckManifest,
@@ -7,35 +8,33 @@ import {
   type SlideArtifact,
   type SlideProject,
 } from "@ai-slide/shared";
-import { ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
+import { projectWorkspaceRoot } from "../local/paths.js";
 import { loadTemplateDeckSource, localTemplateSourceRoots, type TemplateDeckSource } from "../templates/template-service.js";
 import { defaultDeckSkillFiles, defaultDeckSkillSlug } from "./default-deck-skill.js";
 import { mimeTypeForAssetFileName, projectAssetRelativePath } from "./project-file-names.js";
 
-export function materializeDeckProject(root: string, project: SlideProject, artifact: SlideArtifact, templateSource: TemplateDeckSource | null = null) {
+export async function materializeDeckProject(root: string, project: SlideProject, artifact: SlideArtifact, templateSource: TemplateDeckSource | null = null) {
   const deckRoot = join(root, artifact.fileRef);
   const manifestPath = join(deckRoot, "manifest.json");
   const createdAt = project.createdAt;
-  mkdirSync(join(deckRoot, "slides"), { recursive: true });
-  mkdirSync(join(deckRoot, "assets"), { recursive: true });
-  mkdirSync(join(deckRoot, "previews"), { recursive: true });
-  mkdirSync(join(deckRoot, "thumbnails"), { recursive: true });
-  if (project.templateId && templateSource && materializeTemplateDeckSource(deckRoot, project, templateSource)) return;
-  if (!existsSync(manifestPath)) {
-    const manifest = createBlankDeckManifest({ title: project.title, createdAt });
-    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  if (project.templateId && templateSource) {
+    await materializeTemplateDeckSource(deckRoot, project, templateSource);
+    return;
   }
+  await Promise.all([
+    mkdir(join(deckRoot, "slides"), { recursive: true }),
+    mkdir(join(deckRoot, "assets"), { recursive: true }),
+  ]);
+  const manifest = createBlankDeckManifest({ title: project.title, createdAt });
   const stylesPath = join(deckRoot, "assets", "styles.css");
-  if (!existsSync(stylesPath)) {
-    writeFileSync(
+  const coverPath = join(deckRoot, "slides", "01-cover.html");
+  await Promise.all([
+    writeFileIfMissing(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`),
+    writeFileIfMissing(
       stylesPath,
       `html, body { margin: 0; width: 100%; height: 100%; }\nbody { font-family: Lexend, ui-sans-serif, system-ui, sans-serif; }\n.slide { width: 1920px; height: 1080px; box-sizing: border-box; padding: 96px; }\n`,
-      "utf8",
-    );
-  }
-  const coverPath = join(deckRoot, "slides", "01-cover.html");
-  if (!existsSync(coverPath)) {
-    writeFileSync(
+    ),
+    writeFileIfMissing(
       coverPath,
       `<!DOCTYPE html>
 <html lang="en">
@@ -50,34 +49,37 @@ export function materializeDeckProject(root: string, project: SlideProject, arti
 </body>
 </html>
 `,
-      "utf8",
-    );
-  }
+    ),
+  ]);
 }
 
-export function materializeTemplateDeckSource(deckRoot: string, project: SlideProject, source: TemplateDeckSource) {
-  rmSync(deckRoot, { force: true, recursive: true });
-  mkdirSync(join(deckRoot, "slides"), { recursive: true });
-  mkdirSync(join(deckRoot, "assets"), { recursive: true });
-  mkdirSync(join(deckRoot, "previews"), { recursive: true });
-  mkdirSync(join(deckRoot, "thumbnails"), { recursive: true });
-
-  for (const asset of source.assets) {
-    const assetPath = safeTemplateProjectAssetPath(asset.path);
-    const targetPath = join(deckRoot, "assets", assetPath);
-    mkdirSync(dirname(targetPath), { recursive: true });
-    writeFileSync(targetPath, asset.bytes);
-  }
+export async function materializeTemplateDeckSource(deckRoot: string, project: SlideProject, source: TemplateDeckSource) {
+  await rm(deckRoot, { force: true, recursive: true });
+  await Promise.all([
+    mkdir(join(deckRoot, "slides"), { recursive: true }),
+    mkdir(join(deckRoot, "assets"), { recursive: true }),
+  ]);
 
   const slides = source.slides.map((slide, index) => {
     const destinationFile = slide.fileName.replace(/[\\/]/g, "-");
-    const destinationPage = join(deckRoot, "slides", destinationFile);
-    writeFileSync(destinationPage, slide.html || missingTemplateSlideHtml(project.title, slide.fileName), "utf8");
     return {
       id: `slide-${String(index + 1).padStart(3, "0")}`,
       file: `slides/${destinationFile}`,
     };
   });
+  const fileWrites = [
+    ...source.assets.map((asset) => async () => {
+      const assetPath = safeTemplateProjectAssetPath(asset.path);
+      const targetPath = join(deckRoot, "assets", assetPath);
+      await mkdir(dirname(targetPath), { recursive: true });
+      await writeFile(targetPath, asset.bytes);
+    }),
+    ...source.slides.map((slide) => async () => {
+      const destinationFile = slide.fileName.replace(/[\\/]/g, "-");
+      await writeFile(join(deckRoot, "slides", destinationFile), slide.html || missingTemplateSlideHtml(project.title, slide.fileName), "utf8");
+    }),
+  ];
+  await mapWithConcurrency(fileWrites, fileWriteConcurrency, (write) => write());
 
   const now = new Date().toISOString();
   const manifest: DeckManifest = {
@@ -88,7 +90,7 @@ export function materializeTemplateDeckSource(deckRoot: string, project: SlidePr
     createdAt: project.createdAt,
     updatedAt: now,
   };
-  writeFileSync(join(deckRoot, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await writeFile(join(deckRoot, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   return true;
 }
 
@@ -98,37 +100,45 @@ export async function requireTemplateDeckSource(templateId: string) {
   return source;
 }
 
-export function syncProjectTemplateSkill(projectRoot: string, project: SlideProject, artifact: SlideArtifact) {
+export function prepareProjectAgentFiles(projectRoot: string, project: SlideProject, artifact: SlideArtifact) {
+  return Promise.all([
+    syncDefaultDeckSkill(projectRoot, project, artifact),
+    syncProjectTemplateSkill(projectRoot, project, artifact),
+    writeProjectAgentInstructions(projectRoot, artifact),
+  ]);
+}
+
+export function projectAgentInstructionsVersion(project: SlideProject, artifact: SlideArtifact) {
+  return [project.updatedAt, project.templateId ?? "", artifact.id, artifact.revision, artifact.updatedAt].join(":");
+}
+
+export async function syncProjectTemplateSkill(projectRoot: string, project: SlideProject, artifact: SlideArtifact) {
   if (artifact.type !== "deck" || !project.templateId) return;
   const sourceDir = readTemplateSkillSource(project.templateId);
   if (!sourceDir) return;
   const skillRoot = join(projectRoot, ".ai-slide", "skills", safeSkillSlug(project.templateId));
-  rmSync(skillRoot, { force: true, recursive: true });
-  mkdirSync(skillRoot, { recursive: true });
-  cpSync(join(sourceDir, "SKILL.md"), join(skillRoot, "SKILL.md"));
+  await mkdir(skillRoot, { recursive: true });
+  await copyFileIfChanged(join(sourceDir, "SKILL.md"), join(skillRoot, "SKILL.md"));
 }
 
-export function syncDefaultDeckSkill(projectRoot: string, project: SlideProject, artifact: SlideArtifact) {
+export async function syncDefaultDeckSkill(projectRoot: string, project: SlideProject, artifact: SlideArtifact) {
   if (artifact.type !== "deck") return;
   const skillRoot = join(projectRoot, ".ai-slide", "skills", defaultDeckSkillSlug);
   if (project.templateId) {
-    rmSync(skillRoot, { force: true, recursive: true });
+    await rm(skillRoot, { force: true, recursive: true });
     return;
   }
-  rmSync(skillRoot, { force: true, recursive: true });
-  for (const file of defaultDeckSkillFiles) {
+  await mapWithConcurrency(defaultDeckSkillFiles, fileWriteConcurrency, async (file) => {
     const targetPath = join(skillRoot, file.path);
-    mkdirSync(dirname(targetPath), { recursive: true });
-    writeFileSync(targetPath, file.content, "utf8");
-  }
+    await mkdir(dirname(targetPath), { recursive: true });
+    await writeFileIfChanged(targetPath, file.content);
+  });
 }
 
-export function materializePptxProject(root: string, project: SlideProject, artifact: SlideArtifact) {
+export async function materializePptxProject(root: string, project: SlideProject, artifact: SlideArtifact) {
   const manifestPath = join(root, `${artifact.fileRef}.manifest.json`);
-  if (!existsSync(manifestPath)) {
-    const manifest = createEmptyPptxManifest();
-    writeFileSync(manifestPath, `${JSON.stringify({ ...manifest, title: project.title }, null, 2)}\n`, "utf8");
-  }
+  const manifest = createEmptyPptxManifest();
+  await writeFileIfMissing(manifestPath, `${JSON.stringify({ ...manifest, title: project.title }, null, 2)}\n`);
 }
 
 export function isBlankDeckManifest(manifestPath: string) {
@@ -154,13 +164,12 @@ export function isGeneratedImageTemplateDeck(deckRoot: string, manifestPath: str
   }
 }
 
-export function writeProjectAgentInstructions(project: SlideProject, artifact: SlideArtifact) {
-  const root = ensureProjectDirs(project.id);
-  writeFileSync(join(root, "AGENTS.md"), projectAgentInstructions(artifact), "utf8");
+export async function writeProjectAgentInstructions(projectRoot: string, artifact: SlideArtifact) {
+  await writeFileIfChanged(join(projectRoot, "AGENTS.md"), await projectAgentInstructions(artifact));
 }
 
-function projectAgentInstructions(artifact: SlideArtifact) {
-  const projectAssets = projectAssetInstructions(artifact.projectId);
+async function projectAgentInstructions(artifact: SlideArtifact) {
+  const projectAssets = await projectAssetInstructions(artifact.projectId);
   if (artifact.type === "pptx") {
     const targetPptxPath = join(projectWorkspaceRoot(artifact.projectId), artifact.fileRef);
     return [
@@ -217,8 +226,8 @@ function progressiveSlideAuthoringInstructions(artifactLabel: "deck" | "presenta
   ].join("\n");
 }
 
-function projectAssetInstructions(projectId: string) {
-  const assets = listProjectAssets(projectId);
+async function projectAssetInstructions(projectId: string) {
+  const assets = await listProjectAssets(projectId);
   if (assets.length === 0) return "";
   return [
     "",
@@ -228,20 +237,52 @@ function projectAssetInstructions(projectId: string) {
   ].join("\n");
 }
 
-function listProjectAssets(projectId: string) {
+async function listProjectAssets(projectId: string) {
   const assetsDir = join(projectWorkspaceRoot(projectId), "assets");
-  if (!existsSync(assetsDir)) return [];
-  return readdirSync(assetsDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => {
-      const absolutePath = join(assetsDir, entry.name);
-      return {
-        fileName: entry.name,
-        path: projectAssetRelativePath(entry.name),
-        mimeType: mimeTypeForAssetFileName(entry.name),
-        sizeBytes: statSync(absolutePath).size,
-      };
-    });
+  const entries = await readdir(assetsDir, { withFileTypes: true }).catch(() => []);
+  return Promise.all(entries.filter((entry) => entry.isFile()).map(async (entry) => ({
+    fileName: entry.name,
+    path: projectAssetRelativePath(entry.name),
+    mimeType: mimeTypeForAssetFileName(entry.name),
+    sizeBytes: (await stat(join(assetsDir, entry.name))).size,
+  })));
+}
+
+const fileWriteConcurrency = 6;
+
+async function writeFileIfMissing(path: string, content: string | Buffer) {
+  try {
+    await writeFile(path, content, { flag: "wx" });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+  }
+}
+
+async function writeFileIfChanged(path: string, content: string | Buffer) {
+  const current = await readFile(path).catch(() => null);
+  const next = Buffer.isBuffer(content) ? content : Buffer.from(content);
+  if (current?.equals(next)) return;
+  await writeFile(path, next);
+}
+
+async function copyFileIfChanged(source: string, target: string) {
+  const [sourceContent, targetContent] = await Promise.all([
+    readFile(source),
+    readFile(target).catch(() => null),
+  ]);
+  if (targetContent?.equals(sourceContent)) return;
+  await copyFile(source, target);
+}
+
+async function mapWithConcurrency<T>(items: readonly T[], concurrency: number, work: (item: T) => Promise<void>) {
+  let nextIndex = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const item = items[nextIndex];
+      nextIndex += 1;
+      await work(item);
+    }
+  }));
 }
 
 function readTemplateSkillSource(templateId: string | null) {
