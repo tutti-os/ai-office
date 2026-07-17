@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
   LocalAgentRuntimeProvider as SharedLocalAgentRuntimeProvider,
@@ -74,8 +74,9 @@ function localAgentTimeoutMs() {
   return Number.isFinite(parsed) && parsed >= minimumLocalAgentTimeoutMs ? parsed : defaultLocalAgentTimeoutMs;
 }
 
-function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, skillContext: LocalAgentSkillContext) {
+async function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, skillContext: LocalAgentSkillContext) {
   const workspaceRoot = projectWorkspaceRoot(context.project.id);
+  const assetPrompt = await projectAssetPrompt(workspaceRoot);
 
   if (context.project.type === "docx") {
     return withTuttiSkillGuidance(
@@ -90,7 +91,7 @@ function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, 
         "Prefer officecli L1/L2 operations such as view, get, query, add, set, remove, and validate. Do not hand-edit OOXML unless officecli high-level commands cannot solve the task.",
         "When the current request calls for creating or editing this document, write the final DOCX result to the focused file.",
         "Do not convert the doc to HTML or Markdown unless the user explicitly asks for that as a separate export.",
-        projectAssetPrompt(workspaceRoot),
+        assetPrompt,
         noBrowserRenderVerification,
         "After editing files, respond with a brief task summary only. Do not include extracted DOCX content in the final response.",
       ].join("\n\n"),
@@ -113,7 +114,7 @@ function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, 
         "Preserve the existing document style and structure unless the user asks for a rewrite. For edits, make the smallest coherent change that satisfies the user. For new content, create a clear outline before expanding it.",
         "Use headings, short paragraphs, lists, tables, blockquotes, and fenced code blocks only when they improve understanding. Avoid malformed tables, broken nested lists, inconsistent heading levels, and unclosed code fences.",
         "Prefer native Markdown over inline HTML. Do not use Markdown as a fake web layout language.",
-        projectAssetPrompt(workspaceRoot),
+        assetPrompt,
         noBrowserRenderVerification,
         "After editing files, respond with a brief task summary only. Do not include the full Markdown content in the final response.",
       ].join("\n\n"),
@@ -135,7 +136,7 @@ function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, 
       "Preserve the existing editor runtime, CSS, layout conventions, and semantic structure unless the user explicitly asks for a redesign.",
       "Optimize for human review: clear visual hierarchy, readable spacing, navigable structure, and concise sections. Prefer an artifact the user will actually read over a long plain-text dump.",
       "Keep the file complete, valid, self-contained, and previewable in a browser/editor iframe. Do not convert the doc to Markdown.",
-      projectAssetPrompt(workspaceRoot),
+      assetPrompt,
       noBrowserRenderVerification,
       "After editing files, respond with a brief task summary only. Do not include the HTML content in the final response.",
     ].join("\n\n"),
@@ -205,15 +206,15 @@ ${value}
 </${name}>`;
 }
 
-function projectAssetPrompt(workspaceRoot: string) {
+async function projectAssetPrompt(workspaceRoot: string) {
   const assetsDir = resolve(workspaceRoot, "assets");
-  if (!existsSync(assetsDir)) return "No project context attachments are currently uploaded.";
-  const assets = readdirSync(assetsDir, { withFileTypes: true })
+  const entries = await readdir(assetsDir, { withFileTypes: true }).catch(() => []);
+  const assets = await Promise.all(entries
     .filter((entry) => entry.isFile())
-    .map((entry) => {
+    .map(async (entry) => {
       const path = join(assetsDir, entry.name);
-      return `- ${entry.name} (${statSync(path).size} bytes): ${path}`;
-    });
+      return `- ${entry.name} (${(await stat(path)).size} bytes): ${path}`;
+    }));
   if (assets.length === 0) return "No project context attachments are currently uploaded.";
   return [
     "Project context attachments are available in the workspace:",

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import {
@@ -141,23 +141,23 @@ export async function materializePptxProject(root: string, project: SlideProject
   await writeFileIfMissing(manifestPath, `${JSON.stringify({ ...manifest, title: project.title }, null, 2)}\n`);
 }
 
-export function isBlankDeckManifest(manifestPath: string) {
+export async function isBlankDeckManifest(manifestPath: string) {
   try {
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Partial<DeckManifest>;
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Partial<DeckManifest>;
     return manifest.schemaVersion === "ai-slide.deck.v1" && manifest.slides?.length === 1 && manifest.slides[0]?.file === "slides/01-cover.html";
   } catch {
     return true;
   }
 }
 
-export function isGeneratedImageTemplateDeck(deckRoot: string, manifestPath: string) {
+export async function isGeneratedImageTemplateDeck(deckRoot: string, manifestPath: string) {
   try {
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Partial<DeckManifest>;
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Partial<DeckManifest>;
     const firstSlideFile = manifest.slides?.[0]?.file;
     if (!firstSlideFile) return false;
     const normalizedFile = normalize(firstSlideFile);
     if (normalizedFile.startsWith("..") || normalizedFile.includes(`..${sep}`)) return false;
-    const html = readFileSync(join(deckRoot, normalizedFile), "utf8");
+    const html = await readFile(join(deckRoot, normalizedFile), "utf8");
     return html.includes('data-ai-slide-object-id="template-image-') || html.includes("assets/template-images/");
   } catch {
     return false;

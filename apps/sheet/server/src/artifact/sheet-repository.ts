@@ -258,7 +258,8 @@ export class SheetRepository {
     if (input.mimeType !== xlsxMimeType) throw new Error("Only XLSX exports are supported");
     if (input.bytes.byteLength === 0) throw new Error("Export file is empty");
     if (input.bytes.byteLength > maxXlsxImportBytes) throw new Error("Export file is too large");
-    const exportsDir = join(ensureProjectDirs(projectId), "exports");
+    const exportsDir = join(projectWorkspaceRoot(projectId), "exports");
+    await mkdir(exportsDir, { recursive: true });
     const fileName = uniqueXlsxFileName(exportsDir, input.fileName || `${project.title}.xlsx`);
     const absolutePath = join(exportsDir, fileName);
     await writeFile(absolutePath, input.bytes);
@@ -275,7 +276,7 @@ export class SheetRepository {
   async writeContextAttachment(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
-    return writeContextAttachmentFile(ensureProjectDirs(projectId), input);
+    return writeContextAttachmentFile(projectWorkspaceRoot(projectId), input);
   }
 
   projectExportsDir(projectId: string) {

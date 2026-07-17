@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { rmSync } from "node:fs";
+import { copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, extname, join, resolve } from "node:path";
 import {
@@ -47,7 +47,7 @@ import {
   requireTemplateDeckSource,
   writeProjectAgentInstructions,
 } from "./project-materialization.js";
-import { importedProjectTitle, projectAssetRelativePath, uniqueAssetFileName, uniqueExportFileName } from "./project-file-names.js";
+import { importedProjectTitle, normalizedAssetFileName, normalizedExportFileName, projectAssetRelativePath, writeUniqueNamedFile } from "./project-file-names.js";
 import { projectsWithArtifactTypeSql, rowToArtifact, rowToProject, type ArtifactRow, type ProjectRowWithArtifactType } from "./project-rows.js";
 export class ProjectRepository {
   private readonly preparedAgentInstructions = new Map<string, string>();
@@ -226,7 +226,7 @@ export class ProjectRepository {
       title: title.trim() || manifest.title,
       updatedAt: new Date().toISOString(),
     };
-    writeDeckManifest(projectId, artifact, nextManifest);
+    await writeDeckManifest(projectId, artifact, nextManifest);
     const updatedArtifact = this.bumpArtifactRevision(artifact.id, updatedBy) ?? artifact;
     return { artifact: updatedArtifact, manifest: nextManifest };
   }
@@ -241,7 +241,7 @@ export class ProjectRepository {
     if (!manifest) throw new Error("Deck manifest not found");
 
     const slidesDir = join(projectWorkspaceRoot(projectId), artifact.fileRef, "slides");
-    const filesystemSlides = readdirSync(slidesDir, { withFileTypes: true })
+    const filesystemSlides = (await readdir(slidesDir, { withFileTypes: true }))
       .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".html"))
       .map((entry) => entry.name);
     if (!filesystemSlides.length) throw new Error("No slide HTML files found in deck.slides/slides");
@@ -265,7 +265,7 @@ export class ProjectRepository {
       slides: nextSlides,
       updatedAt: new Date().toISOString(),
     };
-    writeDeckManifest(projectId, artifact, nextManifest);
+    await writeDeckManifest(projectId, artifact, nextManifest);
     const updatedArtifact = this.bumpArtifactRevision(artifact.id, updatedBy) ?? artifact;
     return {
       artifact: updatedArtifact,
@@ -432,10 +432,9 @@ export class ProjectRepository {
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact || artifact.type !== "deck") throw new Error("Deck artifact not found");
     await this.ensureTemplateDeckMaterialized(project, artifact);
-    const assetsDir = join(ensureProjectDirs(projectId), artifact.fileRef, "assets");
-    mkdirSync(assetsDir, { recursive: true });
-    const fileName = uniqueAssetFileName(assetsDir, input.fileName, input.mimeType);
-    writeFileSync(join(assetsDir, fileName), input.bytes);
+    const assetsDir = join(projectWorkspaceRoot(projectId), artifact.fileRef, "assets");
+    await mkdir(assetsDir, { recursive: true });
+    const fileName = await writeUniqueNamedFile(assetsDir, normalizedAssetFileName(input.fileName, input.mimeType), input.bytes);
     const updatedArtifact = this.bumpArtifactRevision(artifact.id, "human") ?? artifact;
     return {
       artifact: updatedArtifact,
@@ -451,11 +450,10 @@ export class ProjectRepository {
     if (!project) throw new Error("Project not found");
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact) throw new Error("Project artifact not found");
-    const root = ensureProjectDirs(projectId);
+    const root = projectWorkspaceRoot(projectId);
     const assetsDir = join(root, "assets");
-    mkdirSync(assetsDir, { recursive: true });
-    const fileName = uniqueAssetFileName(assetsDir, input.fileName, input.mimeType);
-    writeFileSync(join(assetsDir, fileName), input.bytes);
+    await mkdir(assetsDir, { recursive: true });
+    const fileName = await writeUniqueNamedFile(assetsDir, normalizedAssetFileName(input.fileName, input.mimeType), input.bytes);
     await writeProjectAgentInstructions(root, artifact);
     return {
       path: projectAssetRelativePath(fileName),
@@ -470,17 +468,16 @@ export class ProjectRepository {
     if (!project) throw new Error("Project not found");
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact) throw new Error("Project artifact not found");
-    return writeContextAttachmentFile(ensureProjectDirs(projectId), input);
+    return writeContextAttachmentFile(projectWorkspaceRoot(projectId), input);
   }
 
   async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
-    const exportsDir = join(ensureProjectDirs(projectId), "exports");
-    mkdirSync(exportsDir, { recursive: true });
-    const fileName = uniqueExportFileName(exportsDir, input.fileName, input.mimeType);
+    const exportsDir = join(projectWorkspaceRoot(projectId), "exports");
+    await mkdir(exportsDir, { recursive: true });
+    const fileName = await writeUniqueNamedFile(exportsDir, normalizedExportFileName(input.fileName, input.mimeType), input.bytes);
     const absolutePath = join(exportsDir, fileName);
-    writeFileSync(absolutePath, input.bytes);
     return {
       path: absolutePath,
       absolutePath,
@@ -530,7 +527,11 @@ export class ProjectRepository {
     if (artifact.type !== "deck" || !project.templateId) return;
     const deckRoot = join(projectWorkspaceRoot(project.id), artifact.fileRef);
     const manifestPath = join(deckRoot, "manifest.json");
-    if (!isBlankDeckManifest(manifestPath) && !isGeneratedImageTemplateDeck(deckRoot, manifestPath)) return;
+    const [blankDeck, generatedImageTemplateDeck] = await Promise.all([
+      isBlankDeckManifest(manifestPath),
+      isGeneratedImageTemplateDeck(deckRoot, manifestPath),
+    ]);
+    if (!blankDeck && !generatedImageTemplateDeck) return;
     const source = await (project.templateId ? loadTemplateDeckSource(project.templateId) : null);
     if (!source || !(await materializeTemplateDeckSource(deckRoot, project, source))) {
       throw new Error(`Template HTML source is missing for "${project.templateId}". Check the slide template provider or set AI_SLIDE_TEMPLATE_PROVIDER=local with AI_SLIDE_TEMPLATE_ROOT.`);
@@ -561,7 +562,7 @@ export class ProjectRepository {
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact || artifact.type !== "pptx") return null;
     const nextManifest = await readPptxManifestFromFile(projectId, artifact);
-    const currentManifest = readStoredPptxManifest(projectId, artifact);
+    const currentManifest = await readStoredPptxManifest(projectId, artifact);
     if (
       currentManifest.sha256 === nextManifest.sha256 &&
       currentManifest.sizeBytes === nextManifest.sizeBytes &&
@@ -569,7 +570,7 @@ export class ProjectRepository {
     ) {
       return { artifact, manifest: nextManifest, changed: false };
     }
-    writeStoredPptxManifest(projectId, artifact, nextManifest);
+    await writeStoredPptxManifest(projectId, artifact, nextManifest);
     const updatedArtifact = this.bumpArtifactRevision(artifact.id, updatedBy) ?? artifact;
     return { artifact: updatedArtifact, manifest: nextManifest, changed: true };
   }
@@ -599,7 +600,6 @@ export class ProjectRepository {
     return { project, artifact };
   }
 }
-
 function defaultArtifactInput(input: { projectId: string; type: SlideArtifactType; now: string }) {
   const id = randomUUID();
   if (input.type === "pptx") {
