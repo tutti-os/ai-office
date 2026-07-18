@@ -9,6 +9,15 @@ export interface ProjectPreparationFailure {
   message: string;
 }
 
+export interface ProjectPreparationRetryOptions<T> {
+  phase: string;
+  path: string;
+  work: () => Promise<T>;
+  retryDelaysMs?: readonly number[];
+  sleep?: (delayMs: number) => Promise<void>;
+  random?: () => number;
+}
+
 export class ProjectPreparationError extends Error implements ProjectPreparationFailure {
   readonly phase: string;
   readonly path: string;
@@ -217,7 +226,34 @@ export function asProjectPreparationError(error: unknown, phase: string, path: s
 }
 
 export function isTransientProjectPreparationError(error: ProjectPreparationFailure) {
-  return new Set(["EACCES", "ESTALE", "EIO", "EROFS", "EBUSY", "ETIMEDOUT"]).has(error.code);
+  return new Set(["ESTALE", "EIO", "EBUSY", "ETIMEDOUT"]).has(error.code);
+}
+
+/**
+ * Retries only operations which are safe to repeat. Callers must make `work`
+ * idempotent (for example by writing missing files and validating the final
+ * state) so a retry repairs a partial FabricFS operation instead of replacing
+ * a completed artifact.
+ */
+export async function retryProjectPreparationOperation<T>(
+  options: ProjectPreparationRetryOptions<T>,
+): Promise<T> {
+  const retryDelays = options.retryDelaysMs ?? [100, 250, 500];
+  const sleep = options.sleep ?? defaultSleep;
+  const random = options.random ?? Math.random;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await options.work();
+    } catch (error) {
+      const failure = asProjectPreparationError(error, options.phase, options.path);
+      if (!isTransientProjectPreparationError(failure) || attempt >= retryDelays.length) {
+        throw failure;
+      }
+      const baseDelay = retryDelays[attempt] ?? 0;
+      const jitterMs = Math.floor(Math.max(0, random()) * Math.min(50, Math.max(1, baseDelay / 4)));
+      await sleep(baseDelay + jitterMs);
+    }
+  }
 }
 
 function defaultSleep(delayMs: number) {

@@ -23,6 +23,7 @@ import { EventHub } from "../ws/event-hub.js";
 import { withProjectImportCleanup } from "./project-import.js";
 import { SheetRepository } from "./sheet-repository.js";
 import { XlsxStorageAdapter } from "./xlsx-storage-adapter.js";
+import { materializeInitialWorkbook } from "./workbook-preparation.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
 import type { XlsxDirtyCell, XlsxFormulaCalcResult } from "./xlsx-formula-calculator.js";
 
@@ -71,11 +72,13 @@ export class SheetService {
     await requireOfficeCli();
     const result = await this.repo.createProject(input);
     try {
-      await this.storage.createBlankWorkbook({
-        workbookPath: this.repo.xlsxFilePath(result.project.id),
+      const workbookPath = this.repo.xlsxFilePath(result.project.id);
+      const refresh = await materializeInitialWorkbook({
+        workbookPath,
+        create: () => this.storage.createBlankWorkbook({ workbookPath }),
+        refresh: () => this.repo.refreshXlsxArtifactFromFile(result.project.id, "system"),
       });
       this.repo.markProjectCoreReady(result.project.id);
-      const refresh = await this.repo.refreshXlsxArtifactFromFile(result.project.id, "system");
       const detail = {
         ...result,
         artifact: refresh.artifact,
@@ -85,7 +88,15 @@ export class SheetService {
       this.repo.startAgentContextPreparation(result.project);
       return detail;
     } catch (error) {
-      this.repo.deleteProject(result.project.id);
+      try {
+        this.repo.deleteProject(result.project.id);
+      } catch (cleanupError) {
+        console.warn(JSON.stringify({
+          event: "ai_sheet.project.create.cleanup_failed",
+          projectId: result.project.id,
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        }));
+      }
       throw error;
     }
   }

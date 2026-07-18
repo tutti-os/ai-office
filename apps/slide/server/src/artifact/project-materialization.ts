@@ -8,35 +8,40 @@ import {
   type SlideProject,
 } from "@ai-slide/shared";
 import { projectWorkspaceRoot } from "../local/paths.js";
-import { withProjectPreparationPhase } from "@ai-app/shared/project-preparation";
+import { retryProjectPreparationOperation, withProjectPreparationPhase } from "@ai-app/shared/project-preparation";
 import { loadTemplateDeckSource, localTemplateSourceRoots, type TemplateDeckSource } from "../templates/template-service.js";
 import { defaultDeckSkillFiles, defaultDeckSkillSlug } from "./default-deck-skill.js";
 import { mimeTypeForAssetFileName, projectAssetRelativePath } from "./project-file-names.js";
 
 export async function materializeDeckProject(root: string, project: SlideProject, artifact: SlideArtifact, templateSource: TemplateDeckSource | null = null) {
   const deckRoot = join(root, artifact.fileRef);
-  const manifestPath = join(deckRoot, "manifest.json");
-  const createdAt = project.createdAt;
   if (project.templateId && templateSource) {
     await materializeTemplateDeckSource(deckRoot, project, templateSource);
     return;
   }
-  await Promise.all([
-    mkdir(join(deckRoot, "slides"), { recursive: true }),
-    mkdir(join(deckRoot, "assets"), { recursive: true }),
-  ]);
-  const manifest = createBlankDeckManifest({ title: project.title, createdAt });
-  const stylesPath = join(deckRoot, "assets", "styles.css");
-  const coverPath = join(deckRoot, "slides", "01-cover.html");
-  await Promise.all([
-    writeFileIfMissing(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`),
-    writeFileIfMissing(
-      stylesPath,
-      `html, body { margin: 0; width: 100%; height: 100%; }\nbody { font-family: Lexend, ui-sans-serif, system-ui, sans-serif; }\n.slide { width: 1920px; height: 1080px; box-sizing: border-box; padding: 96px; }\n`,
-    ),
-    writeFileIfMissing(
-      coverPath,
-      `<!DOCTYPE html>
+  await retryProjectPreparationOperation({
+    phase: "core_deck",
+    path: deckRoot,
+    work: async () => {
+      // FabricFS/NFS can fail when sibling directories and their first files are
+      // created concurrently. These are the project core files, so keep their
+      // creation ordered and make a retry repair only the missing member.
+      await mkdir(deckRoot, { recursive: true });
+      await mkdir(join(deckRoot, "slides"), { recursive: true });
+      await mkdir(join(deckRoot, "assets"), { recursive: true });
+
+      const manifestPath = join(deckRoot, "manifest.json");
+      const stylesPath = join(deckRoot, "assets", "styles.css");
+      const coverPath = join(deckRoot, "slides", "01-cover.html");
+      const manifest = createBlankDeckManifest({ title: project.title, createdAt: project.createdAt });
+      await writeFileIfMissing(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+      await writeFileIfMissing(
+        stylesPath,
+        `html, body { margin: 0; width: 100%; height: 100%; }\nbody { font-family: Lexend, ui-sans-serif, system-ui, sans-serif; }\n.slide { width: 1920px; height: 1080px; box-sizing: border-box; padding: 96px; }\n`,
+      );
+      await writeFileIfMissing(
+        coverPath,
+        `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -49,49 +54,61 @@ export async function materializeDeckProject(root: string, project: SlideProject
 </body>
 </html>
 `,
-    ),
-  ]);
+      );
+      await verifyNonEmptyFiles([manifestPath, stylesPath, coverPath]);
+    },
+  });
 }
 
 export async function materializeTemplateDeckSource(deckRoot: string, project: SlideProject, source: TemplateDeckSource) {
-  await rm(deckRoot, { force: true, recursive: true });
-  await Promise.all([
-    mkdir(join(deckRoot, "slides"), { recursive: true }),
-    mkdir(join(deckRoot, "assets"), { recursive: true }),
-  ]);
+  return retryProjectPreparationOperation({
+    phase: "template_deck",
+    path: deckRoot,
+    work: async () => {
+      // Do not remove a partially created deck before retrying: all writes below
+      // are deterministic, so the retry can fill in the missing files safely.
+      await mkdir(deckRoot, { recursive: true });
+      await mkdir(join(deckRoot, "slides"), { recursive: true });
+      await mkdir(join(deckRoot, "assets"), { recursive: true });
 
-  const slides = source.slides.map((slide, index) => {
-    const destinationFile = slide.fileName.replace(/[\\/]/g, "-");
-    return {
-      id: `slide-${String(index + 1).padStart(3, "0")}`,
-      file: `slides/${destinationFile}`,
-    };
+      const slides = source.slides.map((slide, index) => {
+        const destinationFile = slide.fileName.replace(/[\\/]/g, "-");
+        return {
+          id: `slide-${String(index + 1).padStart(3, "0")}`,
+          file: `slides/${destinationFile}`,
+        };
+      });
+      const fileWrites = [
+        ...source.assets.map((asset) => async () => {
+          const assetPath = safeTemplateProjectAssetPath(asset.path);
+          const targetPath = join(deckRoot, "assets", assetPath);
+          await mkdir(dirname(targetPath), { recursive: true });
+          await writeFileIfMissing(targetPath, asset.bytes);
+        }),
+        ...source.slides.map((slide) => async () => {
+          const destinationFile = slide.fileName.replace(/[\\/]/g, "-");
+          await writeFileIfMissing(join(deckRoot, "slides", destinationFile), slide.html || missingTemplateSlideHtml(project.title, slide.fileName));
+        }),
+      ];
+      await mapWithConcurrency(fileWrites, templateFileWriteConcurrency, (write) => write());
+
+      const manifestPath = join(deckRoot, "manifest.json");
+      const manifest: DeckManifest = {
+        schemaVersion: "ai-slide.deck.v1",
+        title: source.title || project.title,
+        canvas: source.canvas,
+        slides,
+        createdAt: project.createdAt,
+        updatedAt: new Date().toISOString(),
+      };
+      // This function is also used to recover a partial remote write. Never
+      // replace a completed user file during recovery; only missing or zero-byte
+      // files are safe to repair.
+      await writeFileIfMissing(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+      await verifyNonEmptyFiles([manifestPath, ...slides.map((slide) => join(deckRoot, slide.file))]);
+      return true;
+    },
   });
-  const fileWrites = [
-    ...source.assets.map((asset) => async () => {
-      const assetPath = safeTemplateProjectAssetPath(asset.path);
-      const targetPath = join(deckRoot, "assets", assetPath);
-      await mkdir(dirname(targetPath), { recursive: true });
-      await writeFile(targetPath, asset.bytes);
-    }),
-    ...source.slides.map((slide) => async () => {
-      const destinationFile = slide.fileName.replace(/[\\/]/g, "-");
-      await writeFile(join(deckRoot, "slides", destinationFile), slide.html || missingTemplateSlideHtml(project.title, slide.fileName), "utf8");
-    }),
-  ];
-  await mapWithConcurrency(fileWrites, fileWriteConcurrency, (write) => write());
-
-  const now = new Date().toISOString();
-  const manifest: DeckManifest = {
-    schemaVersion: "ai-slide.deck.v1",
-    title: source.title || project.title,
-    canvas: source.canvas,
-    slides,
-    createdAt: project.createdAt,
-    updatedAt: now,
-  };
-  await writeFile(join(deckRoot, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-  return true;
 }
 
 export async function requireTemplateDeckSource(templateId: string) {
@@ -146,7 +163,9 @@ export async function isBlankDeckManifest(manifestPath: string) {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Partial<DeckManifest>;
     return manifest.schemaVersion === "ai-slide.deck.v1" && manifest.slides?.length === 1 && manifest.slides[0]?.file === "slides/01-cover.html";
   } catch {
-    return true;
+    // A transient FabricFS read or parse failure is not proof that this is a
+    // blank deck. Treat it as unknown so callers do not rewrite user content.
+    return false;
   }
 }
 
@@ -254,12 +273,24 @@ async function listProjectAssets(projectId: string) {
 }
 
 const fileWriteConcurrency = 6;
+const templateFileWriteConcurrency = 1;
+
+async function verifyNonEmptyFiles(paths: readonly string[]) {
+  for (const path of paths) {
+    const file = await stat(path);
+    if (!file.isFile() || file.size === 0) throw new Error(`Expected project core file is missing or empty: ${path}`);
+  }
+}
 
 async function writeFileIfMissing(path: string, content: string | Buffer) {
   try {
     await writeFile(path, content, { flag: "wx" });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    // A failed remote create can leave a zero-byte inode behind. It is not a
+    // completed core file, so repair it while preserving every non-empty file.
+    const existing = await readFile(path);
+    if (existing.byteLength === 0) await writeFile(path, content);
   }
 }
 
