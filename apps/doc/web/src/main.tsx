@@ -1,19 +1,32 @@
-import { StrictMode } from "react";
+import { StrictMode, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { ArtifactAppRoot } from "@ai-app/ui/error-boundary";
+import { RichTextMentionServiceProvider } from "@tutti-os/ui-rich-text/editor";
+import { createRichTextMentionService } from "@tutti-os/ui-rich-text/service";
 import { RuntimeWorkbench } from "./app/RuntimeWorkbench";
+import { createTuttiExternalMentionService } from "./app/tuttiMentionService";
 import { I18nProvider } from "./i18n";
 import "@ai-app/ui/app-reset.css";
 import "@tutti-os/ui-rich-text/at-panel/index.css";
 import "@tutti-os/ui-system/styles.css";
 import "./styles/index.css";
 
+function MentionServiceRoot({ children }: { children: ReactNode }) {
+  const [fallbackService] = useState(() => createRichTextMentionService({ providers: [] }));
+  const [service, setService] = useState<ReturnType<typeof createTuttiExternalMentionService>>(fallbackService);
+  useEffect(() => {
+    const next = createTuttiExternalMentionService();
+    setService(next);
+    fallbackService.dispose();
+    return () => next.dispose();
+  }, [fallbackService]);
+  return <RichTextMentionServiceProvider service={service}>{children}</RichTextMentionServiceProvider>;
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ArtifactAppRoot appName="AI Doc">
-      <I18nProvider>
-        <RuntimeWorkbench />
-      </I18nProvider>
+      <MentionServiceRoot><I18nProvider><RuntimeWorkbench /></I18nProvider></MentionServiceRoot>
     </ArtifactAppRoot>
   </StrictMode>,
 );
