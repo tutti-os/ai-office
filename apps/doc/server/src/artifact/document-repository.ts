@@ -15,7 +15,7 @@ import { getDb } from "../db/database.js";
 import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
 import { invalidateProjectAssetCache, mimeTypeForAssetFileName, projectAssetRelativePath } from "./project-assets.js";
 import { insertDocumentProject } from "./document-persistence.js";
-import { materializeDocumentProjectCore, prepareDocumentAgentContext } from "./document-preparation.js";
+import { documentAgentContextVersion, materializeDocumentProjectCore, prepareDocumentAgentContext } from "./document-preparation.js";
 export class DocumentRepository {
   private readonly preparation = new SqliteProjectPreparationCoordinator(getDb, "ai-doc");
   private readonly conversations = new SqliteAgentConversationStore(getDb, {
@@ -388,7 +388,7 @@ export class DocumentRepository {
   }
 
   private agentContextBaseVersion(project: DocumentProject) {
-    return ["doc-agent-context-v2", project.type].join(":");
+    return documentAgentContextVersion(project);
   }
 }
 

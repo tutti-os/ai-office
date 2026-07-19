@@ -273,7 +273,6 @@ function resolveLegacyOfficeCliBinaryPaths(options: OfficeCliToolchainOptions, o
     resolve(options.appRoot, "toolchains", "officecli"),
     legacyToolchainRoot(process.env.AI_OFFICE_TOOLCHAIN_ROOT?.trim()),
     legacyToolchainRoot(process.env.TUTTI_APP_TOOLCHAIN_ROOT?.trim()),
-    legacyWorkspaceRoot(process.env.TUTTI_WORKSPACE_ROOT?.trim()),
     join(homedir(), ".ai-office", "toolchains", "officecli"),
   ].filter((root): root is string => Boolean(root));
   const versionedRoots = [
@@ -294,10 +293,6 @@ function legacyToolchainRoot(toolchainRoot?: string) {
 
 function versionedToolchainRoot(toolchainRoot: string | undefined, officeCliVersion: string) {
   return toolchainRoot ? resolve(toolchainRoot, "officecli", officeCliVersion, officeCliPlatformArch()) : "";
-}
-
-function legacyWorkspaceRoot(workspaceRoot?: string) {
-  return workspaceRoot ? resolve(workspaceRoot, ".ai-office", "toolchains", "officecli") : "";
 }
 
 function uniqueStrings(values: string[]) {

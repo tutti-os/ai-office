@@ -1,4 +1,3 @@
-import { resolve } from "node:path";
 import {
   LocalAgentRuntimeProvider as SharedLocalAgentRuntimeProvider,
   loadTuttiLocalAgentSkillContext,
@@ -20,14 +19,13 @@ const localFilesystemArtifactNotice =
 export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<SheetRun, SheetRuntimeProject, AiEditRequest> {
   constructor() {
     super({
-      workspaceRoot: (context) => projectWorkspaceRoot(context.project.id),
+      runCwd: (context) => projectWorkspaceRoot(context.project.id),
       buildPrompt: buildEditPrompt,
       buildSystemPrompt,
       buildSkillManifest: buildTuttiAgentSkillContext,
-      buildEnv: async (context, workspaceRoot) => ({
+      buildEnv: async (context) => ({
         ...officeCliEnvSync(),
         ...tuttiCliEnv(),
-        AI_SHEET_WORKSPACE: workspaceRoot,
         AI_SHEET_PROJECT_ID: context.project.id,
         AI_SHEET_RUN_ID: context.run.id,
       }),
@@ -40,24 +38,19 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
   }
 }
 
-async function buildTuttiAgentSkillContext(context: RuntimeEditContext, workspaceRoot: string) {
+async function buildTuttiAgentSkillContext(context: RuntimeEditContext, projectCwd: string) {
   try {
-    const cwd = tuttiWorkspaceCwd(workspaceRoot);
     return await loadTuttiLocalAgentSkillContext({
       agentTargetId: context.runtimeProfile.agentTargetId!,
       agentSessionId: context.run.id,
-      cwd,
-      detectContext: context.agentDetectContext ?? { cwd },
+      cwd: projectCwd,
+      detectContext: { ...(context.agentDetectContext ?? {}), cwd: projectCwd },
       commandEnvNames: ["AI_SHEET_TUTTI_CLI"],
     });
   } catch (error) {
     console.warn(`[ai-sheet] Unable to load Tutti agent skill bundle: ${errorMessage(error)}`);
     return { skills: [] };
   }
-}
-
-function tuttiWorkspaceCwd(fallback: string) {
-  return process.env.TUTTI_WORKSPACE_ROOT?.trim() || process.env.AI_SHEET_WORKSPACE_ROOT?.trim() || fallback;
 }
 
 function errorMessage(error: unknown) {
@@ -71,13 +64,12 @@ function localAgentTimeoutMs() {
   return Number.isFinite(parsed) && parsed >= minimumLocalAgentTimeoutMs ? parsed : defaultLocalAgentTimeoutMs;
 }
 
-function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, skillContext: LocalAgentSkillContext) {
-  const targetXlsxPath = resolve(projectWorkspaceRoot(context.project.id), "workbook.xlsx");
+function buildSystemPrompt(context: RuntimeEditContext, _projectCwd: string, skillContext: LocalAgentSkillContext) {
   return withTuttiSkillGuidance(
     [
       "You are an AI spreadsheet editing agent inside a local workbook app.",
       "The project is an XLSX workbook.",
-      `Current focused file: ${targetXlsxPath}`,
+      "Current focused file: workbook.xlsx (relative to the current working directory).",
       localFilesystemArtifactNotice,
       "Use the officecli command-line tool to inspect, create, edit, and validate the focused XLSX file. If an office skill is available in the agent environment, follow it.",
       "Prefer officecli L1/L2 operations such as view, get, query, add, set, remove, import, and validate. Do not hand-edit OOXML unless officecli high-level commands cannot solve the task.",
@@ -106,7 +98,6 @@ function joinPromptParts(...parts: Array<string | undefined>) {
 }
 
 function buildEditPrompt(context: RuntimeEditContext) {
-  const focusedPath = resolve(projectWorkspaceRoot(context.project.id), "workbook.xlsx");
   const selection = [
     `selection_type: ${context.request.selectionType ?? "write"}`,
     `selection_path: ${context.request.selectionPath ?? ""}`,
@@ -119,7 +110,7 @@ project_id: ${context.project.id}
 title: ${context.project.title}
 artifact_type: xlsx
 mode: ${context.request.mode}
-focused_xlsx_path: ${focusedPath}
+focused_xlsx_path: workbook.xlsx
 canonical_xlsx_path: workbook.xlsx
 ${selection}
 </sheet_agent_context>

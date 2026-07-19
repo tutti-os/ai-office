@@ -17,19 +17,19 @@ export type PreparedLocalAgentRun = {
 
 export async function prepareLocalAgentRun<TContext>(input: {
   context: TContext;
-  workspaceRoot: string;
+  runCwd: string;
   timing: AgentRunTimingLogger;
-  buildSkillManifest?: (context: TContext, workspaceRoot: string) => LocalAgentSkillManifestResult | Promise<LocalAgentSkillManifestResult>;
-  buildEnv?: (context: TContext, workspaceRoot: string) => Record<string, string> | Promise<Record<string, string>>;
-  buildSystemPrompt: (context: TContext, workspaceRoot: string, skillContext: LocalAgentSkillContext) => string | Promise<string>;
+  buildSkillManifest?: (context: TContext, runCwd: string) => LocalAgentSkillManifestResult | Promise<LocalAgentSkillManifestResult>;
+  buildEnv?: (context: TContext, runCwd: string) => Record<string, string> | Promise<Record<string, string>>;
+  buildSystemPrompt: (context: TContext, runCwd: string, skillContext: LocalAgentSkillContext) => string | Promise<string>;
 }): Promise<PreparedLocalAgentRun> {
   const skillContextPromise = input.timing.measure("prepare", "skill_manifest", async () =>
-    normalizeSkillManifestResult(await input.buildSkillManifest?.(input.context, input.workspaceRoot)));
+    normalizeSkillManifestResult(await input.buildSkillManifest?.(input.context, input.runCwd)));
   const appEnvPromise = input.timing.measure("prepare", "app_env", async () =>
-    (await input.buildEnv?.(input.context, input.workspaceRoot)) ?? {});
+    (await input.buildEnv?.(input.context, input.runCwd)) ?? {});
   const [skillContext, appEnv] = await Promise.all([skillContextPromise, appEnvPromise]);
   const systemPrompt = await input.timing.measure("prepare", "system_prompt", () =>
-    input.buildSystemPrompt(input.context, input.workspaceRoot, skillContext));
+    input.buildSystemPrompt(input.context, input.runCwd, skillContext));
   return { appEnv, skillContext, systemPrompt };
 }
 

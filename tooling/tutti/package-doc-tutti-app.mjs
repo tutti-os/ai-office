@@ -33,7 +33,6 @@ export AI_DOC_HOME="\${TUTTI_APP_DATA_DIR:-$package_dir/.data}"
 export TUTTI_APP_DATABASE_DIR="\${TUTTI_APP_DATABASE_DIR:-$AI_DOC_HOME/data}"
 export AI_DOC_RUNTIME_ROOT="\${TUTTI_APP_RUNTIME_DIR:-$AI_DOC_HOME/.runtime}"
 export AI_DOC_LOG_ROOT="\${TUTTI_APP_LOG_DIR:-$AI_DOC_RUNTIME_ROOT/logs}"
-export AI_DOC_WORKSPACE_ROOT="\${TUTTI_WORKSPACE_ROOT:-$AI_DOC_HOME}"
 export AI_DOC_TEMPLATE_ROOT="\${AI_DOC_TEMPLATE_ROOT:-$AI_DOC_HOME/templates/tutti}"
 export AI_DOC_TUTTI_CLI="\${TUTTI_CLI:-}"
 
@@ -74,7 +73,7 @@ export function renderPackageGuide() {
 
 This package runs AI Doc as a local Tutti workspace app.
 
-- \`bootstrap.sh\` maps \`TUTTI_APP_*\`, \`TUTTI_WORKSPACE_ROOT\`, and \`TUTTI_CLI\` into \`AI_DOC_*\` variables.
+- \`bootstrap.sh\` maps app-owned \`TUTTI_APP_*\` paths and \`TUTTI_CLI\` into \`AI_DOC_*\` variables.
 - \`server/server.js\` is the bundled Fastify server.
 - \`dist/\` is the built React/Vite frontend.
 - \`tutti.app.json\` declares the app runtime, localized metadata, CLI surface, and references endpoints.

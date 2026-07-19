@@ -1,4 +1,3 @@
-import { resolve } from "node:path";
 import {
   LocalAgentRuntimeProvider as SharedLocalAgentRuntimeProvider,
   loadTuttiLocalAgentSkillContext,
@@ -24,15 +23,14 @@ const minimumLocalAgentTimeoutMs = 5 * 60_000;
 export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<DocumentRun, DocumentProject, AiEditRequest> {
   constructor() {
     super({
-      workspaceRoot: (context) => projectWorkspaceRoot(context.project.id),
+      runCwd: (context) => projectWorkspaceRoot(context.project.id),
       buildPrompt: buildEditPrompt,
       buildSystemPrompt,
       buildSkillManifest: buildTuttiAgentSkillContext,
       buildMcpServers: buildDocAppToolMcpServers,
-      buildEnv: async (context, workspaceRoot) => ({
+      buildEnv: async (context) => ({
         ...officeCliEnvSync(),
         ...tuttiCliEnv(),
-        AI_DOC_WORKSPACE: workspaceRoot,
         AI_DOC_PROJECT_ID: context.project.id,
         AI_DOC_RUN_ID: context.run.id,
       }),
@@ -43,24 +41,19 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<D
   }
 }
 
-async function buildTuttiAgentSkillContext(context: RuntimeEditContext, workspaceRoot: string) {
+async function buildTuttiAgentSkillContext(context: RuntimeEditContext, projectCwd: string) {
   try {
-    const cwd = tuttiWorkspaceCwd(workspaceRoot);
     return await loadTuttiLocalAgentSkillContext({
       agentTargetId: context.runtimeProfile.agentTargetId!,
       agentSessionId: context.run.id,
-      cwd,
-      detectContext: context.agentDetectContext ?? { cwd },
+      cwd: projectCwd,
+      detectContext: { ...(context.agentDetectContext ?? {}), cwd: projectCwd },
       commandEnvNames: ["AI_DOC_TUTTI_CLI"],
     });
   } catch (error) {
     console.warn(`[ai-doc] Unable to load Tutti agent skill bundle: ${errorMessage(error)}`);
     return { skills: [] };
   }
-}
-
-function tuttiWorkspaceCwd(fallback: string) {
-  return process.env.TUTTI_WORKSPACE_ROOT?.trim() || process.env.AI_DOC_WORKSPACE_ROOT?.trim() || fallback;
 }
 
 function errorMessage(error: unknown) {
@@ -74,16 +67,15 @@ function localAgentTimeoutMs() {
   return Number.isFinite(parsed) && parsed >= minimumLocalAgentTimeoutMs ? parsed : defaultLocalAgentTimeoutMs;
 }
 
-async function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, skillContext: LocalAgentSkillContext) {
-  const workspaceRoot = projectWorkspaceRoot(context.project.id);
-  const assetPrompt = await projectAssetPrompt(context.project.id, workspaceRoot);
+async function buildSystemPrompt(context: RuntimeEditContext, _projectCwd: string, skillContext: LocalAgentSkillContext) {
+  const assetPrompt = await projectAssetPrompt(context.project.id);
 
   if (context.project.type === "docx") {
     return withTuttiSkillGuidance(
       [
         "You are an AI doc editing agent inside a local doc app.",
         "This project is a Word DOCX doc.",
-        `Current focused file: ${resolve(workspaceRoot, "document.docx")}`,
+        "Current focused file: document.docx (relative to the current working directory).",
         localFilesystemArtifactNotice,
         appToolPrompt(),
         artifactIntentPrompt("document"),
@@ -100,11 +92,10 @@ async function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: st
   }
 
   if (context.project.type === "markdown") {
-    const targetMarkdownPath = resolve(workspaceRoot, "document.md");
     return withTuttiSkillGuidance(
       [
         "You are editing a Markdown artifact for a local AI doc editor.",
-        `Current focused file: ${targetMarkdownPath}`,
+        "Current focused file: document.md (relative to the current working directory).",
         localFilesystemArtifactNotice,
         appToolPrompt(),
         artifactIntentPrompt("document"),
@@ -122,11 +113,10 @@ async function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: st
     );
   }
 
-  const targetHtmlPath = resolve(workspaceRoot, "document.html");
   return withTuttiSkillGuidance(
     [
       "You are editing an HTML artifact for a local AI doc editor.",
-      `Current focused file: ${targetHtmlPath}`,
+      "Current focused file: document.html (relative to the current working directory).",
       localFilesystemArtifactNotice,
       appToolPrompt(),
       artifactIntentPrompt("document"),
@@ -206,9 +196,9 @@ ${value}
 </${name}>`;
 }
 
-async function projectAssetPrompt(projectId: string, workspaceRoot: string) {
+async function projectAssetPrompt(projectId: string) {
   const assets = (await listProjectAssets(projectId)).map((asset) =>
-    `- ${asset.fileName} (${asset.sizeBytes} bytes): ${resolve(workspaceRoot, asset.path)}`);
+    `- ${asset.fileName} (${asset.sizeBytes} bytes): ${asset.path}`);
   if (assets.length === 0) return "No project context attachments are currently uploaded.";
   return [
     "Project context attachments are available in the workspace:",

@@ -39,7 +39,6 @@ export AI_SHEET_HOME="\${TUTTI_APP_DATA_DIR:-$package_dir/.data}"
 export TUTTI_APP_DATABASE_DIR="\${TUTTI_APP_DATABASE_DIR:-$AI_SHEET_HOME/data}"
 export AI_SHEET_RUNTIME_ROOT="\${TUTTI_APP_RUNTIME_DIR:-$AI_SHEET_HOME/.runtime}"
 export AI_SHEET_LOG_ROOT="\${TUTTI_APP_LOG_DIR:-$AI_SHEET_RUNTIME_ROOT/logs}"
-export AI_SHEET_WORKSPACE_ROOT="\${TUTTI_WORKSPACE_ROOT:-$AI_SHEET_HOME}"
 export AI_SHEET_TUTTI_CLI="\${TUTTI_CLI:-}"
 export TSH_OOXML_CALC_WASM_JS="\${TSH_OOXML_CALC_WASM_JS:-$package_dir/assets/office-formula-calc/tsh_ooxml_calc.js}"
 

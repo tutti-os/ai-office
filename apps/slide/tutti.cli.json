@@ -578,7 +578,7 @@
         "properties": {
           "path": {
             "type": "string",
-            "description": "Absolute path, home-relative path, or path relative to the Tutti workspace root."
+            "description": "Absolute local path to the import file. Relative and home-relative paths are not accepted; upload file content when no absolute path is available."
           },
           "title": {
             "type": "string",

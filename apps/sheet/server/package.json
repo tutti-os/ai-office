@@ -7,7 +7,7 @@
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/artifact/project-import.test.ts src/db/database.test.ts",
+    "test": "tsx --test src/artifact/project-import.test.ts src/artifact/sheet-agent-context.test.ts src/db/database.test.ts",
     "smoke:calc": "tsx scripts/calc-smoke.ts",
     "start": "node dist/apps/sheet/server/src/main.js"
   },

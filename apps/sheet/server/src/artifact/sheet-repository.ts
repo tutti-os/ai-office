@@ -396,11 +396,7 @@ export class SheetRepository {
 
   private async writeProjectAgentInstructions(project: SheetProject) {
     const root = projectWorkspaceRoot(project.id);
-    await mkdir(root, { recursive: true });
-    const path = join(root, "AGENTS.md");
-    const content = sheetProjectAgentInstructions(project);
-    const current = await readFile(path, "utf8").catch(() => null);
-    if (current !== content) await writeFile(path, content, "utf8");
+    await writeSheetProjectAgentInstructions(root, project);
   }
 }
 
@@ -490,15 +486,22 @@ function xlsxFilePath(projectId: string) {
 }
 
 const xlsxManifestCache = new Map<string, { mtimeMs: number; sizeBytes: number; manifest: XlsxManifest }>();
-const sheetAgentContextVersion = "ai-sheet-agent-context-v1";
+export const sheetAgentContextVersion = "ai-sheet-agent-context-v2";
+
+export async function writeSheetProjectAgentInstructions(root: string, project: SheetProject) {
+  await mkdir(root, { recursive: true });
+  const path = join(root, "AGENTS.md");
+  const content = sheetProjectAgentInstructions(project);
+  const current = await readFile(path, "utf8").catch(() => null);
+  if (current !== content) await writeFile(path, content, "utf8");
+}
 
 function sheetProjectAgentInstructions(project: SheetProject) {
-  const targetXlsxPath = join(projectWorkspaceRoot(project.id), xlsxArtifactFileRef);
   return [
     "# AI Sheet Workspace",
     "",
     "You are editing an XLSX workbook with the local AI Sheet app.",
-    `Current focused file: ${targetXlsxPath}`,
+    `Current focused file: ${xlsxArtifactFileRef} (relative to this project directory).`,
     "Use the officecli command-line tool to inspect, create, edit, and validate the focused XLSX file when possible.",
     "When asked to create or edit spreadsheet content, write the final workbook to the focused file with filesystem tools.",
     "Do not convert the workbook to Markdown, CSV, or HTML unless explicitly asked for a separate export.",

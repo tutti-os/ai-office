@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import type { DocumentProject } from "@ai-doc/shared";
-import { ProjectPreparationError } from "@ai-app/shared/project-preparation";
-import { materializeDocumentProjectCore, prepareDocumentAgentContext } from "./document-preparation.js";
+import { AgentContextPreparationCoordinator, ProjectPreparationError } from "@ai-app/shared/project-preparation";
+import { documentAgentContextVersion, materializeDocumentProjectCore, prepareDocumentAgentContext } from "./document-preparation.js";
 
 test("core document stays usable when auxiliary AGENTS preparation fails", async () => {
   const root = await mkdtemp(join(tmpdir(), "ai-doc-preparation-"));
@@ -33,3 +33,52 @@ test("core document stays usable when auxiliary AGENTS preparation fails", async
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("ready v2 agent context is migrated to relative project instructions", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ai-doc-context-migration-"));
+  const project = documentProject("project-migration");
+  const oldVersion = "doc-agent-context-v2:html:0";
+  let stored: { state: "ready" | "preparing" | "failed"; version: string | null } = { state: "ready", version: oldVersion };
+  const coordinator = new AgentContextPreparationCoordinator({
+    read: () => stored,
+    markPreparing: (_projectId, version) => { stored = { state: "preparing", version }; },
+    markReady: (_projectId, version) => { stored = { state: "ready", version }; },
+    markFailed: (_projectId, version) => { stored = { state: "failed", version }; },
+  });
+  try {
+    await writeFile(join(root, "AGENTS.md"), `Current focused file: ${join(root, "document.html")}`);
+    const nextVersion = `${documentAgentContextVersion(project)}:0`;
+    await coordinator.ensure({
+      projectId: project.id,
+      version: nextVersion,
+      prepare: () => prepareDocumentAgentContext(root, project),
+    });
+
+    const instructions = await readFile(join(root, "AGENTS.md"), "utf8");
+    assert.equal(stored.version, "doc-agent-context-v3:html:0");
+    assert.notEqual(stored.version, oldVersion);
+    assert.match(instructions, /Current focused file: document\.html \(relative to this project directory\)\./);
+    assert.doesNotMatch(instructions, new RegExp(escapeRegExp(root)));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+function documentProject(id: string): DocumentProject {
+  const now = "2026-07-19T00:00:00.000Z";
+  return {
+    id,
+    title: "Document",
+    type: "html",
+    content: "<article>Ready</article>",
+    templateId: null,
+    templateName: null,
+    updatedBy: "system",
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
