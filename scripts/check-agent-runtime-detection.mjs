@@ -13,6 +13,8 @@ const profiles = [
   { id: "local-agent:research", kind: "local-agent", agentTargetId: "research", provider: "codex" },
   { id: "local-agent:writer", kind: "local-agent", agentTargetId: "writer", provider: "codex" },
 ];
+const removedWorkspaceRootContract = /\b(?:TUTTI_WORKSPACE_ROOT|NEXTOP_WORKSPACE_ROOT|AI_(?:DOC|SLIDE|SHEET)_WORKSPACE(?:_ROOT)?)\b/;
+const absoluteWorkspaceInstruction = /\/workspace(?:\/|\b)/i;
 const agents = [
   target("research", "codex", true),
   { ...target("writer", "codex", true), isDefault: true },
@@ -91,9 +93,11 @@ const runExecutorSource = readFileSync("packages/ai-app-agent/src/run-executor/i
 assert.doesNotMatch(runExecutorSource, /managedAgent/i);
 assert.doesNotMatch(runExecutorSource, /request\.headers/);
 const localRuntimeSource = readFileSync("packages/ai-app-agent/src/local-agent-runtime/index.ts", "utf8");
-assert.match(localRuntimeSource, /context\?\.agentDetectContext/);
+assert.match(localRuntimeSource, /projectDetectContext\(context\.agentDetectContext, runCwd, env\)/);
 assert.match(localRuntimeSource, /localAgentRuntime\.detect\(detectContext\)/);
 assert.match(localRuntimeSource, /agentTargetId,/);
+assert.match(localRuntimeSource, /cwd: runCwd/);
+assert.doesNotMatch(localRuntimeSource, removedWorkspaceRootContract);
 assert.doesNotMatch(localRuntimeSource, /loadTuttiAgentCatalog/);
 assert.doesNotMatch(localRuntimeSource, /loadTuttiAgentComposerOptions/);
 assert.doesNotMatch(localRuntimeSource, /managedAgent/i);
@@ -103,9 +107,43 @@ for (const file of [
   "apps/sheet/server/src/runtimes/local-agent-provider.ts",
 ]) {
   const source = readFileSync(file, "utf8");
-  assert.match(source, /detectContext: context\.agentDetectContext/);
+  assert.match(source, /detectContext: \{ \.\.\.\(context\.agentDetectContext \?\? \{\}\), cwd: projectCwd \}/);
+  assert.doesNotMatch(source, removedWorkspaceRootContract);
+  assert.doesNotMatch(source, absoluteWorkspaceInstruction);
+  assert.doesNotMatch(source, /const (?:target|focused)\w*Path\s*=\s*(?:resolve|join)\(projectWorkspaceRoot/);
+  assert.doesNotMatch(source, /resolve\([^,\n]+,\s*asset\.path\)/);
   assert.doesNotMatch(source, /managedAgent/i);
 }
+for (const [file, relativeGuidance] of [
+  ["apps/doc/server/src/runtimes/local-agent-provider.ts", /Current focused file: document\.(?:html|md|docx) \(relative to the current working directory\)/],
+  ["apps/slide/server/src/runtimes/local-agent-provider.ts", /Current focused file: slides\.pptx \(relative to the current working directory\)/],
+  ["apps/sheet/server/src/runtimes/local-agent-provider.ts", /Current focused file: workbook\.xlsx \(relative to the current working directory\)/],
+  ["apps/doc/server/src/artifact/document-preparation.ts", /Current focused file: document\.(?:html|md|docx) \(relative to this project directory\)/],
+  ["apps/slide/server/src/artifact/project-materialization.ts", /Current focused (?:file|directory): \$\{artifact\.fileRef\} \(relative to this project directory\)/],
+  ["apps/sheet/server/src/artifact/sheet-repository.ts", /Current focused file: \$\{xlsxArtifactFileRef\} \(relative to this project directory\)/],
+]) {
+  const source = readFileSync(file, "utf8");
+  assert.match(source, relativeGuidance);
+  assert.doesNotMatch(source, removedWorkspaceRootContract);
+  assert.doesNotMatch(source, absoluteWorkspaceInstruction);
+  assert.doesNotMatch(source, /const (?:target|focused)\w*Path\s*=\s*(?:resolve|join)\(projectWorkspaceRoot/);
+}
+for (const file of [
+  "apps/doc/bootstrap.sh",
+  "apps/slide/bootstrap.sh",
+  "apps/sheet/bootstrap.sh",
+  "apps/doc/.tutti/dev-app/bootstrap.sh",
+  "apps/slide/.tutti/dev-app/bootstrap.sh",
+  "tooling/tutti/package-doc-tutti-app.mjs",
+  "tooling/tutti/package-slide-tutti-app.mjs",
+  "tooling/tutti/package-sheet-tutti-app.mjs",
+]) {
+  const source = readFileSync(file, "utf8");
+  assert.doesNotMatch(source, removedWorkspaceRootContract);
+}
+const importSource = readFileSync("packages/ai-app-shared/src/import-source/index.ts", "utf8");
+assert.match(importSource, /isAbsolute\(trimmed\)/);
+assert.doesNotMatch(importSource, /process\.env|process\.cwd|homedir|WORKSPACE_ROOT/);
 for (const file of ["apps/doc/tutti.app.json", "apps/slide/tutti.app.json", "apps/sheet/tutti.app.json"]) {
   const manifest = JSON.parse(readFileSync(file, "utf8"));
   assert.ok(!manifest.hostCompatibility?.requiredTuttiCapabilities?.includes("managed-model-cli-v1"));

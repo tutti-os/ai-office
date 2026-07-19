@@ -29,14 +29,13 @@ const minimumLocalAgentTimeoutMs = 5 * 60_000;
 export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<SlideRun, SlideRuntimeProject, AiEditRequest> {
   constructor() {
     super({
-      workspaceRoot: (context) => projectWorkspaceRoot(context.project.id),
+      runCwd: (context) => projectWorkspaceRoot(context.project.id),
       buildPrompt: buildEditPrompt,
       buildSystemPrompt,
       buildSkillManifest: buildSlideAgentSkillContext,
-      buildEnv: async (context, workspaceRoot) => ({
+      buildEnv: async (context) => ({
         ...officeCliEnvSync(),
         ...tuttiCliEnv(),
-        AI_SLIDE_WORKSPACE: workspaceRoot,
         AI_SLIDE_PROJECT_ID: context.project.id,
         AI_SLIDE_RUN_ID: context.run.id,
       }),
@@ -51,17 +50,16 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
 
 async function buildSlideAgentSkillContext(
   context: RuntimeEditContext,
-  workspaceRoot: string,
+  projectCwd: string,
 ): Promise<LocalAgentSkillManifestResult> {
-  const projectSkillsPromise = buildProjectSkillManifest(context, workspaceRoot);
+  const projectSkillsPromise = buildProjectSkillManifest(context, projectCwd);
   const tuttiContextPromise = (async () => {
-    const cwd = tuttiWorkspaceCwd(workspaceRoot);
     try {
       return await loadTuttiLocalAgentSkillContext({
         agentTargetId: context.runtimeProfile.agentTargetId!,
         agentSessionId: context.run.id,
-        cwd,
-        detectContext: context.agentDetectContext ?? { cwd },
+        cwd: projectCwd,
+        detectContext: { ...(context.agentDetectContext ?? {}), cwd: projectCwd },
         commandEnvNames: ["AI_SLIDE_TUTTI_CLI"],
       });
     } catch (error) {
@@ -77,10 +75,6 @@ async function buildSlideAgentSkillContext(
   };
 }
 
-function tuttiWorkspaceCwd(fallback: string) {
-  return process.env.TUTTI_WORKSPACE_ROOT?.trim() || process.env.AI_SLIDE_WORKSPACE_ROOT?.trim() || fallback;
-}
-
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -92,16 +86,16 @@ function localAgentTimeoutMs() {
   return Number.isFinite(parsed) && parsed >= minimumLocalAgentTimeoutMs ? parsed : defaultLocalAgentTimeoutMs;
 }
 
-async function buildProjectSkillManifest(context: RuntimeEditContext, workspaceRoot: string): Promise<SkillMaterializationRecord[]> {
+async function buildProjectSkillManifest(context: RuntimeEditContext, projectCwd: string): Promise<SkillMaterializationRecord[]> {
   if (context.project.artifact.type !== "deck") return [];
-  const cacheKey = [workspaceRoot, context.project.artifact.id, context.project.templateId ?? "default"].join(":");
+  const cacheKey = [projectCwd, context.project.artifact.id, context.project.templateId ?? "default"].join(":");
   const cached = projectSkillManifestCache.get(cacheKey);
   if (cached) {
     projectSkillManifestCache.delete(cacheKey);
     projectSkillManifestCache.set(cacheKey, cached);
     return cached;
   }
-  const loading = readProjectSkillManifest(workspaceRoot).catch((error) => {
+  const loading = readProjectSkillManifest(projectCwd).catch((error) => {
     projectSkillManifestCache.delete(cacheKey);
     throw error;
   });
@@ -110,8 +104,8 @@ async function buildProjectSkillManifest(context: RuntimeEditContext, workspaceR
   return loading;
 }
 
-async function readProjectSkillManifest(workspaceRoot: string): Promise<SkillMaterializationRecord[]> {
-  const skillsRoot = join(workspaceRoot, ".ai-slide", "skills");
+async function readProjectSkillManifest(projectCwd: string): Promise<SkillMaterializationRecord[]> {
+  const skillsRoot = join(projectCwd, ".ai-slide", "skills");
   let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
   try {
     entries = await readdir(skillsRoot, { withFileTypes: true });
@@ -214,14 +208,13 @@ function isTextSkillFile(fileName: string) {
   return new Set([".md", ".mdx", ".txt", ".json", ".yaml", ".yml"]).has(extname(fileName).toLowerCase());
 }
 
-function buildSystemPrompt(context: RuntimeEditContext, _workspaceRoot: string, skillContext: LocalAgentSkillContext) {
+function buildSystemPrompt(context: RuntimeEditContext, _projectCwd: string, skillContext: LocalAgentSkillContext) {
   if (context.project.artifact.type === "pptx") {
-    const targetPptxPath = resolve(projectWorkspaceRoot(context.project.id), "slides.pptx");
     return withTuttiSkillGuidance(
       [
         "You are an AI slide editing agent inside a local presentation app.",
         "This project is a PowerPoint PPTX presentation.",
-        `Current focused file: ${targetPptxPath}`,
+        "Current focused file: slides.pptx (relative to the current working directory).",
         localFilesystemArtifactNotice,
         artifactIntentPrompt("presentation"),
         progressiveSlideAuthoringPrompt("presentation"),
@@ -336,13 +329,12 @@ function buildEditPrompt(context: RuntimeEditContext) {
   ].join("\n");
 
   if (context.project.artifact.type === "pptx") {
-    const focusedPath = resolve(projectWorkspaceRoot(context.project.id), "slides.pptx");
     return `<slide_agent_context>
 project_id: ${context.project.id}
 title: ${context.project.title}
 artifact_type: pptx
 mode: ${context.request.mode}
-focused_pptx_path: ${focusedPath}
+focused_pptx_path: slides.pptx
 canonical_pptx_path: slides.pptx
 ${selection}
 </slide_agent_context>

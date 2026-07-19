@@ -2,7 +2,7 @@ import { openPathInFileManager } from "@ai-app/shared/local-open";
 import { createDebouncedWorkspaceRefresh, RuntimeRunExecutor } from "@ai-app/agent/run-executor";
 import { resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
-import { resolveWorkspaceImportSourcePath } from "@ai-app/shared/import-source";
+import { resolveAbsoluteImportSourcePath } from "@ai-app/shared/import-source";
 import type { RuntimeProfile } from "@ai-app/shared/types";
 import type {
   AiEditRequest,
@@ -104,9 +104,7 @@ export class SheetService {
   async importXlsxProject(input: { path?: string; title?: string }) {
     await requireOfficeCli();
     if (!input.path?.trim()) throw new Error("XLSX path is required");
-    const sourcePath = resolveWorkspaceImportSourcePath(input.path, {
-      workspaceEnvVars: ["AI_SHEET_WORKSPACE_ROOT", "TUTTI_WORKSPACE_ROOT"],
-    });
+    const sourcePath = resolveAbsoluteImportSourcePath(input.path);
     const result = await this.repo.importXlsxProjectFromFile({
       sourcePath,
       title: input.title,

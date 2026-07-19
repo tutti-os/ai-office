@@ -19,7 +19,7 @@ import { createDebouncedWorkspaceRefresh, RuntimeRunExecutor } from "@ai-app/age
 import { resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
 import { projectAssetFileExtensions, projectAssetMimeTypes } from "@ai-app/shared/artifact-assets";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
-import { resolveWorkspaceImportSourcePath } from "@ai-app/shared/import-source";
+import { resolveAbsoluteImportSourcePath } from "@ai-app/shared/import-source";
 import { openPathInFileManager } from "@ai-app/shared/local-open";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
@@ -75,9 +75,7 @@ export class ProjectService {
   async importPptxProject(input: { path?: string; title?: string }) {
     await requireOfficeCli();
     if (!input.path?.trim()) throw new Error("PPTX path is required");
-    const sourcePath = resolveWorkspaceImportSourcePath(input.path, {
-      workspaceEnvVars: ["AI_SLIDE_WORKSPACE_ROOT", "TUTTI_WORKSPACE_ROOT"],
-    });
+    const sourcePath = resolveAbsoluteImportSourcePath(input.path);
     const imported = await this.repo.importPptxProjectFromFile({
       sourcePath,
       title: input.title,

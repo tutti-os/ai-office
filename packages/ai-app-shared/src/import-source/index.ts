@@ -1,28 +1,26 @@
-import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute } from "node:path";
+import { ArtifactAppError } from "../server-errors/index.js";
 
-export interface WorkspaceImportSourceOptions {
-  workspaceEnvVars: string[];
-}
+export type ImportSourcePathErrorReason = "path_required" | "path_must_be_absolute";
 
-export function resolveWorkspaceImportSourcePath(inputPath: string, options: WorkspaceImportSourceOptions) {
-  const trimmed = inputPath.trim();
-  if (!trimmed) throw new Error("path is required");
-  const expanded = expandHomePath(trimmed);
-  if (isAbsolute(expanded)) return resolve(expanded);
-  return resolve(workspaceRoot(options.workspaceEnvVars), expanded);
-}
+export class ImportSourcePathError extends ArtifactAppError {
+  readonly reason: ImportSourcePathErrorReason;
 
-function expandHomePath(value: string) {
-  if (value === "~") return homedir();
-  if (value.startsWith("~/") || value.startsWith("~\\")) return join(homedir(), value.slice(2));
-  return value;
-}
-
-function workspaceRoot(envVars: string[]) {
-  for (const envVar of envVars) {
-    const value = process.env[envVar]?.trim();
-    if (value) return value;
+  constructor(reason: ImportSourcePathErrorReason, message: string) {
+    super({ code: "bad_request", message });
+    this.name = "ImportSourcePathError";
+    this.reason = reason;
   }
-  return process.cwd();
+}
+
+export function resolveAbsoluteImportSourcePath(inputPath: string) {
+  const trimmed = inputPath.trim();
+  if (!trimmed) throw new ImportSourcePathError("path_required", "path is required");
+  if (!isAbsolute(trimmed)) {
+    throw new ImportSourcePathError(
+      "path_must_be_absolute",
+      "Import path must be absolute; upload file content when an absolute path is unavailable",
+    );
+  }
+  return trimmed;
 }

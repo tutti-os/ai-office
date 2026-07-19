@@ -2,7 +2,6 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createEmptyDocxDocumentManifest, type DocumentProject } from "@ai-doc/shared";
 import { retryProjectPreparationOperation, withProjectPreparationPhase } from "@ai-app/shared/project-preparation";
-import { projectWorkspaceRoot } from "../local/paths.js";
 import { listProjectAssets } from "./project-assets.js";
 
 export async function materializeDocumentProjectCore(root: string, project: DocumentProject) {
@@ -28,6 +27,10 @@ export async function prepareDocumentAgentContext(root: string, project: Documen
   });
 }
 
+export function documentAgentContextVersion(project: Pick<DocumentProject, "type">) {
+  return ["doc-agent-context-v3", project.type].join(":");
+}
+
 function documentCorePath(root: string, project: DocumentProject) {
   return join(root, project.type === "docx" ? "document.json" : project.type === "markdown" ? "document.md" : "document.html");
 }
@@ -39,12 +42,11 @@ async function projectAgentInstructions(project: DocumentProject) {
 }
 
 async function htmlProjectAgentInstructions(project: DocumentProject) {
-  const targetHtmlPath = join(projectWorkspaceRoot(project.id), "document.html");
   return [
     "# AI Doc Workspace",
     "",
     "You are editing a rich HTML doc with the local AI Doc app.",
-    `Current focused file: ${targetHtmlPath}`,
+    "Current focused file: document.html (relative to this project directory).",
     artifactIntentInstructions("document"),
     "When the current request calls for document changes, read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
     stagedProjectWriteInstructions("HTML"),
@@ -53,13 +55,12 @@ async function htmlProjectAgentInstructions(project: DocumentProject) {
 }
 
 async function markdownProjectAgentInstructions(project: DocumentProject) {
-  const targetMarkdownPath = join(projectWorkspaceRoot(project.id), "document.md");
   return [
     "# AI Doc Workspace",
     "",
     "You are editing a Markdown doc with the local AI Doc app.",
-    `Current focused file: ${targetMarkdownPath}`,
-    `Place local image assets under ${join(projectWorkspaceRoot(project.id), "assets")} and reference them from Markdown as ./assets/<file-name>.`,
+    "Current focused file: document.md (relative to this project directory).",
+    "Place local image assets under assets/ and reference them from Markdown as ./assets/<file-name>.",
     artifactIntentInstructions("document"),
     "When the current request calls for document changes, read and edit the focused file directly with filesystem tools. The app watches workspace files and refreshes the preview when content changes.",
     stagedProjectWriteInstructions("Markdown"),
@@ -68,12 +69,11 @@ async function markdownProjectAgentInstructions(project: DocumentProject) {
 }
 
 async function docxProjectAgentInstructions(project: DocumentProject) {
-  const targetDocxPath = join(projectWorkspaceRoot(project.id), "document.docx");
   return [
     "# AI Doc Workspace",
     "",
     "You are editing a Word doc project with the local AI Doc app.",
-    `Current focused file: ${targetDocxPath}`,
+    "Current focused file: document.docx (relative to this project directory).",
     artifactIntentInstructions("document"),
     "When the current request calls for creating or editing this Word doc, write the final result to the focused file with filesystem tools.",
     "The app watches that file and refreshes the preview when its content changes.",

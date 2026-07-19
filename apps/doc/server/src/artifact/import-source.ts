@@ -1,12 +1,10 @@
 import { extname } from "node:path";
-import { resolveWorkspaceImportSourcePath } from "@ai-app/shared/import-source";
+import { resolveAbsoluteImportSourcePath } from "@ai-app/shared/import-source";
 
 const docxMimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 export function resolveImportSourcePath(inputPath: string) {
-  return resolveWorkspaceImportSourcePath(inputPath, {
-    workspaceEnvVars: ["AI_DOC_WORKSPACE_ROOT", "TUTTI_WORKSPACE_ROOT"],
-  });
+  return resolveAbsoluteImportSourcePath(inputPath);
 }
 
 export function mimeTypeForImportFileName(fileName: string) {

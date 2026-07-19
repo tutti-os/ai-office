@@ -126,7 +126,7 @@ export function prepareProjectAgentFiles(projectRoot: string, project: SlideProj
 }
 
 export function projectAgentInstructionsVersion(project: SlideProject, artifact: SlideArtifact) {
-  return ["slide-agent-context-v2", project.templateId ?? "", artifact.id, artifact.type, artifact.fileRef].join(":");
+  return ["slide-agent-context-v3", project.templateId ?? "", artifact.id, artifact.type, artifact.fileRef].join(":");
 }
 
 export async function syncProjectTemplateSkill(projectRoot: string, project: SlideProject, artifact: SlideArtifact) {
@@ -190,24 +190,22 @@ export async function writeProjectAgentInstructions(projectRoot: string, artifac
 async function projectAgentInstructions(artifact: SlideArtifact) {
   const projectAssets = await projectAssetInstructions(artifact.projectId);
   if (artifact.type === "pptx") {
-    const targetPptxPath = join(projectWorkspaceRoot(artifact.projectId), artifact.fileRef);
     return [
       "# AI Slide Workspace",
       "",
       "You are editing a slide presentation with the local AI Slide app.",
-      `Current focused file: ${targetPptxPath}`,
+      `Current focused file: ${artifact.fileRef} (relative to this project directory).`,
       artifactIntentInstructions("presentation"),
       progressiveSlideAuthoringInstructions("presentation"),
       "When the current request calls for creating or editing this PPTX presentation, write the final file to the focused file with filesystem tools.",
       projectAssets,
     ].join("\n");
   }
-  const targetDeckPath = join(projectWorkspaceRoot(artifact.projectId), artifact.fileRef);
   return [
     "# AI Slide Workspace",
     "",
     "You are editing a slide deck with the local AI Slide app.",
-    `Current focused directory: ${targetDeckPath}`,
+    `Current focused directory: ${artifact.fileRef} (relative to this project directory).`,
     artifactIntentInstructions("deck"),
     progressiveSlideAuthoringInstructions("deck"),
     "Use `slides/*.html` as the editable source for individual slides. Slide files must use indexed names such as `01-cover.html`.",

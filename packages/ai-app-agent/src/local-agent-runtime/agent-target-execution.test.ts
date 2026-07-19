@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -29,9 +29,9 @@ test("adapter resolution prefers exact open provider id and rejects loose ambigu
   assert.equal(resolveRegisteredProviderId("claude-code", ["claude"]), "claude");
 });
 
-test("execution resolution discovers project-scoped targets with the workspace cwd", async () => {
+test("execution resolution discovers project-scoped targets with the explicit run cwd", async () => {
   const provider = new LocalAgentRuntimeProvider({
-    workspaceRoot: (context) => `/workspace/${context.project.id}`,
+    runCwd: (context) => `/projects/${context.project.id}`,
     buildPrompt: () => "prompt",
     buildSystemPrompt: () => "system",
   });
@@ -47,9 +47,10 @@ test("execution resolution discovers project-scoped targets with the workspace c
       project: { id: "project-1" },
       runtimeProfile: profile("writer", "old_provider", "old_provider:custom"),
       request: { userPrompt: "Write", mode: "write" },
+      agentDetectContext: { cwd: "/host/workspace" },
     },
   );
-  assert.equal(detectedCwd, "/workspace/project-1");
+  assert.equal(detectedCwd, "/projects/project-1");
   assert.equal(resolved.provider, "new_provider");
 });
 
@@ -92,7 +93,7 @@ test("detections without an exact target id fail closed", () => {
 
 test("run preparation overlaps skills, env, and session reads and consumes kit timing diagnostics", async (t) => {
   t.mock.method(console, "info", () => undefined);
-  const workspaceRoot = await mkdtemp(join(tmpdir(), "ai-office-agent-prep-"));
+  const runCwd = await mkdtemp(join(tmpdir(), "ai-office-agent-prep-"));
   let skillStarted = false;
   let envStarted = false;
   let releasePreparation!: () => void;
@@ -106,21 +107,34 @@ test("run preparation overlaps skills, env, and session reads and consumes kit t
   const markStarted = () => {
     if (skillStarted && envStarted) announceConcurrent();
   };
+  let skillCwd = "";
+  let envCwd = "";
+  let systemPromptCwd = "";
   const provider = new LocalAgentRuntimeProvider({
-    workspaceRoot: () => workspaceRoot,
+    runCwd: () => runCwd,
     buildPrompt: () => "prompt",
-    buildSystemPrompt: () => "system",
-    buildSkillManifest: async () => {
+    buildSystemPrompt: (_context, cwd) => {
+      systemPromptCwd = cwd;
+      return "system";
+    },
+    buildSkillManifest: async (_context, cwd) => {
+      skillCwd = cwd;
       skillStarted = true;
       markStarted();
       await preparationReleased;
-      return [];
+      return [{
+        skillId: "project-skill",
+        slug: "project-skill",
+        content: "# Project skill",
+        deliveryMode: "prompt-injection" as const,
+      }];
     },
-    buildEnv: async () => {
+    buildEnv: async (_context, cwd) => {
+      envCwd = cwd;
       envStarted = true;
       markStarted();
       await preparationReleased;
-      return {};
+      return { APP_CHILD_MARKER: "project-env" };
     },
   });
   let capturedInput: Record<string, unknown> | undefined;
@@ -139,7 +153,7 @@ test("run preparation overlaps skills, env, and session reads and consumes kit t
         },
       };
       yield { type: "text_delta", text: "ready" };
-      yield { type: "done", status: "completed" };
+      yield { type: "done", status: "completed", sessionId: "provider-session-1" };
     },
   };
   const streamed: unknown[] = [];
@@ -167,10 +181,40 @@ test("run preparation overlaps skills, env, and session reads and consumes kit t
     releasePreparation();
     await collecting;
     assert.deepEqual(streamed, [{ type: "text_delta", text: "ready" }]);
+    assert.equal(skillCwd, runCwd);
+    assert.equal(envCwd, runCwd);
+    assert.equal(systemPromptCwd, runCwd);
+    assert.equal(capturedInput?.cwd, runCwd);
+    assert.equal(capturedInput?.systemPrompt, "system");
+    assert.deepEqual(capturedInput?.extraAllowedDirs, [runCwd]);
+    assert.deepEqual(capturedInput?.skillManifest, [{
+      skillId: "project-skill",
+      slug: "project-skill",
+      content: "# Project skill",
+      deliveryMode: "prompt-injection",
+    }]);
+    const childEnv = capturedInput?.env as Record<string, string>;
+    assert.equal(childEnv.APP_CHILD_MARKER, "project-env");
+    for (const forbidden of [
+      "TUTTI_WORKSPACE_ROOT",
+      "AI_DOC_WORKSPACE",
+      "AI_DOC_WORKSPACE_ROOT",
+      "AI_SLIDE_WORKSPACE",
+      "AI_SLIDE_WORKSPACE_ROOT",
+      "AI_SHEET_WORKSPACE",
+      "AI_SHEET_WORKSPACE_ROOT",
+    ]) {
+      assert.equal(Object.hasOwn(childEnv, forbidden), false, `${forbidden} must not be in the explicit Agent env`);
+    }
     assert.deepEqual(capturedInput?.metadata, { timingDiagnostics: true });
+    const storedSession = JSON.parse(await readFile(
+      join(runCwd, ".ai-app", "local-agent-sessions", "project-1.json"),
+      "utf8",
+    )) as { providerSessionId: string };
+    assert.equal(storedSession.providerSessionId, "provider-session-1");
   } finally {
     releasePreparation();
-    await rm(workspaceRoot, { recursive: true, force: true });
+    await rm(runCwd, { recursive: true, force: true });
   }
 });
 

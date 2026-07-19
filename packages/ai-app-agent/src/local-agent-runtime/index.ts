@@ -60,23 +60,23 @@ export interface LocalAgentRuntimeProviderOptions<
   TProject extends { id: string } = { id: string },
   TRequest extends BaseAiEditRequest = BaseAiEditRequest,
 > {
-  workspaceRoot(context: RuntimeEditContext<TRun, TProject, TRequest>): string;
+  runCwd(context: RuntimeEditContext<TRun, TProject, TRequest>): string;
   buildPrompt(context: RuntimeEditContext<TRun, TProject, TRequest>): string;
   buildSystemPrompt(
     context: RuntimeEditContext<TRun, TProject, TRequest>,
-    workspaceRoot: string,
+    runCwd: string,
     skillContext: LocalAgentSkillContext,
   ): string | Promise<string>;
   buildSkillManifest?: (
     context: RuntimeEditContext<TRun, TProject, TRequest>,
-    workspaceRoot: string,
+    runCwd: string,
   ) => LocalAgentSkillManifestResult | Promise<LocalAgentSkillManifestResult>;
   buildMcpServers?: (context: RuntimeEditContext<TRun, TProject, TRequest>) => LocalAgentMcpServer[];
-  buildEnv?: (context: RuntimeEditContext<TRun, TProject, TRequest>, workspaceRoot: string) => Record<string, string> | Promise<Record<string, string>>;
+  buildEnv?: (context: RuntimeEditContext<TRun, TProject, TRequest>, runCwd: string) => Record<string, string> | Promise<Record<string, string>>;
   useProviderResume?: (context: RuntimeEditContext<TRun, TProject, TRequest>) => boolean;
   timeoutMs?: () => number;
   sessionDirName?: string;
-  extraAllowedDirs?: (context: RuntimeEditContext<TRun, TProject, TRequest>, workspaceRoot: string) => string[];
+  extraAllowedDirs?: (context: RuntimeEditContext<TRun, TProject, TRequest>, runCwd: string) => string[];
   commandEnvNames?: string[];
 }
 
@@ -106,14 +106,11 @@ export class LocalAgentRuntimeProvider<
 
   async resolveExecutionProfile(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>) {
     if (!profile.agentTargetId) throw new Error("local-agent profile does not contain an exact Agent Target id");
-    const workspaceRoot = context ? this.options.workspaceRoot(context) : configuredWorkspaceRoot();
-    const env = context && workspaceRoot ? await this.options.buildEnv?.(context, workspaceRoot) : undefined;
-    const detectContext: DetectContext | undefined = context?.agentDetectContext ?? (workspaceRoot || env
-      ? {
-          ...(workspaceRoot ? { cwd: workspaceRoot } : {}),
-          ...(env ? { env } : {}),
-        }
-      : undefined);
+    const runCwd = context ? this.options.runCwd(context) : undefined;
+    const env = context && runCwd ? await this.options.buildEnv?.(context, runCwd) : undefined;
+    const detectContext = context && runCwd
+      ? projectDetectContext(context.agentDetectContext, runCwd, env)
+      : undefined;
     const target = (await this.loadAgentTargets(detectContext))
       .find((candidate) => candidate.agentTargetId === profile.agentTargetId);
     if (!target?.supported) throw new Error(target?.reason ?? `Agent Target is not available: ${profile.agentTargetId}`);
@@ -122,14 +119,11 @@ export class LocalAgentRuntimeProvider<
 
   async detect(profile: RuntimeProfile, context?: RuntimeEditContext<TRun, TProject, TRequest>) {
     if (!profile.agentTargetId) return { available: false, reason: "local-agent profile does not contain an exact Agent Target id" };
-    const workspaceRoot = context ? this.options.workspaceRoot(context) : undefined;
-    const env = context && workspaceRoot ? await this.options.buildEnv?.(context, workspaceRoot) : undefined;
-    const detectionContext: DetectContext | undefined = context?.agentDetectContext ?? (context
-      ? {
-          ...(workspaceRoot ? { cwd: workspaceRoot } : {}),
-          ...(env ? { env } : {}),
-        }
-      : undefined);
+    const runCwd = context ? this.options.runCwd(context) : undefined;
+    const env = context && runCwd ? await this.options.buildEnv?.(context, runCwd) : undefined;
+    const detectionContext = context && runCwd
+      ? projectDetectContext(context.agentDetectContext, runCwd, env)
+      : undefined;
     const target = (await this.loadAgentTargets(detectionContext))
       .find((item) => item.agentTargetId === profile.agentTargetId);
     if (!target?.supported) {
@@ -145,10 +139,9 @@ export class LocalAgentRuntimeProvider<
   }
 
   async listLocalAgentTargets(refresh = false): Promise<LocalAgentTargetStatus[]> {
-    const cwd = configuredWorkspaceRoot();
     const env = this.tuttiCliDetectionEnv();
-    const detectionContext: DetectContext | undefined = cwd || refresh || env
-      ? { ...(cwd ? { cwd } : {}), ...(env ? { env } : {}), ...(refresh ? { refresh: true } : {}) }
+    const detectionContext: DetectContext | undefined = refresh || env
+      ? { ...(env ? { env } : {}), ...(refresh ? { refresh: true } : {}) }
       : undefined;
     return this.loadAgentTargets(detectionContext);
   }
@@ -156,7 +149,7 @@ export class LocalAgentRuntimeProvider<
   async *streamEdit(context: RuntimeEditContext<TRun, TProject, TRequest>) {
     const agentTargetId = context.runtimeProfile.agentTargetId;
     if (!agentTargetId) throw new Error("local-agent runtime profile is missing agentTargetId");
-    const workspaceRoot = this.options.workspaceRoot(context);
+    const runCwd = this.options.runCwd(context);
     const controller = new AbortController();
     this.controllers.set(context.run.id, controller);
     const provider = this.resolveProviderId(context.runtimeProfile.provider) ?? context.runtimeProfile.provider;
@@ -170,7 +163,7 @@ export class LocalAgentRuntimeProvider<
     let runOutcome: "completed" | "failed" | "canceled" = "failed";
 
     try {
-      const sessionStore = new LocalAgentSessionStore(workspaceRoot, this.options.sessionDirName ?? ".ai-app");
+      const sessionStore = new LocalAgentSessionStore(runCwd, this.options.sessionDirName ?? ".ai-app");
       const conversationSessionId = context.conversation?.sessionId ?? context.project.id;
       const providerResumeEnabled = this.options.useProviderResume?.(context) ?? true;
       const [previousSession, prepared] = await Promise.all([
@@ -179,7 +172,7 @@ export class LocalAgentRuntimeProvider<
           : Promise.resolve(null),
         prepareLocalAgentRun({
           context,
-          workspaceRoot,
+          runCwd,
           timing,
           buildSkillManifest: this.options.buildSkillManifest,
           buildEnv: this.options.buildEnv,
@@ -213,7 +206,7 @@ export class LocalAgentRuntimeProvider<
           persistProviderSession: providerResumeEnabled,
           resume,
           sessionStore,
-          workspaceRoot,
+          runCwd,
           prepared,
           timing,
         })) {
@@ -232,7 +225,7 @@ export class LocalAgentRuntimeProvider<
             persistProviderSession: providerResumeEnabled,
             resume: { mode: "fresh" },
             sessionStore,
-            workspaceRoot,
+            runCwd,
             prepared,
             timing,
           })) {
@@ -263,7 +256,7 @@ export class LocalAgentRuntimeProvider<
     provider: string;
     resume: { mode: "provider"; providerSessionId?: string; resumeToken?: string } | { mode: "fresh" };
     sessionStore: LocalAgentSessionStore;
-    workspaceRoot: string;
+    runCwd: string;
     prepared: PreparedLocalAgentRun;
     timing: AgentRunTimingLogger;
   }) {
@@ -275,12 +268,11 @@ export class LocalAgentRuntimeProvider<
       provider,
       resume,
       sessionStore,
-      workspaceRoot,
+      runCwd,
       prepared,
       timing,
     } = input;
     let lastError: Extract<AgentEvent, { type: "error" }> | undefined;
-    const agentCwd = workspaceRoot;
     const conversationId = context.conversation?.conversationId ?? context.project.id;
     const sessionId = context.conversation?.sessionId ?? context.project.id;
     const model = isPlaceholderProfileModel(context.runtimeProfile.model, context.runtimeProfile.provider)
@@ -302,7 +294,7 @@ export class LocalAgentRuntimeProvider<
         provider,
         runtimeKind: "local-agent",
         runtimeProvider: provider,
-        cwd: agentCwd,
+        cwd: runCwd,
         prompt: this.options.buildPrompt(context),
         systemPrompt: prepared.systemPrompt,
         history: context.history ?? [],
@@ -312,7 +304,7 @@ export class LocalAgentRuntimeProvider<
         skillManifest: prepared.skillContext.skills,
         env: { ...prepared.appEnv, ...(tuttiCliEnv ?? {}) },
         timeoutMs: this.options.timeoutMs?.() ?? DEFAULT_TIMEOUT_MS,
-        extraAllowedDirs: this.options.extraAllowedDirs?.(context, workspaceRoot) ?? [workspaceRoot],
+        extraAllowedDirs: this.options.extraAllowedDirs?.(context, runCwd) ?? [runCwd],
         resume,
         signal: controller.signal,
         metadata: { timingDiagnostics: true },
@@ -536,12 +528,19 @@ export function stripProviderPrefix(model: string, provider: string) {
   return model.startsWith(prefix) ? model.slice(prefix.length) : model;
 }
 
-function configuredWorkspaceRoot() {
-  return process.env.TUTTI_WORKSPACE_ROOT?.trim()
-    || process.env.AI_DOC_WORKSPACE_ROOT?.trim()
-    || process.env.AI_SLIDE_WORKSPACE_ROOT?.trim()
-    || process.env.AI_SHEET_WORKSPACE_ROOT?.trim()
-    || undefined;
+function projectDetectContext(
+  provided: DetectContext | undefined,
+  runCwd: string,
+  appEnv: Record<string, string> | undefined,
+): DetectContext {
+  const env = provided?.env || appEnv
+    ? { ...(provided?.env ?? {}), ...(appEnv ?? {}) }
+    : undefined;
+  return {
+    ...(provided ?? {}),
+    cwd: runCwd,
+    ...(env ? { env } : {}),
+  };
 }
 
 interface StoredLocalAgentSession {
@@ -553,11 +552,11 @@ interface StoredLocalAgentSession {
 }
 
 class LocalAgentSessionStore {
-  private readonly workspaceRoot: string;
+  private readonly runCwd: string;
   private readonly sessionDirName: string;
 
-  constructor(workspaceRoot: string, sessionDirName: string) {
-    this.workspaceRoot = workspaceRoot;
+  constructor(runCwd: string, sessionDirName: string) {
+    this.runCwd = runCwd;
     this.sessionDirName = sessionDirName;
   }
 
@@ -585,7 +584,7 @@ class LocalAgentSessionStore {
   }
 
   private pathFor(projectId: string) {
-    return join(this.workspaceRoot, this.sessionDirName, "local-agent-sessions", `${safePathSegment(projectId)}.json`);
+    return join(this.runCwd, this.sessionDirName, "local-agent-sessions", `${safePathSegment(projectId)}.json`);
   }
 }
 

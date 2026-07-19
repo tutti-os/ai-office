@@ -37,7 +37,7 @@ export const artifactCliConfigs = {
         description:
           "Import an HTML, Markdown, or DOCX file into AI Doc and return workspace paths plus an internal openTarget command for the imported project. This command must not open the app automatically. Do not present localhost URLs or raw routes as final links. Ask whether the user wants you to open the project directly; if they confirm, call doc projects open with the project-id.",
         properties: pathAndTitleProperties(
-          "Absolute path, home-relative path, or path relative to the Tutti workspace root.",
+          "Absolute local path to the import file. Relative and home-relative paths are not accepted; upload file content when no absolute path is available.",
         ),
         required: ["path"],
       },
@@ -95,7 +95,7 @@ export const artifactCliConfigs = {
         description:
           "Import a PPTX file into AI Slide and return workspace paths plus an internal openTarget command for the imported project. This command must not open the app automatically. Do not present localhost URLs or raw routes as final links. Ask whether the user wants you to open the project directly; if they confirm, call slide projects open with the project-id.",
         properties: pathAndTitleProperties(
-          "Absolute path, home-relative path, or path relative to the Tutti workspace root.",
+          "Absolute local path to the import file. Relative and home-relative paths are not accepted; upload file content when no absolute path is available.",
         ),
         required: ["path"],
       },
@@ -138,7 +138,7 @@ export const artifactCliConfigs = {
         description:
           "Import an XLSX file into AI Sheet and return workspace paths plus an internal openTarget command for the imported project. This command must not open the app automatically. Do not present localhost URLs or raw routes as final links. Ask whether the user wants you to open the project directly; if they confirm, call sheet projects open with the project-id.",
         properties: pathAndTitleProperties(
-          "Absolute path, home-relative path, or path relative to the Tutti workspace root.",
+          "Absolute local path to the import file. Relative and home-relative paths are not accepted; upload file content when no absolute path is available.",
         ),
         required: ["path"],
       },

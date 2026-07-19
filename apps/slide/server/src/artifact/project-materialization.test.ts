@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import type { SlideArtifact, SlideProject } from "@ai-slide/shared";
-import { ProjectPreparationError } from "@ai-app/shared/project-preparation";
-import { materializeDeckProject, materializeTemplateDeckSource, prepareProjectAgentFiles } from "./project-materialization.js";
+import { AgentContextPreparationCoordinator, ProjectPreparationError } from "@ai-app/shared/project-preparation";
+import { materializeDeckProject, materializeTemplateDeckSource, prepareProjectAgentFiles, projectAgentInstructionsVersion, writeProjectAgentInstructions } from "./project-materialization.js";
 
 test("core deck stays usable when auxiliary agent context preparation fails", async () => {
   const root = await mkdtemp(join(tmpdir(), "ai-slide-preparation-"));
@@ -133,3 +133,59 @@ test("template materialization restores a missing file without deleting its comp
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("ready v2 agent context is migrated to relative deck instructions", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ai-slide-context-migration-"));
+  const now = "2026-07-19T00:00:00.000Z";
+  const project: SlideProject = {
+    id: "project-migration",
+    title: "Deck",
+    activeArtifactId: "artifact-migration",
+    artifactType: "deck",
+    templateId: null,
+    templateName: null,
+    updatedBy: "system",
+    createdAt: now,
+    updatedAt: now,
+  };
+  const artifact: SlideArtifact = {
+    id: "artifact-migration",
+    projectId: project.id,
+    type: "deck",
+    fileRef: "deck.slides",
+    mimeType: "application/vnd.tutti.slide-deck+json",
+    revision: 1,
+    updatedBy: "system",
+    createdAt: now,
+    updatedAt: now,
+  };
+  const oldVersion = "slide-agent-context-v2::artifact-migration:deck:deck.slides:0";
+  let stored: { state: "ready" | "preparing" | "failed"; version: string | null } = { state: "ready", version: oldVersion };
+  const coordinator = new AgentContextPreparationCoordinator({
+    read: () => stored,
+    markPreparing: (_projectId, version) => { stored = { state: "preparing", version }; },
+    markReady: (_projectId, version) => { stored = { state: "ready", version }; },
+    markFailed: (_projectId, version) => { stored = { state: "failed", version }; },
+  });
+  try {
+    await writeFile(join(root, "AGENTS.md"), `Current focused directory: ${join(root, artifact.fileRef)}`);
+    const nextVersion = `${projectAgentInstructionsVersion(project, artifact)}:0`;
+    await coordinator.ensure({
+      projectId: project.id,
+      version: nextVersion,
+      prepare: () => writeProjectAgentInstructions(root, artifact),
+    });
+
+    const instructions = await readFile(join(root, "AGENTS.md"), "utf8");
+    assert.equal(stored.version, "slide-agent-context-v3::artifact-migration:deck:deck.slides:0");
+    assert.notEqual(stored.version, oldVersion);
+    assert.match(instructions, /Current focused directory: deck\.slides \(relative to this project directory\)\./);
+    assert.doesNotMatch(instructions, new RegExp(escapeRegExp(root)));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
