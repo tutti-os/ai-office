@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hasActiveAgentRun } from "@ai-app/agent/conversation";
 import type { LocalAgentTargetStatus, OfficeCliStatus, ProjectDetailResponse, RuntimeProfile, SheetProject } from "@ai-sheet/shared";
 import { isAvailableLocalAgentRuntimeProfileId, mergeLocalAgentRuntimeProfiles, resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
+import { openExportLocation } from "@ai-app/shared/host-files";
 import {
   applyProjectCommands,
   cancelRun,
@@ -73,6 +74,7 @@ export function App() {
   const [exportMessage, setExportMessage] = useState("");
   const [xlsxExporting, setXlsxExporting] = useState(false);
   const [xlsxSelectionRestoreKey, setXlsxSelectionRestoreKey] = useState(0);
+  const lastExportRevealPathRef = useRef("");
   const routeRef = useRef(route);
   const xlsxSelectionRef = useRef<XlsxSelection | null>(null);
   // Signature of the workbook currently reflected in the runtime. Used to skip redundant
@@ -419,6 +421,7 @@ export function App() {
     setXlsxExporting(true);
     try {
       const exported = await exportProjectXlsxFile(projectDetail.project.id);
+      lastExportRevealPathRef.current = exported.path;
       setExportMessage(t("editor.exported", { fileName: exported.fileName }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -430,7 +433,10 @@ export function App() {
   const openExports = useCallback(async () => {
     if (!projectDetail) return;
     try {
-      await openProjectExportsDir(projectDetail.project.id);
+      await openExportLocation({
+        path: lastExportRevealPathRef.current,
+        openExportsDir: () => openProjectExportsDir(projectDetail.project.id),
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }

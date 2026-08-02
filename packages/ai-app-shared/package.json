@@ -8,6 +8,7 @@
     "./import-source": "./src/import-source/index.ts",
     "./local-paths": "./src/local-paths/index.ts",
     "./local-open": "./src/local-open/index.ts",
+    "./host-files": "./src/host-files/index.ts",
     "./event-hub": "./src/event-hub/index.ts",
     "./project-store": "./src/project-store/index.ts",
     "./project-preparation": "./src/project-preparation/index.ts",
@@ -28,7 +29,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/agent-providers/agent-targets.test.ts src/import-source/import-source.test.ts src/local-paths/local-paths.test.ts src/project-preparation/project-preparation.test.ts src/reference-exports/reference-exports.test.ts src/server-errors/server-errors.test.ts"
+    "test": "tsx --test src/agent-providers/agent-targets.test.ts src/host-files/host-files.test.ts src/import-source/import-source.test.ts src/local-paths/local-paths.test.ts src/project-preparation/project-preparation.test.ts src/reference-exports/reference-exports.test.ts src/server-errors/server-errors.test.ts"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

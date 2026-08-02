@@ -1,3 +1,5 @@
+import type { MutableRefObject } from "react";
+import { openExportLocation } from "@ai-app/shared/host-files";
 import type { DocumentProject } from "@ai-doc/shared";
 import type { MarkdownRuntimeState } from "../artifact/markdownArtifactAdapter";
 import type { DocxRuntimeState } from "../artifact/docxArtifactAdapter";
@@ -14,6 +16,7 @@ type DocumentExportActionsInput = {
   currentProjectId: string | null;
   docxRuntime: DocxRuntimeState | null;
   exportInProgress: boolean;
+  lastExportRevealPathRef: MutableRefObject<string>;
   markdownRuntime: MarkdownRuntimeState | null;
   runtime: RuntimeState | null;
   serializeHtmlRuntime: (runtime: RuntimeState) => string;
@@ -23,6 +26,10 @@ type DocumentExportActionsInput = {
   setSourceExporting: (value: boolean) => void;
   t: ReturnType<typeof useI18n>["t"];
 };
+
+function rememberExportRevealPath(input: DocumentExportActionsInput, path: string) {
+  input.lastExportRevealPathRef.current = path;
+}
 
 export function createDocumentExportActions(input: DocumentExportActionsInput) {
   const htmlTitle = input.runtime?.title || input.currentProject?.title || "doc";
@@ -41,6 +48,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
         html: input.serializeHtmlRuntime(input.runtime),
       });
       console.info(`[ai-doc] Exported HTML to ${exported.path}`);
+      rememberExportRevealPath(input, exported.path);
       input.setExportNotice(input.t("editor.exportedHtml", { path: exported.path }));
     } catch (err) {
       input.setError(err instanceof Error ? err.message : String(err));
@@ -61,6 +69,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
         html: renderHtmlProjectAssetReferences(input.serializeHtmlRuntime(input.runtime), input.currentProjectId),
       });
       console.info(`[ai-doc] Exported PDF to ${exported.path}`);
+      rememberExportRevealPath(input, exported.path);
       input.setExportNotice(input.t("editor.exportedPdf", { path: exported.path }));
     } catch (err) {
       input.setError(err instanceof Error ? err.message : String(err));
@@ -81,6 +90,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
         markdown,
       });
       console.info(`[ai-doc] Exported Markdown to ${exported.path}`);
+      rememberExportRevealPath(input, exported.path);
       input.setExportNotice(input.t("editor.exportedMarkdown", { path: exported.path }));
     } catch (err) {
       input.setError(err instanceof Error ? err.message : String(err));
@@ -101,6 +111,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
         markdown,
       });
       console.info(`[ai-doc] Exported Markdown PDF to ${exported.path}`);
+      rememberExportRevealPath(input, exported.path);
       input.setExportNotice(input.t("editor.exportedPdf", { path: exported.path }));
     } catch (err) {
       input.setError(err instanceof Error ? err.message : String(err));
@@ -121,6 +132,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
         title: docxTitle,
       });
       console.info(`[ai-doc] Exported DOCX PDF to ${exported.path}`);
+      rememberExportRevealPath(input, exported.path);
       input.setExportNotice(input.t("editor.exportedPdf", { path: exported.path }));
     } catch (err) {
       input.setError(err instanceof Error ? err.message : String(err));
@@ -130,10 +142,14 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
   };
 
   const openCurrentProjectExportsDir = async () => {
-    if (!input.currentProjectId) return;
+    const projectId = input.currentProjectId;
+    if (!projectId) return;
     input.setError("");
     try {
-      await openProjectExportsDir(input.currentProjectId);
+      await openExportLocation({
+        path: input.lastExportRevealPathRef.current,
+        openExportsDir: () => openProjectExportsDir(projectId),
+      });
     } catch (err) {
       input.setError(err instanceof Error ? err.message : String(err));
     }

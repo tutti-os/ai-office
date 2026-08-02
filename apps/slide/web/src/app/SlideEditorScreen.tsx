@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isArtifactAgentRunning } from "@ai-app/shared/artifact-runtime";
+import { openExportLocation } from "@ai-app/shared/host-files";
 import { ArtifactEditorWorkspace, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { DeckEditor } from "./DeckEditor";
@@ -49,6 +50,7 @@ export function SlideEditorScreen(props: {
   const [pptxExporting, setPptxExporting] = useState(false);
   const [pdfExporting, setPdfExporting] = useState(false);
   const [exportNotice, setExportNotice] = useState("");
+  const lastExportRevealPathRef = useRef("");
   const artifactType = props.detail?.artifact.type ?? "deck";
   const pdfExportAvailable = isTuttiPdfExportAvailable();
   const headerSaveState: ArtifactSaveState = props.loading ? "loading" : props.pptxError ? "error" : artifactType === "deck" ? deckSaveState : "saved";
@@ -62,6 +64,7 @@ export function SlideEditorScreen(props: {
     try {
       const exported = await exportProjectHtmlDeck(props.projectId);
       console.info(`[ai-slide] Exported HTML to ${exported.path}`);
+      lastExportRevealPathRef.current = exported.path;
       setExportNotice(t("editor.exportedHtml", { path: exported.path }));
     } catch (error) {
       console.error(error);
@@ -83,6 +86,7 @@ export function SlideEditorScreen(props: {
         title: props.detail.project.title,
       });
       console.info(`[ai-slide] Exported deck PDF to ${exported.path}`);
+      lastExportRevealPathRef.current = exported.path;
       setExportNotice(t("editor.exportedPdf", { path: exported.path }));
     } catch (error) {
       console.error(error);
@@ -104,6 +108,7 @@ export function SlideEditorScreen(props: {
         title: props.detail.project.title,
       });
       console.info(`[ai-slide] Exported PPTX PDF to ${exported.path}`);
+      lastExportRevealPathRef.current = exported.path;
       setExportNotice(t("editor.exportedPdf", { path: exported.path }));
     } catch (error) {
       console.error(error);
@@ -113,9 +118,12 @@ export function SlideEditorScreen(props: {
     }
   };
 
-  const openExportLocation = async () => {
+  const openExportedLocation = async () => {
     try {
-      await openProjectExportsDir(props.projectId);
+      await openExportLocation({
+        path: lastExportRevealPathRef.current,
+        openExportsDir: () => openProjectExportsDir(props.projectId),
+      });
     } catch (error) {
       console.error(error);
     }
@@ -148,7 +156,7 @@ export function SlideEditorScreen(props: {
       tone="lumen"
       onBackHome={props.onBackHome}
       onDismissExportNotice={() => setExportNotice("")}
-      onOpenExportLocation={() => void openExportLocation()}
+      onOpenExportLocation={() => void openExportedLocation()}
       sidebar={
         <AgentConversationPanel
           activeSelectionLabel={props.activeSelectionLabel}

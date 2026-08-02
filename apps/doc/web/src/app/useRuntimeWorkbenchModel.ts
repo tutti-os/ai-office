@@ -101,6 +101,7 @@ export function useRuntimeWorkbenchModel() {
   const [sourceExporting, setSourceExporting] = useState(false);
   const [pdfExporting, setPdfExporting] = useState(false);
   const [exportNotice, setExportNotice] = useState("");
+  const lastExportRevealPathRef = useRef("");
   const [selectedRuntimeProfileId, setSelectedRuntimeProfileId] = useState("");
   const homeAttachments = useHomeAttachments();
   const [homePanel, setHomePanel] = useState<HomePanel>("templates");
@@ -302,6 +303,7 @@ export function useRuntimeWorkbenchModel() {
     currentProjectId,
     docxRuntime,
     exportInProgress,
+    lastExportRevealPathRef,
     markdownRuntime,
     runtime,
     serializeHtmlRuntime,
