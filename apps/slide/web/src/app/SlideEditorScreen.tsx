@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { isArtifactAgentRunning } from "@ai-app/shared/artifact-runtime";
 import { openExportLocation } from "@ai-app/shared/host-files";
 import { ArtifactEditorWorkspace, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
@@ -50,7 +50,7 @@ export function SlideEditorScreen(props: {
   const [pptxExporting, setPptxExporting] = useState(false);
   const [pdfExporting, setPdfExporting] = useState(false);
   const [exportNotice, setExportNotice] = useState("");
-  const lastExportRevealPathRef = useRef("");
+  const [exportRevealPath, setExportRevealPath] = useState("");
   const artifactType = props.detail?.artifact.type ?? "deck";
   const pdfExportAvailable = isTuttiPdfExportAvailable();
   const headerSaveState: ArtifactSaveState = props.loading ? "loading" : props.pptxError ? "error" : artifactType === "deck" ? deckSaveState : "saved";
@@ -61,10 +61,11 @@ export function SlideEditorScreen(props: {
     if (props.detail?.artifact.type !== "deck" || exportInProgress) return;
     setHtmlExporting(true);
     setExportNotice("");
+    setExportRevealPath("");
     try {
       const exported = await exportProjectHtmlDeck(props.projectId);
       console.info(`[ai-slide] Exported HTML to ${exported.path}`);
-      lastExportRevealPathRef.current = exported.path;
+      setExportRevealPath(exported.path);
       setExportNotice(t("editor.exportedHtml", { path: exported.path }));
     } catch (error) {
       console.error(error);
@@ -78,6 +79,7 @@ export function SlideEditorScreen(props: {
     if (!props.detail?.deckManifest || props.detail.artifact.type !== "deck" || exportInProgress) return;
     setPdfExporting(true);
     setExportNotice("");
+    setExportRevealPath("");
     try {
       const exported = await saveDeckPdfExport({
         artifact: props.detail.artifact,
@@ -86,7 +88,7 @@ export function SlideEditorScreen(props: {
         title: props.detail.project.title,
       });
       console.info(`[ai-slide] Exported deck PDF to ${exported.path}`);
-      lastExportRevealPathRef.current = exported.path;
+      setExportRevealPath(exported.path);
       setExportNotice(t("editor.exportedPdf", { path: exported.path }));
     } catch (error) {
       console.error(error);
@@ -101,6 +103,7 @@ export function SlideEditorScreen(props: {
     if (props.detail?.artifact.type !== "pptx" || !presentation || exportInProgress) return;
     setPptxExporting(true);
     setExportNotice("");
+    setExportRevealPath("");
     try {
       const exported = await savePptxPdfExport({
         presentation,
@@ -108,7 +111,7 @@ export function SlideEditorScreen(props: {
         title: props.detail.project.title,
       });
       console.info(`[ai-slide] Exported PPTX PDF to ${exported.path}`);
-      lastExportRevealPathRef.current = exported.path;
+      setExportRevealPath(exported.path);
       setExportNotice(t("editor.exportedPdf", { path: exported.path }));
     } catch (error) {
       console.error(error);
@@ -121,7 +124,7 @@ export function SlideEditorScreen(props: {
   const openExportedLocation = async () => {
     try {
       await openExportLocation({
-        path: lastExportRevealPathRef.current,
+        path: exportRevealPath,
         openExportsDir: () => openProjectExportsDir(props.projectId),
       });
     } catch (error) {
@@ -151,11 +154,15 @@ export function SlideEditorScreen(props: {
         t,
       })}
       exportNotice={exportNotice}
+      exportRevealPath={exportRevealPath}
       copy={artifactEditorCopy(t)}
       bodyClassName="flex flex-col"
       tone="lumen"
       onBackHome={props.onBackHome}
-      onDismissExportNotice={() => setExportNotice("")}
+      onDismissExportNotice={() => {
+        setExportNotice("");
+        setExportRevealPath("");
+      }}
       onOpenExportLocation={() => void openExportedLocation()}
       sidebar={
         <AgentConversationPanel

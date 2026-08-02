@@ -53,6 +53,7 @@ export type HtmlEditorScreenProps = {
   projectId: string | null;
   error: string;
   exportNotice: string;
+  exportRevealPath?: string;
   editorStats: EditorStats;
   agentConversationItems: DocumentRunTimelineItem[];
   agentConversationLoading: boolean;
@@ -280,6 +281,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
         agentWorking={props.agentProcessing}
         agentOverlayActive={false}
         exportNotice={props.exportNotice}
+        exportRevealPath={props.exportRevealPath}
         copy={artifactEditorCopy(t)}
         bodyClassName="flex flex-col"
         tone="lumen"

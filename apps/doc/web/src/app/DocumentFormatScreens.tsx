@@ -19,6 +19,7 @@ type SharedShellProps = {
   dirty: boolean;
   error: string;
   exportNotice: string;
+  exportRevealPath?: string;
   localAgentTargets: LocalAgentTargetStatus[];
   runtimeProfiles: RuntimeProfile[];
   selectedRuntimeProfileId: string;
@@ -73,6 +74,7 @@ export function MarkdownDocumentScreen(props: SharedShellProps & {
         },
       ]}
       exportNotice={props.exportNotice}
+      exportRevealPath={props.exportRevealPath}
       bodyClassName="flex flex-col"
       tone="lumen"
       onBackHome={props.onBackHome}
@@ -122,6 +124,7 @@ export function DocxDocumentScreen(props: SharedShellProps & {
         },
       ]}
       exportNotice={props.exportNotice}
+      exportRevealPath={props.exportRevealPath}
       bodyClassName="flex flex-col"
       tone="lumen"
       onBackHome={props.onBackHome}

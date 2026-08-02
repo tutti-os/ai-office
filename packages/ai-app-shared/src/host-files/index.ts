@@ -8,9 +8,48 @@ type TuttiExternalFiles = {
   open?: TuttiExternalFilesOpen;
 };
 
-function readTuttiExternalFiles(): TuttiExternalFiles | undefined {
+type TuttiExternalLogs = {
+  write?: (input: { event: string; level?: "debug" | "info" | "warn" | "error"; details?: Record<string, unknown> }) => void;
+};
+
+function readTuttiExternal():
+  | {
+      files?: TuttiExternalFiles;
+      logs?: TuttiExternalLogs;
+    }
+  | undefined {
   if (typeof window === "undefined") return undefined;
-  return (window as unknown as { tuttiExternal?: { files?: TuttiExternalFiles } }).tuttiExternal?.files;
+  return (window as unknown as { tuttiExternal?: { files?: TuttiExternalFiles; logs?: TuttiExternalLogs } }).tuttiExternal;
+}
+
+function readTuttiExternalFiles(): TuttiExternalFiles | undefined {
+  return readTuttiExternal()?.files;
+}
+
+function writeExportLocationDiagnostic(
+  event: string,
+  details: Record<string, unknown>,
+  level: "info" | "warn" | "error" = "info",
+) {
+  const payload = { event: `export-location.${event}`, level, details };
+  if (level === "error") {
+    console.error("[ai-app/host-files]", payload.event, details);
+  } else if (level === "warn") {
+    console.warn("[ai-app/host-files]", payload.event, details);
+  } else {
+    console.info("[ai-app/host-files]", payload.event, details);
+  }
+
+  try {
+    readTuttiExternal()?.logs?.write?.(payload);
+  } catch {
+    // Diagnostics must not affect export-open behavior.
+  }
+}
+
+function readHostFilesOpen(): TuttiExternalFilesOpen | undefined {
+  const open = readTuttiExternalFiles()?.open;
+  return typeof open === "function" ? open : undefined;
 }
 
 /**
@@ -19,28 +58,93 @@ function readTuttiExternalFiles(): TuttiExternalFiles | undefined {
  */
 export async function revealPathInHostFiles(path: string): Promise<boolean> {
   const trimmed = path.trim();
-  if (!trimmed) return false;
-  const files = readTuttiExternalFiles();
-  if (!files?.open) return false;
-  await files.open({ path: trimmed, mode: "reveal" });
+  if (!trimmed) {
+    writeExportLocationDiagnostic("reveal.skip-empty-path", {}, "warn");
+    return false;
+  }
+  const open = readHostFilesOpen();
+  if (!open) {
+    writeExportLocationDiagnostic(
+      "reveal.skip-bridge-absent",
+      {
+        hasTuttiExternal: Boolean(readTuttiExternal()),
+        path: trimmed,
+      },
+      "warn",
+    );
+    return false;
+  }
+
+  writeExportLocationDiagnostic("reveal.attempt", {
+    path: trimmed,
+    mode: "reveal",
+    userActivationActive:
+      typeof navigator !== "undefined" ? navigator.userActivation?.isActive === true : null,
+  });
+
+  await open({ path: trimmed, mode: "reveal" });
+  writeExportLocationDiagnostic("reveal.succeeded", { path: trimmed });
   return true;
 }
 
 /**
  * Prefer host Files reveal for Tutti/TSH; otherwise open the local exports
  * directory through the app server (`/exports/open` → OS file manager).
+ *
+ * When the host bridge exists, never fall back to OS file-manager open: that
+ * path is meaningless inside the TSH sandbox and only surfaces xdg-open errors.
  */
 export async function openExportLocation(input: {
   path?: string | null;
   openExportsDir: () => Promise<unknown>;
 }): Promise<void> {
-  const path = input.path?.trim();
-  if (path) {
+  const path = input.path?.trim() || "";
+  const hostOpen = readHostFilesOpen();
+  writeExportLocationDiagnostic("open.start", {
+    path: path || null,
+    hasBridgeOpen: Boolean(hostOpen),
+    userActivationActive:
+      typeof navigator !== "undefined" ? navigator.userActivation?.isActive === true : null,
+  });
+
+  if (hostOpen) {
+    if (!path) {
+      const error = new Error("Export path is unavailable for host Files reveal.");
+      writeExportLocationDiagnostic("open.missing-export-path-with-bridge", {}, "error");
+      throw error;
+    }
     try {
-      if (await revealPathInHostFiles(path)) return;
-    } catch {
-      // Fall through for non-Tutti or partially wired hosts.
+      await hostOpen({ path, mode: "reveal" });
+      writeExportLocationDiagnostic("open.completed-via-host-reveal", { path });
+      return;
+    } catch (error) {
+      writeExportLocationDiagnostic(
+        "reveal.failed",
+        {
+          path,
+          errorName: error instanceof Error ? error.name : null,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          userActivationActive:
+            typeof navigator !== "undefined" ? navigator.userActivation?.isActive === true : null,
+        },
+        "error",
+      );
+      throw error instanceof Error ? error : new Error(String(error));
     }
   }
+
+  if (!path) {
+    writeExportLocationDiagnostic("open.missing-export-path", {}, "warn");
+  }
+
+  writeExportLocationDiagnostic(
+    "open.fallback-exports-dir",
+    {
+      path: path || null,
+      reason: "host-bridge-absent",
+    },
+    "warn",
+  );
   await input.openExportsDir();
+  writeExportLocationDiagnostic("open.fallback-exports-dir-finished", { path: path || null });
 }

@@ -65,6 +65,7 @@ export function ArtifactEditorWorkspace(props: {
   contentClassName?: string;
   copy?: Partial<ArtifactEditorCopy>;
   exportNotice?: string;
+  exportRevealPath?: string;
   onBackHome?: () => void;
   onDismissExportNotice?: () => void;
   onOpenExportLocation?: () => void;
@@ -94,6 +95,7 @@ export function ArtifactEditorWorkspace(props: {
         />
         <ArtifactExportToast
           message={exportNotice}
+          revealPath={props.exportRevealPath}
           copy={copy}
           onClose={props.onDismissExportNotice ?? noop}
           onOpenLocation={props.onOpenExportLocation ?? noop}
@@ -138,6 +140,7 @@ export function ArtifactAgentProcessingOverlay(props: {
 
 export function ArtifactExportToast(props: {
   message: string;
+  revealPath?: string;
   copy?: ArtifactEditorCopy;
   onClose: () => void;
   onOpenLocation: () => void;
@@ -145,6 +148,33 @@ export function ArtifactExportToast(props: {
   if (!props.message) return null;
   const copy = props.copy ?? defaultArtifactEditorCopy;
   const openLocationAndClose = () => {
+    // Keep files.open on the user-gesture stack: call the host bridge here with the
+    // path carried by the toast, then fall back to the app handler only when needed.
+    const revealPath = props.revealPath?.trim() ?? "";
+    const hostOpen = (
+      window as unknown as {
+        tuttiExternal?: { files?: { open?: (input: { path: string; mode?: "reveal" }) => Promise<void> } };
+      }
+    ).tuttiExternal?.files?.open;
+    if (typeof hostOpen === "function") {
+      if (!revealPath) {
+        console.error("[ai-app/ui] export toast missing reveal path with host Files bridge");
+        props.onOpenLocation();
+        props.onClose();
+        return;
+      }
+      // Host bridge present: never fall back to OS file-manager open (xdg-open ENOENT in TSH).
+      // On failure, still invoke the parent handler so it can surface setError via host reveal.
+      void hostOpen({ path: revealPath, mode: "reveal" })
+        .catch((error) => {
+          console.error("[ai-app/ui] export toast host Files reveal failed", error);
+          props.onOpenLocation();
+        })
+        .finally(() => {
+          props.onClose();
+        });
+      return;
+    }
     props.onOpenLocation();
     props.onClose();
   };

@@ -72,9 +72,9 @@ export function App() {
   const [agentSending, setAgentSending] = useState(false);
   const [error, setError] = useState("");
   const [exportMessage, setExportMessage] = useState("");
+  const [exportRevealPath, setExportRevealPath] = useState("");
   const [xlsxExporting, setXlsxExporting] = useState(false);
   const [xlsxSelectionRestoreKey, setXlsxSelectionRestoreKey] = useState(0);
-  const lastExportRevealPathRef = useRef("");
   const routeRef = useRef(route);
   const xlsxSelectionRef = useRef<XlsxSelection | null>(null);
   // Signature of the workbook currently reflected in the runtime. Used to skip redundant
@@ -421,7 +421,7 @@ export function App() {
     setXlsxExporting(true);
     try {
       const exported = await exportProjectXlsxFile(projectDetail.project.id);
-      lastExportRevealPathRef.current = exported.path;
+      setExportRevealPath(exported.path);
       setExportMessage(t("editor.exported", { fileName: exported.fileName }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -434,13 +434,13 @@ export function App() {
     if (!projectDetail) return;
     try {
       await openExportLocation({
-        path: lastExportRevealPathRef.current,
+        path: exportRevealPath,
         openExportsDir: () => openProjectExportsDir(projectDetail.project.id),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [projectDetail]);
+  }, [exportRevealPath, projectDetail]);
 
   const sheetActive = route.name === "sheet";
   const currentSheetProjectId = route.name === "sheet" ? route.projectId : null;
@@ -484,6 +484,7 @@ export function App() {
         error={xlsxError || error}
         saveState={xlsxSaveState}
         exportMessage={exportMessage}
+        exportRevealPath={exportRevealPath}
         exporting={xlsxExporting}
         conversationError={agentConversation.error}
         conversationItems={agentConversation.items}
@@ -497,7 +498,10 @@ export function App() {
         onCommitCellValue={commitCellValue}
         onBackHome={() => setRoute(pushHomeRoute())}
         onCancelAgentRun={cancelAgentRun}
-        onDismissExport={() => setExportMessage("")}
+        onDismissExport={() => {
+          setExportMessage("");
+          setExportRevealPath("");
+        }}
         onExportXlsx={exportXlsx}
         onOpenExportLocation={openExports}
         onRuntimeProfileChange={setSelectedAgent}

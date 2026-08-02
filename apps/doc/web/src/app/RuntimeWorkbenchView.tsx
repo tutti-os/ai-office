@@ -27,6 +27,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     editorStats,
     error,
     exportNotice,
+    exportRevealPath,
     dismissExportNotice,
     filteredTemplates,
     historyProjects,
@@ -139,6 +140,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             dirty={activeDirty}
             error={error}
             exportNotice={exportNotice}
+            exportRevealPath={exportRevealPath}
             localAgentTargets={localAgentTargets}
             loading={loading}
             projectId={currentProjectId}
@@ -185,6 +187,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             dirty={activeDirty}
             error={error || docxError}
             exportNotice={exportNotice}
+            exportRevealPath={exportRevealPath}
             localAgentTargets={localAgentTargets}
             loading={loading || docxLoading}
             projectId={currentProjectId}
@@ -218,6 +221,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             dirty={activeDirty}
             error={error}
             exportNotice={exportNotice}
+            exportRevealPath={exportRevealPath}
             loading={loading}
             agentConversationItems={agentConversation.items}
             agentConversationLoading={agentConversation.loading}

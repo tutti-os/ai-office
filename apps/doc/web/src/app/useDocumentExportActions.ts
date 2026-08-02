@@ -1,4 +1,3 @@
-import type { MutableRefObject } from "react";
 import { openExportLocation } from "@ai-app/shared/host-files";
 import type { DocumentProject } from "@ai-doc/shared";
 import type { MarkdownRuntimeState } from "../artifact/markdownArtifactAdapter";
@@ -16,19 +15,20 @@ type DocumentExportActionsInput = {
   currentProjectId: string | null;
   docxRuntime: DocxRuntimeState | null;
   exportInProgress: boolean;
-  lastExportRevealPathRef: MutableRefObject<string>;
+  exportRevealPath: string;
   markdownRuntime: MarkdownRuntimeState | null;
   runtime: RuntimeState | null;
   serializeHtmlRuntime: (runtime: RuntimeState) => string;
   setError: (value: string) => void;
   setExportNotice: (value: string) => void;
+  setExportRevealPath: (value: string) => void;
   setPdfExporting: (value: boolean) => void;
   setSourceExporting: (value: boolean) => void;
   t: ReturnType<typeof useI18n>["t"];
 };
 
 function rememberExportRevealPath(input: DocumentExportActionsInput, path: string) {
-  input.lastExportRevealPathRef.current = path;
+  input.setExportRevealPath(path);
 }
 
 export function createDocumentExportActions(input: DocumentExportActionsInput) {
@@ -40,6 +40,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
     if (!input.runtime || !input.currentProjectId || input.exportInProgress) return;
     input.setError("");
     input.setExportNotice("");
+    input.setExportRevealPath("");
     input.setSourceExporting(true);
     try {
       const exported = await saveHtmlArtifactExport({
@@ -61,6 +62,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
     if (!input.runtime || !input.currentProjectId || input.exportInProgress) return;
     input.setError("");
     input.setExportNotice("");
+    input.setExportRevealPath("");
     input.setPdfExporting(true);
     try {
       const exported = await saveHtmlArtifactPdfExport({
@@ -82,6 +84,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
     if (!input.markdownRuntime || !input.currentProjectId || input.exportInProgress) return;
     input.setError("");
     input.setExportNotice("");
+    input.setExportRevealPath("");
     input.setSourceExporting(true);
     try {
       const exported = await saveMarkdownArtifactExport({
@@ -103,6 +106,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
     if (!input.markdownRuntime || !input.currentProjectId || input.exportInProgress) return;
     input.setError("");
     input.setExportNotice("");
+    input.setExportRevealPath("");
     input.setPdfExporting(true);
     try {
       const exported = await saveMarkdownArtifactPdfExport({
@@ -124,6 +128,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
     if (!input.docxRuntime || !input.currentProjectId || !previewElement || input.exportInProgress) return;
     input.setError("");
     input.setExportNotice("");
+    input.setExportRevealPath("");
     input.setPdfExporting(true);
     try {
       const exported = await saveDocxArtifactPdfExport({
@@ -147,7 +152,7 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
     input.setError("");
     try {
       await openExportLocation({
-        path: input.lastExportRevealPathRef.current,
+        path: input.exportRevealPath,
         openExportsDir: () => openProjectExportsDir(projectId),
       });
     } catch (err) {

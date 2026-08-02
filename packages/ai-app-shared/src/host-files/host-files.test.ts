@@ -76,7 +76,7 @@ describe("openExportLocation", () => {
     assert.equal(fallbackCalls, 1);
   });
 
-  it("falls back when host reveal throws", async () => {
+  it("does not fall back to OS open when host reveal throws", async () => {
     let fallbackCalls = 0;
     setHostWindow({
       tuttiExternal: {
@@ -88,13 +88,41 @@ describe("openExportLocation", () => {
       },
     });
 
-    await openExportLocation({
-      path: "/workspace/export.html",
-      openExportsDir: async () => {
-        fallbackCalls += 1;
+    await assert.rejects(
+      () =>
+        openExportLocation({
+          path: "/workspace/export.html",
+          openExportsDir: async () => {
+            fallbackCalls += 1;
+          },
+        }),
+      /bridge failed/,
+    );
+
+    assert.equal(fallbackCalls, 0);
+  });
+
+  it("throws when host bridge exists but export path is missing", async () => {
+    let fallbackCalls = 0;
+    setHostWindow({
+      tuttiExternal: {
+        files: {
+          open: async () => undefined,
+        },
       },
     });
 
-    assert.equal(fallbackCalls, 1);
+    await assert.rejects(
+      () =>
+        openExportLocation({
+          path: "   ",
+          openExportsDir: async () => {
+            fallbackCalls += 1;
+          },
+        }),
+      /Export path is unavailable/,
+    );
+
+    assert.equal(fallbackCalls, 0);
   });
 });

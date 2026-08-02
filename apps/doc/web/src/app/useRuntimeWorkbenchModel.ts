@@ -101,7 +101,7 @@ export function useRuntimeWorkbenchModel() {
   const [sourceExporting, setSourceExporting] = useState(false);
   const [pdfExporting, setPdfExporting] = useState(false);
   const [exportNotice, setExportNotice] = useState("");
-  const lastExportRevealPathRef = useRef("");
+  const [exportRevealPath, setExportRevealPath] = useState("");
   const [selectedRuntimeProfileId, setSelectedRuntimeProfileId] = useState("");
   const homeAttachments = useHomeAttachments();
   const [homePanel, setHomePanel] = useState<HomePanel>("templates");
@@ -303,12 +303,13 @@ export function useRuntimeWorkbenchModel() {
     currentProjectId,
     docxRuntime,
     exportInProgress,
-    lastExportRevealPathRef,
+    exportRevealPath,
     markdownRuntime,
     runtime,
     serializeHtmlRuntime,
     setError,
     setExportNotice,
+    setExportRevealPath,
     setPdfExporting,
     setSourceExporting,
     t,
@@ -334,7 +335,11 @@ export function useRuntimeWorkbenchModel() {
     editorStats,
     error,
     exportNotice,
-    dismissExportNotice: () => setExportNotice(""),
+    exportRevealPath,
+    dismissExportNotice: () => {
+      setExportNotice("");
+      setExportRevealPath("");
+    },
     openCurrentProjectExportsDir,
     filteredTemplates,
     historyProjects,

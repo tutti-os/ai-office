@@ -14,6 +14,7 @@ export function SheetViewerScreen(props: {
   error: string;
   saveState: ArtifactSaveState;
   exportMessage: string;
+  exportRevealPath?: string;
   exporting: boolean;
   conversationError: string;
   conversationItems: SheetRunTimelineItem[];
@@ -69,6 +70,7 @@ export function SheetViewerScreen(props: {
         },
       ]}
       exportNotice={props.exportMessage}
+      exportRevealPath={props.exportRevealPath}
       bodyClassName="bg-white"
       tone="lumen"
       onBackHome={props.onBackHome}
