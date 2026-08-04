@@ -44,6 +44,8 @@ export function App() {
   const { t } = useI18n();
   const [prompt, setPrompt] = useState("");
   const [outputType, setOutputType] = useState<OutputType>("html");
+  const [tshWorkspaceApp, setTshWorkspaceApp] = useState(false);
+  const [parentPath, setParentPath] = useState("/workspace");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedAgent, setSelectedAgent] = useState("");
   const [activePanel, setActivePanel] = useState<"templates" | "history">("templates");
@@ -155,6 +157,10 @@ export function App() {
         const enabledProfiles = snapshot.runtimeProfiles.filter((profile) => profile.enabled && profile.kind === "local-agent");
         const mergedProfiles = mergeLocalAgentRuntimeProfiles(enabledProfiles, localAgentTargetsRef.current);
         setRuntimeProfiles(mergedProfiles);
+        setTshWorkspaceApp(snapshot.tshWorkspaceApp === true);
+        if (snapshot.tshWorkspaceApp === true) {
+          setParentPath(snapshot.defaultParentPath?.trim() || "/workspace");
+        }
         setSelectedAgent((current) => {
           if (isAvailableLocalAgentRuntimeProfileId(current, mergedProfiles, localAgentTargetsRef.current)) return current;
           return resolvePreferredLocalAgentRuntimeProfileId({
@@ -272,6 +278,7 @@ export function App() {
         artifactType,
         templateId: input.template?.id ?? null,
         templateName: input.template?.name ?? null,
+        ...(tshWorkspaceApp ? { parentPath: parentPath.trim() || "/workspace" } : {}),
       });
       setHistoryProjects((projects) => [response.project, ...projects.filter((project) => project.id !== response.project.id)]);
       const uploadedAttachments = input.attachments?.length ? await uploadHomeContextAttachments(response.project.id, input.attachments) : [];
@@ -520,14 +527,17 @@ export function App() {
             officeCliInstalling={officeCliInstalling}
             officeCliStatus={officeCliStatus}
             outputType={outputType}
+            parentPath={parentPath}
             prompt={prompt}
             selectedAgent={selectedAgent}
+            showParentPath={tshWorkspaceApp}
             localAgentTargets={localAgentTargetsLoaded ? localAgentTargets : []}
             runtimeProfiles={localAgentTargetsLoaded ? runtimeProfiles : []}
             onAddFiles={homeAttachments.addFiles}
             onCreate={createFromPrompt}
             onInstallOfficeCli={downloadOfficeCli}
             onOutputTypeChange={setOutputType}
+            onParentPathChange={setParentPath}
             onPromptChange={setPrompt}
             onRemoveAttachment={homeAttachments.removeAttachment}
             onSelectedAgentChange={setSelectedAgent}

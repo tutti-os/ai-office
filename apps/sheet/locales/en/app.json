@@ -57,6 +57,7 @@
   "agent.tool.resultTitle": "Tool result",
   "editor.agentWorking": "Agent working",
   "editor.backHome": "Back to home",
+  "editor.renameTitle": "Rename",
   "editor.dismissExportNotice": "Dismiss export notice",
   "editor.export": "Export",
   "editor.exporting": "Exporting...",

@@ -20,8 +20,21 @@ import {
 import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
 import { asProjectPreparationError } from "@ai-app/shared/project-preparation";
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
+import {
+  allocateTshArtifactRoot,
+  ensureTshArtifactRoot,
+  resolveTshParentPath,
+} from "@ai-app/shared/tsh-host";
 import { getDb, rowOrNull, rows } from "../db/database.js";
-import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
+import {
+  appPaths,
+  bindProjectWorkspaceRoot,
+  clearProjectWorkspaceRootBindings,
+  ensureBaseDirs,
+  ensureProjectDirs,
+  projectWorkspaceRoot,
+  unbindProjectWorkspaceRoot,
+} from "../local/paths.js";
 import { loadTemplateDeckSource } from "../templates/template-service.js";
 import { writeDeckHtmlExportBundle } from "./deck-html-export.js";
 import {
@@ -137,11 +150,21 @@ export class ProjectRepository {
     const templateSource = artifactType === "deck" && input.templateId ? await requireTemplateDeckSource(input.templateId) : null;
     const now = new Date().toISOString();
     const title = input.title?.trim() || input.templateName?.trim() || "Untitled Presentation";
+    const parentPath = resolveTshParentPath(input.parentPath);
+    const workspaceRoot = parentPath ? ensureTshArtifactRoot(allocateTshArtifactRoot(parentPath, title, id)) : null;
+    if (workspaceRoot) bindProjectWorkspaceRoot(id, workspaceRoot);
     const artifact = defaultArtifactInput({ projectId: id, type: artifactType, now });
     const db = getDb();
 
     insertProjectWithArtifact(db, {
-      project: { id, title, activeArtifactId: artifact.id, templateId: input.templateId ?? null, templateName: input.templateName ?? null },
+      project: {
+        id,
+        title,
+        activeArtifactId: artifact.id,
+        templateId: input.templateId ?? null,
+        templateName: input.templateName ?? null,
+        workspaceRoot,
+      },
       artifact,
       now,
     });
@@ -282,7 +305,11 @@ export class ProjectRepository {
   }
 
   clearProjectHistory() {
-    getDb().exec(`
+    const db = getDb();
+    const workspaceRoots = rows<{ id: string; workspace_root: string | null }>(
+      db.prepare(`SELECT id, workspace_root FROM projects`).all(),
+    );
+    db.exec(`
       DELETE FROM slide_run_events;
       DELETE FROM slide_runs;
       DELETE FROM agent_conversation_messages;
@@ -291,6 +318,11 @@ export class ProjectRepository {
       DELETE FROM artifacts;
       DELETE FROM projects;
     `);
+    for (const row of workspaceRoots) {
+      if (row.workspace_root) rmSync(row.workspace_root, { force: true, recursive: true });
+      unbindProjectWorkspaceRoot(row.id);
+    }
+    clearProjectWorkspaceRootBindings();
     rmSync(appPaths.projectsDir, { force: true, recursive: true });
     ensureBaseDirs();
     return { projects: [] as SlideProject[] };
@@ -299,6 +331,7 @@ export class ProjectRepository {
   deleteProject(projectId: string) {
     const project = this.getProject(projectId);
     if (!project) return null;
+    const root = projectWorkspaceRoot(projectId);
     const db = getDb();
     db.exec("BEGIN");
     try {
@@ -314,7 +347,8 @@ export class ProjectRepository {
       db.exec("ROLLBACK");
       throw error;
     }
-    rmSync(projectWorkspaceRoot(projectId), { force: true, recursive: true });
+    rmSync(root, { force: true, recursive: true });
+    unbindProjectWorkspaceRoot(projectId);
     return { projects: this.listProjects() };
   }
 

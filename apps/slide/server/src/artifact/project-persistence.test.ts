@@ -6,7 +6,7 @@ import { insertProjectWithArtifact } from "./project-persistence.js";
 test("project and artifact inserts roll back atomically", () => {
   const db = new DatabaseSync(":memory:");
   db.exec(`
-    CREATE TABLE projects (id TEXT PRIMARY KEY, title TEXT, active_artifact_id TEXT, template_id TEXT, template_name TEXT, updated_by TEXT, created_at TEXT, updated_at TEXT);
+    CREATE TABLE projects (id TEXT PRIMARY KEY, title TEXT, active_artifact_id TEXT, template_id TEXT, template_name TEXT, workspace_root TEXT, updated_by TEXT, created_at TEXT, updated_at TEXT);
     CREATE TABLE artifacts (id TEXT PRIMARY KEY, project_id TEXT, type TEXT CHECK(type = 'deck'), file_ref TEXT, mime_type TEXT, revision INTEGER, updated_by TEXT, created_at TEXT, updated_at TEXT);
     CREATE TABLE project_preparation (project_id TEXT PRIMARY KEY, core_state TEXT, agent_context_state TEXT, updated_at TEXT);
   `);

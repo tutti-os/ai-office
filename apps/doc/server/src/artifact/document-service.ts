@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { basename, extname, join } from "node:path";
@@ -24,7 +25,14 @@ import { resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent
 import { projectAssetFileExtensions, projectAssetMimeTypes } from "@ai-app/shared/artifact-assets";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
 import { openPathInFileManager } from "@ai-app/shared/local-open";
-import { projectWorkspaceRoot } from "../local/paths.js";
+import { isTshFileArtifactPath, isTshWorkspaceAppHost, TSH_DEFAULT_PARENT_PATH } from "@ai-app/shared/tsh-host";
+import {
+  bindProjectWorkspaceRoot,
+  boundWorkspaceRoot,
+  isTshFileArtifactProject,
+  projectFocusedArtifactPath,
+  projectWorkspaceRoot,
+} from "../local/paths.js";
 import { DocumentRepository } from "./document-repository.js";
 import { renderTemplateSeed } from "./document-template-renderer.js";
 import { mimeTypeForImportFileName, resolveImportSourcePath } from "./import-source.js";
@@ -56,9 +64,12 @@ export class DocumentService {
   bootstrap() {
     this.repo.ensureSeedData();
     const snapshot = this.repo.snapshot();
+    const tshWorkspaceApp = isTshWorkspaceAppHost();
     return {
       ...snapshot,
       templates: documentTemplates,
+      tshWorkspaceApp,
+      defaultParentPath: tshWorkspaceApp ? TSH_DEFAULT_PARENT_PATH : null,
     };
   }
 
@@ -100,6 +111,7 @@ export class DocumentService {
       type,
       templateId,
       templateName,
+      parentPath: input.parentPath,
     });
     if (type === "html" && templateId && templateProjectSeed) {
       await materializeTemplateAssetsToProject(templateId, join(projectWorkspaceRoot(project.id), "assets"), content);
@@ -110,7 +122,7 @@ export class DocumentService {
     return result;
   }
 
-  async importProjectFile(input: { fileName: string; mimeType: string; bytes: Buffer; title?: string }) {
+  async importProjectFile(input: { fileName: string; mimeType: string; bytes: Buffer; title?: string; parentPath?: string | null }) {
     if (input.bytes.byteLength === 0) throw new Error("Import file is empty");
     if (input.bytes.byteLength > maxProjectImportBytes) throw new Error("Import file is too large");
     const type = importedDocumentType(input.fileName, input.mimeType);
@@ -131,6 +143,7 @@ export class DocumentService {
       type,
       templateId: null,
       templateName: null,
+      parentPath: input.parentPath,
     });
     if (type === "docx") {
       await writeFile(docxFilePath(project.id), input.bytes);
@@ -159,32 +172,79 @@ export class DocumentService {
 
   projectWorkspaceContext(project: Pick<DocumentProject, "id" | "type">): DocumentWorkspaceContext {
     const workspaceRoot = projectWorkspaceRoot(project.id);
-    const focusedPath = join(workspaceRoot, focusedProjectFileName(project.type));
+    const focusedPath = projectFocusedArtifactPath(project.id, project.type);
     return {
+      // Sidecar root (assets/exports). For TSH single-file, the user product is focusedPath.
       workspaceRoot,
       focusedPath,
       focusedPathKind: "file",
       focusedFilePath: focusedPath,
-      agentInstructionsPath: join(workspaceRoot, "AGENTS.md"),
+      // TSH single-file products do not materialize AGENTS.md; Tutti keeps the path for directory projects.
+      agentInstructionsPath: isTshFileArtifactProject(project.id) ? "" : join(workspaceRoot, "AGENTS.md"),
     };
   }
 
-  getProject(projectId: string) {
+  async getProject(projectId: string) {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
-    return { project };
+    return { project: await this.hydrateProjectFromFocusedArtifact(project) };
+  }
+
+  /**
+   * Source of truth for TSH (and Tutti when the focused file exists) text docs is
+   * the on-disk artifact. DOCX keeps the DB manifest and still requires the binary.
+   *
+   * Never call updateProject/materialize here: rematerializing recreates a renamed
+   * path and shows up as a spurious save on open.
+   */
+  private async hydrateProjectFromFocusedArtifact(project: DocumentProject): Promise<DocumentProject> {
+    const bound = boundWorkspaceRoot(project.id) || project.workspaceRoot || null;
+    if (bound) bindProjectWorkspaceRoot(project.id, bound);
+
+    const path = projectFocusedArtifactPath(project.id, project.type);
+    const requiresDiskArtifact =
+      isTshFileArtifactProject(project.id) ||
+      (isTshWorkspaceAppHost() && Boolean(bound && isTshFileArtifactPath(bound)));
+
+    if (project.type === "docx") {
+      if (requiresDiskArtifact && !existsSync(path)) {
+        throw new Error(`Document file is missing at ${path}: no such file or directory`);
+      }
+      return project;
+    }
+
+    if (!existsSync(path)) {
+      if (requiresDiskArtifact) {
+        throw new Error(`Document file is missing at ${path}: no such file or directory`);
+      }
+      return project;
+    }
+
+    const content = await readFile(path, "utf8");
+    if (content === project.content) return project;
+
+    this.repo.syncProjectContentQuiet(project.id, content);
+    return { ...project, content, updatedBy: "system" };
   }
 
   async getDocxFile(projectId: string) {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
     if (project.type !== "docx") throw new Error("Project is not a DOCX doc");
-    const bytes = await readFile(docxFilePath(projectId));
-    return {
-      bytes,
-      fileName: docxFileName,
-      mimeType: docxMimeType,
-    };
+    const path = docxFilePath(projectId);
+    try {
+      const bytes = await readFile(path);
+      return {
+        bytes,
+        fileName: docxFileName,
+        mimeType: docxMimeType,
+      };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+        throw new Error(`Document file is missing at ${path}`);
+      }
+      throw error;
+    }
   }
 
   listProjectRuns(projectId: string) {
@@ -244,6 +304,9 @@ export class DocumentService {
   async updateProject(projectId: string, input: UpdateProjectRequest) {
     const project = await this.repo.updateProject(projectId, input);
     if (!project) return null;
+    if (input.title !== undefined) {
+      this.repo.updateProjectSessionTitle(projectId, project.title);
+    }
     this.events.emit({ type: "project.updated", projectId, payload: { project } });
     return { project };
   }
@@ -541,15 +604,16 @@ export class DocumentService {
   private async refreshProjectFromWorkspace(projectId: string, runId?: string) {
     const project = this.repo.getProject(projectId);
     if (!project) return null;
-    if (project.type === "html") return this.refreshTextProjectFromFile(project, "document.html", runId);
-    if (project.type === "markdown") return this.refreshTextProjectFromFile(project, "document.md", runId);
+    if (project.type === "html" || project.type === "markdown") {
+      return this.refreshTextProjectFromFile(project, runId);
+    }
     return this.refreshDocxProjectFromFile(project, runId);
   }
 
-  private async refreshTextProjectFromFile(project: DocumentProject, fileName: string, runId?: string) {
+  private async refreshTextProjectFromFile(project: DocumentProject, runId?: string) {
     let content = "";
     try {
-      content = await readFile(join(projectWorkspaceRoot(project.id), fileName), "utf8");
+      content = await readFile(projectFocusedArtifactPath(project.id, project.type), "utf8");
     } catch {
       return null;
     }
@@ -631,13 +695,7 @@ const supportedProjectAssetExtensions = new Set<string>(projectAssetFileExtensio
 const supportedExportMimeTypes = new Set(["text/html", "text/markdown", docxMimeType, pdfMimeType]);
 
 function docxFilePath(projectId: string) {
-  return join(projectWorkspaceRoot(projectId), docxFileName);
-}
-
-function focusedProjectFileName(type: DocumentProject["type"]) {
-  if (type === "docx") return docxFileName;
-  if (type === "markdown") return "document.md";
-  return "document.html";
+  return projectFocusedArtifactPath(projectId, "docx");
 }
 
 function importedDocumentType(fileName: string, mimeType: string): DocumentProject["type"] {

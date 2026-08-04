@@ -6,8 +6,12 @@ import { basename, dirname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
+import { isTshWorkspaceAppHost } from "../../tsh-host/index.js";
 
 const execFileAsync = promisify(execFile);
+
+/** Managed Linux runtime path used by TSH sandboxes (not host PATH probing). */
+const TSH_MANAGED_OFFICECLI_PATH = "/usr/local/bin/officecli";
 
 export type OfficeCliSource = "env" | "bundled" | "tutti" | "missing";
 
@@ -48,6 +52,21 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
   let installPromise: Promise<OfficeCliStatus> | null = null;
 
   async function getOfficeCliStatus(): Promise<OfficeCliStatus> {
+    // TSH sandboxes always provide OfficeCLI at the managed runtime path.
+    if (isTshWorkspaceAppHost()) {
+      const executablePath =
+        process.env.TUTTI_APP_OFFICECLI_PATH?.trim() ||
+        process.env[`${options.envPrefix}_OFFICECLI_PATH`]?.trim() ||
+        TSH_MANAGED_OFFICECLI_PATH;
+      return {
+        available: true,
+        source: "tutti",
+        executablePath,
+        canInstall: false,
+        installing: false,
+      };
+    }
+
     const envPath = process.env[`${options.envPrefix}_OFFICECLI_PATH`]?.trim();
     if (envPath) {
       const status = await probeOfficeCli(envPath, "env");
@@ -115,6 +134,13 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
   }
 
   function officeCliEnvSync(): Record<string, string> {
+    if (isTshWorkspaceAppHost()) {
+      const executablePath =
+        process.env.TUTTI_APP_OFFICECLI_PATH?.trim() ||
+        process.env[`${options.envPrefix}_OFFICECLI_PATH`]?.trim() ||
+        TSH_MANAGED_OFFICECLI_PATH;
+      return officeCliEnvForPath(executablePath);
+    }
     const envPath = process.env[`${options.envPrefix}_OFFICECLI_PATH`]?.trim();
     const tuttiPath = process.env.TUTTI_APP_OFFICECLI_PATH?.trim();
     const managedPath = existsSync(installedBinaryPath) ? installedBinaryPath : "";
@@ -234,10 +260,16 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
       .split(/\r?\n/)
       .map((line) => line.trim().split(/\s+/)[1])
       .filter((asset): asset is string => Boolean(asset));
-    return assets.find((asset) => {
+    const matches = assets.filter((asset) => {
       const normalized = asset.toLowerCase();
       return normalized.includes("officecli") && platformAliases.some((item) => normalized.includes(item)) && archAliases.some((item) => normalized.includes(item));
     });
+    // Prefer glibc linux builds over alpine/musl. Matching "linux"+"arm64" alone
+    // otherwise picks officecli-linux-alpine-arm64 first and fails on glibc VMs.
+    return (
+      matches.find((asset) => !asset.toLowerCase().includes("alpine") && !asset.toLowerCase().includes("musl")) ??
+      matches[0]
+    );
   }
 
   return {

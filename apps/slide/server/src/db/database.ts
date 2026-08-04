@@ -118,6 +118,7 @@ export function migrate(database: DatabaseSync) {
   `);
   ensureColumn(database, "runtime_profiles", "agent_target_id", "TEXT");
   ensureColumn(database, "slide_runs", "agent_target_id", "TEXT");
+  ensureColumn(database, "projects", "workspace_root", "TEXT");
   database.exec(agentConversationSchemaSql);
 }
 

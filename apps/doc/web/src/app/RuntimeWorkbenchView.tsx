@@ -2,6 +2,7 @@ import { HomePage } from "./HomePage";
 import { ArtifactErrorBoundary, ArtifactSurfaceErrorFallback } from "@ai-app/ui/error-boundary";
 import { DocxDocumentScreen, MarkdownDocumentScreen } from "./DocumentFormatScreens";
 import { DocumentLoadingScreen, HtmlEditorScreen } from "./HtmlEditorScreen";
+import { isMissingDocumentError } from "./documentLoadErrors";
 import { markdownParagraphCount, markdownWordCount } from "./documentWorkbenchContent";
 import type { useRuntimeWorkbenchModel } from "./useRuntimeWorkbenchModel";
 import { isArtifactAgentRunning } from "@ai-app/shared/artifact-runtime";
@@ -17,6 +18,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     cancelAgentRun,
     clearHistory,
     currentDocumentType,
+    currentProject,
     currentProjectId,
     deleteHistoryProject,
     docxError,
@@ -50,10 +52,12 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     openCurrentProjectExportsDir,
     openHistoryProject,
     outputType,
+    parentPath,
     pdfExportAvailable,
     pdfExporting,
     prompt,
     redoMarkdown,
+    renameCurrentProjectTitle,
     requestHomeRoute,
     runtime,
     runtimeProfiles,
@@ -74,7 +78,9 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     setMarkdownTableCellCommitter,
     setMarkdownTableCellEditPending,
     setOutputType,
+    setParentPath,
     setPrompt,
+    tshWorkspaceApp,
     setSelectedRuntimeProfileId,
     setSelectedTemplateCategory,
     templateCategories,
@@ -100,12 +106,14 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           officeCliInstalling={officeCliInstalling}
           officeCliStatus={officeCliStatus}
           outputType={outputType}
+          parentPath={parentPath}
           selectedCategory={selectedTemplateCategory}
           selectedRuntimeProfileId={selectedRuntimeProfileId}
           runtimeProfiles={runtimeProfiles}
+          showParentPath={tshWorkspaceApp}
           templateCounts={templateCounts}
           templates={filteredTemplates}
-          error={error}
+          error={isMissingDocumentError(error) ? "" : error}
           loading={loading}
           prompt={prompt}
           onActivePanelChange={setHomePanel}
@@ -120,6 +128,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           onOpenHistoryProject={openHistoryProject}
           onInstallOfficeCli={downloadOfficeCli}
           onOutputTypeChange={setOutputType}
+          onParentPathChange={setParentPath}
           onRemoveAttachment={homeAttachments.removeAttachment}
           onRuntimeProfileChange={setSelectedRuntimeProfileId}
           onSelectTemplate={loadTemplate}
@@ -168,6 +177,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             onSelectionChange={updateMarkdownSelection}
             onSendAgentPrompt={sendAgentPrompt}
             onTableCellCommitterChange={setMarkdownTableCellCommitter}
+            onTitleChange={renameCurrentProjectTitle}
             onUndo={undoMarkdown}
           />
         </ArtifactErrorBoundary>
@@ -205,10 +215,16 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             onRuntimeProfileChange={setSelectedRuntimeProfileId}
             onSelectionChange={updateDocxSelection}
             onSendAgentPrompt={sendAgentPrompt}
+            onTitleChange={renameCurrentProjectTitle}
           />
         </ArtifactErrorBoundary>
       ) : !currentDocumentType ? (
-        <DocumentLoadingScreen error={error} loading={loading} />
+        <DocumentLoadingScreen
+          error={error}
+          loading={loading}
+          title={currentProject?.title}
+          onBackHome={error ? requestHomeRoute : undefined}
+        />
       ) : currentDocumentType === "html" && runtime ? (
         <ArtifactErrorBoundary
           resetKeys={[currentProjectId, currentDocumentType, runtime.id, runtime.revision]}
@@ -243,6 +259,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             linkDraft={linkDraft}
             linkEditorOpen={linkEditorOpen}
             onBackHome={requestHomeRoute}
+            onTitleChange={renameCurrentProjectTitle}
             onTiptapBodyChange={syncHtmlEditorBody}
             onTiptapSelectionChange={updateHtmlEditorSelection}
             onToolbarInteractionStart={() => undefined}
@@ -283,7 +300,12 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           />
         </ArtifactErrorBoundary>
       ) : (
-        <DocumentLoadingScreen error={error} loading={loading} />
+        <DocumentLoadingScreen
+          error={error}
+          loading={loading}
+          title={currentProject?.title}
+          onBackHome={error ? requestHomeRoute : undefined}
+        />
       )}
     </main>
   );

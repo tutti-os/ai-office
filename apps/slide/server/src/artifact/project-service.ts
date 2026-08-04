@@ -21,6 +21,7 @@ import { projectAssetFileExtensions, projectAssetMimeTypes } from "@ai-app/share
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
 import { resolveAbsoluteImportSourcePath } from "@ai-app/shared/import-source";
 import { openPathInFileManager } from "@ai-app/shared/local-open";
+import { isTshWorkspaceAppHost, TSH_DEFAULT_PARENT_PATH } from "@ai-app/shared/tsh-host";
 import { projectWorkspaceRoot } from "../local/paths.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
 import type { SlideRuntimeProject } from "../runtimes/runtime-provider.js";
@@ -46,7 +47,13 @@ export class ProjectService {
   }
 
   bootstrap() {
-    return this.repo.snapshot();
+    const snapshot = this.repo.snapshot();
+    const tshWorkspaceApp = isTshWorkspaceAppHost();
+    return {
+      ...snapshot,
+      tshWorkspaceApp,
+      defaultParentPath: tshWorkspaceApp ? TSH_DEFAULT_PARENT_PATH : null,
+    };
   }
 
   interruptActiveRuns(reason = "Interrupted by server restart") {

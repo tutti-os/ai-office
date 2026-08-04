@@ -24,6 +24,7 @@ import {
   templatesForCategory,
   type TuttiTemplate,
 } from "../templates/tuttiTemplates";
+import { updateProject } from "../api/projects";
 import { useHomeAttachments } from "./useHomeAttachments";
 import { createHomeDocumentActions } from "./useHomeDocumentActions";
 import { useDocumentWorkbenchBootstrap } from "./useDocumentWorkbenchBootstrap";
@@ -80,6 +81,7 @@ export function useRuntimeWorkbenchModel() {
   } = markdownArtifact;
   const {
     runtime: docxRuntime,
+    setRuntime: setDocxRuntime,
     saveState: docxSaveState,
     loadArtifact: loadDocxArtifact,
     clearArtifact: clearDocxArtifact,
@@ -94,6 +96,8 @@ export function useRuntimeWorkbenchModel() {
   const [error, setError] = useState("");
   const [prompt, setPrompt] = useState("");
   const [outputType, setOutputType] = useState<DocumentType>("html");
+  const [tshWorkspaceApp, setTshWorkspaceApp] = useState(false);
+  const [parentPath, setParentPath] = useState("/workspace");
   const [runtimeProfiles, setRuntimeProfiles] = useState<RuntimeProfile[]>([]);
   const [localAgentTargets, setLocalAgentTargets] = useState<LocalAgentTargetStatus[]>([]);
   const [officeCliStatus, setOfficeCliStatus] = useState<OfficeCliStatus | null>(null);
@@ -141,9 +145,11 @@ export function useRuntimeWorkbenchModel() {
     setError,
     setLocalAgentTargets,
     setOfficeCliStatus,
+    setParentPath,
     setRuntimeProfiles,
     setSelectedRuntimeProfileId,
     setTemplates,
+    setTshWorkspaceApp,
   });
 
   const { loadDocxDocument, loadHtmlDocument, loadMarkdownDocument } = createDocumentRuntimeLoaders({
@@ -177,8 +183,10 @@ export function useRuntimeWorkbenchModel() {
     homeAttachments,
     loadHtmlDocument,
     outputType,
+    parentPath,
     prompt,
     selectedRuntimeProfileId,
+    tshWorkspaceApp,
     setError,
     setHistoryProjects,
     setHomePanel,
@@ -289,6 +297,39 @@ export function useRuntimeWorkbenchModel() {
     });
   };
 
+  const renameCurrentProjectTitle = async (title: string) => {
+    const projectId = currentProjectId;
+    if (!projectId) return;
+    const nextTitle = title.trim();
+    if (!nextTitle) return;
+    const previousTitle =
+      currentDocumentType === "markdown"
+        ? markdownRuntime?.title
+        : currentDocumentType === "docx"
+          ? docxRuntime?.title
+          : runtime?.title;
+    const applyTitle = (value: string) => {
+      setCurrentProject((current) => (current ? { ...current, title: value } : current));
+      setHistoryProjects((current) =>
+        current.map((item) => (item.id === projectId ? { ...item, title: value } : item)),
+      );
+      setRuntime((current) => (current ? { ...current, title: value } : current));
+      setMarkdownRuntime((current) => (current ? { ...current, title: value } : current));
+      setDocxRuntime((current) => (current ? { ...current, title: value } : current));
+    };
+    applyTitle(nextTitle);
+    try {
+      const project = await updateProject(projectId, { title: nextTitle, updatedBy: "human" });
+      applyTitle(project.title);
+      setCurrentProject(project);
+      setHistoryProjects((current) => current.map((item) => (item.id === project.id ? project : item)));
+    } catch (error) {
+      if (previousTitle) applyTitle(previousTitle);
+      setError(error instanceof Error ? error.message : String(error));
+      throw error;
+    }
+  };
+
   const exportInProgress = sourceExporting || pdfExporting;
 
   const {
@@ -325,6 +366,7 @@ export function useRuntimeWorkbenchModel() {
     cancelAgentRun,
     clearHistory,
     currentDocumentType,
+    currentProject,
     currentProjectId,
     deleteHistoryProject,
     docxError,
@@ -361,10 +403,13 @@ export function useRuntimeWorkbenchModel() {
     officeCliStatus,
     openHistoryProject,
     outputType,
+    parentPath,
     pdfExportAvailable: isTuttiPdfExportAvailable(),
     pdfExporting,
     prompt,
+    tshWorkspaceApp,
     redoMarkdown,
+    renameCurrentProjectTitle,
     requestHomeRoute,
     runtime,
     runtimeProfiles,
@@ -385,6 +430,7 @@ export function useRuntimeWorkbenchModel() {
     setLinkDraft,
     setLinkEditorOpen,
     setOutputType,
+    setParentPath,
     setPrompt,
     setRoute,
     setSelectedRuntimeProfileId,

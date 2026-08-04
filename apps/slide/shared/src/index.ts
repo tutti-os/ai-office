@@ -39,6 +39,8 @@ export interface SlideProject {
   artifactType: SlideArtifactType;
   templateId: string | null;
   templateName: string | null;
+  /** TSH-only absolute artifact root under /workspace. Null for Tutti/local default projects. */
+  workspaceRoot?: string | null;
   updatedBy: SlideProjectUpdatedBy;
   createdAt: string;
   updatedAt: string;
@@ -206,6 +208,10 @@ export interface AppSnapshot {
   activeRuns: SlideRun[];
   runEvents: SlideRunEvent[];
   lastSeq: number;
+  /** Present when the app process is hosted by TSH workspace-app runtime. */
+  tshWorkspaceApp?: boolean;
+  /** Default parent directory for TSH creates. */
+  defaultParentPath?: string | null;
 }
 
 export interface CreateProjectRequest {
@@ -213,6 +219,8 @@ export interface CreateProjectRequest {
   artifactType?: SlideArtifactType;
   templateId?: string | null;
   templateName?: string | null;
+  /** TSH-only: create the artifact under this /workspace parent directory. */
+  parentPath?: string | null;
 }
 
 export interface OpenSlideCliRequest {

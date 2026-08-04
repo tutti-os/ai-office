@@ -1,11 +1,13 @@
 import {
   createAppPaths,
   ensureBaseDirs as ensureSharedBaseDirs,
-  ensureProjectDirs as ensureSharedProjectDirs,
   projectWorkspaceRoot as sharedProjectWorkspaceRoot,
+  safePathSegment,
 } from "@ai-app/shared/local-paths";
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { isTshFileArtifactPath } from "@ai-app/shared/tsh-host";
+import { mkdirSync, rmSync } from "node:fs";
+import { join, resolve } from "node:path";
+import type { DocumentProject } from "@ai-doc/shared";
 
 export const appPaths = createAppPaths({
   homeEnvVar: "AI_DOC_HOME",
@@ -13,17 +15,87 @@ export const appPaths = createAppPaths({
   dbFileName: "ai-doc.db",
 });
 
+/**
+ * Bound workspace_root values:
+ * - Tutti: unset → private projects/{id}
+ * - TSH legacy: directory under /workspace → that directory is the workspace root
+ * - TSH single-file: .html/.md/.docx under /workspace → private projects/{id} for sidecars;
+ *   focused artifact is the file path itself
+ */
+const projectRootOverrides = new Map<string, string>();
+
 export function ensureBaseDirs() {
   ensureSharedBaseDirs(appPaths);
 }
 
-export function projectWorkspaceRoot(projectId: string) {
+export function projectPrivateRoot(projectId: string) {
   return sharedProjectWorkspaceRoot(appPaths, projectId);
 }
 
+export function boundWorkspaceRoot(projectId: string): string | null {
+  return projectRootOverrides.get(projectId) ?? null;
+}
+
+export function isTshFileArtifactProject(projectId: string): boolean {
+  const bound = boundWorkspaceRoot(projectId);
+  return Boolean(bound && isTshFileArtifactPath(bound));
+}
+
+export function projectWorkspaceRoot(projectId: string) {
+  const bound = boundWorkspaceRoot(projectId);
+  if (bound && isTshFileArtifactPath(bound)) return projectPrivateRoot(projectId);
+  return bound ?? projectPrivateRoot(projectId);
+}
+
+export function projectFocusedArtifactPath(projectId: string, type: DocumentProject["type"]) {
+  const bound = boundWorkspaceRoot(projectId);
+  if (bound && isTshFileArtifactPath(bound)) return bound;
+  return join(projectWorkspaceRoot(projectId), focusedProjectFileName(type));
+}
+
+export function bindProjectWorkspaceRoot(projectId: string, root: string) {
+  projectRootOverrides.set(projectId, resolve(root));
+}
+
+export function unbindProjectWorkspaceRoot(projectId: string) {
+  projectRootOverrides.delete(projectId);
+}
+
+export function clearProjectWorkspaceRootBindings() {
+  projectRootOverrides.clear();
+}
+
 export function ensureProjectDirs(projectId: string) {
-  const root = ensureSharedProjectDirs(appPaths, projectId);
+  const root = projectWorkspaceRoot(projectId);
   mkdirSync(join(root, "assets"), { recursive: true });
   mkdirSync(join(root, "exports"), { recursive: true });
+  mkdirSync(join(root, "snapshots"), { recursive: true });
   return root;
 }
+
+export function removeProjectWorkspaceFiles(projectId: string) {
+  const bound = boundWorkspaceRoot(projectId);
+  const privateRoot = projectPrivateRoot(projectId);
+  if (bound && isTshFileArtifactPath(bound)) {
+    rmSync(bound, { force: true });
+    // Remove empty parent only if it is not /workspace itself — skip aggressive rmdir.
+    rmSync(privateRoot, { force: true, recursive: true });
+    return;
+  }
+  if (bound) {
+    rmSync(bound, { force: true, recursive: true });
+    if (resolve(bound) !== resolve(privateRoot)) {
+      rmSync(privateRoot, { force: true, recursive: true });
+    }
+    return;
+  }
+  rmSync(privateRoot, { force: true, recursive: true });
+}
+
+export function focusedProjectFileName(type: DocumentProject["type"]) {
+  if (type === "docx") return "document.docx";
+  if (type === "markdown") return "document.md";
+  return "document.html";
+}
+
+export { safePathSegment };

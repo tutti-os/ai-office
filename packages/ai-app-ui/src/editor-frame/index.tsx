@@ -11,6 +11,7 @@ export type ArtifactEditorCopy = {
   export: string;
   exporting: string;
   loading: string;
+  renameTitle: string;
   saveError: string;
   saved: string;
   saving: string;
@@ -24,6 +25,7 @@ export const defaultArtifactEditorCopy: ArtifactEditorCopy = {
   export: "Export",
   exporting: "Exporting...",
   loading: "Loading",
+  renameTitle: "Rename",
   saveError: "Save error",
   saved: "Saved",
   saving: "Saving",
@@ -69,6 +71,7 @@ export function ArtifactEditorWorkspace(props: {
   onBackHome?: () => void;
   onDismissExportNotice?: () => void;
   onOpenExportLocation?: () => void;
+  onTitleChange?: (title: string) => void | Promise<void>;
   stats?: string[];
   tone?: "dark" | "lumen";
   workspaceClassName?: string;
@@ -92,6 +95,7 @@ export function ArtifactEditorWorkspace(props: {
           copy={copy}
           tone={tone}
           onBackHome={props.onBackHome}
+          onTitleChange={props.onTitleChange}
         />
         <ArtifactExportToast
           message={exportNotice}
@@ -220,11 +224,16 @@ export function ArtifactWorkspaceHeader(props: {
   exportItems: ArtifactExportItem[];
   copy?: ArtifactEditorCopy;
   onBackHome?: () => void;
+  onTitleChange?: (title: string) => void | Promise<void>;
   tone?: "dark" | "lumen";
 }) {
   const [open, setOpen] = useState(false);
   const [pendingExportLabel, setPendingExportLabel] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(props.title);
+  const [titleSaving, setTitleSaving] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
   const lumen = props.tone === "lumen";
   const copy = props.copy ?? defaultArtifactEditorCopy;
   const exportingItem = props.exportItems.find((item) => item.loading || item.label === pendingExportLabel);
@@ -233,6 +242,16 @@ export function ArtifactWorkspaceHeader(props: {
   useEffect(() => {
     if (exporting) setOpen(false);
   }, [exporting]);
+
+  useEffect(() => {
+    if (!editingTitle && !titleSaving) setTitleDraft(props.title);
+  }, [editingTitle, props.title, titleSaving]);
+
+  useEffect(() => {
+    if (!editingTitle) return;
+    titleInputRef.current?.focus();
+    titleInputRef.current?.select();
+  }, [editingTitle]);
 
   useEffect(() => {
     if (!open) return;
@@ -249,6 +268,25 @@ export function ArtifactWorkspaceHeader(props: {
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [open]);
+
+  const commitTitle = async () => {
+    const next = titleDraft.trim();
+    if (!props.onTitleChange || !next || next === props.title) {
+      setEditingTitle(false);
+      setTitleDraft(props.title);
+      return;
+    }
+    setTitleSaving(true);
+    try {
+      await props.onTitleChange(next);
+      setEditingTitle(false);
+    } catch {
+      setTitleDraft(props.title);
+      setEditingTitle(false);
+    } finally {
+      setTitleSaving(false);
+    }
+  };
 
   return (
     <header className={cx("flex h-12 shrink-0 items-center justify-between gap-4 border-b px-5", lumen ? "border-[#B8A07C]/30 bg-[#EEE8DC] text-[#2A2620]" : "border-white/8")}>
@@ -267,7 +305,50 @@ export function ArtifactWorkspaceHeader(props: {
             <ArrowLeft size={16} />
           </button>
         ) : null}
-        <div className={cx("flex h-5 min-w-0 items-center truncate text-[13px] font-semibold leading-none", lumen ? "text-[#2A2620]" : "text-white")}>{props.title}</div>
+        {props.onTitleChange && editingTitle ? (
+          <input
+            ref={titleInputRef}
+            className={cx(
+              "h-8 min-w-0 max-w-[min(420px,46vw)] truncate rounded-[10px] border px-2 text-[13px] font-semibold outline-none",
+              lumen
+                ? "border-[#B8A07C]/55 bg-[#F4EFE6] text-[#2A2620] focus:border-[#5C6B50]"
+                : "border-white/20 bg-white/10 text-white focus:border-white/40",
+            )}
+            disabled={titleSaving}
+            value={titleDraft}
+            aria-label={copy.renameTitle}
+            onChange={(event) => setTitleDraft(event.target.value)}
+            onBlur={() => {
+              void commitTitle();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void commitTitle();
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setTitleDraft(props.title);
+                setEditingTitle(false);
+              }
+            }}
+          />
+        ) : props.onTitleChange ? (
+          <button
+            className={cx(
+              "flex h-8 min-w-0 max-w-[min(420px,46vw)] items-center truncate rounded-[10px] px-2 text-left text-[13px] font-semibold leading-none transition",
+              lumen ? "text-[#2A2620] hover:bg-[#E6DDCD]/80" : "text-white hover:bg-white/10",
+            )}
+            type="button"
+            title={copy.renameTitle}
+            aria-label={copy.renameTitle}
+            onClick={() => setEditingTitle(true)}
+          >
+            <span className="truncate">{props.title}</span>
+          </button>
+        ) : (
+          <div className={cx("flex h-5 min-w-0 items-center truncate text-[13px] font-semibold leading-none", lumen ? "text-[#2A2620]" : "text-white")}>{props.title}</div>
+        )}
         <SaveStateBadge agentWorking={props.agentWorking} copy={copy} state={props.saveState} tone={props.tone} />
         {props.stats?.length ? (
           <div className={cx("hidden h-5 min-w-0 items-center gap-1.5 text-[11px] font-semibold leading-none md:flex", lumen ? "text-[#8B8275]" : "text-white/32")}>

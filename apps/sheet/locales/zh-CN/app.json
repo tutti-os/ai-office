@@ -57,6 +57,7 @@
   "agent.tool.resultTitle": "工具结果",
   "editor.agentWorking": "Agent 工作中",
   "editor.backHome": "返回首页",
+  "editor.renameTitle": "重命名",
   "editor.dismissExportNotice": "关闭导出提示",
   "editor.export": "导出",
   "editor.exporting": "正在导出...",

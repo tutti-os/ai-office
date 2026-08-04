@@ -8,7 +8,7 @@ test("document project and preparation inserts roll back atomically", () => {
   db.exec(`
     CREATE TABLE projects (
       id TEXT PRIMARY KEY, title TEXT, type TEXT, content TEXT, template_id TEXT, template_name TEXT,
-      updated_by TEXT, created_at TEXT, updated_at TEXT
+      workspace_root TEXT, updated_by TEXT, created_at TEXT, updated_at TEXT
     );
     CREATE TABLE project_preparation (
       project_id TEXT PRIMARY KEY, core_state TEXT CHECK(core_state = 'ready'),

@@ -37,6 +37,8 @@ export interface DocumentProject {
   content: string;
   templateId: string | null;
   templateName: string | null;
+  /** TSH-only absolute artifact root under /workspace. Null for Tutti/local default projects. */
+  workspaceRoot?: string | null;
   updatedBy: "human" | "ai" | "system";
   createdAt: string;
   updatedAt: string;
@@ -169,6 +171,10 @@ export interface AppSnapshot {
   runEvents: DocumentRunEvent[];
   templates: DocumentTemplate[];
   lastSeq: number;
+  /** Present when the app process is hosted by TSH workspace-app runtime. */
+  tshWorkspaceApp?: boolean;
+  /** Default parent directory for TSH creates. */
+  defaultParentPath?: string | null;
 }
 
 export interface CreateProjectRequest {
@@ -177,6 +183,8 @@ export interface CreateProjectRequest {
   templateName?: string | null;
   content?: string;
   type?: DocumentType;
+  /** TSH-only: create the artifact under this /workspace parent directory. */
+  parentPath?: string | null;
 }
 
 export interface OpenDocumentCliRequest {

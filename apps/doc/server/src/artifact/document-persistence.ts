@@ -7,6 +7,7 @@ export interface DocumentProjectPersistenceInput {
   content: string;
   templateId: string | null;
   templateName: string | null;
+  workspaceRoot?: string | null;
   now: string;
 }
 
@@ -14,9 +15,19 @@ export function insertDocumentProject(db: DatabaseSync, input: DocumentProjectPe
   db.exec("BEGIN IMMEDIATE");
   try {
     db.prepare(
-      `INSERT INTO projects (id, title, type, content, template_id, template_name, updated_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'system', ?, ?)`,
-    ).run(input.id, input.title, input.type, input.content, input.templateId, input.templateName, input.now, input.now);
+      `INSERT INTO projects (id, title, type, content, template_id, template_name, workspace_root, updated_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'system', ?, ?)`,
+    ).run(
+      input.id,
+      input.title,
+      input.type,
+      input.content,
+      input.templateId,
+      input.templateName,
+      input.workspaceRoot ?? null,
+      input.now,
+      input.now,
+    );
     db.prepare(
       `INSERT INTO project_preparation (project_id, core_state, agent_context_state, updated_at)
        VALUES (?, 'preparing', 'pending', ?)`,

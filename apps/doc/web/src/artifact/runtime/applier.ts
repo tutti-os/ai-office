@@ -115,6 +115,13 @@ export class RuntimeApplier {
     bodyInnerHTML: string,
     input: { operationType: string; description: string; replaceCurrentSnapshot?: boolean; selection?: RuntimeState["activeSelection"] },
   ) {
+    // TipTap can emit an initial onUpdate after setContent; ignore no-op body syncs
+    // so opening a history project does not mark dirty and rematerialize the file.
+    if (bodyInnerHTML === state.document.bodyInnerHTML) {
+      return input.selection === undefined
+        ? state
+        : this.apply(state, { type: "selection-changed", selection: input.selection ?? null });
+    }
     const nextDocument = {
       ...state.document,
       bodyInnerHTML,

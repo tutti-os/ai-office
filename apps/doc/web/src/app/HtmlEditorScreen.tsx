@@ -7,6 +7,7 @@ import { editorToolbarStripClass, type ToolbarLayoutValue } from "@ai-app/ui/too
 import type { DocumentRunTimelineItem, LocalAgentTargetStatus, RuntimeProfile } from "@ai-doc/shared";
 import type { RuntimeState, SelectionState } from "../artifact/runtime/types";
 import { AgentConversationPanel } from "./AgentConversationPanel";
+import { isMissingDocumentError } from "./documentLoadErrors";
 import { HtmlEditorToolbar } from "./HtmlEditorToolbar";
 import { HtmlTiptapEditorSurface, useHtmlTiptapEditor } from "./HtmlTiptapEditorSurface";
 import { artifactEditorCopy } from "../i18n/copy";
@@ -22,24 +23,50 @@ type LinkEditorPosition = {
   width: number;
 };
 
-export function DocumentLoadingScreen(props: { error: string; loading: boolean }) {
+export function DocumentLoadingScreen(props: {
+  error: string;
+  loading: boolean;
+  title?: string;
+  onBackHome?: () => void;
+}) {
   const { t } = useI18n();
+  const missing = Boolean(props.error && isMissingDocumentError(props.error));
+  const headerTitle = missing
+    ? props.title?.trim() || t("editor.documentNotFound")
+    : props.title?.trim() || t("editor.loadingDoc");
+
   return (
     <section className="relative flex h-full min-h-0 flex-col bg-[#E6DDCD] text-[#2A2620]">
-      <header className="flex h-12 shrink-0 items-center border-b border-[#B8A07C]/45 px-5">
-        <div className="min-w-0 truncate text-[13px] font-semibold text-[#2A2620]">{t("editor.loadingDoc")}</div>
+      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[#B8A07C]/45 px-5">
+        {props.onBackHome ? (
+          <button
+            type="button"
+            className="shrink-0 rounded-md px-2 py-1 text-[12px] font-semibold text-[#5C5346] transition hover:bg-[#B8A07C]/20 hover:text-[#2A2620]"
+            onClick={props.onBackHome}
+          >
+            {t("editor.backHome")}
+          </button>
+        ) : null}
+        <div className="min-w-0 truncate text-[13px] font-semibold text-[#2A2620]">{headerTitle}</div>
       </header>
       <div className="grid min-h-0 flex-1 place-items-center bg-[#E6DDCD] px-6 text-center">
-        <div className="max-w-[360px] text-[13px] font-semibold text-[#8B8275]">
-          {props.error ? (
-            props.error
-          ) : (
-            <span className="inline-flex items-center gap-2">
-              {props.loading ? <Loader2 className="animate-spin" size={16} /> : null}
-              {t("editor.loadingDocProgress")}
-            </span>
-          )}
-        </div>
+        {missing ? (
+          <div className="w-[min(480px,calc(100%_-_32px))] rounded-xl border border-[#B8A07C]/35 bg-[#F4EEE3] px-6 py-7 text-left shadow-sm">
+            <h2 className="m-0 text-[15px] font-extrabold leading-snug text-[#2A2620]">{t("editor.documentNotFound")}</h2>
+            <p className="mt-2 mb-0 text-[13px] font-medium leading-relaxed text-[#5C5346]">{t("editor.documentMissingDetail")}</p>
+          </div>
+        ) : (
+          <div className="max-w-[360px] text-[13px] font-semibold text-[#8B8275]">
+            {props.error ? (
+              props.error
+            ) : (
+              <span className="inline-flex items-center gap-2">
+                {props.loading ? <Loader2 className="animate-spin" size={16} /> : null}
+                {t("editor.loadingDocProgress")}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -74,6 +101,7 @@ export type HtmlEditorScreenProps = {
   onAlignment: (alignment: Alignment) => void;
   onApplyLink: (draft: LinkDraft) => void;
   onBackHome: () => void;
+  onTitleChange?: (title: string) => void | Promise<void>;
   onTiptapBodyChange: (bodyInnerHTML: string, selection: SelectionState | null) => void;
   onTiptapSelectionChange: (selection: SelectionState | null, toolbarState?: ToolbarState) => void;
   onToolbarInteractionStart: () => void;
@@ -286,6 +314,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
         bodyClassName="flex flex-col"
         tone="lumen"
         onBackHome={props.onBackHome}
+        onTitleChange={props.onTitleChange}
         onDismissExportNotice={props.onDismissExportNotice}
         onOpenExportLocation={props.onOpenExportLocation}
         exportItems={[

@@ -1,5 +1,5 @@
 import { existsSync, rmSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, extname, join } from "node:path";
 import {
@@ -12,10 +12,35 @@ import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationSto
 import { asProjectPreparationError, SqliteProjectPreparationCoordinator } from "@ai-app/shared/project-preparation";
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
 import { getDb } from "../db/database.js";
-import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
+import {
+  allocateRenamedTshArtifactFile,
+  allocateTshArtifactFile,
+  ensureTshArtifactFile,
+  isTshFileArtifactPath,
+  resolveTshParentPath,
+} from "@ai-app/shared/tsh-host";
+import {
+  appPaths,
+  bindProjectWorkspaceRoot,
+  boundWorkspaceRoot,
+  clearProjectWorkspaceRootBindings,
+  ensureBaseDirs,
+  ensureProjectDirs,
+  isTshFileArtifactProject,
+  projectFocusedArtifactPath,
+  projectPrivateRoot,
+  projectWorkspaceRoot,
+  removeProjectWorkspaceFiles,
+  unbindProjectWorkspaceRoot,
+} from "../local/paths.js";
 import { invalidateProjectAssetCache, mimeTypeForAssetFileName, projectAssetRelativePath } from "./project-assets.js";
 import { insertDocumentProject } from "./document-persistence.js";
-import { documentAgentContextVersion, materializeDocumentProjectCore, prepareDocumentAgentContext } from "./document-preparation.js";
+import {
+  documentAgentContextVersion,
+  materializeDocumentArtifactFile,
+  materializeDocumentProjectCore,
+  prepareDocumentAgentContext,
+} from "./document-preparation.js";
 export class DocumentRepository {
   private readonly preparation = new SqliteProjectPreparationCoordinator(getDb, "ai-doc");
   private readonly conversations = new SqliteAgentConversationStore(getDb, {
@@ -54,16 +79,31 @@ export class DocumentRepository {
     };
   }
 
-  async createProject(input: { title: string; content: string; type: DocumentProject["type"]; templateId: string | null; templateName: string | null }) {
+  async createProject(input: {
+    title: string;
+    content: string;
+    type: DocumentProject["type"];
+    templateId: string | null;
+    templateName: string | null;
+    parentPath?: string | null;
+  }) {
     const id = randomUUID();
     const now = new Date().toISOString();
+    const parentPath = resolveTshParentPath(input.parentPath);
+    const workspaceRoot = parentPath
+      ? ensureTshArtifactFile(allocateTshArtifactFile(parentPath, input.title, id, input.type))
+      : null;
+    if (workspaceRoot) bindProjectWorkspaceRoot(id, workspaceRoot);
+    // TSH single-file products: project title is the on-disk filename.
+    const title = workspaceRoot ? basename(workspaceRoot) : input.title;
     insertDocumentProject(getDb(), {
       id,
-      title: input.title,
+      title,
       type: input.type,
       content: input.content,
       templateId: input.templateId,
       templateName: input.templateName,
+      workspaceRoot,
       now,
     });
     const project = this.getProject(id);
@@ -81,11 +121,16 @@ export class DocumentRepository {
   }
 
   listProjects() {
-    return rows<ProjectRow>(getDb().prepare(`SELECT * FROM projects ORDER BY updated_at DESC`).all()).map(rowToProject);
+    return rows<ProjectRow>(getDb().prepare(`SELECT * FROM projects ORDER BY updated_at DESC`).all())
+      .map(rowToProject)
+      .map(syncTshFileArtifactTitle);
   }
 
   clearProjectHistory() {
     const db = getDb();
+    const workspaceRoots = rows<{ id: string; workspace_root: string | null }>(
+      db.prepare(`SELECT id, workspace_root FROM projects`).all(),
+    );
     db.exec(`
       DELETE FROM document_run_events;
       DELETE FROM document_runs;
@@ -94,6 +139,14 @@ export class DocumentRepository {
       DELETE FROM stream_events;
       DELETE FROM projects;
     `);
+    for (const row of workspaceRoots) {
+      if (row.workspace_root) {
+        bindProjectWorkspaceRoot(row.id, row.workspace_root);
+        removeProjectWorkspaceFiles(row.id);
+      }
+      unbindProjectWorkspaceRoot(row.id);
+    }
+    clearProjectWorkspaceRootBindings();
     rmSync(appPaths.projectsDir, { force: true, recursive: true });
     invalidateProjectAssetCache();
     ensureBaseDirs();
@@ -117,14 +170,23 @@ export class DocumentRepository {
       db.exec("ROLLBACK");
       throw error;
     }
-    rmSync(projectWorkspaceRoot(projectId), { force: true, recursive: true });
+    removeProjectWorkspaceFiles(projectId);
+    unbindProjectWorkspaceRoot(projectId);
     invalidateProjectAssetCache(projectId);
     return { projects: this.listProjects() };
   }
 
   getProject(projectId: string) {
     const row = rowOrNull<ProjectRow>(getDb().prepare(`SELECT * FROM projects WHERE id = ?`).get(projectId));
-    return row ? rowToProject(row) : null;
+    if (!row) return null;
+    return syncTshFileArtifactTitle(rowToProject(row));
+  }
+
+  /** Align DB content with disk without rematerializing the artifact file. */
+  syncProjectContentQuiet(projectId: string, content: string) {
+    getDb()
+      .prepare(`UPDATE projects SET content = ?, updated_by = ?, updated_at = ? WHERE id = ?`)
+      .run(content, "system", new Date().toISOString(), projectId);
   }
 
   getProjectPreparation(projectId: string) {
@@ -141,6 +203,7 @@ export class DocumentRepository {
       content: input.content ?? current.content,
       updatedBy: input.updatedBy ?? "human",
     };
+    const titleChanged = next.title !== current.title;
     getDb()
       .prepare(
         `UPDATE projects
@@ -148,6 +211,9 @@ export class DocumentRepository {
          WHERE id = ?`,
       )
       .run(next.title, next.type, next.content, next.updatedBy, now, projectId);
+    if (titleChanged) {
+      await this.renameTshArtifactFileForTitle(projectId, next.title);
+    }
     const updated = this.getProject(projectId);
     const coreNeedsRepair = this.preparation.getStatus(projectId)?.coreState !== "ready";
     if (updated && (next.content !== current.content || next.type !== current.type || coreNeedsRepair)) {
@@ -164,6 +230,29 @@ export class DocumentRepository {
       this.startAgentContextPreparation(updated);
     }
     return updated;
+  }
+
+  private async renameTshArtifactFileForTitle(projectId: string, title: string) {
+    const currentPath = boundWorkspaceRoot(projectId);
+    if (!currentPath || !isTshFileArtifactPath(currentPath)) return;
+    if (!existsSync(currentPath)) {
+      throw new Error(`Document file is missing at ${currentPath}`);
+    }
+    const nextPath = allocateRenamedTshArtifactFile(currentPath, title);
+    const fileName = basename(nextPath);
+    if (nextPath === currentPath) {
+      // Canonical title is always the on-disk filename (including short id + extension).
+      getDb().prepare(`UPDATE projects SET title = ? WHERE id = ?`).run(fileName, projectId);
+      return;
+    }
+    if (existsSync(nextPath)) {
+      throw new Error(`A file already exists at ${nextPath}`);
+    }
+    await rename(currentPath, nextPath);
+    bindProjectWorkspaceRoot(projectId, nextPath);
+    getDb()
+      .prepare(`UPDATE projects SET workspace_root = ?, title = ? WHERE id = ?`)
+      .run(nextPath, fileName, projectId);
   }
 
   updateProjectSessionTitle(projectId: string, title: string) {
@@ -365,12 +454,22 @@ export class DocumentRepository {
   }
 
   private async materializeProjectCore(project: DocumentProject) {
-    const root = projectWorkspaceRoot(project.id);
-    await materializeDocumentProjectCore(root, project);
+    if (isTshFileArtifactProject(project.id)) {
+      await materializeDocumentArtifactFile(
+        projectFocusedArtifactPath(project.id, project.type),
+        projectPrivateRoot(project.id),
+        project,
+      );
+      return;
+    }
+    await materializeDocumentProjectCore(projectWorkspaceRoot(project.id), project);
   }
+
   private async writeProjectAgentInstructions(project: DocumentProject) {
-    const root = projectWorkspaceRoot(project.id);
-    await prepareDocumentAgentContext(root, project);
+    // TSH single-file products stay clean: no AGENTS.md next to the user artifact.
+    // In-app agents use buildSystemPrompt; Tutti directory projects still get AGENTS.md.
+    if (isTshFileArtifactProject(project.id)) return;
+    await prepareDocumentAgentContext(projectWorkspaceRoot(project.id), project);
   }
 
   private startAgentContextPreparation(project: DocumentProject) {
@@ -383,6 +482,10 @@ export class DocumentRepository {
   }
 
   private documentPath(project: DocumentProject) {
+    if (isTshFileArtifactProject(project.id)) {
+      if (project.type === "docx") return join(projectPrivateRoot(project.id), "document.json");
+      return projectFocusedArtifactPath(project.id, project.type);
+    }
     const fileName = project.type === "docx" ? "document.json" : project.type === "markdown" ? "document.md" : "document.html";
     return join(projectWorkspaceRoot(project.id), fileName);
   }
@@ -399,12 +502,23 @@ interface ProjectRow {
   content: string;
   template_id: string | null;
   template_name: string | null;
+  workspace_root?: string | null;
   updated_by: "human" | "ai" | "system";
   created_at: string;
   updated_at: string;
 }
 
+function syncTshFileArtifactTitle(project: DocumentProject): DocumentProject {
+  const bound = boundWorkspaceRoot(project.id);
+  if (!bound || !isTshFileArtifactPath(bound)) return project;
+  const fileName = basename(bound);
+  if (project.title === fileName) return project;
+  getDb().prepare(`UPDATE projects SET title = ? WHERE id = ?`).run(fileName, project.id);
+  return { ...project, title: fileName };
+}
+
 function rowToProject(row: ProjectRow): DocumentProject {
+  if (row.workspace_root) bindProjectWorkspaceRoot(row.id, row.workspace_root);
   return {
     id: row.id,
     title: row.title,
@@ -412,6 +526,7 @@ function rowToProject(row: ProjectRow): DocumentProject {
     content: row.content,
     templateId: row.template_id,
     templateName: row.template_name,
+    workspaceRoot: row.workspace_root ?? null,
     updatedBy: row.updated_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

@@ -36,6 +36,10 @@ export AI_SLIDE_LOG_ROOT="\${TUTTI_APP_LOG_DIR:-$AI_SLIDE_RUNTIME_ROOT/logs}"
 export AI_SLIDE_TEMPLATE_ROOT="\${AI_SLIDE_TEMPLATE_ROOT:-$package_dir/templates/source}"
 export AI_SLIDE_TEMPLATE_ASSET_ROOT="\${AI_SLIDE_TEMPLATE_ASSET_ROOT:-$package_dir/templates/generated/templates}"
 export AI_SLIDE_TUTTI_CLI="\${TUTTI_CLI:-}"
+# TSH sandboxes always expose OfficeCLI at the managed runtime path.
+if [ "\${TSH_WORKSPACE_APP:-}" = "1" ] && [ -z "\${TUTTI_APP_OFFICECLI_PATH:-}" ]; then
+  export TUTTI_APP_OFFICECLI_PATH=/usr/local/bin/officecli
+fi
 
 base_url="\${TUTTI_APP_BASE_URL:-http://$HOST:$PORT}"
 export AI_SLIDE_SERVER_URL="$base_url"

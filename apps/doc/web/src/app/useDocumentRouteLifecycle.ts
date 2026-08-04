@@ -113,6 +113,8 @@ export function useDocumentRouteLifecycle(input: DocumentRouteLifecycleInput) {
 
   useEffect(() => {
     if (input.route.name === "home") {
+      // Detail-page load failures (e.g. external rename ENOENT) must not leak into home composer.
+      input.setError("");
       input.setCurrentProject(null);
       input.clearArtifact();
       input.clearMarkdownArtifact();
@@ -159,8 +161,9 @@ export function useDocumentRouteLifecycle(input: DocumentRouteLifecycleInput) {
     const saveRevision = input.runtime.revision;
     input.setSaveState("saving");
     input.saveTimerRef.current = setTimeout(() => {
+      // Content autosave must not send title: a stale title races with rename and
+      // can move the on-disk file back to the previous name.
       void updateProject(input.currentProjectId!, {
-        title: input.runtime!.title,
         content: input.serializeHtmlRuntime(input.runtime!),
         type: "html",
         updatedBy: "human",
@@ -179,7 +182,7 @@ export function useDocumentRouteLifecycle(input: DocumentRouteLifecycleInput) {
     return () => {
       if (input.saveTimerRef.current) clearTimeout(input.saveTimerRef.current);
     };
-  }, [input.currentDocumentType, input.currentProjectId, input.runtime?.dirty, input.runtime?.revision, input.runtime?.title, input.serializeHtmlRuntime, input.setRuntime]);
+  }, [input.currentDocumentType, input.currentProjectId, input.runtime?.dirty, input.runtime?.revision, input.serializeHtmlRuntime, input.setRuntime]);
 
   useEffect(() => {
     if (input.currentDocumentType !== "markdown" || !input.currentProjectId || !input.markdownRuntime?.dirty) return;
@@ -190,7 +193,6 @@ export function useDocumentRouteLifecycle(input: DocumentRouteLifecycleInput) {
     input.setMarkdownSaveState("saving");
     input.saveTimerRef.current = setTimeout(() => {
       void updateProject(input.currentProjectId!, {
-        title: input.markdownRuntime!.title,
         content: input.serializeMarkdownRuntime(input.markdownRuntime!),
         type: "markdown",
         updatedBy: "human",
@@ -210,7 +212,7 @@ export function useDocumentRouteLifecycle(input: DocumentRouteLifecycleInput) {
     return () => {
       if (input.saveTimerRef.current) clearTimeout(input.saveTimerRef.current);
     };
-  }, [input.currentDocumentType, input.currentProjectId, input.markdownRuntime?.dirty, input.markdownRuntime?.revision, input.markdownRuntime?.title, input.serializeMarkdownRuntime, input.setMarkdownRuntime]);
+  }, [input.currentDocumentType, input.currentProjectId, input.markdownRuntime?.dirty, input.markdownRuntime?.revision, input.serializeMarkdownRuntime, input.setMarkdownRuntime]);
 
   return { requestHomeRoute };
 }

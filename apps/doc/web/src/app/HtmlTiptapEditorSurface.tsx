@@ -256,8 +256,14 @@ export function useHtmlTiptapEditor(input: {
   const { props } = input;
   const selectionBookmarkRef = useRef<StoredSelectionBookmark | null>(null);
   const pendingImageReplacePositionRef = useRef<number | null>(null);
+  const suppressBodySyncRef = useRef(true);
   const [focused, setFocused] = useState(false);
   const runtimeId = props.runtime?.id;
+  useEffect(() => {
+    // Fresh document load: ignore TipTap's first normalization update so open
+    // does not mark the runtime dirty and rewrite the on-disk artifact.
+    suppressBodySyncRef.current = true;
+  }, [runtimeId, props.projectId]);
   const tiptapExtensions = useMemo(
     () => [
       AiHtmlAttributes,
@@ -327,6 +333,11 @@ export function useHtmlTiptapEditor(input: {
         rememberSelectionBookmark(currentEditor, selectionBookmarkRef);
         const selection = safeSelectionStateFromTiptap(currentEditor);
         const currentHTML = safeTiptapHTML(currentEditor);
+        if (suppressBodySyncRef.current) {
+          suppressBodySyncRef.current = false;
+          props.onTiptapSelectionChange(selection, safeToolbarStateFromTiptap(currentEditor, props.toolbarState));
+          return;
+        }
         if (currentHTML) props.onTiptapBodyChange(restoreHtmlProjectFragmentAssetReferences(cleanTiptapHtmlForRuntime(currentHTML)), selection);
         props.onTiptapSelectionChange(selection, safeToolbarStateFromTiptap(currentEditor, props.toolbarState));
       },

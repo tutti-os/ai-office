@@ -10,9 +10,11 @@ type DocumentWorkbenchBootstrapInput = {
   setError: (value: string) => void;
   setLocalAgentTargets: StateSetter<LocalAgentTargetStatus[]>;
   setOfficeCliStatus: StateSetter<OfficeCliStatus | null>;
+  setParentPath: StateSetter<string>;
   setRuntimeProfiles: StateSetter<RuntimeProfile[]>;
   setSelectedRuntimeProfileId: StateSetter<string>;
   setTemplates: StateSetter<TuttiTemplate[]>;
+  setTshWorkspaceApp: StateSetter<boolean>;
 };
 
 export function useDocumentWorkbenchBootstrap(input: DocumentWorkbenchBootstrapInput) {
@@ -20,9 +22,11 @@ export function useDocumentWorkbenchBootstrap(input: DocumentWorkbenchBootstrapI
     setError,
     setLocalAgentTargets,
     setOfficeCliStatus,
+    setParentPath,
     setRuntimeProfiles,
     setSelectedRuntimeProfileId,
     setTemplates,
+    setTshWorkspaceApp,
   } = input;
 
   useEffect(() => {
@@ -53,6 +57,10 @@ export function useDocumentWorkbenchBootstrap(input: DocumentWorkbenchBootstrapI
         setLocalAgentTargets(targetStatus.agents);
         setTemplates(normalizeTemplates(libraryTemplates));
         setOfficeCliStatus(officeCli.officecli);
+        setTshWorkspaceApp(snapshot.tshWorkspaceApp === true);
+        if (snapshot.tshWorkspaceApp === true) {
+          setParentPath(snapshot.defaultParentPath?.trim() || "/workspace");
+        }
         setSelectedRuntimeProfileId((current) => {
           if (isAvailableLocalAgentRuntimeProfileId(current, mergedProfiles, targetStatus.agents)) return current;
           return resolvePreferredLocalAgentRuntimeProfileId({
@@ -67,5 +75,5 @@ export function useDocumentWorkbenchBootstrap(input: DocumentWorkbenchBootstrapI
     return () => {
       cancelled = true;
     };
-  }, [setError, setLocalAgentTargets, setOfficeCliStatus, setRuntimeProfiles, setSelectedRuntimeProfileId, setTemplates]);
+  }, [setError, setLocalAgentTargets, setOfficeCliStatus, setParentPath, setRuntimeProfiles, setSelectedRuntimeProfileId, setTemplates, setTshWorkspaceApp]);
 }

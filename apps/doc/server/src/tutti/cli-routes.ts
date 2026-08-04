@@ -50,7 +50,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
     const projectId = requiredString(input, "project-id");
     if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
     try {
-      const { project } = documents.getProject(projectId);
+      const { project } = await documents.getProject(projectId);
       return reply.send(cliJsonOutput(await openProjectCliOutput(project)));
     } catch (error) {
       return sendCliError(reply, cliErrorStatus(error), "project_open_failed", errorMessage(error));
@@ -62,7 +62,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
     const projectId = requiredString(input, "project-id");
     if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
     try {
-      const { project } = documents.getProject(projectId);
+      const { project } = await documents.getProject(projectId);
       return reply.send(cliJsonOutput(await documentContentOutput(documents, project)));
     } catch (error) {
       return sendCliError(reply, cliErrorStatus(error), "content_get_failed", errorMessage(error));
@@ -74,7 +74,7 @@ export function registerTuttiCliRoutes(server: FastifyInstance, documents: Docum
     const projectId = requiredString(input, "project-id");
     if (!projectId) return sendCliError(reply, 400, "invalid_input", "project-id is required");
     try {
-      const { project } = documents.getProject(projectId);
+      const { project } = await documents.getProject(projectId);
       const workspace = documents.projectWorkspaceContext(project);
       return reply.send(cliJsonOutput({
         project: projectSummary(project),
@@ -292,7 +292,7 @@ async function agentRunCliResponse(
   try {
     const runtimeProfileId = await runtimeProfileIdFromCliInput(input, documents);
     if (runtimeProfileId.error) return sendCliError(reply, 400, "invalid_input", runtimeProfileId.error);
-    const { project } = documents.getProject(projectId);
+    const { project } = await documents.getProject(projectId);
     const result = await documents.startAiEdit(projectId, {
       htmlContent: project.content,
       selectedText: "",

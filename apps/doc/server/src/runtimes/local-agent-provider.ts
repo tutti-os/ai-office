@@ -5,11 +5,17 @@ import {
 } from "@ai-app/agent/local-agent-runtime";
 import type { AiEditRequest, DocumentProject, DocumentRun } from "@ai-doc/shared";
 import { buildDocAppToolMcpServers } from "../agent-tools.js";
-import { projectWorkspaceRoot } from "../local/paths.js";
+import {
+  isTshFileArtifactProject,
+  projectFocusedArtifactPath,
+  projectPrivateRoot,
+  projectWorkspaceRoot,
+} from "../local/paths.js";
 import { listProjectAssets } from "../artifact/project-assets.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
 import { tuttiCliEnv } from "../tutti/tutti-cli.js";
 import type { RuntimeEditContext } from "./runtime-provider.js";
+import { basename, dirname } from "node:path";
 
 const noBrowserRenderVerification =
   "Do not proactively use browser, Playwright, Chrome, or JavaScript rendering tools for visual verification unless the user explicitly asks for browser-based validation.";
@@ -23,7 +29,17 @@ const minimumLocalAgentTimeoutMs = 5 * 60_000;
 export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<DocumentRun, DocumentProject, AiEditRequest> {
   constructor() {
     super({
-      runCwd: (context) => projectWorkspaceRoot(context.project.id),
+      runCwd: (context) => {
+        if (isTshFileArtifactProject(context.project.id)) {
+          return dirname(projectFocusedArtifactPath(context.project.id, context.project.type));
+        }
+        return projectWorkspaceRoot(context.project.id);
+      },
+      // Keep resume/session files out of the user-visible artifact parent directory.
+      sessionRoot: (context) =>
+        isTshFileArtifactProject(context.project.id)
+          ? projectPrivateRoot(context.project.id)
+          : projectWorkspaceRoot(context.project.id),
       buildPrompt: buildEditPrompt,
       buildSystemPrompt,
       buildSkillManifest: buildTuttiAgentSkillContext,
@@ -34,6 +50,13 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<D
         AI_DOC_PROJECT_ID: context.project.id,
         AI_DOC_RUN_ID: context.run.id,
       }),
+      extraAllowedDirs: (context, runCwd) => {
+        if (!isTshFileArtifactProject(context.project.id)) return [runCwd];
+        const privateRoot = projectPrivateRoot(context.project.id);
+        return privateRoot === runCwd ? [runCwd] : [runCwd, privateRoot];
+      },
+      writeCodexProjectRootMarker: (context) =>
+        isTshFileArtifactProject(context.project.id) ? false : undefined,
       timeoutMs: localAgentTimeoutMs,
       sessionDirName: ".ai-doc",
       commandEnvNames: ["AI_DOC_TUTTI_CLI"],
@@ -69,13 +92,14 @@ function localAgentTimeoutMs() {
 
 async function buildSystemPrompt(context: RuntimeEditContext, _projectCwd: string, skillContext: LocalAgentSkillContext) {
   const assetPrompt = await projectAssetPrompt(context.project.id);
+  const focusedFileLine = focusedFilePromptLine(context);
 
   if (context.project.type === "docx") {
     return withTuttiSkillGuidance(
       [
         "You are an AI doc editing agent inside a local doc app.",
         "This project is a Word DOCX doc.",
-        "Current focused file: document.docx (relative to the current working directory).",
+        focusedFileLine,
         localFilesystemArtifactNotice,
         appToolPrompt(),
         artifactIntentPrompt("document"),
@@ -95,7 +119,7 @@ async function buildSystemPrompt(context: RuntimeEditContext, _projectCwd: strin
     return withTuttiSkillGuidance(
       [
         "You are editing a Markdown artifact for a local AI doc editor.",
-        "Current focused file: document.md (relative to the current working directory).",
+        focusedFileLine,
         localFilesystemArtifactNotice,
         appToolPrompt(),
         artifactIntentPrompt("document"),
@@ -116,7 +140,7 @@ async function buildSystemPrompt(context: RuntimeEditContext, _projectCwd: strin
   return withTuttiSkillGuidance(
     [
       "You are editing an HTML artifact for a local AI doc editor.",
-      "Current focused file: document.html (relative to the current working directory).",
+      focusedFileLine,
       localFilesystemArtifactNotice,
       appToolPrompt(),
       artifactIntentPrompt("document"),
@@ -132,6 +156,20 @@ async function buildSystemPrompt(context: RuntimeEditContext, _projectCwd: strin
     ].join("\n\n"),
     skillContext,
   );
+}
+
+function focusedFilePromptLine(context: RuntimeEditContext) {
+  if (isTshFileArtifactProject(context.project.id)) {
+    const name = basename(projectFocusedArtifactPath(context.project.id, context.project.type));
+    return `Current focused file: ${name} (relative to the current working directory).`;
+  }
+  if (context.project.type === "docx") {
+    return "Current focused file: document.docx (relative to the current working directory).";
+  }
+  if (context.project.type === "markdown") {
+    return "Current focused file: document.md (relative to the current working directory).";
+  }
+  return "Current focused file: document.html (relative to the current working directory).";
 }
 
 function withTuttiSkillGuidance(appSystemPrompt: string, skillContext: LocalAgentSkillContext) {

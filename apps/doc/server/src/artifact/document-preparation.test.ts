@@ -5,7 +5,26 @@ import { join } from "node:path";
 import test from "node:test";
 import type { DocumentProject } from "@ai-doc/shared";
 import { AgentContextPreparationCoordinator, ProjectPreparationError } from "@ai-app/shared/project-preparation";
-import { documentAgentContextVersion, materializeDocumentProjectCore, prepareDocumentAgentContext } from "./document-preparation.js";
+import {
+  documentAgentContextVersion,
+  materializeDocumentArtifactFile,
+  materializeDocumentProjectCore,
+  prepareDocumentAgentContext,
+} from "./document-preparation.js";
+
+test("TSH single-file materialize writes html next to a private sidecar root", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ai-doc-tsh-file-"));
+  const privateRoot = join(root, "private");
+  const artifactPath = join(root, "Quarterly_Plan-abcd1234.html");
+  const project = documentProject("project-tsh-file");
+  try {
+    await materializeDocumentArtifactFile(artifactPath, privateRoot, project);
+    assert.equal(await readFile(artifactPath, "utf8"), project.content);
+    await assert.rejects(readFile(join(privateRoot, "document.html"), "utf8"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("core document stays usable when auxiliary AGENTS preparation fails", async () => {
   const root = await mkdtemp(join(tmpdir(), "ai-doc-preparation-"));

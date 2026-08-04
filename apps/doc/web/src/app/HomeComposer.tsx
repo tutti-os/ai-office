@@ -3,6 +3,7 @@ import { contextAttachmentFileAccept } from "@ai-app/shared/context-attachments"
 import type { DocumentType, LocalAgentTargetStatus, OfficeCliStatus, RuntimeProfile } from "@ai-doc/shared";
 import { useI18n } from "../i18n";
 import { AgentPromptRichTextInput } from "./AgentPromptRichTextInput";
+import { ParentPathPicker } from "./ParentPathPicker";
 import type { HomeAttachment } from "./useHomeAttachments";
 
 export function HomeComposer(props: {
@@ -13,13 +14,16 @@ export function HomeComposer(props: {
   officeCliInstalling: boolean;
   officeCliStatus: OfficeCliStatus | null;
   outputType: DocumentType;
+  parentPath?: string;
   prompt: string;
   runtimeProfiles: RuntimeProfile[];
   selectedRuntimeProfileId: string;
+  showParentPath?: boolean;
   onAddFiles: (files: File[]) => void;
   onCreateFromPrompt: () => void;
   onInstallOfficeCli: () => void;
   onOutputTypeChange: (type: DocumentType) => void;
+  onParentPathChange?: (value: string) => void;
   onPromptChange: (value: string) => void;
   onRemoveAttachment: (id: string) => void;
   onRuntimeProfileChange: (profileId: string) => void;
@@ -31,42 +35,57 @@ export function HomeComposer(props: {
   const canSubmit = !props.loading && selectedOutputAvailable && (props.prompt.trim().length > 0 || props.attachments.length > 0);
 
   return (
-    <ArtifactHomeComposer
-      addFilesLabel={t("composer.addContext")}
-      agentProfiles={props.runtimeProfiles}
-      agentTargets={props.localAgentTargets}
-      agentUnavailableLabel={t("composer.agentUnavailable")}
-      acceptedFileTypes={contextAttachmentFileAccept}
-      attachments={props.attachments}
-      canSubmit={canSubmit}
-      error={props.error}
-      formatOptions={documentFormatOptions({
-        docxAvailable,
-        docxInstalling,
-        officeCliStatus: props.officeCliStatus,
-        t,
-        onInstallOfficeCli: props.onInstallOfficeCli,
-      })}
-      loading={props.loading}
-      placeholder={t("composer.placeholder")}
-      prompt={props.prompt}
-      selectedAgentId={props.selectedRuntimeProfileId}
-      selectedFormatId={props.outputType}
-      selectAgentLabel={t("composer.selectAgent")}
-      submitLabel={t("composer.create")}
-      renderPromptInput={(inputProps) => (
-        <AgentPromptRichTextInput
-          {...inputProps}
-          className={`${inputProps.className} ai-doc-home-rich-text-editor`}
-        />
-      )}
-      onAddFiles={props.onAddFiles}
-      onFormatChange={props.onOutputTypeChange}
-      onPromptChange={props.onPromptChange}
-      onRemoveAttachment={props.onRemoveAttachment}
-      onSelectedAgentChange={props.onRuntimeProfileChange}
-      onSubmit={props.onCreateFromPrompt}
-    />
+    <div className="flex w-full flex-col">
+      <ArtifactHomeComposer
+        addFilesLabel={t("composer.addContext")}
+        agentProfiles={props.runtimeProfiles}
+        agentTargets={props.localAgentTargets}
+        agentUnavailableLabel={t("composer.agentUnavailable")}
+        acceptedFileTypes={contextAttachmentFileAccept}
+        attachments={props.attachments}
+        canSubmit={canSubmit}
+        error={props.error}
+        formatOptions={documentFormatOptions({
+          docxAvailable,
+          docxInstalling,
+          officeCliStatus: props.officeCliStatus,
+          t,
+          onInstallOfficeCli: props.onInstallOfficeCli,
+        })}
+        loading={props.loading}
+        placeholder={t("composer.placeholder")}
+        prompt={props.prompt}
+        selectedAgentId={props.selectedRuntimeProfileId}
+        selectedFormatId={props.outputType}
+        selectAgentLabel={t("composer.selectAgent")}
+        submitLabel={t("composer.create")}
+        leadingActionsExtra={
+          props.showParentPath ? (
+            <ParentPathPicker
+              disabled={props.loading}
+              linkExistingLabel={t("composer.linkExistingProject")}
+              parentPath={props.parentPath ?? "/workspace"}
+              placeholder={t("composer.parentPathLabel")}
+              title={t("composer.parentPathHint")}
+              workspaceRootLabel={t("composer.workspaceRoot")}
+              onParentPathChange={(value) => props.onParentPathChange?.(value)}
+            />
+          ) : null
+        }
+        renderPromptInput={(inputProps) => (
+          <AgentPromptRichTextInput
+            {...inputProps}
+            className={`${inputProps.className} ai-doc-home-rich-text-editor`}
+          />
+        )}
+        onAddFiles={props.onAddFiles}
+        onFormatChange={props.onOutputTypeChange}
+        onPromptChange={props.onPromptChange}
+        onRemoveAttachment={props.onRemoveAttachment}
+        onSelectedAgentChange={props.onRuntimeProfileChange}
+        onSubmit={props.onCreateFromPrompt}
+      />
+    </div>
   );
 }
 

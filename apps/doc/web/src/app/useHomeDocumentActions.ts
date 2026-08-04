@@ -22,8 +22,10 @@ type HomeDocumentActionsInput = {
   homeAttachments: HomeAttachmentsState;
   loadHtmlDocument: (html: string, input: { projectId?: string | null; title: string; source?: RuntimeState["source"] }) => void;
   outputType: DocumentType;
+  parentPath: string;
   prompt: string;
   selectedRuntimeProfileId: string;
+  tshWorkspaceApp: boolean;
   setError: (value: string) => void;
   setHistoryProjects: StateSetter<DocumentProject[]>;
   setHomePanel: (value: HomePanel) => void;
@@ -34,6 +36,10 @@ type HomeDocumentActionsInput = {
   setRoute: (route: AppRoute) => void;
   t: ReturnType<typeof useI18n>["t"];
 };
+
+function createRequestExtras(input: HomeDocumentActionsInput) {
+  return input.tshWorkspaceApp ? { parentPath: input.parentPath.trim() || "/workspace" } : {};
+}
 
 export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
   const openProject = (project: { id: string }) => {
@@ -75,6 +81,7 @@ export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
         title: input.t("project.untitledDoc"),
         content: type === "markdown" ? undefined : initialContentForType(type),
         type,
+        ...createRequestExtras(input),
       });
       input.setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
       openProject(project);
@@ -96,6 +103,7 @@ export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
         title: attachmentTitle.length > 80 ? `${attachmentTitle.slice(0, 80).trim()}...` : attachmentTitle,
         content: initialContentForType(input.outputType),
         type: input.outputType,
+        ...createRequestExtras(input),
       });
       const uploadedAttachments = await uploadHomeContextAttachments(project.id, attachments);
       input.setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
@@ -128,6 +136,7 @@ export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
         type: "html",
         templateId: template.id,
         templateName: template.name,
+        ...createRequestExtras(input),
       });
       input.setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
       openProject(project);

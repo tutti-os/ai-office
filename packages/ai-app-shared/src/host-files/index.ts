@@ -8,6 +8,17 @@ type TuttiExternalFiles = {
   open?: TuttiExternalFilesOpen;
 };
 
+type TuttiExternalUserProject = {
+  path: string;
+  name?: string;
+  displayName?: string;
+};
+
+type TuttiExternalUserProjects = {
+  list?: () => Promise<TuttiExternalUserProject[] | { projects?: TuttiExternalUserProject[] }>;
+  selectDirectory?: () => Promise<{ path: string } | null>;
+};
+
 type TuttiExternalLogs = {
   write?: (input: { event: string; level?: "debug" | "info" | "warn" | "error"; details?: Record<string, unknown> }) => void;
 };
@@ -16,10 +27,19 @@ function readTuttiExternal():
   | {
       files?: TuttiExternalFiles;
       logs?: TuttiExternalLogs;
+      userProjects?: TuttiExternalUserProjects;
     }
   | undefined {
   if (typeof window === "undefined") return undefined;
-  return (window as unknown as { tuttiExternal?: { files?: TuttiExternalFiles; logs?: TuttiExternalLogs } }).tuttiExternal;
+  return (
+    window as unknown as {
+      tuttiExternal?: {
+        files?: TuttiExternalFiles;
+        logs?: TuttiExternalLogs;
+        userProjects?: TuttiExternalUserProjects;
+      };
+    }
+  ).tuttiExternal;
 }
 
 function readTuttiExternalFiles(): TuttiExternalFiles | undefined {
@@ -50,6 +70,37 @@ function writeExportLocationDiagnostic(
 function readHostFilesOpen(): TuttiExternalFilesOpen | undefined {
   const open = readTuttiExternalFiles()?.open;
   return typeof open === "function" ? open : undefined;
+}
+
+export async function listTuttiExternalUserProjects(): Promise<Array<{ path: string; name: string }>> {
+  const list = readTuttiExternal()?.userProjects?.list;
+  if (typeof list !== "function") return [];
+  const result = await list();
+  const projects = Array.isArray(result) ? result : result?.projects ?? [];
+  return projects
+    .map((project) => {
+      const path = typeof project.path === "string" ? project.path.trim() : "";
+      if (!path) return null;
+      const name =
+        (typeof project.displayName === "string" && project.displayName.trim()) ||
+        (typeof project.name === "string" && project.name.trim()) ||
+        path.split("/").filter(Boolean).pop() ||
+        path;
+      return { path, name };
+    })
+    .filter((project): project is { path: string; name: string } => Boolean(project));
+}
+
+/**
+ * Opens the host "Select project folder" flow when available
+ * (`tuttiExternal.userProjects.selectDirectory`).
+ */
+export async function selectTuttiExternalUserProjectDirectory(): Promise<string | null> {
+  const selectDirectory = readTuttiExternal()?.userProjects?.selectDirectory;
+  if (typeof selectDirectory !== "function") return null;
+  const selected = await selectDirectory();
+  const path = selected?.path?.trim() ?? "";
+  return path || null;
 }
 
 /**

@@ -32,9 +32,11 @@ export function HomePage(props: {
   officeCliInstalling: boolean;
   officeCliStatus: OfficeCliStatus | null;
   outputType: DocumentType;
+  parentPath: string;
   selectedCategory: string;
   selectedRuntimeProfileId: string;
   runtimeProfiles: RuntimeProfile[];
+  showParentPath: boolean;
   templateCounts: Record<string, number>;
   templates: TuttiTemplate[];
   error: string;
@@ -51,6 +53,7 @@ export function HomePage(props: {
   onImportFile: (file: File) => void;
   onInstallOfficeCli: () => void;
   onOutputTypeChange: (type: DocumentType) => void;
+  onParentPathChange: (value: string) => void;
   onPromptChange: (value: string) => void;
   onRemoveAttachment: (id: string) => void;
   onRuntimeProfileChange: (profileId: string) => void;
@@ -95,13 +98,16 @@ export function HomePage(props: {
             officeCliInstalling={props.officeCliInstalling}
             officeCliStatus={props.officeCliStatus}
             outputType={props.outputType}
+            parentPath={props.parentPath}
             prompt={props.prompt}
             runtimeProfiles={props.runtimeProfiles}
             selectedRuntimeProfileId={props.selectedRuntimeProfileId}
+            showParentPath={props.showParentPath}
             onAddFiles={props.onAddFiles}
             onCreateFromPrompt={props.onCreateFromPrompt}
             onInstallOfficeCli={props.onInstallOfficeCli}
             onOutputTypeChange={props.onOutputTypeChange}
+            onParentPathChange={props.onParentPathChange}
             onPromptChange={props.onPromptChange}
             onRemoveAttachment={props.onRemoveAttachment}
             onRuntimeProfileChange={props.onRuntimeProfileChange}

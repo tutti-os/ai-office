@@ -1,4 +1,5 @@
 import type { SlideArtifact, SlideProject } from "@ai-slide/shared";
+import { bindProjectWorkspaceRoot } from "../local/paths.js";
 
 export function projectsWithArtifactTypeSql(input: { orderByUpdatedAt?: boolean; whereProjectId?: boolean } = {}) {
   const where = input.whereProjectId ? "WHERE projects.id = ?" : "";
@@ -13,6 +14,7 @@ export function projectsWithArtifactTypeSql(input: { orderByUpdatedAt?: boolean;
 }
 
 export function rowToProject(row: ProjectRowWithArtifactType): SlideProject {
+  if (row.workspace_root) bindProjectWorkspaceRoot(row.id, row.workspace_root);
   return {
     id: row.id,
     title: row.title,
@@ -20,6 +22,7 @@ export function rowToProject(row: ProjectRowWithArtifactType): SlideProject {
     artifactType: row.artifact_type ?? "deck",
     templateId: row.template_id,
     templateName: row.template_name,
+    workspaceRoot: row.workspace_root ?? null,
     updatedBy: row.updated_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -46,6 +49,7 @@ export interface ProjectRow {
   active_artifact_id: string;
   template_id: string | null;
   template_name: string | null;
+  workspace_root?: string | null;
   updated_by: "human" | "ai" | "system";
   created_at: string;
   updated_at: string;

@@ -40,6 +40,10 @@ export TUTTI_APP_DATABASE_DIR="\${TUTTI_APP_DATABASE_DIR:-$AI_SHEET_HOME/data}"
 export AI_SHEET_RUNTIME_ROOT="\${TUTTI_APP_RUNTIME_DIR:-$AI_SHEET_HOME/.runtime}"
 export AI_SHEET_LOG_ROOT="\${TUTTI_APP_LOG_DIR:-$AI_SHEET_RUNTIME_ROOT/logs}"
 export AI_SHEET_TUTTI_CLI="\${TUTTI_CLI:-}"
+# TSH sandboxes always expose OfficeCLI at the managed runtime path.
+if [ "\${TSH_WORKSPACE_APP:-}" = "1" ] && [ -z "\${TUTTI_APP_OFFICECLI_PATH:-}" ]; then
+  export TUTTI_APP_OFFICECLI_PATH=/usr/local/bin/officecli
+fi
 export TSH_OOXML_CALC_WASM_JS="\${TSH_OOXML_CALC_WASM_JS:-$package_dir/assets/office-formula-calc/tsh_ooxml_calc.js}"
 
 base_url="\${TUTTI_APP_BASE_URL:-http://$HOST:$PORT}"

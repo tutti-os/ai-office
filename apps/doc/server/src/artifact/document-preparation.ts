@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createEmptyDocxDocumentManifest, type DocumentProject } from "@ai-doc/shared";
 import { retryProjectPreparationOperation, withProjectPreparationPhase } from "@ai-app/shared/project-preparation";
 import { listProjectAssets } from "./project-assets.js";
@@ -14,6 +14,29 @@ export async function materializeDocumentProjectCore(root: string, project: Docu
     phase: "core_document",
     path,
     work: () => withProjectPreparationPhase("core_document", path, () => writeFile(path, content, "utf8")),
+  });
+}
+
+/** TSH single-file: write html/md content (or docx private JSON) without a project directory product. */
+export async function materializeDocumentArtifactFile(
+  artifactPath: string,
+  privateRoot: string,
+  project: DocumentProject,
+) {
+  await mkdir(privateRoot, { recursive: true });
+  if (project.type === "docx") {
+    // Keep manifest in private state; binary lives at the user-facing artifact path (written on import / agent).
+    await materializeDocumentProjectCore(privateRoot, project);
+    await mkdir(dirname(artifactPath), { recursive: true });
+    return;
+  }
+  await retryProjectPreparationOperation({
+    phase: "core_document",
+    path: artifactPath,
+    work: () => withProjectPreparationPhase("core_document", artifactPath, async () => {
+      await mkdir(dirname(artifactPath), { recursive: true });
+      await writeFile(artifactPath, project.content, "utf8");
+    }),
   });
 }
 

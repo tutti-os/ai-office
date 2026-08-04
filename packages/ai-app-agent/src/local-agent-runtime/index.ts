@@ -61,6 +61,8 @@ export interface LocalAgentRuntimeProviderOptions<
   TRequest extends BaseAiEditRequest = BaseAiEditRequest,
 > {
   runCwd(context: RuntimeEditContext<TRun, TProject, TRequest>): string;
+  /** Defaults to `runCwd`. Use a private root when cwd is a user-visible artifact directory. */
+  sessionRoot?: (context: RuntimeEditContext<TRun, TProject, TRequest>) => string;
   buildPrompt(context: RuntimeEditContext<TRun, TProject, TRequest>): string;
   buildSystemPrompt(
     context: RuntimeEditContext<TRun, TProject, TRequest>,
@@ -77,6 +79,8 @@ export interface LocalAgentRuntimeProviderOptions<
   timeoutMs?: () => number;
   sessionDirName?: string;
   extraAllowedDirs?: (context: RuntimeEditContext<TRun, TProject, TRequest>, runCwd: string) => string[];
+  /** Codex-only. Forwarded to `@tutti-os/agent-acp-kit` as `writeCodexProjectRootMarker`. */
+  writeCodexProjectRootMarker?: (context: RuntimeEditContext<TRun, TProject, TRequest>) => boolean | undefined;
   commandEnvNames?: string[];
 }
 
@@ -150,6 +154,7 @@ export class LocalAgentRuntimeProvider<
     const agentTargetId = context.runtimeProfile.agentTargetId;
     if (!agentTargetId) throw new Error("local-agent runtime profile is missing agentTargetId");
     const runCwd = this.options.runCwd(context);
+    const sessionRoot = this.options.sessionRoot?.(context) ?? runCwd;
     const controller = new AbortController();
     this.controllers.set(context.run.id, controller);
     const provider = this.resolveProviderId(context.runtimeProfile.provider) ?? context.runtimeProfile.provider;
@@ -163,7 +168,7 @@ export class LocalAgentRuntimeProvider<
     let runOutcome: "completed" | "failed" | "canceled" = "failed";
 
     try {
-      const sessionStore = new LocalAgentSessionStore(runCwd, this.options.sessionDirName ?? ".ai-app");
+      const sessionStore = new LocalAgentSessionStore(sessionRoot, this.options.sessionDirName ?? ".ai-app");
       const conversationSessionId = context.conversation?.sessionId ?? context.project.id;
       const providerResumeEnabled = this.options.useProviderResume?.(context) ?? true;
       const [previousSession, prepared] = await Promise.all([
@@ -286,6 +291,7 @@ export class LocalAgentRuntimeProvider<
       isAborted: () => controller.signal.aborted,
     });
     try {
+      const writeCodexProjectRootMarker = this.options.writeCodexProjectRootMarker?.(context);
       for await (const event of this.localAgentRuntime.run({
         agentTargetId,
         runId: context.run.id,
@@ -305,6 +311,9 @@ export class LocalAgentRuntimeProvider<
         env: { ...prepared.appEnv, ...(tuttiCliEnv ?? {}) },
         timeoutMs: this.options.timeoutMs?.() ?? DEFAULT_TIMEOUT_MS,
         extraAllowedDirs: this.options.extraAllowedDirs?.(context, runCwd) ?? [runCwd],
+        ...(writeCodexProjectRootMarker === undefined
+          ? {}
+          : { writeCodexProjectRootMarker }),
         resume,
         signal: controller.signal,
         metadata: { timingDiagnostics: true },

@@ -109,6 +109,8 @@ export function ArtifactHomeComposer<T extends string>(props: {
   selectedFormatId: T;
   selectAgentLabel: string;
   submitLabel: string;
+  /** Rendered after the agent selector in the composer footer (e.g. workspace path). */
+  leadingActionsExtra?: ReactNode;
   renderPromptInput?: (props: PromptComposerInputRenderProps) => ReactNode;
   onAddFiles: (files: File[]) => void;
   onFormatChange: (formatId: T) => void;
@@ -194,6 +196,7 @@ export function ArtifactHomeComposer<T extends string>(props: {
                 selectAgentLabel={props.selectAgentLabel}
                 onChange={props.onSelectedAgentChange}
               />
+              {props.leadingActionsExtra}
             </>
           }
           trailingActions={
