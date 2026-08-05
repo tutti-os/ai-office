@@ -1,8 +1,8 @@
 import { StrictMode, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { ArtifactAppRoot } from "@ai-app/ui/error-boundary";
-import { RichTextMentionServiceProvider } from "@tutti-os/ui-rich-text/editor";
 import { createRichTextMentionService } from "@tutti-os/ui-rich-text/service";
+import { AgentMentionProviderRoot } from "./app/AgentMentionProviderRoot";
 import { App } from "./App";
 import { createTuttiExternalMentionService } from "./app/tuttiMentionService";
 import { I18nProvider } from "./i18n";
@@ -20,7 +20,7 @@ function MentionServiceRoot({ children }: { children: ReactNode }) {
     fallbackService.dispose();
     return () => next.dispose();
   }, [fallbackService]);
-  return <RichTextMentionServiceProvider service={service}>{children}</RichTextMentionServiceProvider>;
+  return <AgentMentionProviderRoot service={service}>{children}</AgentMentionProviderRoot>;
 }
 
 createRoot(document.getElementById("root")!).render(

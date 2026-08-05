@@ -7,7 +7,7 @@
     "copy:office-preview-assets": "node scripts/copy-office-preview-assets.mjs",
     "dev": "pnpm run copy:office-preview-assets && vite --host 127.0.0.1 --port 5174",
     "build": "pnpm run copy:office-preview-assets && tsc -p tsconfig.json --noEmit && vite build",
-    "test": "tsx --test src/app/tuttiMentionService.test.ts src/app/htmlExport.test.ts src/app/documentLoadErrors.test.ts",
+    "test": "tsx --test src/app/tuttiMentionService.test.ts src/app/htmlExport.test.ts src/app/documentLoadErrors.test.ts && vitest run src/app/agentMentionComponents.test.tsx",
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -35,9 +35,9 @@
     "@tiptap/react": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
     "@tutti-os/office-preview": "0.0.0-test.20260706055103.ad1e4504c24a",
-    "@tutti-os/ui-rich-text": "0.0.137",
+    "@tutti-os/ui-rich-text": "0.0.288",
     "@tutti-os/ui-system": "0.0.137",
-    "@tutti-os/workspace-external-core": "0.0.125",
+    "@tutti-os/workspace-external-core": "0.0.288",
     "@vitejs/plugin-react": "^5.1.1",
     "lucide-react": "^0.562.0",
     "react": "^19.2.3",
@@ -45,10 +45,13 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.1",
+    "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "jsdom": "^27.2.0",
     "tailwindcss": "^4.3.1",
     "typescript": "^5.9.3",
-    "vite": "^7.2.7"
+    "vite": "^7.2.7",
+    "vitest": "^4.1.8"
   }
 }

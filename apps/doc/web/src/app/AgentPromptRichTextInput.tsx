@@ -3,8 +3,7 @@ import { RichTextTriggerEditor, type RichTextTriggerEditorProps } from "@tutti-o
 import type { AgentComposerInputRenderProps } from "@ai-app/agent/conversation-ui";
 import { useI18n } from "../i18n";
 
-const appMentionProviderIds = ["workspace-app"] as const;
-const agentMentionProviderIds = ["agent-target"] as const;
+const fileMentionProviderIds = ["file"] as const;
 
 export function AgentPromptRichTextInput(props: AgentComposerInputRenderProps) {
   const { t } = useI18n();
@@ -12,23 +11,26 @@ export function AgentPromptRichTextInput(props: AgentComposerInputRenderProps) {
     () => ({
       categories: [
         {
-          id: "apps",
-          label: t("agent.mentionTabApps"),
-          providerIds: appMentionProviderIds,
-        },
-        {
-          id: "agents",
-          label: t("agent.mentionTabAgents"),
-          providerIds: agentMentionProviderIds,
+          id: "files",
+          label: t("agent.mentionTabFiles"),
+          providerIds: fileMentionProviderIds,
         },
       ],
-      defaultCategoryId: "agents",
+      defaultCategoryId: "files",
       labels: {
         tabHint: t("agent.mentionPalette"),
         cycleFilter: t("agent.mentionCycleFilter"),
         moveSelection: t("agent.mentionMoveSelection"),
         empty: t("agent.mentionEmpty"),
         listbox: t("agent.mentionPalette"),
+      },
+      directoryNavigation: {
+        providerId: "file",
+        labels: {
+          back: t("agent.mentionDirectoryBack"),
+          enter: t("agent.mentionDirectoryEnter"),
+          navigateHierarchy: t("agent.mentionDirectoryNavigate"),
+        },
       },
       maxHeightPx: 320,
     }),
