@@ -144,6 +144,7 @@ export class ProjectService {
     if (!cleanTitle) throw new Error("Project title is required");
     const project = this.repo.updateProject(projectId, { title: cleanTitle, updatedBy });
     if (!project) throw new Error("Project not found");
+    await this.repo.renameTshArtifactRootForTitle(projectId, cleanTitle);
     this.repo.updateProjectSessionTitle(projectId, cleanTitle);
     await this.repo.updateDeckManifestTitle(projectId, cleanTitle, updatedBy);
     const detail = await this.getProject(projectId);

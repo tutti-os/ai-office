@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   allocateRenamedTshArtifactFile,
+  allocateRenamedTshArtifactRoot,
   allocateTshArtifactFile,
   allocateTshArtifactRoot,
   assertAllowedTshParentPath,
@@ -39,6 +40,22 @@ test("assertAllowedTshParentPath rejects escapes and .tsh", () => {
 test("allocateTshArtifactRoot nests under the parent path", () => {
   const root = allocateTshArtifactRoot("/workspace/docs", "Quarterly Plan", "abcd1234-ef56-7890-abcd-ef1234567890");
   assert.equal(root, "/workspace/docs/Quarterly_Plan-abcd1234");
+});
+
+test("allocateTshArtifactRoot keeps unicode titles", () => {
+  const root = allocateTshArtifactRoot("/workspace", "把无聊变成实验", "af139ff9-ef56-7890-abcd-ef1234567890");
+  assert.equal(root, "/workspace/把无聊变成实验-af139ff9");
+});
+
+test("allocateRenamedTshArtifactRoot keeps short id", () => {
+  assert.equal(
+    allocateRenamedTshArtifactRoot("/workspace/Untitled_Presentation-af139ff9", "把无聊变成实验"),
+    "/workspace/把无聊变成实验-af139ff9",
+  );
+  assert.equal(
+    allocateRenamedTshArtifactRoot("/workspace/把无聊变成实验-af139ff9", "把无聊变成实验"),
+    "/workspace/把无聊变成实验-af139ff9",
+  );
 });
 
 test("allocateTshArtifactFile uses date slug and file extension", () => {

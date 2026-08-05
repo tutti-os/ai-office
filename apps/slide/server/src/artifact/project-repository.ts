@@ -1,5 +1,5 @@
 import { existsSync, rmSync } from "node:fs";
-import { copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, extname, join, resolve } from "node:path";
 import {
@@ -21,6 +21,7 @@ import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationSto
 import { asProjectPreparationError } from "@ai-app/shared/project-preparation";
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
 import {
+  allocateRenamedTshArtifactRoot,
   allocateTshArtifactRoot,
   assertAllowedTshParentPath,
   ensureTshArtifactRoot,
@@ -30,6 +31,7 @@ import { getDb, rowOrNull, rows } from "../db/database.js";
 import {
   appPaths,
   bindProjectWorkspaceRoot,
+  boundWorkspaceRoot,
   clearProjectWorkspaceRootBindings,
   ensureBaseDirs,
   ensureProjectDirs,
@@ -242,6 +244,26 @@ export class ProjectRepository {
 
   updateProjectSessionTitle(projectId: string, title: string) {
     return this.conversations.updateProjectSessionTitle(projectId, title);
+  }
+
+  /**
+   * TSH directory artifacts keep a stable short id suffix. When the AI/human
+   * sets a real title, rename `/workspace/Untitled_…-<id>` to match.
+   */
+  async renameTshArtifactRootForTitle(projectId: string, title: string) {
+    const currentPath = boundWorkspaceRoot(projectId);
+    if (!currentPath) return;
+    if (!existsSync(currentPath)) {
+      throw new Error(`Deck directory is missing at ${currentPath}: no such file or directory`);
+    }
+    const nextPath = allocateRenamedTshArtifactRoot(currentPath, title);
+    if (nextPath === currentPath) return;
+    if (existsSync(nextPath)) {
+      throw new Error(`A directory already exists at ${nextPath}`);
+    }
+    await rename(currentPath, nextPath);
+    bindProjectWorkspaceRoot(projectId, nextPath);
+    getDb().prepare(`UPDATE projects SET workspace_root = ? WHERE id = ?`).run(nextPath, projectId);
   }
 
   async updateDeckManifestTitle(projectId: string, title: string, updatedBy: SlideProject["updatedBy"] = "ai") {

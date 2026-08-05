@@ -1,6 +1,5 @@
 import { mkdirSync } from "node:fs";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
-import { safePathSegment } from "../local-paths/index.js";
 
 export const TSH_WORKSPACE_APP_ENV = "TSH_WORKSPACE_APP";
 export const TSH_DEFAULT_PARENT_PATH = "/workspace";
@@ -22,8 +21,23 @@ export function resolveTshParentPath(input?: string | null, env: NodeJS.ProcessE
 /** Legacy directory artifact root (still used by slide). */
 export function allocateTshArtifactRoot(parentPath: string, title: string, projectId: string): string {
   const parent = assertAllowedTshParentPath(parentPath);
-  const slug = safePathSegment(title.trim() || "untitled").slice(0, 48);
+  // Keep Unicode letters (e.g. Chinese titles) — do not use ASCII-only safePathSegment.
+  const slug = safeTshFileStem(title.trim() || "untitled").slice(0, 48);
   const shortId = projectId.replace(/-/g, "").slice(0, 8) || "project";
+  return join(parent, `${slug}-${shortId}`);
+}
+
+/** Rename a TSH directory artifact root while preserving the trailing short id. */
+export function allocateRenamedTshArtifactRoot(currentRoot: string, title: string): string {
+  const resolved = resolve(currentRoot.trim());
+  const parent = dirname(resolved);
+  assertAllowedTshParentPath(parent);
+  const base = basename(resolved);
+  const shortIdMatch = base.match(/-([a-f0-9]{8})$/i);
+  const shortId = shortIdMatch?.[1] || "project";
+  let stem = title.trim();
+  stem = stem.replace(new RegExp(`-${shortId}$`, "i"), "");
+  const slug = safeTshFileStem(stem);
   return join(parent, `${slug}-${shortId}`);
 }
 

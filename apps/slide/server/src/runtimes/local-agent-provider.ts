@@ -9,7 +9,11 @@ import {
   type SkillMaterializationRecord,
 } from "@ai-app/agent/local-agent-runtime";
 import type { AiEditRequest, SlideRun } from "@ai-slide/shared";
-import { projectWorkspaceRoot } from "../local/paths.js";
+import {
+  isTshDirectoryArtifactProject,
+  projectPrivateRoot,
+  projectWorkspaceRoot,
+} from "../local/paths.js";
 import { extractOoxmlTextPreview } from "../artifact/ooxml-text.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
 import { tuttiCliEnv } from "../tutti/tutti-cli.js";
@@ -30,6 +34,11 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
   constructor() {
     super({
       runCwd: (context) => projectWorkspaceRoot(context.project.id),
+      // Keep resume/session files out of the user-visible TSH deck directory.
+      sessionRoot: (context) =>
+        isTshDirectoryArtifactProject(context.project.id)
+          ? projectPrivateRoot(context.project.id)
+          : projectWorkspaceRoot(context.project.id),
       buildPrompt: buildEditPrompt,
       buildSystemPrompt,
       buildSkillManifest: buildSlideAgentSkillContext,
@@ -39,6 +48,15 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
         AI_SLIDE_PROJECT_ID: context.project.id,
         AI_SLIDE_RUN_ID: context.run.id,
       }),
+      extraAllowedDirs: (context, runCwd) => {
+        if (!isTshDirectoryArtifactProject(context.project.id)) return [runCwd];
+        const privateRoot = projectPrivateRoot(context.project.id);
+        return privateRoot === runCwd ? [runCwd] : [runCwd, privateRoot];
+      },
+      // Never leave `.agent-acp-kit-codex-root` in user-visible /workspace trees.
+      // AGENTS.md under the deck root is still materialized separately and kept.
+      writeCodexProjectRootMarker: (context) =>
+        isTshDirectoryArtifactProject(context.project.id) ? false : undefined,
       useProviderResume: (context) => context.project.artifact.type !== "deck",
       timeoutMs: localAgentTimeoutMs,
       sessionDirName: ".ai-slide",
