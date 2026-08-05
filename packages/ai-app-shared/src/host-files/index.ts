@@ -123,7 +123,9 @@ export async function selectTuttiExternalUserProjectDirectory(
  */
 export function resolveTshExportBaseDirectory(workspaceRoot?: string | null): string {
   const trimmed = workspaceRoot?.trim() || "/workspace";
-  if (/\.(html?|md|markdown|docx)$/i.test(trimmed)) {
+  // Single-file artifacts (doc html/md/docx, slide pptx) use the parent folder.
+  // Directory products (slide decks) pass workspaceRoot as-is.
+  if (/\.(html?|md|markdown|docx|pptx)$/i.test(trimmed)) {
     const slash = trimmed.lastIndexOf("/");
     return slash > 0 ? trimmed.slice(0, slash) : "/workspace";
   }

@@ -166,13 +166,18 @@ export type ProjectExportWriteResponse = {
   sizeBytes: number;
 };
 
-export async function writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; content: Uint8Array | ArrayBuffer }) {
+export async function writeProjectExport(
+  projectId: string,
+  input: { fileName: string; mimeType: string; content: Uint8Array | ArrayBuffer; targetDirectory?: string | null },
+) {
+  const targetDirectory = input.targetDirectory?.trim() || "";
   const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/exports`, {
     method: "POST",
     headers: {
       "content-type": "application/octet-stream",
       "x-file-name": encodeURIComponent(input.fileName || "slides.pptx"),
       "x-mime-type": encodeURIComponent(input.mimeType),
+      ...(targetDirectory ? { "x-export-directory": encodeURIComponent(targetDirectory) } : {}),
     },
     body: input.content instanceof Uint8Array ? input.content.slice().buffer : input.content,
   });
@@ -182,16 +187,28 @@ export async function writeProjectExport(projectId: string, input: { fileName: s
   return data;
 }
 
-export async function exportProjectPptxFile(projectId: string) {
-  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/exports/pptx`, { method: "POST" });
+export async function exportProjectPptxFile(projectId: string, input?: { targetDirectory?: string | null }) {
+  const targetDirectory = input?.targetDirectory?.trim() || "";
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/exports/pptx`, {
+    method: "POST",
+    headers: {
+      ...(targetDirectory ? { "x-export-directory": encodeURIComponent(targetDirectory) } : {}),
+    },
+  });
   const data = (await response.json().catch(() => null)) as ProjectExportWriteResponse | { error?: string } | null;
   if (!response.ok) throw new Error(data && "error" in data && data.error ? data.error : `Export failed: ${response.status}`);
   if (!data || !("path" in data)) throw new Error("Export response is missing export path");
   return data;
 }
 
-export async function exportProjectHtmlDeck(projectId: string) {
-  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/exports/html-deck`, { method: "POST" });
+export async function exportProjectHtmlDeck(projectId: string, input?: { targetDirectory?: string | null }) {
+  const targetDirectory = input?.targetDirectory?.trim() || "";
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/exports/html-deck`, {
+    method: "POST",
+    headers: {
+      ...(targetDirectory ? { "x-export-directory": encodeURIComponent(targetDirectory) } : {}),
+    },
+  });
   const data = (await response.json().catch(() => null)) as ProjectExportWriteResponse | { error?: string } | null;
   if (!response.ok) throw new Error(data && "error" in data && data.error ? data.error : `Export failed: ${response.status}`);
   if (!data || !("path" in data)) throw new Error("Export response is missing export path");

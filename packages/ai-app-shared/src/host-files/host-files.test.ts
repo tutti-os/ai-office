@@ -144,6 +144,13 @@ describe("resolveTshExportBaseDirectory", () => {
     );
   });
 
+  it("uses the parent of a pptx file artifact", () => {
+    assert.equal(
+      resolveTshExportBaseDirectory("/workspace/decks/slides.pptx"),
+      "/workspace/decks",
+    );
+  });
+
   it("keeps directory workspace roots", () => {
     assert.equal(resolveTshExportBaseDirectory("/workspace/docs"), "/workspace/docs");
   });

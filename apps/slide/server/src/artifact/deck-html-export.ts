@@ -1,13 +1,15 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, extname, join, normalize, sep } from "node:path";
+import { basename, dirname, extname, join, normalize, sep } from "node:path";
 import {
   deckSlideDisplayName,
   type DeckManifest,
   type SlideArtifact,
 } from "@ai-slide/shared";
+import { assertAllowedTshParentPath } from "@ai-app/shared/tsh-host";
 import { ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
 
 const htmlMimeType = "text/html";
+const EXPORT_STEM_EXTENSIONS = new Set([".html", ".htm", ".pdf", ".ppt", ".pptx"]);
 
 type DeckHtmlExportSlide = {
   bodyAttrs: string;
@@ -27,8 +29,11 @@ export function writeDeckHtmlExportBundle(input: {
   manifest: DeckManifest;
   projectId: string;
   projectTitle: string;
+  targetDirectory?: string | null;
 }) {
-  const exportsRoot = join(ensureProjectDirs(input.projectId), "exports");
+  const exportsRoot = input.targetDirectory?.trim()
+    ? assertAllowedTshParentPath(input.targetDirectory)
+    : join(ensureProjectDirs(input.projectId), "exports");
   mkdirSync(exportsRoot, { recursive: true });
   const exportDirName = uniqueExportDirectoryName(exportsRoot, input.projectTitle || input.manifest.title || "slides");
   const exportDir = join(exportsRoot, exportDirName);
@@ -514,12 +519,22 @@ function resolveDeckSlidePath(projectId: string, artifact: SlideArtifact, file: 
 }
 
 function safeFileStem(value: string, fallback: string) {
-  return value
-    .trim()
+  const withoutExportSuffix = exportDirectoryStem(value.trim());
+  return withoutExportSuffix
     .replace(/[^\p{L}\p{N}._-]+/gu, "-")
     .replace(/^-+|-+$/g, "")
     .replace(/\.+$/g, "")
     .slice(0, 80) || fallback;
+}
+
+function exportDirectoryStem(fileName: string) {
+  let stem = fileName;
+  for (;;) {
+    const extension = extname(stem).toLowerCase();
+    if (!EXPORT_STEM_EXTENSIONS.has(extension)) break;
+    stem = basename(stem, extname(stem));
+  }
+  return stem;
 }
 
 function escapeHtml(value: string) {

@@ -64,6 +64,7 @@
   "editor.exportedPdf": "Exported PDF to {{path}}",
   "editor.htmlExportFailed": "HTML export failed.",
   "editor.pdfExportFailed": "PDF export failed.",
+  "editor.exportPickerUnavailable": "Export folder picker is unavailable in this host.",
   "editor.agentWorking": "Agent working",
   "editor.backHome": "Back to home",
   "editor.dismissExportNotice": "Dismiss export notice",

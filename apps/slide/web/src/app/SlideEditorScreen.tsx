@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { isArtifactAgentRunning } from "@ai-app/shared/artifact-runtime";
-import { openExportLocation } from "@ai-app/shared/host-files";
+import {
+  canSelectTuttiExternalUserProjectDirectory,
+  openExportLocation,
+  resolveTshExportBaseDirectory,
+  selectTuttiExternalUserProjectDirectory,
+} from "@ai-app/shared/host-files";
 import { ArtifactEditorWorkspace, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
 import { AgentConversationPanel } from "./AgentConversationPanel";
 import { DeckEditor } from "./DeckEditor";
@@ -35,6 +40,7 @@ export function SlideEditorScreen(props: {
   runtimeProfiles: RuntimeProfile[];
   selectedAgent: string;
   sending: boolean;
+  tshWorkspaceApp: boolean;
   onArtifactSaveStateChange: (state: ArtifactSaveState) => void;
   onBackHome: () => void;
   onCancel: (runId: string) => Promise<void>;
@@ -57,13 +63,28 @@ export function SlideEditorScreen(props: {
   const agentProcessing = isArtifactAgentRunning(props.artifactInteraction);
   const exportInProgress = htmlExporting || pdfExporting || pptxExporting;
 
+  /**
+   * TSH: pick an export directory (base = current project root). null = cancelled.
+   * Tutti / non-TSH: undefined → write under the private project exports dir.
+   */
+  const resolveExportTargetDirectory = async (): Promise<string | null | undefined> => {
+    if (!props.tshWorkspaceApp) return undefined;
+    if (!canSelectTuttiExternalUserProjectDirectory()) {
+      throw new Error(t("editor.exportPickerUnavailable"));
+    }
+    const initialPath = resolveTshExportBaseDirectory(props.detail?.project.workspaceRoot);
+    return selectTuttiExternalUserProjectDirectory({ initialPath });
+  };
+
   const exportDeckHtml = async () => {
     if (props.detail?.artifact.type !== "deck" || exportInProgress) return;
     setHtmlExporting(true);
     setExportNotice("");
     setExportRevealPath("");
     try {
-      const exported = await exportProjectHtmlDeck(props.projectId);
+      const targetDirectory = await resolveExportTargetDirectory();
+      if (targetDirectory === null) return;
+      const exported = await exportProjectHtmlDeck(props.projectId, { targetDirectory });
       console.info(`[ai-slide] Exported HTML to ${exported.path}`);
       setExportRevealPath(exported.path);
       setExportNotice(t("editor.exportedHtml", { path: exported.path }));
@@ -81,11 +102,14 @@ export function SlideEditorScreen(props: {
     setExportNotice("");
     setExportRevealPath("");
     try {
+      const targetDirectory = await resolveExportTargetDirectory();
+      if (targetDirectory === null) return;
       const exported = await saveDeckPdfExport({
         artifact: props.detail.artifact,
         manifest: props.detail.deckManifest,
         projectId: props.projectId,
         title: props.detail.project.title,
+        targetDirectory,
       });
       console.info(`[ai-slide] Exported deck PDF to ${exported.path}`);
       setExportRevealPath(exported.path);
@@ -105,10 +129,13 @@ export function SlideEditorScreen(props: {
     setExportNotice("");
     setExportRevealPath("");
     try {
+      const targetDirectory = await resolveExportTargetDirectory();
+      if (targetDirectory === null) return;
       const exported = await savePptxPdfExport({
         presentation,
         projectId: props.projectId,
         title: props.detail.project.title,
+        targetDirectory,
       });
       console.info(`[ai-slide] Exported PPTX PDF to ${exported.path}`);
       setExportRevealPath(exported.path);

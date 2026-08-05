@@ -57,7 +57,9 @@ export function ParentPathPicker(props: {
         onChange={(event) => {
           const next = event.currentTarget.value;
           if (next === LINK_EXISTING_VALUE) {
-            void selectTuttiExternalUserProjectDirectory()
+            void selectTuttiExternalUserProjectDirectory({
+              initialPath: props.parentPath.trim() || WORKSPACE_ROOT,
+            })
               .then((path) => {
                 if (!path) return;
                 props.onParentPathChange(path);

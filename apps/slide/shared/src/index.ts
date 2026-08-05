@@ -260,6 +260,8 @@ export interface DeckSlideHtmlResponse {
 
 export interface UpdateDeckSlideHtmlRequest {
   html: string;
+  /** Reject human saves that race an agent/other revision bump. */
+  expectedArtifactRevision?: number;
 }
 
 export interface DeckAssetUploadResponse {

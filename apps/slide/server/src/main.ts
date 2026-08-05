@@ -183,7 +183,13 @@ server.post<{ Params: { projectId: string }; Body: Buffer }>("/api/projects/:pro
 
 server.post<{ Params: { projectId: string } }>("/api/projects/:projectId/exports/pptx", async (request, reply) => {
   try {
-    return await projects.exportPptxFile(request.params.projectId);
+    const exportRequest = readArtifactExportRequest(request, {
+      defaultFileName: "slides.pptx",
+      defaultMimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    });
+    return await projects.exportPptxFile(request.params.projectId, {
+      targetDirectory: exportRequest.targetDirectory,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to export PPTX file";
     return reply.code(message.toLowerCase().includes("not found") ? 404 : 400).send({ error: message });
@@ -192,7 +198,13 @@ server.post<{ Params: { projectId: string } }>("/api/projects/:projectId/exports
 
 server.post<{ Params: { projectId: string } }>("/api/projects/:projectId/exports/html-deck", async (request, reply) => {
   try {
-    return await projects.exportDeckHtml(request.params.projectId);
+    const exportRequest = readArtifactExportRequest(request, {
+      defaultFileName: "index.html",
+      defaultMimeType: "text/html",
+    });
+    return await projects.exportDeckHtml(request.params.projectId, {
+      targetDirectory: exportRequest.targetDirectory,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to export HTML deck";
     return reply.code(message.toLowerCase().includes("not found") ? 404 : 400).send({ error: message });

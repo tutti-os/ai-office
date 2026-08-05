@@ -21,23 +21,47 @@ export class DeckEditorController {
   private readonly pendingSaveSlides = new Set<string>();
   private readonly savingSlides = new Set<string>();
   private hasSaveError = false;
+  private savesAllowed = true;
+  private artifactRevision: number;
 
   constructor(
     private readonly deps: {
+      artifactRevision: number;
       fileRef: string;
       projectId: string;
       onHistoryChange: () => void;
       onSaveStateChange: (state: "saved" | "saving" | "error") => void;
     },
-  ) {}
+  ) {
+    this.artifactRevision = deps.artifactRevision;
+  }
 
   dispose() {
-    for (const record of this.frameRecords.values()) {
-      if (record.saveTimer) clearTimeout(record.saveTimer);
-    }
+    this.discardPendingSaves();
     this.frameRecords.clear();
-    this.pendingSaveSlides.clear();
     this.savingSlides.clear();
+  }
+
+  setArtifactRevision(revision: number) {
+    this.artifactRevision = revision;
+  }
+
+  setSavesAllowed(allowed: boolean) {
+    this.savesAllowed = allowed;
+    if (!allowed) this.discardPendingSaves();
+  }
+
+  /** Drop queued human autosaves so they cannot overwrite agent writes. */
+  discardPendingSaves() {
+    for (const record of this.frameRecords.values()) {
+      if (record.saveTimer) {
+        clearTimeout(record.saveTimer);
+        record.saveTimer = null;
+      }
+    }
+    this.pendingSaveSlides.clear();
+    this.hasSaveError = false;
+    this.publishSaveState();
   }
 
   registerFrame(slideId: string, iframe: HTMLIFrameElement) {
@@ -98,7 +122,14 @@ export class DeckEditorController {
     this.deps.onHistoryChange();
   }
 
+  /** Clear local undo history after an external (agent) revision bump. */
+  clearHistories() {
+    this.slideHistories.clear();
+    this.deps.onHistoryChange();
+  }
+
   scheduleSave(slideId: string) {
+    if (!this.savesAllowed) return;
     const record = this.frameRecords.get(slideId);
     const doc = record?.iframe.contentDocument;
     if (!record || !doc) return;
@@ -106,15 +137,24 @@ export class DeckEditorController {
     this.hasSaveError = false;
     this.pendingSaveSlides.add(slideId);
     this.deps.onSaveStateChange("saving");
+    const expectedArtifactRevision = this.artifactRevision;
     record.saveTimer = setTimeout(() => {
       record.saveTimer = null;
+      if (!this.savesAllowed) {
+        this.pendingSaveSlides.delete(slideId);
+        this.publishSaveState();
+        return;
+      }
       this.pendingSaveSlides.delete(slideId);
       this.savingSlides.add(slideId);
       this.deps.onSaveStateChange("saving");
       const html = serializeSlideDocument(doc);
-      void updateDeckSlideHtml(this.deps.projectId, slideId, { html })
-        .then(() => {
+      void updateDeckSlideHtml(this.deps.projectId, slideId, { html, expectedArtifactRevision })
+        .then((result) => {
           this.savingSlides.delete(slideId);
+          if (result.artifact?.revision != null) {
+            this.artifactRevision = result.artifact.revision;
+          }
           this.publishSaveState();
         })
         .catch(() => {

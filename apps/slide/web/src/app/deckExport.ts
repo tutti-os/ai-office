@@ -17,6 +17,7 @@ export async function saveDeckPdfExport(input: {
   manifest: DeckManifest;
   projectId: string;
   title: string;
+  targetDirectory?: string | null;
 }) {
   const frames = await createExportFrames({
     artifact: input.artifact,
@@ -42,6 +43,7 @@ export async function saveDeckPdfExport(input: {
       fileName: `${safeExportFileName(input.title || "slides")}.pdf`,
       mimeType: pdfMimeType,
       content: bytes,
+      targetDirectory: input.targetDirectory,
     });
   } finally {
     for (const frame of frames) frame.remove();
@@ -307,9 +309,12 @@ function absolutizeDeckSlideAssetReferences(
   });
 }
 
-function safeExportFileName(value: string) {
-  return value
+export function safeExportFileName(value: string) {
+  // Drop source/export suffixes so titles like `deck.pptx` export as `deck.pdf`.
+  const withoutExportSuffix = value
     .trim()
+    .replace(/(?:\.(?:html?|pdf|ppt|pptx))+$/i, "");
+  return withoutExportSuffix
     .replace(/[^\p{L}\p{N}._-]+/gu, "-")
     .replace(/^-+|-+$/g, "")
     .replace(/\.+$/g, "")
