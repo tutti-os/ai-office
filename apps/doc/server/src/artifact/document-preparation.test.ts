@@ -26,6 +26,37 @@ test("TSH single-file materialize writes html next to a private sidecar root", a
   }
 });
 
+test("TSH single-file docx materialize keeps private manifest and does not invent a binary", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ai-doc-tsh-docx-"));
+  const privateRoot = join(root, "private");
+  const artifactPath = join(root, "2026-08-06-abcd1234.docx");
+  const now = "2026-08-06T00:00:00.000Z";
+  const project: DocumentProject = {
+    id: "project-tsh-docx",
+    title: "Letter",
+    type: "docx",
+    content: JSON.stringify({
+      kind: "docx",
+      fileName: "document.docx",
+      sha256: null,
+      sizeBytes: 0,
+      updatedAt: null,
+    }),
+    templateId: null,
+    templateName: null,
+    updatedBy: "system",
+    createdAt: now,
+    updatedAt: now,
+  };
+  try {
+    await materializeDocumentArtifactFile(artifactPath, privateRoot, project);
+    assert.equal(await readFile(join(privateRoot, "document.json"), "utf8"), project.content);
+    await assert.rejects(readFile(artifactPath));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("core document stays usable when auxiliary AGENTS preparation fails", async () => {
   const root = await mkdtemp(join(tmpdir(), "ai-doc-preparation-"));
   const now = "2026-07-17T00:00:00.000Z";
