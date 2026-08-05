@@ -8,6 +8,7 @@ import { buildDocAppToolMcpServers } from "../agent-tools.js";
 import {
   isTshFileArtifactProject,
   projectFocusedArtifactPath,
+  projectLocalAgentStateRoot,
   projectPrivateRoot,
   projectWorkspaceRoot,
 } from "../local/paths.js";
@@ -35,11 +36,8 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<D
         }
         return projectWorkspaceRoot(context.project.id);
       },
-      // Keep resume/session files out of the user-visible artifact parent directory.
-      sessionRoot: (context) =>
-        isTshFileArtifactProject(context.project.id)
-          ? projectPrivateRoot(context.project.id)
-          : projectWorkspaceRoot(context.project.id),
+      // Resume pointers stay in VM-local database dir — never /workspace or .tsh app-data.
+      sessionRoot: (context) => projectLocalAgentStateRoot(context.project.id),
       buildPrompt: buildEditPrompt,
       buildSystemPrompt,
       buildSkillManifest: buildTuttiAgentSkillContext,

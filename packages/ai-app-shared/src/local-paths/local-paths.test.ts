@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { resolve } from "node:path";
-import { createAppPaths } from "./index.js";
+import { createAppPaths, projectLocalAgentStateRoot } from "./index.js";
 
 const originalDatabaseDir = process.env.TUTTI_APP_DATABASE_DIR;
 const originalHome = process.env.TEST_APP_HOME;
@@ -24,8 +24,13 @@ test("uses the dedicated database directory without moving shared app data", () 
   });
 
   assert.equal(paths.root, resolve("/workspace/.tsh/apps/data/install-1"));
+  assert.equal(paths.databaseDir, resolve("/workspace/.tsh/apps/databases/install-1"));
   assert.equal(paths.projectsDir, resolve("/workspace/.tsh/apps/data/install-1/projects"));
   assert.equal(paths.dbPath, resolve("/workspace/.tsh/apps/databases/install-1/test-app.db"));
+  assert.equal(
+    projectLocalAgentStateRoot(paths, "proj-1"),
+    resolve("/workspace/.tsh/apps/databases/install-1/local-agent-state/proj-1"),
+  );
 });
 
 test("falls back to the legacy data directory when no database directory is injected", () => {

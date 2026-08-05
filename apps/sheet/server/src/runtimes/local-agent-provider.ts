@@ -4,7 +4,10 @@ import {
   type LocalAgentSkillContext,
 } from "@ai-app/agent/local-agent-runtime";
 import type { AiEditRequest, SheetRun } from "@ai-sheet/shared";
-import { projectWorkspaceRoot } from "../local/paths.js";
+import {
+  projectLocalAgentStateRoot,
+  projectWorkspaceRoot,
+} from "../local/paths.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
 import { tuttiCliEnv } from "../tutti/tutti-cli.js";
 import { buildSheetAppToolMcpServers } from "../agent-tools.js";
@@ -31,6 +34,8 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       }),
       buildMcpServers: (context) => buildSheetAppToolMcpServers(context),
       useProviderResume: () => true,
+      // Resume pointers stay in VM-local database dir — never app-data / workspace trees.
+      sessionRoot: (context) => projectLocalAgentStateRoot(context.project.id),
       timeoutMs: localAgentTimeoutMs,
       sessionDirName: ".ai-sheet",
       commandEnvNames: ["AI_SHEET_TUTTI_CLI"],

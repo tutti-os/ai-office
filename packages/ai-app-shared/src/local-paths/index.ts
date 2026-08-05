@@ -11,6 +11,8 @@ export interface AppPathOptions {
 export interface AppPaths {
   root: string;
   dataDir: string;
+  /** VM-local private state root (TUTTI_APP_DATABASE_DIR when injected). */
+  databaseDir: string;
   projectsDir: string;
   dbPath: string;
 }
@@ -18,14 +20,15 @@ export interface AppPaths {
 export function createAppPaths(options: AppPathOptions): AppPaths {
   const envHome = process.env[options.homeEnvVar];
   const root = envHome ? resolve(envHome) : join(homedir(), options.defaultHomeDirName);
-  const databaseRoot = process.env.TUTTI_APP_DATABASE_DIR?.trim()
+  const databaseDir = process.env.TUTTI_APP_DATABASE_DIR?.trim()
     ? resolve(process.env.TUTTI_APP_DATABASE_DIR)
     : join(root, "data");
   return {
     root,
     dataDir: join(root, "data"),
+    databaseDir,
     projectsDir: join(root, "projects"),
-    dbPath: join(databaseRoot, options.dbFileName ?? `${options.defaultHomeDirName.replace(/^\./, "")}.db`),
+    dbPath: join(databaseDir, options.dbFileName ?? `${options.defaultHomeDirName.replace(/^\./, "")}.db`),
   };
 }
 
@@ -36,6 +39,18 @@ export function ensureBaseDirs(paths: Pick<AppPaths, "dataDir" | "projectsDir">)
 
 export function projectWorkspaceRoot(paths: Pick<AppPaths, "projectsDir">, projectId: string) {
   return join(paths.projectsDir, safePathSegment(projectId));
+}
+
+/**
+ * VM-local private root for local-agent resume/session pointers.
+ * Prefer TUTTI_APP_DATABASE_DIR — do not put these under user-visible /workspace
+ * or FabricFS app-data trees.
+ */
+export function projectLocalAgentStateRoot(
+  paths: Pick<AppPaths, "databaseDir">,
+  projectId: string,
+) {
+  return join(paths.databaseDir, "local-agent-state", safePathSegment(projectId));
 }
 
 export function ensureProjectDirs(paths: Pick<AppPaths, "projectsDir">, projectId: string) {
