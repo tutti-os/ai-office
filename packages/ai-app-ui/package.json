@@ -13,6 +13,7 @@
     "./persistent-selection-highlight": "./src/persistent-selection-highlight/index.ts",
     "./prompt-composer": "./src/prompt-composer/index.tsx",
     "./rich-text": "./src/rich-text/index.ts",
+    "./tutti-reference-add-control": "./src/tutti-reference-add-control/index.tsx",
     "./toolbar": "./src/toolbar/index.tsx"
   },
   "scripts": {
@@ -21,6 +22,8 @@
   },
   "dependencies": {
     "@ai-app/shared": "workspace:*",
+    "@tutti-os/workspace-external-core": "0.0.291",
+    "@tutti-os/workspace-file-reference": "0.0.291",
     "lucide-react": "^0.562.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"

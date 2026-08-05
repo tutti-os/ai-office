@@ -111,6 +111,7 @@ export function ArtifactHomeComposer<T extends string>(props: {
   submitLabel: string;
   /** Rendered after the agent selector in the composer footer (e.g. workspace path). */
   leadingActionsExtra?: ReactNode;
+  renderAddContentAction?: (props: { disabled: boolean; onUploadFile: () => void }) => ReactNode;
   renderPromptInput?: (props: PromptComposerInputRenderProps) => ReactNode;
   onAddFiles: (files: File[]) => void;
   onFormatChange: (formatId: T) => void;
@@ -178,16 +179,23 @@ export function ArtifactHomeComposer<T extends string>(props: {
           }
           leadingActions={
             <>
-              <button
-                className={appShell.iconAction}
-                type="button"
-                title={props.addFilesLabel}
-                aria-label={props.addFilesLabel}
-                disabled={props.loading}
-                onClick={() => importInputRef.current?.click()}
-              >
-                <Plus size={20} />
-              </button>
+              {props.renderAddContentAction ? (
+                props.renderAddContentAction({
+                  disabled: Boolean(props.loading),
+                  onUploadFile: () => importInputRef.current?.click(),
+                })
+              ) : (
+                <button
+                  className={appShell.iconAction}
+                  type="button"
+                  title={props.addFilesLabel}
+                  aria-label={props.addFilesLabel}
+                  disabled={props.loading}
+                  onClick={() => importInputRef.current?.click()}
+                >
+                  <Plus size={20} />
+                </button>
+              )}
               <AgentMenu
                 agentTargets={props.agentTargets}
                 agentProfiles={props.agentProfiles}

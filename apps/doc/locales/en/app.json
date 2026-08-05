@@ -42,6 +42,8 @@
   "composer.linkExistingProject": "Use existing project",
   "composer.workspaceRoot": "workspace",
   "composer.addContext": "Add to context",
+  "composer.addContent": "Add content",
+  "composer.browseReferences": "Browse files and app outputs",
   "composer.createFromPrompt": "Create from prompt",
   "composer.create": "Create",
   "composer.selectAgent": "Select agent",
