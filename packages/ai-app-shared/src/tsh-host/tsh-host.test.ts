@@ -12,13 +12,40 @@ import {
   isTshWorkspaceAppHost,
   resolveTshParentPath,
   safeTshFileStem,
+  TSH_CMD_ROUTING_BASH_ENV,
   TSH_DEFAULT_PARENT_PATH,
+  TSH_ROUTING_LD_PRELOAD,
+  tshAgentRoutingEnv,
 } from "./index.js";
 
 test("isTshWorkspaceAppHost requires TSH_WORKSPACE_APP=1", () => {
   assert.equal(isTshWorkspaceAppHost({}), false);
   assert.equal(isTshWorkspaceAppHost({ TSH_WORKSPACE_APP: "0" }), false);
   assert.equal(isTshWorkspaceAppHost({ TSH_WORKSPACE_APP: "1" }), true);
+});
+
+test("tshAgentRoutingEnv is empty outside TSH host", () => {
+  assert.deepEqual(tshAgentRoutingEnv({}), {});
+});
+
+test("tshAgentRoutingEnv stamps ADR 0017 routing on TSH host", () => {
+  assert.deepEqual(tshAgentRoutingEnv({ TSH_WORKSPACE_APP: "1" }), {
+    TSH_AGENT_ROUTING: "1",
+    LD_PRELOAD: TSH_ROUTING_LD_PRELOAD,
+    BASH_ENV: TSH_CMD_ROUTING_BASH_ENV,
+  });
+  assert.deepEqual(
+    tshAgentRoutingEnv({
+      TSH_WORKSPACE_APP: "1",
+      LD_PRELOAD: "/custom/preload.so",
+      BASH_ENV: "/custom/bashenv.sh",
+    }),
+    {
+      TSH_AGENT_ROUTING: "1",
+      LD_PRELOAD: "/custom/preload.so",
+      BASH_ENV: "/custom/bashenv.sh",
+    },
+  );
 });
 
 test("resolveTshParentPath is null outside TSH host", () => {

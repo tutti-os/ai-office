@@ -13,6 +13,7 @@ import {
   projectWorkspaceRoot,
 } from "../local/paths.js";
 import { listProjectAssets } from "../artifact/project-assets.js";
+import { tshAgentRoutingEnv } from "@ai-app/shared/tsh-host";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
 import { tuttiCliEnv } from "../tutti/tutti-cli.js";
 import type { RuntimeEditContext } from "./runtime-provider.js";
@@ -43,6 +44,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<D
       buildSkillManifest: buildTuttiAgentSkillContext,
       buildMcpServers: buildDocAppToolMcpServers,
       buildEnv: async (context) => ({
+        ...tshAgentRoutingEnv(),
         ...officeCliEnvSync(),
         ...tuttiCliEnv(),
         AI_DOC_PROJECT_ID: context.project.id,

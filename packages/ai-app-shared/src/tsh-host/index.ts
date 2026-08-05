@@ -1,6 +1,12 @@
 import { mkdirSync } from "node:fs";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 
+export {
+  TSH_CMD_ROUTING_BASH_ENV,
+  TSH_ROUTING_LD_PRELOAD,
+  tshAgentRoutingEnv,
+} from "./agent-routing.js";
+
 export const TSH_WORKSPACE_APP_ENV = "TSH_WORKSPACE_APP";
 export const TSH_DEFAULT_PARENT_PATH = "/workspace";
 
