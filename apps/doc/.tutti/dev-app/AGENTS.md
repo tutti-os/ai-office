@@ -7,17 +7,18 @@ Tutti may load either `apps/doc` or this `.tutti/dev-app` directory. When `apps/
 Runtime:
 
 - `bootstrap.sh` reads `TUTTI_APP_HOST` and the required `TUTTI_APP_PORT`.
-- The source server starts with managed Node through `apps/doc/server/node_modules/tsx/dist/cli.mjs watch apps/doc/server/src/main.ts`.
+- Tutti's assigned port runs the Vite development server and its HMR client.
+- The source server starts on an ephemeral loopback port with managed Node through `apps/doc/server/node_modules/tsx/dist/cli.mjs watch apps/doc/server/src/main.ts`.
+- Vite proxies `/api`, `/tutti`, and `/local-assets` to the source server through `AI_DOC_DEV_BACKEND_ORIGIN`.
 - Durable data maps to `TUTTI_APP_DATA_DIR` through `AI_DOC_HOME`.
 - Runtime scratch data maps to `TUTTI_APP_RUNTIME_DIR` through `AI_DOC_RUNTIME_ROOT`.
 - Backend logs map to `TUTTI_APP_LOG_DIR` through `AI_DOC_LOG_ROOT`.
 - OfficeCLI reusable binaries use `TUTTI_APP_TOOLCHAIN_ROOT` through `AI_OFFICE_TOOLCHAIN_ROOT`.
-- The app serves `apps/doc/web/dist` through `AI_DOC_WEB_DIST`.
 
 Development:
 
 - Server source edits hot-restart through `tsx watch`.
-- Frontend source edits require rebuilding `apps/doc/web/dist`; reload the app webview after the build.
+- Frontend source edits hot-update through Vite. No manual web build or app reload is required.
 - Changes to this directory's `tutti.app.json`, `tutti.cli.json`, `bootstrap.sh`, `icon.svg`, locale files, or this guide require App Center's Reload action.
 - Keep this wrapper small. Do not copy the full app source tree into `.tutti/dev-app`.
 

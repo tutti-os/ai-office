@@ -46,6 +46,26 @@ for (const path of ["apps/doc/bootstrap.sh", "apps/slide/bootstrap.sh", "apps/sh
   expectIncludes(path, "web_dist=\"$package_dir/dist\"", "packaged web dist fallback");
 }
 
+for (const [app, backendEnv] of [
+  ["doc", "AI_DOC_DEV_BACKEND_ORIGIN"],
+  ["slide", "AI_SLIDE_DEV_BACKEND_ORIGIN"],
+]) {
+  const bootstrapPath = `apps/${app}/.tutti/dev-app/bootstrap.sh`;
+  const manifestPath = `apps/${app}/.tutti/dev-app/tutti.app.json`;
+  const viteConfigPath = `apps/${app}/web/vite.config.ts`;
+  if (json(manifestPath).runtime?.profile !== undefined) {
+    fail(`${manifestPath} must use Tutti's default managed runtime`);
+  }
+  expectIncludes(bootstrapPath, "node_modules/vite/bin/vite.js", "Vite development entrypoint");
+  expectIncludes(bootstrapPath, "--strictPort", "strict Tutti-assigned frontend port");
+  expectIncludes(bootstrapPath, backendEnv, "ephemeral backend origin export");
+  expectNotIncludes(bootstrapPath, "web build is missing", "prebuilt web asset requirement");
+  expectIncludes(viteConfigPath, backendEnv, "runtime backend proxy target");
+  for (const route of ['"/api"', '"/tutti"', '"/local-assets"']) {
+    expectIncludes(viteConfigPath, route, `${route} development proxy`);
+  }
+}
+
 expectIncludes("apps/doc/server/src/runtimes/local-agent-provider.ts", "const defaultLocalAgentTimeoutMs = 3 * 24 * 60 * 60_000", "three day default local agent timeout");
 expectIncludes("apps/slide/server/src/runtimes/local-agent-provider.ts", "const defaultLocalAgentTimeoutMs = 3 * 24 * 60 * 60_000", "three day default local agent timeout");
 

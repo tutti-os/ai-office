@@ -10,8 +10,7 @@
   },
   "runtime": {
     "bootstrap": "bootstrap.sh",
-    "healthcheckPath": "/api/health",
-    "profile": "node-static"
+    "healthcheckPath": "/api/health"
   },
   "hostCompatibility": {
     "requiredTuttiCapabilities": ["managed-model-cli-v1"]
