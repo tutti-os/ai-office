@@ -8,6 +8,7 @@ import {
   projectLocalAgentStateRoot,
   projectWorkspaceRoot,
 } from "../local/paths.js";
+import { tshAgentRoutingEnv } from "@ai-app/shared/tsh-host";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
 import { tuttiCliEnv } from "../tutti/tutti-cli.js";
 import { buildSheetAppToolMcpServers } from "../agent-tools.js";
@@ -27,6 +28,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       buildSystemPrompt,
       buildSkillManifest: buildTuttiAgentSkillContext,
       buildEnv: async (context) => ({
+        ...tshAgentRoutingEnv(),
         ...officeCliEnvSync(),
         ...tuttiCliEnv(),
         AI_SHEET_PROJECT_ID: context.project.id,
