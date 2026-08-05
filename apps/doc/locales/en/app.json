@@ -43,7 +43,7 @@
   "composer.workspaceRoot": "workspace",
   "composer.addContext": "Add to context",
   "composer.addContent": "Add content",
-  "composer.browseReferences": "Browse files and app outputs",
+  "composer.browseReferences": "Workspace resources",
   "composer.createFromPrompt": "Create from prompt",
   "composer.create": "Create",
   "composer.selectAgent": "Select agent",

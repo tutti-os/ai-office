@@ -47,7 +47,7 @@
   "composer.placeholder": "Ask for a pitch deck, lesson deck, board update, research talk...",
   "composer.addSourceFiles": "Add source files",
   "composer.addContent": "Add content",
-  "composer.browseReferences": "Browse files and app outputs",
+  "composer.browseReferences": "Workspace resources",
   "composer.createDeck": "Create deck",
   "composer.create": "Create",
   "composer.selectAgent": "Select agent",
