@@ -10,6 +10,8 @@ const officePreviewAssetsRoot = resolve(
   import.meta.dirname,
   "node_modules/@tutti-os/office-preview/dist/ooxml-convert",
 );
+const backendOrigin =
+  process.env.AI_SLIDE_DEV_BACKEND_ORIGIN?.trim() || "http://127.0.0.1:8791";
 
 export default defineConfig({
   plugins: [officeAssetDevRoutes(), react(), tailwindcss()],
@@ -23,10 +25,11 @@ export default defineConfig({
     port: 5175,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8791",
+        target: backendOrigin,
         ws: true,
       },
-      "/local-assets": "http://127.0.0.1:8791",
+      "/local-assets": backendOrigin,
+      "/tutti": backendOrigin,
     },
   },
 });
