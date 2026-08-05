@@ -102,7 +102,9 @@ function validateCliManifest(manifest) {
 async function validateBootstrap(root) {
   const bootstrapPath = path.join(root, "bootstrap.sh");
   const info = await stat(bootstrapPath).catch(() => null);
-  if (!info || (info.mode & 0o111) === 0) errors.push("bootstrap.sh must be executable");
+  if (!info || (process.platform !== "win32" && (info.mode & 0o111) === 0)) {
+    errors.push("bootstrap.sh must be executable");
+  }
   const text = await readFile(bootstrapPath, "utf8").catch(() => "");
   if (!text.includes("TUTTI_APP_NODE")) errors.push("bootstrap.sh must use TUTTI_APP_NODE");
   if (!text.includes("TUTTI_APP_DATA_DIR")) errors.push("bootstrap.sh must use TUTTI_APP_DATA_DIR");
