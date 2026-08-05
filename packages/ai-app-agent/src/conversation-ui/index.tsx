@@ -87,6 +87,7 @@ export type AgentConversationPanelProps<TRun extends BaseRun = BaseRun, TEvent e
   uiCopy?: Partial<Omit<AgentConversationUiCopy, "tool">> & { tool?: Partial<ConversationToolCopy> };
   quickPromptsVisible?: boolean;
   selectedAgentId?: string;
+  renderComposerLeadingAction?: (props: { disabled: boolean; value: string; onChange: (value: string) => void }) => ReactNode;
   renderComposerInput?: (props: AgentComposerInputRenderProps) => ReactNode;
   formatRunAgentLabel?: (run: TRun) => string;
   renderUserMessageText?: (props: AgentUserMessageTextRenderProps) => ReactNode;
@@ -264,26 +265,33 @@ export function AgentConversationPanel<TRun extends BaseRun, TEvent extends Base
             />
           )}
           <div className={cx.composerFooter}>
-            {props.agentOptions?.length ? (
-              <div className={cx.agentSelectWrap}>
-                <select
-                  className={cx.agentSelect}
-                  value={props.selectedAgentId ?? props.agentOptions[0]?.id ?? ""}
-                  aria-label={uiCopy.selectAgent}
-                  disabled={props.sending}
-                  onChange={(event) => props.onAgentChange?.(event.currentTarget.value)}
-                >
-                  {props.agentOptions.map((option) => (
-                    <option disabled={option.disabled} key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className={cx.agentSelectChevron} size={15} />
-              </div>
-            ) : (
-              <div />
-            )}
+            <div className="flex min-w-0 items-center gap-2">
+              {props.renderComposerLeadingAction?.({
+                disabled: props.sending,
+                value: draft,
+                onChange: setDraft,
+              })}
+              {props.agentOptions?.length ? (
+                <div className={cx.agentSelectWrap}>
+                  <select
+                    className={cx.agentSelect}
+                    value={props.selectedAgentId ?? props.agentOptions[0]?.id ?? ""}
+                    aria-label={uiCopy.selectAgent}
+                    disabled={props.sending}
+                    onChange={(event) => props.onAgentChange?.(event.currentTarget.value)}
+                  >
+                    {props.agentOptions.map((option) => (
+                      <option disabled={option.disabled} key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className={cx.agentSelectChevron} size={15} />
+                </div>
+              ) : (
+                <div />
+              )}
+            </div>
             <div className={cx.composerActions}>
               <button
                 className={[cx.sendButton, sendButtonBusy ? cx.sendButtonBusy : ""].filter(Boolean).join(" ")}

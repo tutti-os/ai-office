@@ -1,5 +1,7 @@
 import { ArtifactAgentConversationPanel } from "@ai-app/agent/conversation-ui";
 import type { ArtifactEditorKind } from "@ai-app/ui/editor-frame";
+import { appShell } from "@ai-app/ui/app-shell";
+import { TuttiReferenceAddControl } from "@ai-app/ui/tutti-reference-add-control";
 import type { LocalAgentTargetStatus, RuntimeProfile, SlideRun, SlideRunEvent, SlideRunTimelineItem } from "@ai-slide/shared";
 import { agentConversationUiCopy } from "../i18n/copy";
 import { useI18n } from "../i18n";
@@ -39,6 +41,19 @@ export function AgentConversationPanel(props: AgentConversationPanelProps) {
       }}
       uiCopy={agentConversationUiCopy(t)}
       formatUnavailableRuntimeProfileLabel={(profile) => `${profile.displayName} ${t("composer.agentUnavailable")}`}
+      renderComposerLeadingAction={(inputProps) => (
+        <TuttiReferenceAddControl
+          className={appShell.iconAction}
+          disabled={inputProps.disabled}
+          labels={{
+            addContent: t("composer.addContent"),
+            browseReferences: t("composer.browseReferences"),
+            uploadFile: t("composer.addSourceFiles"),
+          }}
+          value={inputProps.value}
+          onChange={inputProps.onChange}
+        />
+      )}
       renderComposerInput={(inputProps) => <AgentPromptRichTextInput {...inputProps} />}
       renderUserMessageText={(messageProps) => <AgentUserMessageRichText {...messageProps} />}
       selectedRuntimeProfileId={props.selectedAgent}

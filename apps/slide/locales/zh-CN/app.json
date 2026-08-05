@@ -46,6 +46,8 @@
   "composer.workspaceRoot": "workspace",
   "composer.placeholder": "创建路演、课程、董事会更新、研究报告...",
   "composer.addSourceFiles": "添加源文件",
+  "composer.addContent": "添加内容",
+  "composer.browseReferences": "工作区资源",
   "composer.createDeck": "创建幻灯片",
   "composer.create": "创建",
   "composer.selectAgent": "选择智能体",

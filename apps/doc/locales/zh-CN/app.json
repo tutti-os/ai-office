@@ -42,6 +42,8 @@
   "composer.linkExistingProject": "使用已有项目",
   "composer.workspaceRoot": "workspace",
   "composer.addContext": "添加上下文",
+  "composer.addContent": "添加内容",
+  "composer.browseReferences": "工作区资源",
   "composer.createFromPrompt": "从提示创建",
   "composer.create": "创建",
   "composer.selectAgent": "选择智能体",

@@ -3,6 +3,7 @@
 @source "../../../../../packages/ai-app-agent/src";
 @source "../../node_modules/@tutti-os/ui-rich-text/dist";
 @source "../../node_modules/@tutti-os/ui-system/dist";
+@source "../../node_modules/@tutti-os/workspace-file-reference/dist";
 @reference "@tutti-os/ui-system/styles.css";
 
 @theme {

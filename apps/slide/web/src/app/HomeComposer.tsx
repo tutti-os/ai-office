@@ -1,4 +1,6 @@
 import { ArtifactHomeComposer, CodeFilledFormatIcon, PptFilledFormatIcon, type ArtifactHomeFormatOption } from "@ai-app/ui/home-composer";
+import { appShell } from "@ai-app/ui/app-shell";
+import { TuttiReferenceAddControl } from "@ai-app/ui/tutti-reference-add-control";
 import { contextAttachmentFileAccept } from "@ai-app/shared/context-attachments";
 import type { LocalAgentTargetStatus, OfficeCliStatus, RuntimeProfile } from "@ai-slide/shared";
 import { useI18n } from "../i18n";
@@ -73,6 +75,20 @@ export function HomeComposer(props: {
             />
           ) : null
         }
+        renderAddContentAction={({ disabled, onUploadFile }) => (
+          <TuttiReferenceAddControl
+            className={appShell.iconAction}
+            disabled={disabled}
+            labels={{
+              addContent: t("composer.addContent"),
+              browseReferences: t("composer.browseReferences"),
+              uploadFile: t("composer.addSourceFiles"),
+            }}
+            value={props.prompt}
+            onChange={props.onPromptChange}
+            onUploadFile={onUploadFile}
+          />
+        )}
         renderPromptInput={(inputProps) => (
           <AgentPromptRichTextInput
             {...inputProps}
