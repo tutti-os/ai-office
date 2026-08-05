@@ -133,6 +133,13 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           onRuntimeProfileChange={setSelectedRuntimeProfileId}
           onSelectTemplate={loadTemplate}
         />
+      ) : isMissingDocumentError(error) ? (
+        <DocumentLoadingScreen
+          error={error}
+          loading={loading}
+          title={currentProject?.title}
+          onBackHome={requestHomeRoute}
+        />
       ) : currentDocumentType === "markdown" && markdownRuntime ? (
         <ArtifactErrorBoundary
           resetKeys={[currentProjectId, currentDocumentType, markdownRuntime.revision]}

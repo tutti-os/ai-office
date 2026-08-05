@@ -7,7 +7,7 @@
     "copy:office-preview-assets": "node scripts/copy-office-preview-assets.mjs",
     "dev": "pnpm run copy:office-preview-assets && vite --host 127.0.0.1 --port 5174",
     "build": "pnpm run copy:office-preview-assets && tsc -p tsconfig.json --noEmit && vite build",
-    "test": "tsx --test src/app/tuttiMentionService.test.ts",
+    "test": "tsx --test src/app/tuttiMentionService.test.ts src/app/htmlExport.test.ts src/app/documentLoadErrors.test.ts",
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

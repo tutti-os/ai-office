@@ -89,6 +89,7 @@
   "editor.exportedHtml": "Exported HTML to {{path}}",
   "editor.exportedMarkdown": "Exported Markdown to {{path}}",
   "editor.exportedPdf": "Exported PDF to {{path}}",
+  "editor.exportPickerUnavailable": "Export folder picker is unavailable in this host.",
   "editor.docxComingSoon": "DOCX (coming soon)",
   "editor.pdfExporting": "PDF exporting...",
   "editor.untitledMarkdown": "Untitled Markdown",

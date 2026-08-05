@@ -4,7 +4,12 @@ import { printHtmlToPdfWithTutti } from "./tuttiPdfBridge";
 
 const pdfMimeType = "application/pdf";
 
-export async function saveDocxArtifactPdfExport(input: { previewElement: HTMLElement; projectId: string; title: string }) {
+export async function saveDocxArtifactPdfExport(input: {
+  previewElement: HTMLElement;
+  projectId: string;
+  title: string;
+  targetDirectory?: string | null;
+}) {
   const html = docxPreviewPrintHtml({
     bodyHtml: input.previewElement.innerHTML,
     styles: collectDocumentStyles(input.previewElement.ownerDocument),
@@ -22,6 +27,7 @@ export async function saveDocxArtifactPdfExport(input: { previewElement: HTMLEle
     fileName: `${safeExportFileName(input.title || "doc")}.pdf`,
     mimeType: pdfMimeType,
     content: bytes,
+    targetDirectory: input.targetDirectory,
   });
 }
 

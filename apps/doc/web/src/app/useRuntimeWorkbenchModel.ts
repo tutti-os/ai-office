@@ -354,6 +354,7 @@ export function useRuntimeWorkbenchModel() {
     setPdfExporting,
     setSourceExporting,
     t,
+    tshWorkspaceApp,
   });
 
   return {

@@ -3,6 +3,7 @@ import type { DocumentProject } from "@ai-doc/shared";
 import { getProject, updateProject } from "../api/projects";
 import type { MarkdownRuntimeState } from "../artifact/markdownArtifactAdapter";
 import type { RuntimeState } from "../artifact/runtime/types";
+import { isMissingDocumentError } from "./documentLoadErrors";
 import { pushHomeRoute, readCurrentRoute, routePath, type AppRoute } from "./documentWorkbenchRoutes";
 import { defaultToolbarState, type ToolbarState } from "./runtimeWorkbenchTypes";
 
@@ -128,6 +129,14 @@ export function useDocumentRouteLifecycle(input: DocumentRouteLifecycleInput) {
     let cancelled = false;
     input.setLoading(true);
     input.setError("");
+    // Drop any previous editor state before hydrate so a failed reopen (external
+    // rename/delete) cannot keep showing the last successful document.
+    input.setCurrentProject(null);
+    input.clearArtifact();
+    input.clearMarkdownArtifact();
+    input.clearDocxArtifact();
+    input.setToolbarState(defaultToolbarState);
+    input.setHtmlToolbarActive(false);
     void getProject(input.route.projectId)
       .then(async (project) => {
         if (cancelled) return;
@@ -142,6 +151,10 @@ export function useDocumentRouteLifecycle(input: DocumentRouteLifecycleInput) {
       })
       .catch((err) => {
         if (cancelled) return;
+        input.setCurrentProject(null);
+        input.clearArtifact();
+        input.clearMarkdownArtifact();
+        input.clearDocxArtifact();
         input.setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => {
@@ -175,8 +188,13 @@ export function useDocumentRouteLifecycle(input: DocumentRouteLifecycleInput) {
         })
         .catch((err) => {
           if (input.htmlSaveGenerationRef.current !== saveGeneration) return;
+          const message = err instanceof Error ? err.message : String(err);
           input.setSaveState("error");
-          input.setError(err instanceof Error ? err.message : String(err));
+          input.setError(message);
+          if (isMissingDocumentError(message)) {
+            input.clearArtifact();
+            input.setCurrentProject(null);
+          }
         });
     }, 700);
     return () => {
@@ -205,8 +223,13 @@ export function useDocumentRouteLifecycle(input: DocumentRouteLifecycleInput) {
         })
         .catch((err) => {
           if (input.markdownSaveGenerationRef.current !== saveGeneration) return;
+          const message = err instanceof Error ? err.message : String(err);
           input.setMarkdownSaveState("error");
-          input.setError(err instanceof Error ? err.message : String(err));
+          input.setError(message);
+          if (isMissingDocumentError(message)) {
+            input.clearMarkdownArtifact();
+            input.setCurrentProject(null);
+          }
         });
     }, 700);
     return () => {

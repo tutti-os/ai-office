@@ -54,11 +54,14 @@ export function readArtifactExportRequest(request: ArtifactUploadRequest, input:
   defaultFileName: string;
   defaultMimeType: string;
 }) {
-  return readArtifactUploadRequest(request, {
-    defaultFileName: input.defaultFileName,
-    defaultMimeType: input.defaultMimeType,
-    mimeHeader: "x-mime-type",
-  });
+  return {
+    ...readArtifactUploadRequest(request, {
+      defaultFileName: input.defaultFileName,
+      defaultMimeType: input.defaultMimeType,
+      mimeHeader: "x-mime-type",
+    }),
+    targetDirectory: decodedHeader(request.headers["x-export-directory"]),
+  };
 }
 
 export function sendArtifactBinaryFile(reply: {

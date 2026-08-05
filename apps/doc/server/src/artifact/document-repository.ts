@@ -15,6 +15,7 @@ import { getDb } from "../db/database.js";
 import {
   allocateRenamedTshArtifactFile,
   allocateTshArtifactFile,
+  assertAllowedTshParentPath,
   ensureTshArtifactFile,
   isTshFileArtifactPath,
   resolveTshParentPath,
@@ -217,6 +218,14 @@ export class DocumentRepository {
     const updated = this.getProject(projectId);
     const coreNeedsRepair = this.preparation.getStatus(projectId)?.coreState !== "ready";
     if (updated && (next.content !== current.content || next.type !== current.type || coreNeedsRepair)) {
+      // Never recreate a TSH single-file artifact that was renamed/deleted externally.
+      // Rematerializing would silently restore the old path and history could open again.
+      if (isTshFileArtifactProject(projectId)) {
+        const focusedPath = projectFocusedArtifactPath(projectId, updated.type);
+        if (!existsSync(focusedPath)) {
+          throw new Error(`Document file is missing at ${focusedPath}: no such file or directory`);
+        }
+      }
       this.preparation.markCore(projectId, "preparing");
       try {
         await this.materializeProjectCore(updated);
@@ -286,11 +295,15 @@ export class DocumentRepository {
     return writeContextAttachmentFile(root, input);
   }
 
-  async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
+  async writeProjectExport(
+    projectId: string,
+    input: { fileName: string; mimeType: string; bytes: Buffer; targetDirectory?: string | null },
+  ) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
-    const root = projectWorkspaceRoot(projectId);
-    const exportsDir = join(root, "exports");
+    const exportsDir = input.targetDirectory?.trim()
+      ? assertAllowedTshParentPath(input.targetDirectory)
+      : join(projectWorkspaceRoot(projectId), "exports");
     await mkdir(exportsDir, { recursive: true });
     const fileName = uniqueExportFileName(exportsDir, input.fileName, input.mimeType);
     const absolutePath = join(exportsDir, fileName);
@@ -569,9 +582,22 @@ function safeAssetFileName(fileName: string, mimeType: string) {
 function safeExportFileName(fileName: string, mimeType: string) {
   const rawBase = safeBaseName(fileName || "export");
   const extension = normalizedExportExtension(rawBase, mimeType);
-  const stem = safeFileStem(basename(rawBase, extname(rawBase)), "export");
+  const stem = safeFileStem(exportFileStem(rawBase), "export");
   return `${stem}${extension}`;
 }
+
+/** Strip document/export suffixes so `note.html` + pdf → `note.pdf`, not `note.html.pdf`. */
+function exportFileStem(fileName: string) {
+  let stem = fileName;
+  for (;;) {
+    const extension = extname(stem).toLowerCase();
+    if (!EXPORT_STEM_EXTENSIONS.has(extension)) break;
+    stem = basename(stem, extname(stem));
+  }
+  return stem;
+}
+
+const EXPORT_STEM_EXTENSIONS = new Set([".html", ".htm", ".md", ".markdown", ".docx", ".pdf"]);
 
 function safeBaseName(value: string) {
   return basename(safeDecodeURIComponent(value));
@@ -642,14 +668,17 @@ function normalizedAssetExtension(fileName: string, mimeType: string) {
 }
 
 function normalizedExportExtension(fileName: string, mimeType: string) {
-  const extension = extname(fileName).toLowerCase();
-  if (extension === ".html" || extension === ".htm") return extension;
-  if (extension === ".md" || extension === ".markdown") return extension;
-  if (extension === ".docx") return extension;
-  if (extension === ".pdf") return extension;
+  // Prefer the export mime type so a title like `note.html` exporting as PDF
+  // does not keep the source `.html` extension.
+  if (mimeType === "application/pdf") return ".pdf";
   if (mimeType === "text/markdown") return ".md";
   if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return ".docx";
-  if (mimeType === "application/pdf") return ".pdf";
+  if (mimeType === "text/html") return ".html";
+  const extension = extname(fileName).toLowerCase();
+  if (extension === ".html" || extension === ".htm") return extension;
+  if (extension === ".md" || extension === ".markdown") return ".md";
+  if (extension === ".docx") return extension;
+  if (extension === ".pdf") return extension;
   return ".html";
 }
 

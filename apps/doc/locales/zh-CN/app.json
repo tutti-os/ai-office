@@ -89,6 +89,7 @@
   "editor.exportedHtml": "已导出 HTML 到 {{path}}",
   "editor.exportedMarkdown": "已导出 Markdown 到 {{path}}",
   "editor.exportedPdf": "已导出 PDF 到 {{path}}",
+  "editor.exportPickerUnavailable": "当前环境无法打开导出目录选择器。",
   "editor.docxComingSoon": "DOCX（即将推出）",
   "editor.pdfExporting": "正在导出 PDF...",
   "editor.untitledMarkdown": "未命名 Markdown",
