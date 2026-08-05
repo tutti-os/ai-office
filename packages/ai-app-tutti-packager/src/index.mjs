@@ -187,8 +187,14 @@ async function validatePackageRoot(root, options) {
     if (documentationFile) await access(path.join(root, documentationFile));
   }
   const bootstrapMode = (await stat(path.join(root, "bootstrap.sh"))).mode;
-  if ((bootstrapMode & 0o111) === 0) throw new Error("bootstrap.sh must be executable");
+  assertBootstrapExecutable(bootstrapMode);
   await assertNoSymlinks(root);
+}
+
+export function assertBootstrapExecutable(mode, targetPlatform = process.platform) {
+  if (targetPlatform !== "win32" && (mode & 0o111) === 0) {
+    throw new Error("bootstrap.sh must be executable");
+  }
 }
 
 export function createCliManifest(config) {

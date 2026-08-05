@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveArchiveInvocation, resolveBuildInvocation } from "./index.mjs";
+import { assertBootstrapExecutable, resolveArchiveInvocation, resolveBuildInvocation } from "./index.mjs";
 
 test("package manager runs through the active lifecycle entrypoint", () => {
   assert.deepEqual(
@@ -23,4 +23,9 @@ test("Windows archives use tar.exe without a shell", () => {
     command: "tar.exe",
     args: ["-a", "-c", "-f", "C:\\output\\app.zip", "."],
   });
+});
+
+test("Windows packages do not require POSIX executable mode bits", () => {
+  assert.doesNotThrow(() => assertBootstrapExecutable(0o644, "win32"));
+  assert.throws(() => assertBootstrapExecutable(0o644, "linux"), /must be executable/);
 });
