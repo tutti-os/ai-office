@@ -119,6 +119,7 @@ export class ProjectService {
     if (!project) throw new Error("Project not found");
     const artifact = this.repo.getArtifact(project.activeArtifactId);
     if (!artifact) throw new Error("Active artifact not found");
+    this.repo.assertFocusedArtifactPresent(project, artifact);
     await this.repo.ensureTemplateDeckMaterialized(project, artifact);
     return {
       project,
@@ -143,6 +144,7 @@ export class ProjectService {
     if (!cleanTitle) throw new Error("Project title is required");
     const project = this.repo.updateProject(projectId, { title: cleanTitle, updatedBy });
     if (!project) throw new Error("Project not found");
+    await this.repo.renameTshArtifactRootForTitle(projectId, cleanTitle);
     this.repo.updateProjectSessionTitle(projectId, cleanTitle);
     await this.repo.updateDeckManifestTitle(projectId, cleanTitle, updatedBy);
     const detail = await this.getProject(projectId);
@@ -167,7 +169,13 @@ export class ProjectService {
 
   writeDeckSlideHtml(projectId: string, slideId: string, input: UpdateDeckSlideHtmlRequest) {
     if (typeof input.html !== "string" || !input.html.trim()) throw new Error("Slide HTML is required");
-    return this.repo.writeDeckSlideHtml(projectId, slideId, input.html);
+    return this.repo.writeDeckSlideHtml(
+      projectId,
+      slideId,
+      input.html,
+      "human",
+      input.expectedArtifactRevision,
+    );
   }
 
   async uploadDeckAsset(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }): Promise<DeckAssetUploadResponse> {
@@ -198,14 +206,21 @@ export class ProjectService {
     return this.repo.writeContextAttachment(projectId, input);
   }
 
-  async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
+  async writeProjectExport(
+    projectId: string,
+    input: { fileName: string; mimeType: string; bytes: Buffer; targetDirectory?: string | null },
+  ) {
     if (!isSupportedExportMimeType(input.mimeType)) throw new Error("Only PPTX and PDF exports are supported");
     if (input.bytes.byteLength === 0) throw new Error("Export file is empty");
     if (input.bytes.byteLength > maxDeckExportBytes) throw new Error("Export file is too large");
-    return this.repo.writeProjectExport(projectId, input);
+    const targetDirectory = input.targetDirectory?.trim() || null;
+    if (targetDirectory && !isTshWorkspaceAppHost()) {
+      throw new Error("Custom export directories are only supported on TSH");
+    }
+    return this.repo.writeProjectExport(projectId, { ...input, targetDirectory });
   }
 
-  async exportPptxFile(projectId: string) {
+  async exportPptxFile(projectId: string, input: { targetDirectory?: string | null } = {}) {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
     const file = await this.repo.readPptxFile(projectId);
@@ -213,11 +228,16 @@ export class ProjectService {
       fileName: `${project.title || "slides"}.pptx`,
       mimeType: file.mimeType,
       bytes: file.bytes,
+      targetDirectory: input.targetDirectory,
     });
   }
 
-  async exportDeckHtml(projectId: string) {
-    return this.repo.writeDeckHtmlExport(projectId);
+  async exportDeckHtml(projectId: string, input: { targetDirectory?: string | null } = {}) {
+    const targetDirectory = input.targetDirectory?.trim() || null;
+    if (targetDirectory && !isTshWorkspaceAppHost()) {
+      throw new Error("Custom export directories are only supported on TSH");
+    }
+    return this.repo.writeDeckHtmlExport(projectId, { targetDirectory });
   }
 
   async openProjectExportsDir(projectId: string) {
@@ -501,18 +521,14 @@ export class ProjectService {
 
   private async refreshArtifactFromWorkspace(projectId: string, runId: string | undefined, previousFingerprint: string) {
     const detail = await this.getProject(projectId);
+    const fingerprint = await this.workspaceFingerprintFromDetail(detail);
+    if (fingerprint === previousFingerprint) return { changed: false, fingerprint };
+
     if (detail.artifact.type === "pptx") {
-      const refresh = await this.repo.refreshPptxArtifactFromFile(projectId, "ai");
-      const fingerprint = await this.workspaceFingerprint(projectId);
-      if (!refresh?.changed) return { changed: false, fingerprint };
+      await this.repo.refreshPptxArtifactFromFile(projectId, "ai");
     } else {
-      const fingerprint = await this.workspaceFingerprintFromDetail(detail);
-      if (fingerprint === previousFingerprint) return { changed: false, fingerprint };
       const syncedManifest = await this.syncDeckManifestSlideFiles(detail);
       if (!syncedManifest) this.repo.bumpArtifactRevision(detail.artifact.id, "ai");
-      const updated = await this.getProject(projectId);
-      this.events.emit({ type: "project.updated", projectId, runId, payload: updated });
-      return { changed: true, fingerprint: await this.workspaceFingerprint(projectId) };
     }
     const updated = await this.getProject(projectId);
     this.events.emit({ type: "project.updated", projectId, runId, payload: updated });

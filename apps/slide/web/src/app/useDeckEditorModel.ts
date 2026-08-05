@@ -70,9 +70,11 @@ export function useDeckEditorModel(props: {
   const [directTextEditMode, setDirectTextEditMode] = useState(false);
   const [snapGuides, setSnapGuides] = useState<DeckSnapGuide[]>([]);
   const [agentSelectionVersion, setAgentSelectionVersion] = useState(0);
+  const lastExternalRevisionRef = useRef(props.detail.artifact.revision);
   const deckController = useMemo(
     () =>
       new DeckEditorController({
+        artifactRevision: props.detail.artifact.revision,
         fileRef: props.detail.artifact.fileRef,
         projectId: props.projectId,
         onHistoryChange: () => setHistoryVersion((version) => version + 1),
@@ -111,6 +113,28 @@ export function useDeckEditorModel(props: {
     setDirectTextEditMode(false);
     setSnapGuides([]);
   }, [readOnly]);
+
+  useEffect(() => {
+    lastExternalRevisionRef.current = props.detail.artifact.revision;
+    deckController.setArtifactRevision(props.detail.artifact.revision);
+  }, [deckController, props.detail.artifact.fileRef, props.projectId]);
+
+  useEffect(() => {
+    // Agent owns the deck while running; human cannot edit. Drop any pending
+    // human autosave so a stale iframe cannot overwrite agent writes.
+    deckController.setSavesAllowed(!readOnly);
+  }, [deckController, readOnly]);
+
+  useEffect(() => {
+    const nextRevision = props.detail.artifact.revision;
+    if (nextRevision === lastExternalRevisionRef.current) return;
+    lastExternalRevisionRef.current = nextRevision;
+    deckController.setArtifactRevision(nextRevision);
+    deckController.discardPendingSaves();
+    // External revision bumps remount iframes via asset URLs; clear local undo
+    // so it cannot re-apply pre-agent HTML after the reload.
+    deckController.clearHistories();
+  }, [deckController, props.detail.artifact.revision]);
 
   useEffect(() => {
     onSaveStateChange(saveState);

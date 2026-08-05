@@ -3,8 +3,6 @@ import { createHash } from "node:crypto";
 import { join, normalize, sep } from "node:path";
 import {
   createEmptyPptxManifest,
-  parsePptxManifest,
-  serializePptxManifest,
   type DeckManifest,
   type PptxManifest,
   type SlideArtifact,
@@ -13,10 +11,6 @@ import { projectWorkspaceRoot } from "../local/paths.js";
 
 export function pptxFilePath(projectId: string, artifact: SlideArtifact) {
   return join(projectWorkspaceRoot(projectId), artifact.fileRef);
-}
-
-export function pptxManifestPath(projectId: string, artifact: SlideArtifact) {
-  return join(projectWorkspaceRoot(projectId), `${artifact.fileRef}.manifest.json`);
 }
 
 export async function readPptxManifestFromFile(projectId: string, artifact: SlideArtifact): Promise<PptxManifest> {
@@ -35,18 +29,6 @@ export async function readPptxManifestFromFile(projectId: string, artifact: Slid
   } catch {
     return createEmptyPptxManifest();
   }
-}
-
-export async function readStoredPptxManifest(projectId: string, artifact: SlideArtifact) {
-  try {
-    return parsePptxManifest(await readFile(pptxManifestPath(projectId, artifact), "utf8"));
-  } catch {
-    return createEmptyPptxManifest();
-  }
-}
-
-export function writeStoredPptxManifest(projectId: string, artifact: SlideArtifact, manifest: PptxManifest) {
-  return writeFile(pptxManifestPath(projectId, artifact), `${serializePptxManifest(manifest)}\n`, "utf8");
 }
 
 export function writeDeckManifest(projectId: string, artifact: SlideArtifact, manifest: DeckManifest) {

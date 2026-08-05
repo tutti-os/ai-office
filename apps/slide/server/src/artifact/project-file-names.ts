@@ -91,11 +91,23 @@ export function normalizedAssetFileName(fileName: string, mimeType: string) {
 
 export function normalizedExportFileName(fileName: string, mimeType: string) {
   const clean = safeBaseName(fileName || "slides");
-  const cleanExt = extname(clean).toLowerCase();
-  const ext = cleanExt === ".pptx" || cleanExt === ".pdf" ? cleanExt : extensionForExportMimeType(mimeType);
-  const stem = safeFileStem(basename(clean, extname(clean)), "slides");
+  const ext = extensionForExportMimeType(mimeType) || extname(clean).toLowerCase() || ".pptx";
+  const stem = safeFileStem(exportFileStem(clean), "slides");
   return `${stem}${ext}`;
 }
+
+/** Strip source/export suffixes so `deck.pptx` + pdf → `deck.pdf`, not `deck.pptx.pdf`. */
+function exportFileStem(fileName: string) {
+  let stem = fileName;
+  for (;;) {
+    const extension = extname(stem).toLowerCase();
+    if (!EXPORT_STEM_EXTENSIONS.has(extension)) break;
+    stem = basename(stem, extname(stem));
+  }
+  return stem;
+}
+
+const EXPORT_STEM_EXTENSIONS = new Set([".html", ".htm", ".pdf", ".ppt", ".pptx"]);
 
 function safeBaseName(value: string) {
   return basename(safeDecodeURIComponent(value)).split(/[\\/]/).filter(Boolean).pop() || value;

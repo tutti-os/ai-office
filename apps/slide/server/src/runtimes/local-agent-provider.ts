@@ -9,7 +9,11 @@ import {
   type SkillMaterializationRecord,
 } from "@ai-app/agent/local-agent-runtime";
 import type { AiEditRequest, SlideRun } from "@ai-slide/shared";
-import { projectWorkspaceRoot } from "../local/paths.js";
+import {
+  isTshDirectoryArtifactProject,
+  projectPrivateRoot,
+  projectWorkspaceRoot,
+} from "../local/paths.js";
 import { extractOoxmlTextPreview } from "../artifact/ooxml-text.js";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
 import { tuttiCliEnv } from "../tutti/tutti-cli.js";
@@ -30,6 +34,11 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
   constructor() {
     super({
       runCwd: (context) => projectWorkspaceRoot(context.project.id),
+      // Keep resume/session files out of the user-visible TSH deck directory.
+      sessionRoot: (context) =>
+        isTshDirectoryArtifactProject(context.project.id)
+          ? projectPrivateRoot(context.project.id)
+          : projectWorkspaceRoot(context.project.id),
       buildPrompt: buildEditPrompt,
       buildSystemPrompt,
       buildSkillManifest: buildSlideAgentSkillContext,
@@ -39,6 +48,15 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
         AI_SLIDE_PROJECT_ID: context.project.id,
         AI_SLIDE_RUN_ID: context.run.id,
       }),
+      extraAllowedDirs: (context, runCwd) => {
+        if (!isTshDirectoryArtifactProject(context.project.id)) return [runCwd];
+        const privateRoot = projectPrivateRoot(context.project.id);
+        return privateRoot === runCwd ? [runCwd] : [runCwd, privateRoot];
+      },
+      // Never leave `.agent-acp-kit-codex-root` in user-visible /workspace trees.
+      // AGENTS.md under the deck root is still materialized separately and kept.
+      writeCodexProjectRootMarker: (context) =>
+        isTshDirectoryArtifactProject(context.project.id) ? false : undefined,
       useProviderResume: (context) => context.project.artifact.type !== "deck",
       timeoutMs: localAgentTimeoutMs,
       sessionDirName: ".ai-slide",
@@ -216,11 +234,14 @@ function buildSystemPrompt(context: RuntimeEditContext, _projectCwd: string, ski
         "This project is a PowerPoint PPTX presentation.",
         "Current focused file: slides.pptx (relative to the current working directory).",
         localFilesystemArtifactNotice,
+        pptxAppToolPrompt(),
         artifactIntentPrompt("presentation"),
         progressiveSlideAuthoringPrompt("presentation"),
         "Use the officecli command-line tool to inspect, create, edit, and validate the focused PPTX file. If an office skill is available in the agent environment, follow it.",
         "Prefer officecli L1/L2 operations such as view, get, query, add, set, remove, and validate. Do not hand-edit OOXML unless officecli high-level commands cannot solve the task.",
         "When the current request calls for creating or editing this presentation, write the final PPTX result to the focused file.",
+        "When starting a new presentation from a user request, choose a concise human title and call `set_project_title`; do not leave the raw instruction as the project title.",
+        "To rename the project directory, call the `set_project_title` app tool instead of renaming folders by hand.",
         "Do not convert the presentation to Markdown or a single HTML document unless explicitly asked for a separate export.",
         noBrowserRenderVerification,
         "After editing files, respond with a brief task summary only. Do not include extracted PPTX content in the final response.",
@@ -292,6 +313,14 @@ function appToolPrompt() {
     "App-owned tools:",
     "- Use MCP app tools `mcp__app_tools__set_project_title` and `mcp__app_tools__reorder_slides`.",
     "- If MCP app tools are unavailable, report that app tools are unavailable instead of editing app databases, session files, or manifest playlists by hand.",
+  ].join("\n");
+}
+
+function pptxAppToolPrompt() {
+  return [
+    "App-owned tools:",
+    "- Use MCP app tool `mcp__app_tools__set_project_title` to set a human title (this also renames the project directory on TSH).",
+    "- If MCP app tools are unavailable, report that app tools are unavailable instead of editing app databases or session files by hand.",
   ].join("\n");
 }
 

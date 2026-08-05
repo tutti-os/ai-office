@@ -64,6 +64,7 @@
   "editor.exportedPdf": "已导出 PDF 到 {{path}}",
   "editor.htmlExportFailed": "HTML 导出失败。",
   "editor.pdfExportFailed": "PDF 导出失败。",
+  "editor.exportPickerUnavailable": "当前环境无法打开导出目录选择器。",
   "editor.agentWorking": "Agent 工作中",
   "editor.backHome": "返回首页",
   "editor.dismissExportNotice": "关闭导出提示",

@@ -1,5 +1,5 @@
-import { rmSync } from "node:fs";
-import { copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { existsSync, rmSync } from "node:fs";
+import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, extname, join, resolve } from "node:path";
 import {
@@ -21,7 +21,9 @@ import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationSto
 import { asProjectPreparationError } from "@ai-app/shared/project-preparation";
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
 import {
+  allocateRenamedTshArtifactRoot,
   allocateTshArtifactRoot,
+  assertAllowedTshParentPath,
   ensureTshArtifactRoot,
   resolveTshParentPath,
 } from "@ai-app/shared/tsh-host";
@@ -29,6 +31,7 @@ import { getDb, rowOrNull, rows } from "../db/database.js";
 import {
   appPaths,
   bindProjectWorkspaceRoot,
+  boundWorkspaceRoot,
   clearProjectWorkspaceRootBindings,
   ensureBaseDirs,
   ensureProjectDirs,
@@ -45,10 +48,8 @@ import {
   normalizeSlideListItem,
   pptxFilePath,
   readPptxManifestFromFile,
-  readStoredPptxManifest,
   resolveDeckSlidePath,
   writeDeckManifest,
-  writeStoredPptxManifest,
 } from "./deck-project-files.js";
 import {
   isBlankDeckManifest,
@@ -241,6 +242,26 @@ export class ProjectRepository {
 
   updateProjectSessionTitle(projectId: string, title: string) {
     return this.conversations.updateProjectSessionTitle(projectId, title);
+  }
+
+  /**
+   * TSH directory artifacts keep a stable short id suffix. When the AI/human
+   * sets a real title, rename `/workspace/Untitled_…-<id>` to match.
+   */
+  async renameTshArtifactRootForTitle(projectId: string, title: string) {
+    const currentPath = boundWorkspaceRoot(projectId);
+    if (!currentPath) return;
+    if (!existsSync(currentPath)) {
+      throw new Error(`Deck directory is missing at ${currentPath}: no such file or directory`);
+    }
+    const nextPath = allocateRenamedTshArtifactRoot(currentPath, title);
+    if (nextPath === currentPath) return;
+    if (existsSync(nextPath)) {
+      throw new Error(`A directory already exists at ${nextPath}`);
+    }
+    await rename(currentPath, nextPath);
+    bindProjectWorkspaceRoot(projectId, nextPath);
+    getDb().prepare(`UPDATE projects SET workspace_root = ? WHERE id = ?`).run(nextPath, projectId);
   }
 
   async updateDeckManifestTitle(projectId: string, title: string, updatedBy: SlideProject["updatedBy"] = "ai") {
@@ -453,11 +474,21 @@ export class ProjectRepository {
     return { slide, html, artifact };
   }
 
-  async writeDeckSlideHtml(projectId: string, slideId: string, html: string, updatedBy: SlideProject["updatedBy"] = "human") {
+  async writeDeckSlideHtml(
+    projectId: string,
+    slideId: string,
+    html: string,
+    updatedBy: SlideProject["updatedBy"] = "human",
+    expectedArtifactRevision?: number,
+  ) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact || artifact.type !== "deck") throw new Error("Deck artifact not found");
+    this.assertFocusedArtifactPresent(project, artifact);
+    if (expectedArtifactRevision != null && artifact.revision !== expectedArtifactRevision) {
+      throw new Error("Deck changed before this save completed. Reload the presentation before saving again.");
+    }
     await this.ensureTemplateDeckMaterialized(project, artifact);
     const manifest = await this.readDeckManifest(projectId, artifact);
     const slide = manifest?.slides.find((item) => item.id === slideId);
@@ -513,10 +544,15 @@ export class ProjectRepository {
     return writeContextAttachmentFile(projectWorkspaceRoot(projectId), input);
   }
 
-  async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
+  async writeProjectExport(
+    projectId: string,
+    input: { fileName: string; mimeType: string; bytes: Buffer; targetDirectory?: string | null },
+  ) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
-    const exportsDir = join(projectWorkspaceRoot(projectId), "exports");
+    const exportsDir = input.targetDirectory?.trim()
+      ? assertAllowedTshParentPath(input.targetDirectory)
+      : join(projectWorkspaceRoot(projectId), "exports");
     await mkdir(exportsDir, { recursive: true });
     const fileName = await writeUniqueNamedFile(exportsDir, normalizedExportFileName(input.fileName, input.mimeType), input.bytes);
     const absolutePath = join(exportsDir, fileName);
@@ -530,11 +566,12 @@ export class ProjectRepository {
     };
   }
 
-  async writeDeckHtmlExport(projectId: string) {
+  async writeDeckHtmlExport(projectId: string, input: { targetDirectory?: string | null } = {}) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact || artifact.type !== "deck") throw new Error("Deck artifact not found");
+    this.assertFocusedArtifactPresent(project, artifact);
     await this.ensureTemplateDeckMaterialized(project, artifact);
     const manifest = await this.readDeckManifest(projectId, artifact);
     if (!manifest) throw new Error("Deck manifest not found");
@@ -544,7 +581,28 @@ export class ProjectRepository {
       projectTitle: project.title,
       artifact,
       manifest,
+      targetDirectory: input.targetDirectory,
     });
+  }
+
+  /**
+   * TSH projects bind a workspace root under /workspace. If that root (or the
+   * focused deck directory) was renamed or deleted, fail open instead of
+   * silently rematerializing a ghost tree.
+   *
+   * PPTX deliberately starts without `slides.pptx` — the agent creates it.
+   * Only the project directory must exist; missing pptx is the waiting state.
+   */
+  assertFocusedArtifactPresent(project: SlideProject, artifact: SlideArtifact) {
+    if (!project.workspaceRoot) return;
+    const root = projectWorkspaceRoot(project.id);
+    if (!existsSync(root)) {
+      throw new Error(`Presentation directory is missing at ${root}: no such file or directory`);
+    }
+    if (artifact.type !== "deck") return;
+    const focusedPath = join(root, artifact.fileRef);
+    if (existsSync(focusedPath)) return;
+    throw new Error(`Deck directory is missing at ${focusedPath}: no such file or directory`);
   }
   projectExportsDir(projectId: string) {
     const project = this.getProject(projectId);
@@ -604,15 +662,6 @@ export class ProjectRepository {
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact || artifact.type !== "pptx") return null;
     const nextManifest = await readPptxManifestFromFile(projectId, artifact);
-    const currentManifest = await readStoredPptxManifest(projectId, artifact);
-    if (
-      currentManifest.sha256 === nextManifest.sha256 &&
-      currentManifest.sizeBytes === nextManifest.sizeBytes &&
-      currentManifest.updatedAt === nextManifest.updatedAt
-    ) {
-      return { artifact, manifest: nextManifest, changed: false };
-    }
-    await writeStoredPptxManifest(projectId, artifact, nextManifest);
     const updatedArtifact = this.bumpArtifactRevision(artifact.id, updatedBy) ?? artifact;
     return { artifact: updatedArtifact, manifest: nextManifest, changed: true };
   }

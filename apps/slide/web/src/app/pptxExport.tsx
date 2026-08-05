@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { PptxRenderer, type PptxRenderPresentation } from "@tutti-os/office-preview/pptx";
 import { writeProjectExport } from "../api/projects";
+import { safeExportFileName } from "./deckExport";
 import { printHtmlToPdfWithTutti } from "./tuttiPdfBridge";
 
 const pdfMimeType = "application/pdf";
@@ -11,6 +12,7 @@ export async function savePptxPdfExport(input: {
   presentation: PptxRenderPresentation;
   projectId: string;
   title: string;
+  targetDirectory?: string | null;
 }) {
   const renderRoot = document.createElement("div");
   const reactRoot = createRoot(renderRoot);
@@ -53,6 +55,7 @@ export async function savePptxPdfExport(input: {
       fileName: `${safeExportFileName(input.title || input.presentation.title || "slides")}.pdf`,
       mimeType: pdfMimeType,
       content: bytes,
+      targetDirectory: input.targetDirectory,
     });
   } finally {
     reactRoot.unmount();
@@ -181,15 +184,6 @@ function waitForImageReady(image: HTMLImageElement) {
     image.addEventListener("load", handleDone, { once: true });
     image.addEventListener("error", handleDone, { once: true });
   });
-}
-
-function safeExportFileName(value: string) {
-  return value
-    .trim()
-    .replace(/[^\p{L}\p{N}._-]+/gu, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/\.+$/g, "")
-    .slice(0, 80) || "slides";
 }
 
 function escapeHtml(value: string) {

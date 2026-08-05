@@ -18,8 +18,22 @@ export function ensureBaseDirs() {
   ensureSharedBaseDirs(appPaths);
 }
 
+/** Private app-owned root (sessions/sidecars). Always under AI_SLIDE_HOME. */
+export function projectPrivateRoot(projectId: string) {
+  return sharedProjectWorkspaceRoot(appPaths, projectId);
+}
+
+/** TSH-bound workspace root under /workspace, if any. */
+export function boundWorkspaceRoot(projectId: string): string | null {
+  return projectRootOverrides.get(projectId) ?? null;
+}
+
+export function isTshDirectoryArtifactProject(projectId: string): boolean {
+  return Boolean(boundWorkspaceRoot(projectId));
+}
+
 export function projectWorkspaceRoot(projectId: string) {
-  return projectRootOverrides.get(projectId) ?? sharedProjectWorkspaceRoot(appPaths, projectId);
+  return boundWorkspaceRoot(projectId) ?? projectPrivateRoot(projectId);
 }
 
 export function bindProjectWorkspaceRoot(projectId: string, root: string) {

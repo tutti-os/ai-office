@@ -482,6 +482,7 @@ export function App() {
         pptxError={pptxError}
         pptxRuntime={pptxRuntime}
         projectId={route.projectId}
+        tshWorkspaceApp={tshWorkspaceApp}
         onArtifactSaveStateChange={setArtifactSaveState}
         onBackHome={requestHomeRoute}
         onCancel={cancelAgentRun}
