@@ -34,7 +34,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       }),
       buildMcpServers: (context) => buildSheetAppToolMcpServers(context),
       useProviderResume: () => true,
-      // Resume pointers stay in VM-local database dir — never app-data / workspace trees.
+      // Resume pointers stay in the VM-local database directory.
       sessionRoot: (context) => projectLocalAgentStateRoot(context.project.id),
       timeoutMs: localAgentTimeoutMs,
       sessionDirName: ".ai-sheet",

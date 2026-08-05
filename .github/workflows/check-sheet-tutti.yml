@@ -31,7 +31,12 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    name: Check (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -48,6 +53,9 @@ jobs:
 
       - name: Check shared packages and AI Sheet
         run: pnpm -r --filter "./packages/*" --if-present check && pnpm --filter @ai-sheet/app check
+
+      - name: Test shared Windows adapters
+        run: pnpm --filter @ai-app/shared exec tsx --test src/toolchains/officecli/officecli.test.ts src/tutti-cli-client/tutti-cli-client.test.ts && pnpm --filter @ai-app/tutti-packager test
 
       - name: Check AI Sheet i18n
         run: pnpm --filter @ai-sheet/app check:i18n

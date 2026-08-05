@@ -9,6 +9,6 @@
   "scripts": {
     "build": "node --check src/index.mjs && node --check src/version.mjs",
     "check": "node --check src/index.mjs && node --check src/version.mjs",
-    "test": "node --test src/version.test.mjs"
+    "test": "node --test src/version.test.mjs src/index.test.mjs"
   }
 }

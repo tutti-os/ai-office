@@ -35,7 +35,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
   constructor() {
     super({
       runCwd: (context) => projectWorkspaceRoot(context.project.id),
-      // Resume pointers stay in VM-local database dir — never /workspace or .tsh app-data.
+      // Resume pointers stay in the VM-local database directory.
       sessionRoot: (context) => projectLocalAgentStateRoot(context.project.id),
       buildPrompt: buildEditPrompt,
       buildSystemPrompt,
@@ -51,7 +51,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
         const privateRoot = projectPrivateRoot(context.project.id);
         return privateRoot === runCwd ? [runCwd] : [runCwd, privateRoot];
       },
-      // Never leave `.agent-acp-kit-codex-root` in user-visible /workspace trees.
+      // Never leave `.agent-acp-kit-codex-root` in user-visible project trees.
       // AGENTS.md under the deck root is still materialized separately and kept.
       writeCodexProjectRootMarker: (context) =>
         isTshDirectoryArtifactProject(context.project.id) ? false : undefined,

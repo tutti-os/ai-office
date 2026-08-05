@@ -408,8 +408,8 @@ importers:
         specifier: workspace:*
         version: link:../ai-app-shared
       '@tutti-os/agent-acp-kit':
-        specifier: 0.7.7
-        version: 0.7.7
+        specifier: 0.7.8
+        version: 0.7.8
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.7)
@@ -2490,8 +2490,8 @@ packages:
   '@tiptap/starter-kit@3.27.1':
     resolution: {integrity: sha512-vfxRsqW8rCc0k4pzo0ilU3wobVi2wqVj88VZI2SlgZlNnUAkrDGDIAph7CTa9k9fshV+O1ivpEgPC5yC046jow==}
 
-  '@tutti-os/agent-acp-kit@0.7.7':
-    resolution: {integrity: sha512-fjr1jRNAI6c0C3whGJL/XF267MVCqoh+9rmgkNqlwjOy79Fe3Qc90gj032j/8ZQFka/CcMZBTnglTZTrZmaqeA==}
+  '@tutti-os/agent-acp-kit@0.7.8':
+    resolution: {integrity: sha512-axnRH7yYL6w0uIZqXb86i7TNBwUzYgezvnm8vl/4pftBhAEl+4aXsuPDZJRFqpnp1qU4aCE8e1ldlt+Chob2Xw==}
     engines: {node: '>=22'}
 
   '@tutti-os/agent-activity-core@0.0.288':
@@ -6528,7 +6528,7 @@ snapshots:
       '@tiptap/extensions': 3.27.1(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1)
       '@tiptap/pm': 3.27.1
 
-  '@tutti-os/agent-acp-kit@0.7.7':
+  '@tutti-os/agent-acp-kit@0.7.8':
     dependencies:
       '@anthropic-ai/claude-agent-sdk': 0.2.141(zod@4.4.3)
       zod: 4.4.3

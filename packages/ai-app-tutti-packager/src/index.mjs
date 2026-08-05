@@ -75,7 +75,13 @@ export async function packageTuttiApp(options) {
   });
   const zipPath = await createZip({ appId, buildRoot, packageRoot, version });
   const zipSha256 = await sha256File(zipPath);
-  const result = { appId: manifest.appId, version, packageRoot, zipPath, zipSha256 };
+  const result = {
+    appId: manifest.appId,
+    version,
+    packageRoot,
+    zipPath,
+    zipSha256,
+  };
   await writeFile(path.join(buildRoot, "package-result.json"), `${JSON.stringify(result, null, 2)}\n`);
   console.log(`Created ${zipPath}`);
   return result;
@@ -103,7 +109,9 @@ async function writePackageFiles(input) {
   await chmod(path.join(input.packageRoot, "bootstrap.sh"), 0o755);
   await writeFile(path.join(input.packageRoot, "AGENTS.md"), input.renderPackageGuide());
   await writeFile(path.join(input.packageRoot, "icon.svg"), input.renderIcon());
-  await cp(input.webDistDir, path.join(input.packageRoot, "dist"), { recursive: true });
+  await cp(input.webDistDir, path.join(input.packageRoot, "dist"), {
+    recursive: true,
+  });
   for (const asset of input.packageAssets ?? []) {
     await copyPackageAsset(input.packageRoot, asset);
   }
@@ -152,8 +160,13 @@ async function bundleServer(input) {
 async function createZip(input) {
   const zipPath = path.join(input.buildRoot, `${input.appId}-${input.version}.zip`);
   await rm(zipPath, { force: true });
-  await run("zip", ["-qry", zipPath, "."], { cwd: input.packageRoot });
+  const archive = resolveArchiveInvocation(zipPath);
+  await run(archive.command, archive.args, { cwd: input.packageRoot });
   return zipPath;
+}
+
+export function resolveArchiveInvocation(zipPath, targetPlatform = process.platform) {
+  return targetPlatform === "win32" ? { command: "tar.exe", args: ["-a", "-c", "-f", zipPath, "."] } : { command: "zip", args: ["-qry", zipPath, "."] };
 }
 
 async function validatePackageRoot(root, options) {
@@ -174,8 +187,14 @@ async function validatePackageRoot(root, options) {
     if (documentationFile) await access(path.join(root, documentationFile));
   }
   const bootstrapMode = (await stat(path.join(root, "bootstrap.sh"))).mode;
-  if ((bootstrapMode & 0o111) === 0) throw new Error("bootstrap.sh must be executable");
+  assertBootstrapExecutable(bootstrapMode);
   await assertNoSymlinks(root);
+}
+
+export function assertBootstrapExecutable(mode, targetPlatform = process.platform) {
+  if (targetPlatform !== "win32" && (mode & 0o111) === 0) {
+    throw new Error("bootstrap.sh must be executable");
+  }
 }
 
 export function createCliManifest(config) {
@@ -317,8 +336,9 @@ async function sha256File(filePath) {
 }
 
 async function run(command, args, options = {}) {
+  const invocation = resolveBuildInvocation(command, args);
   await new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const child = spawn(invocation.command, invocation.args, {
       stdio: "inherit",
       shell: false,
       ...options,
@@ -326,7 +346,16 @@ async function run(command, args, options = {}) {
     child.on("error", reject);
     child.on("exit", (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`${command} ${args.join(" ")} exited with code ${code}`));
+      else reject(new Error(`${invocation.command} ${invocation.args.join(" ")} exited with code ${code}`));
     });
   });
+}
+
+export function resolveBuildInvocation(command, args, env = process.env, nodePath = process.execPath) {
+  if (command !== "pnpm") return { command, args };
+  const entrypoint = env.npm_execpath?.trim();
+  if (!entrypoint) {
+    throw new Error("npm_execpath is required to run the package manager");
+  }
+  return { command: nodePath, args: [entrypoint, ...args] };
 }
