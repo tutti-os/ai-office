@@ -3,6 +3,6 @@ import { createTuttiExternalRichTextMentionService } from "@tutti-os/workspace-e
 export function createTuttiExternalMentionService() {
   return createTuttiExternalRichTextMentionService({
     getBridge: () => (typeof window === "undefined" ? undefined : (window as unknown as { tuttiExternal?: unknown }).tuttiExternal) as never,
-    providerIds: ["workspace-app", "agent-target"],
+    providerIds: ["file"],
   });
 }
