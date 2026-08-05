@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { chmod, copyFile, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { arch, homedir, platform } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
@@ -46,18 +46,14 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
   const installRoot = resolveOfficeCliInstallRoot(options, officeCliVersion);
   const installedBinaryPath = join(installRoot, officeCliBinaryName());
   const legacyBinaryPaths = resolveLegacyOfficeCliBinaryPaths(options, officeCliVersion, installedBinaryPath);
-  const releaseMirrors = [
-    `https://d2ddkmrpvnj1wf.cloudfront.net/releases/download/v${officeCliVersion}`,
-  ];
+  const releaseMirrors = [`https://d2ddkmrpvnj1wf.cloudfront.net/releases/download/v${officeCliVersion}`];
   let installPromise: Promise<OfficeCliStatus> | null = null;
 
   async function getOfficeCliStatus(): Promise<OfficeCliStatus> {
     // TSH sandboxes always provide OfficeCLI at the managed runtime path.
     if (isTshWorkspaceAppHost()) {
       const executablePath =
-        process.env.TUTTI_APP_OFFICECLI_PATH?.trim() ||
-        process.env[`${options.envPrefix}_OFFICECLI_PATH`]?.trim() ||
-        TSH_MANAGED_OFFICECLI_PATH;
+        process.env.TUTTI_APP_OFFICECLI_PATH?.trim() || process.env[`${options.envPrefix}_OFFICECLI_PATH`]?.trim() || TSH_MANAGED_OFFICECLI_PATH;
       return {
         available: true,
         source: "tutti",
@@ -71,19 +67,32 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
     if (envPath) {
       const status = await probeOfficeCli(envPath, "env");
       if (status.available) return status;
-      return { ...status, canInstall: canInstallOfficeCli(), installing: Boolean(installPromise) };
+      return {
+        ...status,
+        canInstall: canInstallOfficeCli(),
+        installing: Boolean(installPromise),
+      };
     }
 
     const tuttiPath = process.env.TUTTI_APP_OFFICECLI_PATH?.trim();
     if (tuttiPath) {
       const status = await probeOfficeCli(tuttiPath, "tutti");
       if (status.available) return status;
-      return { ...status, canInstall: canInstallOfficeCli(), installing: Boolean(installPromise) };
+      return {
+        ...status,
+        canInstall: canInstallOfficeCli(),
+        installing: Boolean(installPromise),
+      };
     }
 
     if (existsSync(installedBinaryPath)) {
       const status = await probeOfficeCli(installedBinaryPath, "bundled");
-      if (status.available) return { ...status, canInstall: canInstallOfficeCli(), installing: Boolean(installPromise) };
+      if (status.available)
+        return {
+          ...status,
+          canInstall: canInstallOfficeCli(),
+          installing: Boolean(installPromise),
+        };
     }
 
     for (const legacyBinaryPath of legacyBinaryPaths) {
@@ -91,7 +100,11 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
       const status = await probeOfficeCli(legacyBinaryPath, "bundled");
       if (status.available) {
         await promoteLegacyOfficeCli(legacyBinaryPath).catch(() => undefined);
-        return { ...status, canInstall: canInstallOfficeCli(), installing: Boolean(installPromise) };
+        return {
+          ...status,
+          canInstall: canInstallOfficeCli(),
+          installing: Boolean(installPromise),
+        };
       }
     }
 
@@ -136,9 +149,7 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
   function officeCliEnvSync(): Record<string, string> {
     if (isTshWorkspaceAppHost()) {
       const executablePath =
-        process.env.TUTTI_APP_OFFICECLI_PATH?.trim() ||
-        process.env[`${options.envPrefix}_OFFICECLI_PATH`]?.trim() ||
-        TSH_MANAGED_OFFICECLI_PATH;
+        process.env.TUTTI_APP_OFFICECLI_PATH?.trim() || process.env[`${options.envPrefix}_OFFICECLI_PATH`]?.trim() || TSH_MANAGED_OFFICECLI_PATH;
       return officeCliEnvForPath(executablePath);
     }
     const envPath = process.env[`${options.envPrefix}_OFFICECLI_PATH`]?.trim();
@@ -151,7 +162,9 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
 
   async function probeOfficeCli(command: string, source: OfficeCliSource): Promise<OfficeCliStatus> {
     try {
-      const result = await execFileAsync(command, ["--version"], { timeout: 5000 });
+      const result = await execFileAsync(command, ["--version"], {
+        timeout: 5000,
+      });
       const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
       return {
         available: true,
@@ -246,7 +259,9 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
       .map((line) => line.trim().split(/\s+/))
       .find((parts) => parts[1] === asset)?.[0];
     if (!expected) throw new Error(`OfficeCLI checksum not found for ${asset}`);
-    const actual = createHash("sha256").update(await readFile(filePath)).digest("hex");
+    const actual = createHash("sha256")
+      .update(await readFile(filePath))
+      .digest("hex");
     if (actual !== expected) throw new Error("OfficeCLI checksum mismatch.");
     await writeFile(join(installRoot, "VERSION"), `${officeCliVersion}\n`, "utf8");
   }
@@ -262,14 +277,13 @@ export function createOfficeCliToolchain(options: OfficeCliToolchainOptions): Of
       .filter((asset): asset is string => Boolean(asset));
     const matches = assets.filter((asset) => {
       const normalized = asset.toLowerCase();
-      return normalized.includes("officecli") && platformAliases.some((item) => normalized.includes(item)) && archAliases.some((item) => normalized.includes(item));
+      return (
+        normalized.includes("officecli") && platformAliases.some((item) => normalized.includes(item)) && archAliases.some((item) => normalized.includes(item))
+      );
     });
     // Prefer glibc linux builds over alpine/musl. Matching "linux"+"arm64" alone
     // otherwise picks officecli-linux-alpine-arm64 first and fails on glibc VMs.
-    return (
-      matches.find((asset) => !asset.toLowerCase().includes("alpine") && !asset.toLowerCase().includes("musl")) ??
-      matches[0]
-    );
+    return matches.find((asset) => !asset.toLowerCase().includes("alpine") && !asset.toLowerCase().includes("musl")) ?? matches[0];
   }
 
   return {
@@ -292,9 +306,7 @@ function resolveOfficeCliInstallRoot(options: OfficeCliToolchainOptions, officeC
     process.env.TUTTI_APP_OFFICECLI_INSTALL_ROOT?.trim();
   if (directRoot) return resolve(directRoot);
 
-  const toolchainRoot =
-    process.env.AI_OFFICE_TOOLCHAIN_ROOT?.trim() ||
-    process.env.TUTTI_APP_TOOLCHAIN_ROOT?.trim();
+  const toolchainRoot = process.env.AI_OFFICE_TOOLCHAIN_ROOT?.trim() || process.env.TUTTI_APP_TOOLCHAIN_ROOT?.trim();
   if (toolchainRoot) return resolve(toolchainRoot, "officecli", officeCliVersion, officeCliPlatformArch());
 
   return resolve(options.appRoot, "toolchains", "officecli");
@@ -313,9 +325,7 @@ function resolveLegacyOfficeCliBinaryPaths(options: OfficeCliToolchainOptions, o
   ].filter((root): root is string => Boolean(root));
 
   return uniqueStrings(
-    [...unversionedRoots, ...versionedRoots]
-      .map((root) => join(root, officeCliBinaryName()))
-      .filter((candidate) => candidate !== installedBinaryPath),
+    [...unversionedRoots, ...versionedRoots].map((root) => join(root, officeCliBinaryName())).filter((candidate) => candidate !== installedBinaryPath),
   );
 }
 
@@ -340,10 +350,14 @@ function officeCliPlatformArch() {
 }
 
 function officeCliEnvForPath(executablePath: string) {
+  return buildOfficeCliEnv(executablePath);
+}
+
+export function buildOfficeCliEnv(executablePath: string, basePath = process.env.PATH ?? "", pathDelimiter = delimiter) {
   return {
     OFFICECLI: executablePath,
     OFFICECLI_NO_AUTO_RESIDENT: "1",
-    PATH: `${dirname(executablePath)}:${process.env.PATH ?? ""}`,
+    PATH: `${dirname(executablePath)}${pathDelimiter}${basePath}`,
   };
 }
 

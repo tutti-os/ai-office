@@ -24,13 +24,14 @@
     "./reference-exports": "./src/reference-exports/index.ts",
     "./server-routes": "./src/server-routes/index.ts",
     "./tutti-cli": "./src/tutti-cli/index.ts",
+    "./tutti-cli-client": "./src/tutti-cli-client/index.ts",
     "./toolchains/officecli": "./src/toolchains/officecli/index.ts",
     "./api-client": "./src/api-client/index.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/agent-providers/agent-targets.test.ts src/host-files/host-files.test.ts src/import-source/import-source.test.ts src/local-paths/local-paths.test.ts src/project-preparation/project-preparation.test.ts src/reference-exports/reference-exports.test.ts src/server-errors/server-errors.test.ts src/tsh-host/tsh-host.test.ts"
+    "test": "tsx --test src/agent-providers/agent-targets.test.ts src/host-files/host-files.test.ts src/import-source/import-source.test.ts src/local-paths/local-paths.test.ts src/project-preparation/project-preparation.test.ts src/reference-exports/reference-exports.test.ts src/server-errors/server-errors.test.ts src/tsh-host/tsh-host.test.ts src/toolchains/officecli/officecli.test.ts src/tutti-cli-client/tutti-cli-client.test.ts"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
