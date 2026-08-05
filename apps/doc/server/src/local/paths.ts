@@ -2,7 +2,7 @@ import {
   createAppPaths,
   ensureBaseDirs as ensureSharedBaseDirs,
   projectLocalAgentStateRoot as sharedProjectLocalAgentStateRoot,
-  projectWorkspaceRoot as sharedProjectWorkspaceRoot,
+  projectPrivateStateRoot as sharedProjectPrivateStateRoot,
   safePathSegment,
 } from "@ai-app/shared/local-paths";
 import { isTshFileArtifactPath } from "@ai-app/shared/tsh-host";
@@ -29,8 +29,9 @@ export function ensureBaseDirs() {
   ensureSharedBaseDirs(appPaths);
 }
 
+/** Private sidecars: VM database dir on TSH, legacy HOME/projects locally. */
 export function projectPrivateRoot(projectId: string) {
-  return sharedProjectWorkspaceRoot(appPaths, projectId);
+  return sharedProjectPrivateStateRoot(appPaths, projectId);
 }
 
 /** VM-local root for local-agent resume pointers (TUTTI_APP_DATABASE_DIR). */

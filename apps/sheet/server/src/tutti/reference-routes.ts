@@ -1,6 +1,7 @@
 import { readdir, stat } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
 import type { FastifyInstance } from "fastify";
+import { privateProjectsParentDir } from "@ai-app/shared/local-paths";
 import { xlsxMimeType } from "@ai-sheet/shared";
 import { getDb, rows } from "../db/database.js";
 import { appPaths } from "../local/paths.js";
@@ -87,7 +88,7 @@ export function registerTuttiReferenceRoutes(server: FastifyInstance) {
 }
 
 async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]) {
-  const entries = await safeReaddir(appPaths.projectsDir);
+  const entries = await safeReaddir(privateProjectsParentDir(appPaths));
   const projectMetadata = loadProjectMetadata();
   const groups = (await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
     const projectId = entry.name;
@@ -109,7 +110,7 @@ async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]) {
 }
 
 async function listAllReferences(timeRange: ReferenceSearchRequest["timeRange"]) {
-  const groups = await safeReaddir(appPaths.projectsDir);
+  const groups = await safeReaddir(privateProjectsParentDir(appPaths));
   const projectMetadata = loadProjectMetadata();
   const nested = await Promise.all(
     groups
@@ -120,7 +121,7 @@ async function listAllReferences(timeRange: ReferenceSearchRequest["timeRange"])
 }
 
 async function listReferencesForProject(projectId: string, timeRange: ReferenceListRequest["timeRange"], projectDisplayNameValue?: string) {
-  const root = join(appPaths.projectsDir, projectId);
+  const root = join(privateProjectsParentDir(appPaths), projectId);
   const exportsRoot = join(root, "exports");
   const exportEntries = await safeReaddir(exportsRoot);
   const files = [

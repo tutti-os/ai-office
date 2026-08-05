@@ -17,6 +17,7 @@ import {
   type SlideProject,
   type UpdateProjectRequest,
 } from "@ai-slide/shared";
+import { privateProjectsParentDir } from "@ai-app/shared/local-paths";
 import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
 import { asProjectPreparationError } from "@ai-app/shared/project-preparation";
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
@@ -344,6 +345,7 @@ export class ProjectRepository {
       unbindProjectWorkspaceRoot(row.id);
     }
     clearProjectWorkspaceRootBindings();
+    rmSync(privateProjectsParentDir(appPaths), { force: true, recursive: true });
     rmSync(appPaths.projectsDir, { force: true, recursive: true });
     ensureBaseDirs();
     return { projects: [] as SlideProject[] };

@@ -1,6 +1,7 @@
 import { readdir, stat } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
 import type { FastifyInstance } from "fastify";
+import { privateProjectsParentDir } from "@ai-app/shared/local-paths";
 import { readPublishedReferenceExports } from "@ai-app/shared/reference-exports";
 import { getDb, rows } from "../db/database.js";
 import { appPaths } from "../local/paths.js";
@@ -99,7 +100,7 @@ async function listProjectGroups(
   timeRange: ReferenceListRequest["timeRange"],
   ensureProjectReferences?: (projectId: string) => unknown | Promise<unknown>,
 ) {
-  const entries = await safeReaddir(appPaths.projectsDir);
+  const entries = await safeReaddir(privateProjectsParentDir(appPaths));
   const projectMetadata = loadProjectMetadata();
   const groups = (await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
     const projectId = entry.name;
@@ -125,7 +126,7 @@ async function listAllReferences(
   timeRange: ReferenceSearchRequest["timeRange"],
   ensureProjectReferences?: (projectId: string) => unknown | Promise<unknown>,
 ) {
-  const groups = await safeReaddir(appPaths.projectsDir);
+  const groups = await safeReaddir(privateProjectsParentDir(appPaths));
   const projectMetadata = loadProjectMetadata();
   const nested = await Promise.all(
     groups
@@ -146,7 +147,7 @@ async function listReferencesForProject(
   projectMetadataValue?: ProjectMetadata,
   ensureProjectReferences?: (projectId: string) => unknown | Promise<unknown>,
 ) {
-  const root = join(appPaths.projectsDir, projectId);
+  const root = join(privateProjectsParentDir(appPaths), projectId);
   const projectMetadata = projectMetadataValue ?? loadProjectMetadata().get(projectId);
   if (!projectMetadata) return [];
   await ensureProjectReferences?.(projectId);

@@ -3,7 +3,7 @@ import {
   ensureBaseDirs as ensureSharedBaseDirs,
   ensureProjectDirs as ensureSharedProjectDirs,
   projectLocalAgentStateRoot as sharedProjectLocalAgentStateRoot,
-  projectWorkspaceRoot as sharedProjectWorkspaceRoot,
+  projectPrivateStateRoot as sharedProjectPrivateStateRoot,
 } from "@ai-app/shared/local-paths";
 
 export const appPaths = createAppPaths({
@@ -17,7 +17,7 @@ export function ensureBaseDirs() {
 }
 
 export function projectWorkspaceRoot(projectId: string) {
-  return sharedProjectWorkspaceRoot(appPaths, projectId);
+  return sharedProjectPrivateStateRoot(appPaths, projectId);
 }
 
 /** VM-local root for local-agent resume pointers (TUTTI_APP_DATABASE_DIR). */

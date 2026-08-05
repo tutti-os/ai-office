@@ -32,11 +32,26 @@ export function createAppPaths(options: AppPathOptions): AppPaths {
   };
 }
 
-export function ensureBaseDirs(paths: Pick<AppPaths, "dataDir" | "projectsDir">) {
-  mkdirSync(paths.dataDir, { recursive: true });
-  mkdirSync(paths.projectsDir, { recursive: true });
+export function hasInjectedDatabaseDir(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return Boolean(env.TUTTI_APP_DATABASE_DIR?.trim());
 }
 
+export function ensureBaseDirs(paths: Pick<AppPaths, "dataDir" | "databaseDir" | "projectsDir">) {
+  mkdirSync(paths.databaseDir, { recursive: true });
+  // On TSH, durable private state belongs in databaseDir — do not seed FabricFS
+  // DATA_DIR / .tsh project trees.
+  if (!hasInjectedDatabaseDir()) {
+    mkdirSync(paths.dataDir, { recursive: true });
+    mkdirSync(paths.projectsDir, { recursive: true });
+  }
+}
+
+/**
+ * Legacy HOME/projects path. Prefer {@link projectPrivateStateRoot} for private
+ * sidecars; on TSH that root lives under TUTTI_APP_DATABASE_DIR.
+ */
 export function projectWorkspaceRoot(paths: Pick<AppPaths, "projectsDir">, projectId: string) {
   return join(paths.projectsDir, safePathSegment(projectId));
 }
@@ -53,13 +68,41 @@ export function projectLocalAgentStateRoot(
   return join(paths.databaseDir, "local-agent-state", safePathSegment(projectId));
 }
 
-export function ensureProjectDirs(paths: Pick<AppPaths, "projectsDir">, projectId: string) {
-  const rootDir = projectWorkspaceRoot(paths, projectId);
+/**
+ * Private per-project app state (sidecars, assets cache, default exports).
+ * On TSH (injected database dir): under TUTTI_APP_DATABASE_DIR.
+ * Local/dev without injection: legacy HOME/projects/{id}.
+ */
+export function projectPrivateStateRoot(
+  paths: Pick<AppPaths, "databaseDir" | "projectsDir">,
+  projectId: string,
+) {
+  if (hasInjectedDatabaseDir()) {
+    return join(paths.databaseDir, "project-private", safePathSegment(projectId));
+  }
+  return projectWorkspaceRoot(paths, projectId);
+}
+
+/** Parent directory that contains per-project private state roots. */
+export function privateProjectsParentDir(
+  paths: Pick<AppPaths, "databaseDir" | "projectsDir">,
+) {
+  if (hasInjectedDatabaseDir()) {
+    return join(paths.databaseDir, "project-private");
+  }
+  return paths.projectsDir;
+}
+
+export function ensureProjectDirs(
+  paths: Pick<AppPaths, "databaseDir" | "projectsDir">,
+  projectId: string,
+) {
+  const rootDir = projectPrivateStateRoot(paths, projectId);
   mkdirSync(join(rootDir, "exports"), { recursive: true });
   mkdirSync(join(rootDir, "snapshots"), { recursive: true });
   return rootDir;
 }
 
 export function safePathSegment(value: string) {
-  return value.replace(/[^\w.-]/g, "_") || "unknown";
+  return value.replace(/[^\w.-]+/g, "_") || "unknown";
 }
