@@ -521,18 +521,14 @@ export class ProjectService {
 
   private async refreshArtifactFromWorkspace(projectId: string, runId: string | undefined, previousFingerprint: string) {
     const detail = await this.getProject(projectId);
+    const fingerprint = await this.workspaceFingerprintFromDetail(detail);
+    if (fingerprint === previousFingerprint) return { changed: false, fingerprint };
+
     if (detail.artifact.type === "pptx") {
-      const refresh = await this.repo.refreshPptxArtifactFromFile(projectId, "ai");
-      const fingerprint = await this.workspaceFingerprint(projectId);
-      if (!refresh?.changed) return { changed: false, fingerprint };
+      await this.repo.refreshPptxArtifactFromFile(projectId, "ai");
     } else {
-      const fingerprint = await this.workspaceFingerprintFromDetail(detail);
-      if (fingerprint === previousFingerprint) return { changed: false, fingerprint };
       const syncedManifest = await this.syncDeckManifestSlideFiles(detail);
       if (!syncedManifest) this.repo.bumpArtifactRevision(detail.artifact.id, "ai");
-      const updated = await this.getProject(projectId);
-      this.events.emit({ type: "project.updated", projectId, runId, payload: updated });
-      return { changed: true, fingerprint: await this.workspaceFingerprint(projectId) };
     }
     const updated = await this.getProject(projectId);
     this.events.emit({ type: "project.updated", projectId, runId, payload: updated });

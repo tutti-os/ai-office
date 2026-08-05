@@ -48,10 +48,8 @@ import {
   normalizeSlideListItem,
   pptxFilePath,
   readPptxManifestFromFile,
-  readStoredPptxManifest,
   resolveDeckSlidePath,
   writeDeckManifest,
-  writeStoredPptxManifest,
 } from "./deck-project-files.js";
 import {
   isBlankDeckManifest,
@@ -664,15 +662,6 @@ export class ProjectRepository {
     const artifact = this.getArtifact(project.activeArtifactId);
     if (!artifact || artifact.type !== "pptx") return null;
     const nextManifest = await readPptxManifestFromFile(projectId, artifact);
-    const currentManifest = await readStoredPptxManifest(projectId, artifact);
-    if (
-      currentManifest.sha256 === nextManifest.sha256 &&
-      currentManifest.sizeBytes === nextManifest.sizeBytes &&
-      currentManifest.updatedAt === nextManifest.updatedAt
-    ) {
-      return { artifact, manifest: nextManifest, changed: false };
-    }
-    await writeStoredPptxManifest(projectId, artifact, nextManifest);
     const updatedArtifact = this.bumpArtifactRevision(artifact.id, updatedBy) ?? artifact;
     return { artifact: updatedArtifact, manifest: nextManifest, changed: true };
   }

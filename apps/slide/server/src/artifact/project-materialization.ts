@@ -2,7 +2,6 @@ import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs
 import { dirname, extname, join, normalize, sep } from "node:path";
 import {
   createBlankDeckManifest,
-  createEmptyPptxManifest,
   type DeckManifest,
   type SlideArtifact,
   type SlideProject,
@@ -126,7 +125,7 @@ export function prepareProjectAgentFiles(projectRoot: string, project: SlideProj
 }
 
 export function projectAgentInstructionsVersion(project: SlideProject, artifact: SlideArtifact) {
-  return ["slide-agent-context-v3", project.templateId ?? "", artifact.id, artifact.type, artifact.fileRef].join(":");
+  return ["slide-agent-context-v4", project.templateId ?? "", artifact.id, artifact.type, artifact.fileRef].join(":");
 }
 
 export async function syncProjectTemplateSkill(projectRoot: string, project: SlideProject, artifact: SlideArtifact) {
@@ -152,10 +151,10 @@ export async function syncDefaultDeckSkill(projectRoot: string, project: SlidePr
   });
 }
 
-export async function materializePptxProject(root: string, project: SlideProject, artifact: SlideArtifact) {
-  const manifestPath = join(root, `${artifact.fileRef}.manifest.json`);
-  const manifest = createEmptyPptxManifest();
-  await writeFileIfMissing(manifestPath, `${JSON.stringify({ ...manifest, title: project.title }, null, 2)}\n`);
+export async function materializePptxProject(root: string, _project: SlideProject, _artifact: SlideArtifact) {
+  // PPTX starts as an empty project directory. The agent creates slides.pptx;
+  // do not seed user-visible sidecars like slides.pptx.manifest.json.
+  await mkdir(root, { recursive: true });
 }
 
 export async function isBlankDeckManifest(manifestPath: string) {
@@ -198,6 +197,9 @@ async function projectAgentInstructions(artifact: SlideArtifact) {
       artifactIntentInstructions("presentation"),
       progressiveSlideAuthoringInstructions("presentation"),
       "When the current request calls for creating or editing this PPTX presentation, write the final file to the focused file with filesystem tools.",
+      "When starting a new presentation from a user request, choose a concise human title and call the `set_project_title` app tool; do not leave the raw instruction as the project title.",
+      "To rename the project directory, call the `set_project_title` app tool.",
+      "If MCP app tools are unavailable, report that app tools are unavailable instead of editing app databases or session files by hand.",
       projectAssets,
     ].join("\n");
   }

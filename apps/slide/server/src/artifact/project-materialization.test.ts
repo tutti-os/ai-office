@@ -177,7 +177,7 @@ test("ready v2 agent context is migrated to relative deck instructions", async (
     });
 
     const instructions = await readFile(join(root, "AGENTS.md"), "utf8");
-    assert.equal(stored.version, "slide-agent-context-v3::artifact-migration:deck:deck.slides:0");
+    assert.equal(stored.version, "slide-agent-context-v4::artifact-migration:deck:deck.slides:0");
     assert.notEqual(stored.version, oldVersion);
     assert.match(instructions, /Current focused directory: deck\.slides \(relative to this project directory\)\./);
     assert.doesNotMatch(instructions, new RegExp(escapeRegExp(root)));
