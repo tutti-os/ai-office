@@ -7,7 +7,8 @@
     ".": "./src/index.mjs"
   },
   "scripts": {
-    "build": "node --check src/index.mjs",
-    "check": "node --check src/index.mjs"
+    "build": "node --check src/index.mjs && node --check src/version.mjs",
+    "check": "node --check src/index.mjs && node --check src/version.mjs",
+    "test": "node --test src/version.test.mjs"
   }
 }

@@ -2,6 +2,9 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { access, chmod, cp, lstat, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { resolveTuttiAppPackageVersion } from "./version.mjs";
+
+export { resolveStableVersionSeed, resolveTuttiAppPackageVersion } from "./version.mjs";
 
 export async function packageTuttiApp(options) {
   const {
@@ -30,7 +33,13 @@ export async function packageTuttiApp(options) {
 
   const sourceManifest = JSON.parse(await readFile(path.join(appDir, manifestFile), "utf8"));
   const rootPackage = JSON.parse(await readFile(path.join(rootDir, "package.json"), "utf8"));
-  const version = process.env[versionEnvVar]?.trim() || sourceManifest.version || rootPackage.version || "0.0.0";
+  const version = resolveTuttiAppPackageVersion({
+    appId,
+    manifestVersion: sourceManifest.version,
+    rootPackageVersion: rootPackage.version,
+    versionEnvVar,
+    rootDir,
+  });
   const manifest = { ...sourceManifest, version };
 
   await run("pnpm", ["--filter", webBuildFilter, "build"], { cwd: rootDir });
