@@ -36,7 +36,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<D
         }
         return projectWorkspaceRoot(context.project.id);
       },
-      // Resume pointers stay in VM-local database dir — never /workspace or .tsh app-data.
+      // Resume pointers stay in the VM-local database directory.
       sessionRoot: (context) => projectLocalAgentStateRoot(context.project.id),
       buildPrompt: buildEditPrompt,
       buildSystemPrompt,
