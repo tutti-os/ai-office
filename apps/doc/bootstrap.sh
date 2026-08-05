@@ -26,7 +26,8 @@ export AI_DOC_HOME="${TUTTI_APP_DATA_DIR:-$script_dir/.ai-doc-dev}"
 export TUTTI_APP_DATABASE_DIR="${TUTTI_APP_DATABASE_DIR:-$AI_DOC_HOME/data}"
 export AI_DOC_RUNTIME_ROOT="${TUTTI_APP_RUNTIME_DIR:-$AI_DOC_HOME/.runtime}"
 export AI_DOC_LOG_ROOT="${TUTTI_APP_LOG_DIR:-$AI_DOC_RUNTIME_ROOT/logs}"
-export AI_DOC_TEMPLATE_ROOT="${AI_DOC_TEMPLATE_ROOT:-$AI_DOC_HOME/templates/tutti}"
+# Keep private template cache on the VM database volume, not FabricFS .tsh.
+export AI_DOC_TEMPLATE_ROOT="${AI_DOC_TEMPLATE_ROOT:-$TUTTI_APP_DATABASE_DIR/templates/tutti}"
 export AI_DOC_TUTTI_CLI="${TUTTI_CLI:-}"
 # TSH sandboxes always expose OfficeCLI at the managed runtime path.
 if [ "${TSH_WORKSPACE_APP:-}" = "1" ] && [ -z "${TUTTI_APP_OFFICECLI_PATH:-}" ]; then
