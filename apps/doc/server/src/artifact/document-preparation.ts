@@ -25,7 +25,8 @@ export async function materializeDocumentArtifactFile(
 ) {
   await mkdir(privateRoot, { recursive: true });
   if (project.type === "docx") {
-    // Keep manifest in private state; binary lives at the user-facing artifact path (written on import / agent).
+    // Keep manifest in private state. Blank binary is seeded by DocumentService.ensureBlankDocxArtifact
+    // (import writes bytes; agent edits the existing focused .docx).
     await materializeDocumentProjectCore(privateRoot, project);
     await mkdir(dirname(artifactPath), { recursive: true });
     return;

@@ -1,7 +1,9 @@
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { basename, extname, join } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
+import { promisify } from "node:util";
 import {
   createEmptyDocxDocumentManifest,
   defaultHtmlDocument,
@@ -31,18 +33,23 @@ import {
   boundWorkspaceRoot,
   isTshFileArtifactProject,
   projectFocusedArtifactPath,
+  projectPrivateRoot,
   projectWorkspaceRoot,
 } from "../local/paths.js";
 import { DocumentRepository } from "./document-repository.js";
+import { materializeDocumentProjectCore } from "./document-preparation.js";
 import { renderTemplateSeed } from "./document-template-renderer.js";
 import { mimeTypeForImportFileName, resolveImportSourcePath } from "./import-source.js";
 import { assistantConversationContent, conversationMessageMetadata, previewText } from "./run-preview.js";
 import { documentTemplates, getTemplate } from "./templates.js";
 import { loadTemplateProjectSeed, materializeTemplateAssetsToProject } from "../templates/template-service.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
-import { requireOfficeCli } from "../toolchains/officecli.js";
+import { officeCliEnv, requireOfficeCli } from "../toolchains/officecli.js";
 import { EventHub } from "../ws/event-hub.js";
 import { invalidateProjectAssetCache } from "./project-assets.js";
+
+const execFileAsync = promisify(execFile);
+
 export class DocumentService {
   private readonly runtimes = createRuntimeProviderRegistry();
   private readonly cancelledRunIds = new Set<string>();
@@ -113,12 +120,31 @@ export class DocumentService {
       templateName,
       parentPath: input.parentPath,
     });
+    if (type === "docx") {
+      // TSH single-file DOCX binds a /workspace/*.docx path that hydrate/getDocxFile require.
+      // Blank create must seed that binary (import writes bytes; agent edits assume the file exists).
+      try {
+        await this.ensureBlankDocxArtifact(project.id);
+      } catch (error) {
+        try {
+          this.repo.deleteProject(project.id);
+        } catch (cleanupError) {
+          console.warn(JSON.stringify({
+            event: "ai_doc.project.create.cleanup_failed",
+            projectId: project.id,
+            error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          }));
+        }
+        throw error;
+      }
+    }
     if (type === "html" && templateId && templateProjectSeed) {
       await materializeTemplateAssetsToProject(templateId, join(projectWorkspaceRoot(project.id), "assets"), content);
       this.repo.invalidateAndStartAgentContext(project.id);
     }
-    const result = { project, preparation: this.repo.getProjectPreparation(project.id) };
-    this.events.emit({ type: "project.created", projectId: project.id, payload: result });
+    const ready = this.repo.getProject(project.id) ?? project;
+    const result = { project: ready, preparation: this.repo.getProjectPreparation(ready.id) };
+    this.events.emit({ type: "project.created", projectId: ready.id, payload: result });
     return result;
   }
 
@@ -208,6 +234,11 @@ export class DocumentService {
 
     if (project.type === "docx") {
       if (requiresDiskArtifact && !existsSync(path)) {
+        // Recover blank creates that bound a path but never seeded the binary.
+        if (isBlankDocxManifest(project.content)) {
+          await this.ensureBlankDocxArtifact(project.id);
+          return this.repo.getProject(project.id) ?? project;
+        }
         throw new Error(`Document file is missing at ${path}: no such file or directory`);
       }
       return project;
@@ -241,10 +272,42 @@ export class DocumentService {
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+        if (isBlankDocxManifest(project.content)) {
+          await this.ensureBlankDocxArtifact(projectId);
+          const bytes = await readFile(path);
+          return { bytes, fileName: docxFileName, mimeType: docxMimeType };
+        }
         throw new Error(`Document file is missing at ${path}`);
       }
       throw error;
     }
+  }
+
+  /** Seed a blank .docx when create left only the private manifest (import already writes bytes). */
+  private async ensureBlankDocxArtifact(projectId: string) {
+    const path = docxFilePath(projectId);
+    if (existsSync(path)) return;
+
+    const status = await requireOfficeCli();
+    if (!status.executablePath) throw new Error("OfficeCLI executable path is missing.");
+    const env = { ...process.env, ...(await officeCliEnv()) };
+    await mkdir(dirname(path), { recursive: true });
+    await execFileAsync(
+      status.executablePath,
+      ["create", path, "--type", "docx", "--force", "--locale", "en-US", "--json"],
+      { env, timeout: 30_000 },
+    );
+
+    const manifest = await readDocxManifestFromFile(projectId);
+    if (!manifest) return;
+    const content = serializeDocxDocumentManifest(manifest);
+    this.repo.syncProjectContentQuiet(projectId, content);
+    const project = this.repo.getProject(projectId);
+    if (!project) return;
+    const coreRoot = isTshFileArtifactProject(projectId)
+      ? projectPrivateRoot(projectId)
+      : projectWorkspaceRoot(projectId);
+    await materializeDocumentProjectCore(coreRoot, { ...project, content });
   }
 
   listProjectRuns(projectId: string) {
@@ -703,6 +766,11 @@ const supportedExportMimeTypes = new Set(["text/html", "text/markdown", docxMime
 
 function docxFilePath(projectId: string) {
   return projectFocusedArtifactPath(projectId, "docx");
+}
+
+function isBlankDocxManifest(content: string) {
+  const manifest = parseDocxDocumentManifest(content);
+  return !manifest.sha256 && manifest.sizeBytes === 0;
 }
 
 function importedDocumentType(fileName: string, mimeType: string): DocumentProject["type"] {
