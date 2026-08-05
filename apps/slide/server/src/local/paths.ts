@@ -1,7 +1,8 @@
 import {
   createAppPaths,
   ensureBaseDirs as ensureSharedBaseDirs,
-  projectWorkspaceRoot as sharedProjectWorkspaceRoot,
+  projectLocalAgentStateRoot as sharedProjectLocalAgentStateRoot,
+  projectPrivateStateRoot as sharedProjectPrivateStateRoot,
 } from "@ai-app/shared/local-paths";
 import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -18,9 +19,14 @@ export function ensureBaseDirs() {
   ensureSharedBaseDirs(appPaths);
 }
 
-/** Private app-owned root (sessions/sidecars). Always under AI_SLIDE_HOME. */
+/** Private app-owned root (sidecars). VM database dir on TSH. */
 export function projectPrivateRoot(projectId: string) {
-  return sharedProjectWorkspaceRoot(appPaths, projectId);
+  return sharedProjectPrivateStateRoot(appPaths, projectId);
+}
+
+/** VM-local root for local-agent resume pointers (TUTTI_APP_DATABASE_DIR). */
+export function projectLocalAgentStateRoot(projectId: string) {
+  return sharedProjectLocalAgentStateRoot(appPaths, projectId);
 }
 
 /** TSH-bound workspace root under /workspace, if any. */

@@ -33,7 +33,7 @@ export AI_DOC_HOME="\${TUTTI_APP_DATA_DIR:-$package_dir/.data}"
 export TUTTI_APP_DATABASE_DIR="\${TUTTI_APP_DATABASE_DIR:-$AI_DOC_HOME/data}"
 export AI_DOC_RUNTIME_ROOT="\${TUTTI_APP_RUNTIME_DIR:-$AI_DOC_HOME/.runtime}"
 export AI_DOC_LOG_ROOT="\${TUTTI_APP_LOG_DIR:-$AI_DOC_RUNTIME_ROOT/logs}"
-export AI_DOC_TEMPLATE_ROOT="\${AI_DOC_TEMPLATE_ROOT:-$AI_DOC_HOME/templates/tutti}"
+export AI_DOC_TEMPLATE_ROOT="\${AI_DOC_TEMPLATE_ROOT:-$TUTTI_APP_DATABASE_DIR/templates/tutti}"
 export AI_DOC_TUTTI_CLI="\${TUTTI_CLI:-}"
 # TSH sandboxes always expose OfficeCLI at the managed runtime path.
 if [ "\${TSH_WORKSPACE_APP:-}" = "1" ] && [ -z "\${TUTTI_APP_OFFICECLI_PATH:-}" ]; then
@@ -82,8 +82,8 @@ This package runs AI Doc as a local Tutti workspace app.
 - \`dist/\` is the built React/Vite frontend.
 - \`tutti.app.json\` declares the app runtime, localized metadata, CLI surface, and references endpoints.
 - \`tutti.cli.json\` exposes project commands such as \`doc projects list\`, \`doc projects get\`, and \`doc projects create\` for other Tutti apps and agents.
-- Durable app data is stored under \`AI_DOC_HOME\`, which defaults to \`TUTTI_APP_DATA_DIR\`.
-- Active SQLite database and WAL files use \`TUTTI_APP_DATABASE_DIR\` when provided.
+- Private app state (SQLite, sidecars, template cache) uses \`TUTTI_APP_DATABASE_DIR\` when provided.
+- Public user artifacts live under the bound \`/workspace\` path. Do not persist under \`TUTTI_APP_DATA_DIR\` / \`.tsh\`.
 - Runtime scratch data is stored under \`AI_DOC_RUNTIME_ROOT\`, which defaults to \`TUTTI_APP_RUNTIME_DIR\`.
 - Backend logs, if added later, must stay under \`AI_DOC_LOG_ROOT\`, which defaults to \`TUTTI_APP_LOG_DIR\`.
 - OfficeCLI auto-install uses the shared AI Office toolchain cache, not \`AI_DOC_HOME\`; override with \`AI_DOC_OFFICECLI_PATH\`, \`TUTTI_APP_OFFICECLI_PATH\`, or an \`*_OFFICECLI_INSTALL_ROOT\` env var.

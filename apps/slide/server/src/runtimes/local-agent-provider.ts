@@ -11,6 +11,7 @@ import {
 import type { AiEditRequest, SlideRun } from "@ai-slide/shared";
 import {
   isTshDirectoryArtifactProject,
+  projectLocalAgentStateRoot,
   projectPrivateRoot,
   projectWorkspaceRoot,
 } from "../local/paths.js";
@@ -34,11 +35,8 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
   constructor() {
     super({
       runCwd: (context) => projectWorkspaceRoot(context.project.id),
-      // Keep resume/session files out of the user-visible TSH deck directory.
-      sessionRoot: (context) =>
-        isTshDirectoryArtifactProject(context.project.id)
-          ? projectPrivateRoot(context.project.id)
-          : projectWorkspaceRoot(context.project.id),
+      // Resume pointers stay in VM-local database dir — never /workspace or .tsh app-data.
+      sessionRoot: (context) => projectLocalAgentStateRoot(context.project.id),
       buildPrompt: buildEditPrompt,
       buildSystemPrompt,
       buildSkillManifest: buildSlideAgentSkillContext,

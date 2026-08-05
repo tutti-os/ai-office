@@ -14,6 +14,7 @@ import {
   xlsxArtifactFileRef,
   xlsxMimeType,
 } from "@ai-sheet/shared";
+import { privateProjectsParentDir } from "@ai-app/shared/local-paths";
 import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
 import { retryProjectPreparationOperation, SqliteProjectPreparationCoordinator } from "@ai-app/shared/project-preparation";
@@ -224,6 +225,7 @@ export class SheetRepository {
       DELETE FROM artifacts;
       DELETE FROM projects;
     `);
+    rmSync(privateProjectsParentDir(appPaths), { force: true, recursive: true });
     rmSync(appPaths.projectsDir, { force: true, recursive: true });
     ensureBaseDirs();
     return { projects: [] as SheetProject[] };

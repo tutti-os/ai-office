@@ -8,6 +8,7 @@ import {
   type DocumentRunEvent,
   type UpdateProjectRequest,
 } from "@ai-doc/shared";
+import { privateProjectsParentDir } from "@ai-app/shared/local-paths";
 import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
 import { asProjectPreparationError, SqliteProjectPreparationCoordinator } from "@ai-app/shared/project-preparation";
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
@@ -148,6 +149,7 @@ export class DocumentRepository {
       unbindProjectWorkspaceRoot(row.id);
     }
     clearProjectWorkspaceRootBindings();
+    rmSync(privateProjectsParentDir(appPaths), { force: true, recursive: true });
     rmSync(appPaths.projectsDir, { force: true, recursive: true });
     invalidateProjectAssetCache();
     ensureBaseDirs();

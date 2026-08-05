@@ -83,8 +83,8 @@ This package runs AI Slide as a local Tutti workspace app.
 - \`dist/\` is the built React/Vite frontend.
 - \`tutti.app.json\` declares the app runtime, localized metadata, CLI surface, and references endpoints.
 - \`tutti.cli.json\` exposes project commands such as \`slide projects list\`, \`slide projects get\`, and \`slide projects create\` for other Tutti apps and agents.
-- Durable app data is stored under \`AI_SLIDE_HOME\`.
-- Active SQLite database and WAL files use \`TUTTI_APP_DATABASE_DIR\` when provided.
+- Private app state (SQLite, sidecars) uses \`TUTTI_APP_DATABASE_DIR\` when provided.
+- Public deck files live under the bound \`/workspace\` project directory. Do not persist under \`TUTTI_APP_DATA_DIR\` / \`.tsh\`.
 - Runtime scratch data is stored under \`AI_SLIDE_RUNTIME_ROOT\`.
 - Backend logs, if added later, must stay under \`AI_SLIDE_LOG_ROOT\`.
 - Templates load from CloudFront by default at \`/office-templates/slide/template.json\`; set \`AI_SLIDE_TEMPLATE_PROVIDER=local\` to use \`AI_SLIDE_TEMPLATE_ROOT\` and \`AI_SLIDE_TEMPLATE_ASSET_ROOT\`.
