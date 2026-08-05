@@ -1,9 +1,7 @@
-import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { basename, dirname, extname, join } from "node:path";
-import { promisify } from "node:util";
 import {
   createEmptyDocxDocumentManifest,
   defaultHtmlDocument,
@@ -36,6 +34,7 @@ import {
   projectPrivateRoot,
   projectWorkspaceRoot,
 } from "../local/paths.js";
+import { blankDocxBytes } from "./blank-docx-bytes.js";
 import { DocumentRepository } from "./document-repository.js";
 import { materializeDocumentProjectCore } from "./document-preparation.js";
 import { renderTemplateSeed } from "./document-template-renderer.js";
@@ -44,11 +43,9 @@ import { assistantConversationContent, conversationMessageMetadata, previewText 
 import { documentTemplates, getTemplate } from "./templates.js";
 import { loadTemplateProjectSeed, materializeTemplateAssetsToProject } from "../templates/template-service.js";
 import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
-import { officeCliEnv, requireOfficeCli } from "../toolchains/officecli.js";
+import { requireOfficeCli } from "../toolchains/officecli.js";
 import { EventHub } from "../ws/event-hub.js";
 import { invalidateProjectAssetCache } from "./project-assets.js";
-
-const execFileAsync = promisify(execFile);
 
 export class DocumentService {
   private readonly runtimes = createRuntimeProviderRegistry();
@@ -288,19 +285,19 @@ export class DocumentService {
     const path = docxFilePath(projectId);
     if (existsSync(path)) return;
 
-    const status = await requireOfficeCli();
-    if (!status.executablePath) throw new Error("OfficeCLI executable path is missing.");
-    const env = { ...process.env, ...(await officeCliEnv()) };
+    // Do not call officecli here: TSH marks OfficeCLI available without probing, and
+    // create-time exec against HostFS/NFS has failed in production ("Unable to create project").
     await mkdir(dirname(path), { recursive: true });
-    await execFileAsync(
-      status.executablePath,
-      ["create", path, "--type", "docx", "--force", "--locale", "en-US", "--json"],
-      { env, timeout: 30_000 },
-    );
+    await writeFile(path, blankDocxBytes);
 
-    const manifest = await readDocxManifestFromFile(projectId);
-    if (!manifest) return;
-    const content = serializeDocxDocumentManifest(manifest);
+    const now = new Date().toISOString();
+    const content = serializeDocxDocumentManifest({
+      kind: "docx",
+      fileName: docxFileName,
+      sha256: createHash("sha256").update(blankDocxBytes).digest("hex"),
+      sizeBytes: blankDocxBytes.byteLength,
+      updatedAt: now,
+    });
     this.repo.syncProjectContentQuiet(projectId, content);
     const project = this.repo.getProject(projectId);
     if (!project) return;
