@@ -4,15 +4,26 @@ import { printHtmlToPdfWithTutti, type TuttiPdfPageSize, type TuttiPdfPrintMargi
 const htmlMimeType = "text/html";
 const pdfMimeType = "application/pdf";
 
-export async function saveHtmlArtifactExport(input: { projectId: string; title: string; html: string }) {
+export async function saveHtmlArtifactExport(input: {
+  projectId: string;
+  title: string;
+  html: string;
+  targetDirectory?: string | null;
+}) {
   return writeProjectExport(input.projectId, {
     fileName: `${safeExportFileName(input.title || "doc")}.html`,
     mimeType: htmlMimeType,
     content: input.html,
+    targetDirectory: input.targetDirectory,
   });
 }
 
-export async function saveHtmlArtifactPdfExport(input: { html: string; projectId: string; title: string }) {
+export async function saveHtmlArtifactPdfExport(input: {
+  html: string;
+  projectId: string;
+  title: string;
+  targetDirectory?: string | null;
+}) {
   const prepared = await prepareHtmlForPdfExport(input.html, input.title || "Untitled Doc");
   const bytes = await printHtmlToPdfWithTutti({
     baseUrl: `${window.location.origin}/`,
@@ -27,6 +38,7 @@ export async function saveHtmlArtifactPdfExport(input: { html: string; projectId
     fileName: `${safeExportFileName(input.title || "doc")}.pdf`,
     mimeType: pdfMimeType,
     content: bytes,
+    targetDirectory: input.targetDirectory,
   });
 }
 
@@ -464,8 +476,11 @@ function visualPdfPageCss(layout: VisualPdfLayout) {
 }
 
 export function safeExportFileName(value: string) {
-  return value
+  // Drop source/export suffixes so titles like `note.html` export as `note.pdf`.
+  const withoutDocSuffix = value
     .trim()
+    .replace(/(?:\.(?:html?|md|markdown|docx|pdf))+$/i, "");
+  return withoutDocSuffix
     .replace(/[^\p{L}\p{N}._-]+/gu, "-")
     .replace(/^-+|-+$/g, "")
     .replace(/\.+$/g, "")

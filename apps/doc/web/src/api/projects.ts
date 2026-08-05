@@ -86,14 +86,24 @@ export async function uploadContextAttachment(projectId: string, file: File) {
   return data;
 }
 
-export async function writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; content: string | Uint8Array | ArrayBuffer }) {
+export async function writeProjectExport(
+  projectId: string,
+  input: {
+    fileName: string;
+    mimeType: string;
+    content: string | Uint8Array | ArrayBuffer;
+    targetDirectory?: string | null;
+  },
+) {
   const bytes = typeof input.content === "string" ? new TextEncoder().encode(input.content) : input.content;
+  const targetDirectory = input.targetDirectory?.trim() || "";
   const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/exports`, {
     method: "POST",
     headers: {
       "content-type": "application/octet-stream",
       "x-file-name": encodeURIComponent(input.fileName || "export"),
       "x-mime-type": encodeURIComponent(input.mimeType),
+      ...(targetDirectory ? { "x-export-directory": encodeURIComponent(targetDirectory) } : {}),
     },
     body: bytes instanceof Uint8Array ? bytes.slice().buffer : bytes,
   });

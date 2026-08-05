@@ -7,15 +7,26 @@ import { printHtmlToPdfWithTutti } from "./tuttiPdfBridge";
 const markdownMimeType = "text/markdown";
 const pdfMimeType = "application/pdf";
 
-export async function saveMarkdownArtifactExport(input: { projectId: string; title: string; markdown: string }) {
+export async function saveMarkdownArtifactExport(input: {
+  projectId: string;
+  title: string;
+  markdown: string;
+  targetDirectory?: string | null;
+}) {
   return writeProjectExport(input.projectId, {
     fileName: `${safeExportFileName(input.title || "doc")}.md`,
     mimeType: markdownMimeType,
     content: input.markdown,
+    targetDirectory: input.targetDirectory,
   });
 }
 
-export async function saveMarkdownArtifactPdfExport(input: { projectId: string; title: string; markdown: string }) {
+export async function saveMarkdownArtifactPdfExport(input: {
+  projectId: string;
+  title: string;
+  markdown: string;
+  targetDirectory?: string | null;
+}) {
   const html = renderHtmlProjectAssetReferences(markdownPrintHtml(input), input.projectId);
   const bytes = await printHtmlToPdfWithTutti({
     baseUrl: `${window.location.origin}/`,
@@ -29,6 +40,7 @@ export async function saveMarkdownArtifactPdfExport(input: { projectId: string; 
     fileName: `${safeExportFileName(input.title || "doc")}.pdf`,
     mimeType: pdfMimeType,
     content: bytes,
+    targetDirectory: input.targetDirectory,
   });
 }
 

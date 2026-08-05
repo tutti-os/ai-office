@@ -337,7 +337,10 @@ export class DocumentService {
     return this.repo.writeContextAttachment(projectId, input);
   }
 
-  async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
+  async writeProjectExport(
+    projectId: string,
+    input: { fileName: string; mimeType: string; bytes: Buffer; targetDirectory?: string | null },
+  ) {
     const project = this.repo.getProject(projectId);
     if (!project) throw new Error("Project not found");
     if (project.type === "docx" && input.mimeType.toLowerCase() !== pdfMimeType) throw new Error("Only PDF exports are supported for Word documents");
@@ -345,7 +348,11 @@ export class DocumentService {
     if (!isSupportedExportMimeType(input.mimeType)) throw new Error("Only HTML, Markdown, DOCX, and PDF exports are supported");
     if (input.bytes.byteLength === 0) throw new Error("Export file is empty");
     if (input.bytes.byteLength > maxProjectExportBytes) throw new Error("Export file is too large");
-    return this.repo.writeProjectExport(projectId, input);
+    const targetDirectory = input.targetDirectory?.trim() || null;
+    if (targetDirectory && !isTshWorkspaceAppHost()) {
+      throw new Error("Custom export directories are only supported on TSH");
+    }
+    return this.repo.writeProjectExport(projectId, { ...input, targetDirectory });
   }
 
   async getProjectAsset(projectId: string, fileName: string) {

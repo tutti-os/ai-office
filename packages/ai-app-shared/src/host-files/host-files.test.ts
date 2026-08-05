@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { openExportLocation, revealPathInHostFiles } from "./index.js";
+import {
+  canSelectTuttiExternalUserProjectDirectory,
+  openExportLocation,
+  resolveTshExportBaseDirectory,
+  revealPathInHostFiles,
+  selectTuttiExternalUserProjectDirectory,
+} from "./index.js";
 
 type HostWindow = {
   tuttiExternal?: {
     files?: {
       open?: (input: { path: string; mode?: string }) => Promise<void>;
+    };
+    userProjects?: {
+      selectDirectory?: (input?: { initialPath?: string }) => Promise<{ path: string } | null>;
     };
   };
 };
@@ -124,5 +133,50 @@ describe("openExportLocation", () => {
     );
 
     assert.equal(fallbackCalls, 0);
+  });
+});
+
+describe("resolveTshExportBaseDirectory", () => {
+  it("uses the parent of a single-file artifact", () => {
+    assert.equal(
+      resolveTshExportBaseDirectory("/workspace/docs/2026-08-04-abcd1234.html"),
+      "/workspace/docs",
+    );
+  });
+
+  it("keeps directory workspace roots", () => {
+    assert.equal(resolveTshExportBaseDirectory("/workspace/docs"), "/workspace/docs");
+  });
+
+  it("defaults to /workspace", () => {
+    assert.equal(resolveTshExportBaseDirectory(null), "/workspace");
+  });
+});
+
+describe("selectTuttiExternalUserProjectDirectory", () => {
+  it("returns null when the bridge is absent", async () => {
+    setHostWindow({});
+    assert.equal(canSelectTuttiExternalUserProjectDirectory(), false);
+    assert.equal(await selectTuttiExternalUserProjectDirectory({ initialPath: "/workspace" }), null);
+  });
+
+  it("forwards initialPath to the host picker", async () => {
+    const calls: Array<{ initialPath?: string } | undefined> = [];
+    setHostWindow({
+      tuttiExternal: {
+        userProjects: {
+          selectDirectory: async (input) => {
+            calls.push(input);
+            return { path: "/workspace/docs" };
+          },
+        },
+      },
+    });
+    assert.equal(canSelectTuttiExternalUserProjectDirectory(), true);
+    assert.equal(
+      await selectTuttiExternalUserProjectDirectory({ initialPath: " /workspace/docs " }),
+      "/workspace/docs",
+    );
+    assert.deepEqual(calls, [{ initialPath: "/workspace/docs" }]);
   });
 });

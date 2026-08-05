@@ -14,9 +14,15 @@ type TuttiExternalUserProject = {
   displayName?: string;
 };
 
+type TuttiExternalUserProjectSelectDirectoryInput = {
+  initialPath?: string;
+};
+
 type TuttiExternalUserProjects = {
   list?: () => Promise<TuttiExternalUserProject[] | { projects?: TuttiExternalUserProject[] }>;
-  selectDirectory?: () => Promise<{ path: string } | null>;
+  selectDirectory?: (
+    input?: TuttiExternalUserProjectSelectDirectoryInput,
+  ) => Promise<{ path: string } | null>;
 };
 
 type TuttiExternalLogs = {
@@ -91,16 +97,37 @@ export async function listTuttiExternalUserProjects(): Promise<Array<{ path: str
     .filter((project): project is { path: string; name: string } => Boolean(project));
 }
 
+/** True when the host exposes `tuttiExternal.userProjects.selectDirectory`. */
+export function canSelectTuttiExternalUserProjectDirectory(): boolean {
+  return typeof readTuttiExternal()?.userProjects?.selectDirectory === "function";
+}
+
 /**
  * Opens the host "Select project folder" flow when available
  * (`tuttiExternal.userProjects.selectDirectory`).
  */
-export async function selectTuttiExternalUserProjectDirectory(): Promise<string | null> {
+export async function selectTuttiExternalUserProjectDirectory(
+  input?: TuttiExternalUserProjectSelectDirectoryInput,
+): Promise<string | null> {
   const selectDirectory = readTuttiExternal()?.userProjects?.selectDirectory;
   if (typeof selectDirectory !== "function") return null;
-  const selected = await selectDirectory();
+  const initialPath = typeof input?.initialPath === "string" ? input.initialPath.trim() : "";
+  const selected = await selectDirectory(initialPath ? { initialPath } : undefined);
   const path = selected?.path?.trim() ?? "";
   return path || null;
+}
+
+/**
+ * Base directory for TSH export/save pickers.
+ * Single-file products use the parent of the artifact; directory products use workspaceRoot.
+ */
+export function resolveTshExportBaseDirectory(workspaceRoot?: string | null): string {
+  const trimmed = workspaceRoot?.trim() || "/workspace";
+  if (/\.(html?|md|markdown|docx)$/i.test(trimmed)) {
+    const slash = trimmed.lastIndexOf("/");
+    return slash > 0 ? trimmed.slice(0, slash) : "/workspace";
+  }
+  return trimmed;
 }
 
 /**

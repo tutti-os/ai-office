@@ -1,4 +1,9 @@
-import { openExportLocation } from "@ai-app/shared/host-files";
+import {
+  canSelectTuttiExternalUserProjectDirectory,
+  openExportLocation,
+  resolveTshExportBaseDirectory,
+  selectTuttiExternalUserProjectDirectory,
+} from "@ai-app/shared/host-files";
 import type { DocumentProject } from "@ai-doc/shared";
 import type { MarkdownRuntimeState } from "../artifact/markdownArtifactAdapter";
 import type { DocxRuntimeState } from "../artifact/docxArtifactAdapter";
@@ -25,10 +30,26 @@ type DocumentExportActionsInput = {
   setPdfExporting: (value: boolean) => void;
   setSourceExporting: (value: boolean) => void;
   t: ReturnType<typeof useI18n>["t"];
+  tshWorkspaceApp: boolean;
 };
 
 function rememberExportRevealPath(input: DocumentExportActionsInput, path: string) {
   input.setExportRevealPath(path);
+}
+
+/**
+ * TSH: pick an export directory (base = current project). null = cancelled.
+ * Tutti / non-TSH: undefined → write under the private project exports dir.
+ */
+async function resolveExportTargetDirectory(
+  input: DocumentExportActionsInput,
+): Promise<string | null | undefined> {
+  if (!input.tshWorkspaceApp) return undefined;
+  if (!canSelectTuttiExternalUserProjectDirectory()) {
+    throw new Error(input.t("editor.exportPickerUnavailable"));
+  }
+  const initialPath = resolveTshExportBaseDirectory(input.currentProject?.workspaceRoot);
+  return selectTuttiExternalUserProjectDirectory({ initialPath });
 }
 
 export function createDocumentExportActions(input: DocumentExportActionsInput) {
@@ -43,10 +64,13 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
     input.setExportRevealPath("");
     input.setSourceExporting(true);
     try {
+      const targetDirectory = await resolveExportTargetDirectory(input);
+      if (targetDirectory === null) return;
       const exported = await saveHtmlArtifactExport({
         projectId: input.currentProjectId,
         title: htmlTitle,
         html: input.serializeHtmlRuntime(input.runtime),
+        targetDirectory,
       });
       console.info(`[ai-doc] Exported HTML to ${exported.path}`);
       rememberExportRevealPath(input, exported.path);
@@ -65,10 +89,13 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
     input.setExportRevealPath("");
     input.setPdfExporting(true);
     try {
+      const targetDirectory = await resolveExportTargetDirectory(input);
+      if (targetDirectory === null) return;
       const exported = await saveHtmlArtifactPdfExport({
         projectId: input.currentProjectId,
         title: htmlTitle,
         html: renderHtmlProjectAssetReferences(input.serializeHtmlRuntime(input.runtime), input.currentProjectId),
+        targetDirectory,
       });
       console.info(`[ai-doc] Exported PDF to ${exported.path}`);
       rememberExportRevealPath(input, exported.path);
@@ -87,10 +114,13 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
     input.setExportRevealPath("");
     input.setSourceExporting(true);
     try {
+      const targetDirectory = await resolveExportTargetDirectory(input);
+      if (targetDirectory === null) return;
       const exported = await saveMarkdownArtifactExport({
         projectId: input.currentProjectId,
         title: markdownTitle,
         markdown,
+        targetDirectory,
       });
       console.info(`[ai-doc] Exported Markdown to ${exported.path}`);
       rememberExportRevealPath(input, exported.path);
@@ -109,10 +139,13 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
     input.setExportRevealPath("");
     input.setPdfExporting(true);
     try {
+      const targetDirectory = await resolveExportTargetDirectory(input);
+      if (targetDirectory === null) return;
       const exported = await saveMarkdownArtifactPdfExport({
         projectId: input.currentProjectId,
         title: markdownTitle,
         markdown,
+        targetDirectory,
       });
       console.info(`[ai-doc] Exported Markdown PDF to ${exported.path}`);
       rememberExportRevealPath(input, exported.path);
@@ -131,10 +164,13 @@ export function createDocumentExportActions(input: DocumentExportActionsInput) {
     input.setExportRevealPath("");
     input.setPdfExporting(true);
     try {
+      const targetDirectory = await resolveExportTargetDirectory(input);
+      if (targetDirectory === null) return;
       const exported = await saveDocxArtifactPdfExport({
         previewElement,
         projectId: input.currentProjectId,
         title: docxTitle,
+        targetDirectory,
       });
       console.info(`[ai-doc] Exported DOCX PDF to ${exported.path}`);
       rememberExportRevealPath(input, exported.path);
