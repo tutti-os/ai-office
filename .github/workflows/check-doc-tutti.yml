@@ -55,7 +55,7 @@ jobs:
         run: pnpm -r --filter "./packages/*" --if-present check && pnpm --filter @ai-doc/app check
 
       - name: Test shared Windows adapters
-        run: pnpm --filter @ai-app/shared test && pnpm --filter @ai-app/tutti-packager test
+        run: pnpm --filter @ai-app/shared exec tsx --test src/toolchains/officecli/officecli.test.ts src/tutti-cli-client/tutti-cli-client.test.ts && pnpm --filter @ai-app/tutti-packager test
 
       - name: Check AI Doc i18n
         run: pnpm check:i18n
