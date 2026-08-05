@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileCode2, FileText, Hash, History, Plus, Upload } from "lucide-react";
+import { FileCode2, FileText, Hash, History, Loader2, Plus, Upload } from "lucide-react";
 import { parseDocxDocumentManifest, type DocumentProject, type DocumentType, type LocalAgentTargetStatus, type OfficeCliStatus, type RuntimeProfile } from "@ai-doc/shared";
 import {
   allTemplatesLabel,
@@ -153,6 +153,7 @@ export function HomePage(props: {
 
           {props.activePanel === "templates" ? (
             <TemplateMasonry
+              loading={props.loading}
               outputType={props.outputType}
               showBlank={props.selectedCategory === allTemplatesLabel}
               templates={props.templates}
@@ -183,6 +184,7 @@ const templateMasonryMinColumnWidthPx = 190;
 const templateMasonryMaxColumns = 5;
 
 function TemplateMasonry(props: {
+  loading: boolean;
   outputType: DocumentType;
   showBlank: boolean;
   templates: TuttiTemplate[];
@@ -191,6 +193,7 @@ function TemplateMasonry(props: {
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const items = useMemo<MasonryItem[]>(
     () => [
       ...(props.showBlank ? [{ kind: "blank" } as const] : []),
@@ -198,6 +201,10 @@ function TemplateMasonry(props: {
     ],
     [props.showBlank, props.templates],
   );
+
+  useEffect(() => {
+    if (!props.loading) setBusyKey(null);
+  }, [props.loading]);
   const measuredWidth = containerWidth || 1180;
   const columnCount = Math.max(
     1,
@@ -231,8 +238,32 @@ function TemplateMasonry(props: {
       {columns.map((column, index) => (
         <div key={index} className="flex min-w-0 flex-1 flex-col gap-7">
           {column.map((item) => item.kind === "blank"
-            ? <BlankTemplateCard key="blank" outputType={props.outputType} onCreate={props.onCreateBlank} />
-            : <TemplateCard key={item.template.id} template={item.template} onSelect={props.onSelectTemplate} />,
+            ? (
+              <BlankTemplateCard
+                key="blank"
+                busy={props.loading && busyKey === "blank"}
+                disabled={props.loading}
+                outputType={props.outputType}
+                onCreate={(type) => {
+                  if (props.loading) return;
+                  setBusyKey("blank");
+                  props.onCreateBlank(type);
+                }}
+              />
+            )
+            : (
+              <TemplateCard
+                key={item.template.id}
+                busy={props.loading && busyKey === item.template.id}
+                disabled={props.loading}
+                template={item.template}
+                onSelect={(template) => {
+                  if (props.loading) return;
+                  setBusyKey(template.id);
+                  props.onSelectTemplate(template);
+                }}
+              />
+            ),
           )}
         </div>
       ))}
@@ -263,17 +294,23 @@ function estimatedTemplateCardHeight(item: MasonryItem, columnWidth: number) {
   return columnWidth / aspectRatio + 42;
 }
 
-function BlankTemplateCard(props: { outputType: DocumentType; onCreate: (type: DocumentType) => void }) {
+function BlankTemplateCard(props: {
+  busy?: boolean;
+  disabled?: boolean;
+  outputType: DocumentType;
+  onCreate: (type: DocumentType) => void;
+}) {
   const { t } = useI18n();
   return (
-    <div className="group w-full min-w-0">
+    <div className={`group w-full min-w-0 ${props.disabled ? "opacity-70" : ""}`}>
       <button
-        className="flex aspect-[0.72] w-full min-h-[212px] flex-col items-center justify-center rounded-[16px] border border-[#B8A07C]/30 bg-[#F8F4EC] text-[#5C6B50]  backdrop-blur transition hover:-translate-y-0.5 hover:border-[#B8A07C]/30"
+        className="relative flex aspect-[0.72] w-full min-h-[212px] flex-col items-center justify-center rounded-[16px] border border-[#B8A07C]/30 bg-[#F8F4EC] text-[#5C6B50]  backdrop-blur transition hover:-translate-y-0.5 hover:border-[#B8A07C]/30 disabled:cursor-default disabled:hover:translate-y-0"
         type="button"
         aria-label={t("home.blankDocAria")}
+        disabled={props.disabled}
         onClick={() => props.onCreate(props.outputType)}
       >
-        <Plus className="mb-4 opacity-60" size={26} />
+        {props.busy ? <Loader2 className="mb-4 animate-spin opacity-80" size={26} /> : <Plus className="mb-4 opacity-60" size={26} />}
       </button>
       <div className="mt-2 truncate px-1 text-[15px] font-semibold text-[#2A2620]">{t("home.blankDoc")}</div>
       <div className="mt-0.5 truncate px-1 text-[11px] text-[#8B8275]">{blankDocumentTypeLabel(props.outputType)}</div>
@@ -328,18 +365,25 @@ function blankDocumentTypeLabel(type: DocumentType) {
   return "HTML";
 }
 
-function TemplateCard(props: { template: TuttiTemplate; onSelect: (template: TuttiTemplate) => void }) {
+function TemplateCard(props: {
+  busy?: boolean;
+  disabled?: boolean;
+  template: TuttiTemplate;
+  onSelect: (template: TuttiTemplate) => void;
+}) {
   const { t } = useI18n();
   const aspectRatio =
     props.template.screenshot_width && props.template.screenshot_height
       ? `${props.template.screenshot_width} / ${props.template.screenshot_height}`
       : "0.72";
   return (
-    <div className="group w-full min-w-0">
+    <div className={`group w-full min-w-0 ${props.disabled ? "opacity-70" : ""}`}>
       <button
-        className="relative w-full overflow-hidden rounded-[16px] bg-[#F4EFE6] text-left text-[#2A2620]  ring-1 ring-[#B8A07C]/30 transition hover:-translate-y-0.5 "
+        className="relative w-full overflow-hidden rounded-[16px] bg-[#F4EFE6] text-left text-[#2A2620]  ring-1 ring-[#B8A07C]/30 transition hover:-translate-y-0.5 disabled:cursor-default disabled:hover:translate-y-0"
         type="button"
+        aria-busy={props.busy || undefined}
         aria-label={t("home.createTemplateAria", { title: props.template.name })}
+        disabled={props.disabled}
         onClick={() => props.onSelect(props.template)}
         style={{ aspectRatio }}
       >
@@ -356,6 +400,11 @@ function TemplateCard(props: { template: TuttiTemplate; onSelect: (template: Tut
             {props.template.name}
           </div>
         )}
+        {props.busy ? (
+          <span className="absolute inset-0 grid place-items-center bg-[#2A2620]/28 text-[#F4EFE6]">
+            <Loader2 className="animate-spin" size={28} />
+          </span>
+        ) : null}
       </button>
       <div className="mt-2 min-w-0 px-1">
         <div className="truncate text-[15px] font-semibold text-[#2A2620]">{props.template.name}</div>

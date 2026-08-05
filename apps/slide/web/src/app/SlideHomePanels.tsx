@@ -17,16 +17,22 @@ export function CategoryButton(props: { active: boolean; count: number; label: s
   );
 }
 
-export function BlankTemplateCard(props: { outputType: OutputType; onCreate: () => void }) {
+export function BlankTemplateCard(props: {
+  busy?: boolean;
+  disabled?: boolean;
+  outputType: OutputType;
+  onCreate: () => void;
+}) {
   const { t } = useI18n();
   return (
-    <div className="group w-full min-w-0">
+    <div className={cn("group w-full min-w-0", props.disabled && "opacity-70")}>
       <button
-        className="flex aspect-video w-full min-h-[148px] flex-col items-center justify-center rounded-[16px] border border-[#B8A07C]/30 bg-[#F8F4EC] text-[#5C6B50] backdrop-blur transition hover:-translate-y-0.5 hover:border-[#B8A07C]/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B8A07C]/45"
+        className="relative flex aspect-video w-full min-h-[148px] flex-col items-center justify-center rounded-[16px] border border-[#B8A07C]/30 bg-[#F8F4EC] text-[#5C6B50] backdrop-blur transition hover:-translate-y-0.5 hover:border-[#B8A07C]/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B8A07C]/45 disabled:cursor-default disabled:hover:translate-y-0"
         type="button"
+        disabled={props.disabled}
         onClick={props.onCreate}
       >
-        <Plus className="opacity-60" size={26} />
+        {props.busy ? <Loader2 className="animate-spin opacity-80" size={26} /> : <Plus className="opacity-60" size={26} />}
       </button>
       <div className="mt-2 min-w-0 px-1">
         <div className="truncate text-[15px] font-semibold text-[#2A2620]">{t("home.blankPresentation")}</div>
@@ -36,15 +42,21 @@ export function BlankTemplateCard(props: { outputType: OutputType; onCreate: () 
   );
 }
 
-export function TemplateCard(props: { showCategory: boolean; template: SlideTemplate; onSelect: (template: SlideTemplate) => void }) {
+export function TemplateCard(props: {
+  disabled?: boolean;
+  showCategory: boolean;
+  template: SlideTemplate;
+  onSelect: (template: SlideTemplate) => void;
+}) {
   const { template } = props;
   const { t } = useI18n();
   return (
-    <div className="group w-full min-w-0">
+    <div className={cn("group w-full min-w-0", props.disabled && "opacity-70")}>
       <button
-        className="relative w-full overflow-hidden rounded-[16px] bg-[#F4EFE6] text-left text-[#2A2620] ring-1 ring-[#B8A07C]/30 transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B8A07C]/45"
+        className="relative w-full overflow-hidden rounded-[16px] bg-[#F4EFE6] text-left text-[#2A2620] ring-1 ring-[#B8A07C]/30 transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B8A07C]/45 disabled:cursor-default disabled:hover:translate-y-0"
         type="button"
         aria-label={t("home.createTemplateAria", { title: template.name })}
+        disabled={props.disabled}
         onClick={() => props.onSelect(template)}
       >
         <span className="block aspect-video overflow-hidden bg-white">
