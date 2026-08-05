@@ -197,6 +197,23 @@ export class DocumentRepository {
   async updateProject(projectId: string, input: UpdateProjectRequest) {
     const current = this.getProject(projectId);
     if (!current) return null;
+    if (input.expectedUpdatedAt && current.updatedAt !== input.expectedUpdatedAt) {
+      throw new Error("Document changed before this save completed. Reload the document before saving again.");
+    }
+    if (
+      input.content !== undefined &&
+      input.content !== current.content &&
+      (input.updatedBy ?? "human") === "human" &&
+      isTshFileArtifactProject(projectId)
+    ) {
+      const focusedPath = projectFocusedArtifactPath(projectId, input.type ?? current.type);
+      if (existsSync(focusedPath)) {
+        const diskContent = await readFile(focusedPath, "utf8");
+        if (diskContent !== current.content && diskContent !== input.content) {
+          throw new Error("Document file changed on disk before this save completed. Reload the document before saving again.");
+        }
+      }
+    }
     const now = new Date().toISOString();
     const next = {
       title: input.title === undefined ? current.title : input.title.trim() || current.title,

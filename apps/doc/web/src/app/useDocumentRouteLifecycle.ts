@@ -12,11 +12,13 @@ type StateSetter<T> = (value: T | ((current: T) => T)) => void;
 
 type DocumentRouteLifecycleInput = {
   activeHasUnsavedChanges: boolean;
+  agentBusy: boolean;
   clearArtifact: () => void;
   clearDocxArtifact: () => void;
   clearMarkdownArtifact: () => void;
   currentDocumentType: DocumentProject["type"] | null;
   currentProjectId: string | null;
+  currentProjectUpdatedAt: string | null;
   hasUnsavedChangesRef: Ref<boolean>;
   htmlSaveGenerationRef: Ref<number>;
   loadDocxDocument: (project: DocumentProject) => Promise<void>;
@@ -58,6 +60,31 @@ export function useDocumentRouteLifecycle(input: DocumentRouteLifecycleInput) {
   useEffect(() => {
     input.hasUnsavedChangesRef.current = input.activeHasUnsavedChanges;
   }, [input.activeHasUnsavedChanges, input.hasUnsavedChangesRef]);
+
+  useEffect(() => {
+    // Agent owns the document while running; human cannot edit. Drop any pending
+    // human dirty/autosave so an empty editor cannot overwrite agent writes.
+    if (!input.agentBusy) return;
+    if (input.saveTimerRef.current) {
+      clearTimeout(input.saveTimerRef.current);
+      input.saveTimerRef.current = null;
+    }
+    input.htmlSaveGenerationRef.current += 1;
+    input.markdownSaveGenerationRef.current += 1;
+    input.setRuntime((current) => (current?.dirty ? { ...current, dirty: false } : current));
+    input.setMarkdownRuntime((current) => (current?.dirty ? { ...current, dirty: false } : current));
+    input.setSaveState("saved");
+    input.setMarkdownSaveState("saved");
+  }, [
+    input.agentBusy,
+    input.htmlSaveGenerationRef,
+    input.markdownSaveGenerationRef,
+    input.saveTimerRef,
+    input.setMarkdownRuntime,
+    input.setMarkdownSaveState,
+    input.setRuntime,
+    input.setSaveState,
+  ]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -169,9 +196,11 @@ export function useDocumentRouteLifecycle(input: DocumentRouteLifecycleInput) {
   useEffect(() => {
     if (input.currentDocumentType !== "html" || !input.currentProjectId || !input.runtime?.dirty) return;
     if (input.saveTimerRef.current) clearTimeout(input.saveTimerRef.current);
+    if (input.agentBusy) return;
     const saveGeneration = input.htmlSaveGenerationRef.current + 1;
     input.htmlSaveGenerationRef.current = saveGeneration;
     const saveRevision = input.runtime.revision;
+    const expectedUpdatedAt = input.currentProjectUpdatedAt;
     input.setSaveState("saving");
     input.saveTimerRef.current = setTimeout(() => {
       // Content autosave must not send title: a stale title races with rename and
@@ -180,9 +209,11 @@ export function useDocumentRouteLifecycle(input: DocumentRouteLifecycleInput) {
         content: input.serializeHtmlRuntime(input.runtime!),
         type: "html",
         updatedBy: "human",
+        expectedUpdatedAt: expectedUpdatedAt ?? undefined,
       })
-        .then(() => {
+        .then((project) => {
           if (input.htmlSaveGenerationRef.current !== saveGeneration) return;
+          input.setCurrentProject(project);
           input.setRuntime((current) => (current && current.revision === saveRevision ? { ...current, dirty: false } : current));
           input.setSaveState("saved");
         })
@@ -200,20 +231,33 @@ export function useDocumentRouteLifecycle(input: DocumentRouteLifecycleInput) {
     return () => {
       if (input.saveTimerRef.current) clearTimeout(input.saveTimerRef.current);
     };
-  }, [input.currentDocumentType, input.currentProjectId, input.runtime?.dirty, input.runtime?.revision, input.serializeHtmlRuntime, input.setRuntime]);
+  }, [
+    input.agentBusy,
+    input.currentDocumentType,
+    input.currentProjectId,
+    input.currentProjectUpdatedAt,
+    input.runtime?.dirty,
+    input.runtime?.revision,
+    input.serializeHtmlRuntime,
+    input.setCurrentProject,
+    input.setRuntime,
+  ]);
 
   useEffect(() => {
     if (input.currentDocumentType !== "markdown" || !input.currentProjectId || !input.markdownRuntime?.dirty) return;
     if (input.saveTimerRef.current) clearTimeout(input.saveTimerRef.current);
+    if (input.agentBusy) return;
     const saveGeneration = input.markdownSaveGenerationRef.current + 1;
     input.markdownSaveGenerationRef.current = saveGeneration;
     const saveRevision = input.markdownRuntime.revision;
+    const expectedUpdatedAt = input.currentProjectUpdatedAt;
     input.setMarkdownSaveState("saving");
     input.saveTimerRef.current = setTimeout(() => {
       void updateProject(input.currentProjectId!, {
         content: input.serializeMarkdownRuntime(input.markdownRuntime!),
         type: "markdown",
         updatedBy: "human",
+        expectedUpdatedAt: expectedUpdatedAt ?? undefined,
       })
         .then((project) => {
           if (input.markdownSaveGenerationRef.current !== saveGeneration) return;
@@ -235,7 +279,16 @@ export function useDocumentRouteLifecycle(input: DocumentRouteLifecycleInput) {
     return () => {
       if (input.saveTimerRef.current) clearTimeout(input.saveTimerRef.current);
     };
-  }, [input.currentDocumentType, input.currentProjectId, input.markdownRuntime?.dirty, input.markdownRuntime?.revision, input.serializeMarkdownRuntime, input.setMarkdownRuntime]);
+  }, [
+    input.agentBusy,
+    input.currentDocumentType,
+    input.currentProjectId,
+    input.currentProjectUpdatedAt,
+    input.markdownRuntime?.dirty,
+    input.markdownRuntime?.revision,
+    input.serializeMarkdownRuntime,
+    input.setMarkdownRuntime,
+  ]);
 
   return { requestHomeRoute };
 }

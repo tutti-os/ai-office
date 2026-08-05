@@ -23,6 +23,7 @@ import {
 } from "../artifact/runtime/projectAssets";
 import type { LinkDraft, ToolbarState } from "./runtimeWorkbenchTypes";
 import type { HtmlEditorScreenProps } from "./HtmlEditorScreen";
+import { shouldSyncHtmlBodyFromTransaction } from "./shouldSyncHtmlBodyFromTransaction";
 import {
   AiBlockStyle,
   AiFontSize,
@@ -257,8 +258,11 @@ export function useHtmlTiptapEditor(input: {
   const selectionBookmarkRef = useRef<StoredSelectionBookmark | null>(null);
   const pendingImageReplacePositionRef = useRef<number | null>(null);
   const suppressBodySyncRef = useRef(true);
+  const focusedRef = useRef(false);
+  const readOnlyRef = useRef(props.readOnly);
   const [focused, setFocused] = useState(false);
   const runtimeId = props.runtime?.id;
+  readOnlyRef.current = props.readOnly;
   useEffect(() => {
     // Fresh document load: ignore TipTap's first normalization update so open
     // does not mark the runtime dirty and rewrite the on-disk artifact.
@@ -329,7 +333,7 @@ export function useHtmlTiptapEditor(input: {
           class: htmlDocumentBodyClassName,
         },
       },
-      onUpdate: ({ editor: currentEditor }) => {
+      onUpdate: ({ editor: currentEditor, transaction }) => {
         rememberSelectionBookmark(currentEditor, selectionBookmarkRef);
         const selection = safeSelectionStateFromTiptap(currentEditor);
         const currentHTML = safeTiptapHTML(currentEditor);
@@ -338,7 +342,18 @@ export function useHtmlTiptapEditor(input: {
           props.onTiptapSelectionChange(selection, safeToolbarStateFromTiptap(currentEditor, props.toolbarState));
           return;
         }
-        if (currentHTML) props.onTiptapBodyChange(restoreHtmlProjectFragmentAssetReferences(cleanTiptapHtmlForRuntime(currentHTML)), selection);
+        // Only human edits mark dirty / autosave. TipTap open/load normalization,
+        // read-only agent runs, and unfocused schema churn must not rewrite disk.
+        if (
+          currentHTML &&
+          shouldSyncHtmlBodyFromTransaction({
+            focused: currentEditor.isFocused || focusedRef.current,
+            readOnly: readOnlyRef.current,
+            transaction,
+          })
+        ) {
+          props.onTiptapBodyChange(restoreHtmlProjectFragmentAssetReferences(cleanTiptapHtmlForRuntime(currentHTML)), selection);
+        }
         props.onTiptapSelectionChange(selection, safeToolbarStateFromTiptap(currentEditor, props.toolbarState));
       },
       onSelectionUpdate: ({ editor: currentEditor }) => {
@@ -347,9 +362,11 @@ export function useHtmlTiptapEditor(input: {
         props.onTiptapSelectionChange(selection, safeToolbarStateFromTiptap(currentEditor, props.toolbarState));
       },
       onFocus: () => {
+        focusedRef.current = true;
         setFocused(true);
       },
       onBlur: () => {
+        focusedRef.current = false;
         setFocused(false);
       },
       onTransaction: ({ editor: currentEditor }) => {

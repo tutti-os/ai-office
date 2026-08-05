@@ -198,13 +198,43 @@ export function useRuntimeWorkbenchModel() {
     t,
   });
 
+  const {
+    agentBusy,
+    agentConversation,
+    artifactInteraction,
+    artifactReadOnly,
+    cancelAgentRun,
+    sendAgentPrompt,
+  } = useDocumentAgentRuntime({
+    artifactReadOnlyRef,
+    createAiEditRequest,
+    createDocxAiEditRequest,
+    createMarkdownAiEditRequest,
+    currentDocumentType,
+    currentProject,
+    currentProjectId,
+    docxRuntime,
+    loadDocxDocument,
+    loadHtmlDocument,
+    loadMarkdownDocument,
+    markdownRuntime,
+    runtime,
+    selectedRuntimeProfileId,
+    setCurrentProject,
+    setError,
+    setHistoryProjects,
+    setLinkEditorOpen,
+  });
+
   const { requestHomeRoute } = useDocumentRouteLifecycle({
     activeHasUnsavedChanges,
+    agentBusy,
     clearArtifact,
     clearDocxArtifact,
     clearMarkdownArtifact,
     currentDocumentType,
     currentProjectId,
+    currentProjectUpdatedAt: loadedCurrentProject?.updatedAt ?? null,
     hasUnsavedChangesRef,
     htmlSaveGenerationRef,
     loadDocxDocument,
@@ -238,35 +268,9 @@ export function useRuntimeWorkbenchModel() {
     setToolbarState,
   });
 
-  const {
-    agentBusy,
-    agentConversation,
-    artifactInteraction,
-    artifactReadOnly,
-    cancelAgentRun,
-    sendAgentPrompt,
-  } = useDocumentAgentRuntime({
-    artifactReadOnlyRef,
-    createAiEditRequest,
-    createDocxAiEditRequest,
-    createMarkdownAiEditRequest,
-    currentDocumentType,
-    currentProject,
-    currentProjectId,
-    docxRuntime,
-    loadDocxDocument,
-    loadHtmlDocument,
-    loadMarkdownDocument,
-    markdownRuntime,
-    runtime,
-    selectedRuntimeProfileId,
-    setCurrentProject,
-    setError,
-    setHistoryProjects,
-    setLinkEditorOpen,
-  });
-
   const syncHtmlEditorBody = (bodyInnerHTML: string, selection: SelectionState | null) => {
+    // Agent / read-only sessions must not mark human dirty or trigger autosave.
+    if (artifactReadOnlyRef.current) return;
     setRuntime((current) =>
       current
         ? applier.syncFromEditorBody(current, bodyInnerHTML, {
