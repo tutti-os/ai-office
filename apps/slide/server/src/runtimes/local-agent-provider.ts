@@ -16,6 +16,7 @@ import {
   projectWorkspaceRoot,
 } from "../local/paths.js";
 import { extractOoxmlTextPreview } from "../artifact/ooxml-text.js";
+import { tshAgentRoutingEnv } from "@ai-app/shared/tsh-host";
 import { officeCliEnvSync } from "../toolchains/officecli.js";
 import { tuttiCliEnv } from "../tutti/tutti-cli.js";
 import { deckSystemAuthoringPrompt } from "./deck-system-prompt.js";
@@ -41,6 +42,7 @@ export class LocalAgentRuntimeProvider extends SharedLocalAgentRuntimeProvider<S
       buildSystemPrompt,
       buildSkillManifest: buildSlideAgentSkillContext,
       buildEnv: async (context) => ({
+        ...tshAgentRoutingEnv(),
         ...officeCliEnvSync(),
         ...tuttiCliEnv(),
         AI_SLIDE_PROJECT_ID: context.project.id,
