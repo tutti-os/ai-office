@@ -588,18 +588,23 @@ export class ProjectRepository {
   }
 
   /**
-   * TSH projects bind a workspace root under /workspace. If that root or the
-   * focused deck directory / pptx file was renamed or deleted, fail open instead
-   * of silently rematerializing a ghost tree.
+   * TSH projects bind a workspace root under /workspace. If that root (or the
+   * focused deck directory) was renamed or deleted, fail open instead of
+   * silently rematerializing a ghost tree.
+   *
+   * PPTX deliberately starts without `slides.pptx` — the agent creates it.
+   * Only the project directory must exist; missing pptx is the waiting state.
    */
   assertFocusedArtifactPresent(project: SlideProject, artifact: SlideArtifact) {
     if (!project.workspaceRoot) return;
-    const focusedPath = join(projectWorkspaceRoot(project.id), artifact.fileRef);
-    if (existsSync(focusedPath)) return;
-    if (artifact.type === "deck") {
-      throw new Error(`Deck directory is missing at ${focusedPath}: no such file or directory`);
+    const root = projectWorkspaceRoot(project.id);
+    if (!existsSync(root)) {
+      throw new Error(`Presentation directory is missing at ${root}: no such file or directory`);
     }
-    throw new Error(`Presentation file is missing at ${focusedPath}: no such file or directory`);
+    if (artifact.type !== "deck") return;
+    const focusedPath = join(root, artifact.fileRef);
+    if (existsSync(focusedPath)) return;
+    throw new Error(`Deck directory is missing at ${focusedPath}: no such file or directory`);
   }
   projectExportsDir(projectId: string) {
     const project = this.getProject(projectId);
