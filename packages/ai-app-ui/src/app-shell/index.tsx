@@ -361,14 +361,19 @@ export function ArtifactHistoryPanel<Project>(props: {
             <ArtifactHistoryCard
               id={id}
               copy={copy}
+              disabled={props.loading}
               icon={icon}
               key={id}
               preview={props.getPreview?.(project)}
               subtitle={props.getSubtitle(project)}
               title={props.getTitle(project)}
               updatedAt={props.getUpdatedAt(project)}
-              onDelete={props.onDeleteProject}
-              onOpen={() => props.onOpenProject(project)}
+              onDelete={(projectId) => {
+                if (!props.loading) props.onDeleteProject(projectId);
+              }}
+              onOpen={() => {
+                if (!props.loading) props.onOpenProject(project);
+              }}
             />
           );
         })}
@@ -409,6 +414,7 @@ function ArtifactHistoryActions(props: {
 
 function ArtifactHistoryCard(props: {
   copy: ArtifactHistoryCopy;
+  disabled?: boolean;
   id: string;
   icon: ReactNode;
   preview?: string;
@@ -419,11 +425,12 @@ function ArtifactHistoryCard(props: {
   onOpen: () => void;
 }) {
   return (
-    <div className={cx("group", historyCardClass())}>
+    <div className={cx("group", historyCardClass(), props.disabled && "opacity-70")}>
       <button
         aria-label={props.copy.openProjectAria(props.title)}
-        className="block h-full min-h-[132px] w-full rounded-[16px] p-4 text-left"
+        className="block h-full min-h-[132px] w-full rounded-[16px] p-4 text-left disabled:cursor-default"
         type="button"
+        disabled={props.disabled}
         onClick={props.onOpen}
       >
         <div>
@@ -438,12 +445,13 @@ function ArtifactHistoryCard(props: {
       </button>
       <button
         aria-label={props.copy.deleteProjectAria(props.title)}
-        className={historyDeleteButtonClass}
+        className={cx(historyDeleteButtonClass, props.disabled && "opacity-100")}
         type="button"
         title={props.copy.deleteProject}
+        disabled={props.disabled}
         onClick={() => props.onDelete(props.id)}
       >
-        <Trash2 size={13} />
+        {props.disabled ? <Loader2 className="animate-spin" size={13} /> : <Trash2 size={13} />}
       </button>
     </div>
   );
@@ -489,7 +497,7 @@ export const historyActionsClass = "mt-4 flex items-center justify-start";
 export const historyClearButtonClass =
   "flex h-8 items-center gap-2 rounded-full border border-[#B8A07C]/30 bg-[#F4EFE6]/55 px-3 text-[13px] font-medium text-[#8B8275] transition hover:border-[#B8A07C]/30 hover:text-[#5C6B50] disabled:cursor-not-allowed disabled:opacity-40";
 export const historyDeleteButtonClass =
-  "absolute bottom-3 right-3 grid size-7 place-items-center rounded-[16px] border border-[#B8A07C]/30 bg-[#F4EFE6]/70 text-[#8B8275] opacity-0 transition hover:border-[#B8A07C]/30 hover:text-[#5C6B50] focus-visible:opacity-100 group-hover:opacity-100";
+  "absolute bottom-3 right-3 grid size-7 place-items-center rounded-[16px] border border-[#B8A07C]/30 bg-[#F4EFE6]/70 text-[#8B8275] opacity-0 transition hover:border-[#B8A07C]/30 hover:text-[#5C6B50] focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-default";
 export const historyEmptyStateClass =
   "grid min-h-[220px] place-items-center gap-2 rounded-[20px] border border-[#B8A07C]/30 bg-[#F4EFE6]/50 p-7 text-center  backdrop-blur";
 export const historyEmptyIconClass = "grid size-9 place-items-center rounded-full bg-[#5C6B50] text-[#F4EFE6]";

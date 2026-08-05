@@ -93,6 +93,7 @@ export function useRuntimeWorkbenchModel() {
   const [route, setRoute] = useState<AppRoute>(() => readCurrentRoute());
   const [currentProject, setCurrentProject] = useState<DocumentProject | null>(null);
   const [loading, setLoading] = useState(false);
+  const homeBusyRef = useRef(false);
   const [error, setError] = useState("");
   const [prompt, setPrompt] = useState("");
   const [outputType, setOutputType] = useState<DocumentType>("html");
@@ -181,6 +182,7 @@ export function useRuntimeWorkbenchModel() {
     refreshProjectHistory,
   } = createHomeDocumentActions({
     homeAttachments,
+    homeBusyRef,
     loadHtmlDocument,
     outputType,
     parentPath,

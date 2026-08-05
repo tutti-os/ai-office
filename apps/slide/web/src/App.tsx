@@ -50,6 +50,7 @@ export function App() {
   const [selectedAgent, setSelectedAgent] = useState("");
   const [activePanel, setActivePanel] = useState<"templates" | "history">("templates");
   const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
   const [route, setRoute] = useState<AppRoute>(() => readCurrentRoute());
   const [projectDetail, setProjectDetail] = useState<ProjectDetailResponse | null>(null);
   const [historyProjects, setHistoryProjects] = useState<SlideProject[]>([]);
@@ -62,6 +63,7 @@ export function App() {
   const [officeCliInstalling, setOfficeCliInstalling] = useState(false);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [loadingProject, setLoadingProject] = useState(false);
+  const loadingProjectRef = useRef(false);
   const [error, setError] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState<SlideTemplate | null>(null);
   const [selectedSlideIndex, setSelectedSlideIndex] = useState(0);
@@ -266,6 +268,8 @@ export function App() {
   ]);
 
   const createAndOpenProject = async (input: { title: string; template?: SlideTemplate; artifactType?: SlideArtifactType; initialPrompt?: string; attachments?: HomeAttachment[] }) => {
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     setCreating(true);
     setError("");
     try {
@@ -304,6 +308,7 @@ export function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
+      creatingRef.current = false;
       setCreating(false);
     }
   };
@@ -387,6 +392,8 @@ export function App() {
   };
 
   const deleteHistoryProject = async (projectId: string) => {
+    if (loadingProjectRef.current) return;
+    loadingProjectRef.current = true;
     setError("");
     setLoadingProject(true);
     try {
@@ -395,6 +402,7 @@ export function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
+      loadingProjectRef.current = false;
       setLoadingProject(false);
     }
   };
@@ -587,9 +595,26 @@ export function App() {
 
           {activePanel === "templates" ? (
             <div className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-x-5 gap-y-7">
-              {selectedCategory === "All" ? <BlankTemplateCard outputType={outputType} onCreate={createBlank} /> : null}
+              {selectedCategory === "All" ? (
+                <BlankTemplateCard
+                  busy={creating && !selectedTemplate}
+                  disabled={creating}
+                  outputType={outputType}
+                  onCreate={() => {
+                    if (!creating) createBlank();
+                  }}
+                />
+              ) : null}
               {visibleTemplates.map((template) => (
-                <TemplateCard key={template.id} showCategory={selectedCategory === "All"} template={template} onSelect={openTemplate} />
+                <TemplateCard
+                  key={template.id}
+                  disabled={creating}
+                  showCategory={selectedCategory === "All"}
+                  template={template}
+                  onSelect={(next) => {
+                    if (!creating) openTemplate(next);
+                  }}
+                />
               ))}
               {templatesLoading ? <div className="text-[13px] font-medium text-[#8B8275]">{t("home.loadingTemplates")}</div> : null}
             </div>

@@ -20,6 +20,7 @@ type HomeAttachmentsState = {
 
 type HomeDocumentActionsInput = {
   homeAttachments: HomeAttachmentsState;
+  homeBusyRef: { current: boolean };
   loadHtmlDocument: (html: string, input: { projectId?: string | null; title: string; source?: RuntimeState["source"] }) => void;
   outputType: DocumentType;
   parentPath: string;
@@ -36,6 +37,21 @@ type HomeDocumentActionsInput = {
   setRoute: (route: AppRoute) => void;
   t: ReturnType<typeof useI18n>["t"];
 };
+
+async function runHomeBusyAction(input: HomeDocumentActionsInput, action: () => Promise<void>) {
+  if (input.homeBusyRef.current) return;
+  input.homeBusyRef.current = true;
+  input.setError("");
+  input.setLoading(true);
+  try {
+    await action();
+  } catch (err) {
+    input.setError(err instanceof Error ? err.message : String(err));
+  } finally {
+    input.homeBusyRef.current = false;
+    input.setLoading(false);
+  }
+}
 
 function createRequestExtras(input: HomeDocumentActionsInput) {
   return input.tshWorkspaceApp ? { parentPath: input.parentPath.trim() || "/workspace" } : {};
@@ -74,9 +90,7 @@ export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
 
   const loadBlankDocument = async (typeOverride?: DocumentType) => {
     const type = typeOverride ?? input.outputType;
-    input.setError("");
-    input.setLoading(true);
-    try {
+    await runHomeBusyAction(input, async () => {
       const project = await createProject({
         title: input.t("project.untitledDoc"),
         content: type === "markdown" ? undefined : initialContentForType(type),
@@ -85,17 +99,11 @@ export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
       });
       input.setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
       openProject(project);
-    } catch (err) {
-      input.setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      input.setLoading(false);
-    }
+    });
   };
 
   const loadPromptDocument = async () => {
-    input.setError("");
-    input.setLoading(true);
-    try {
+    await runHomeBusyAction(input, async () => {
       const userPrompt = input.prompt.trim();
       const attachments = input.homeAttachments.attachments;
       const attachmentTitle = attachments[0]?.name ? input.t("project.docFromAttachment", { name: attachments[0].name }) : input.t("project.untitledDoc");
@@ -120,17 +128,11 @@ export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
       }
       input.homeAttachments.clearAttachments();
       input.setPrompt("");
-    } catch (err) {
-      input.setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      input.setLoading(false);
-    }
+    });
   };
 
   const loadTemplate = async (template: TuttiTemplate) => {
-    input.setError("");
-    input.setLoading(true);
-    try {
+    await runHomeBusyAction(input, async () => {
       const project = await createProject({
         title: template.name,
         type: "html",
@@ -140,25 +142,15 @@ export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
       });
       input.setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
       openProject(project);
-    } catch (err) {
-      input.setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      input.setLoading(false);
-    }
+    });
   };
 
   const importDocumentFile = async (file: File) => {
-    input.setError("");
-    input.setLoading(true);
-    try {
+    await runHomeBusyAction(input, async () => {
       const project = await importProjectFile(file);
       input.setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
       openProject(project);
-    } catch (err) {
-      input.setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      input.setLoading(false);
-    }
+    });
   };
 
   const openHistoryProject = (project: DocumentProject) => {
@@ -166,43 +158,25 @@ export function createHomeDocumentActions(input: HomeDocumentActionsInput) {
   };
 
   const clearHistory = async () => {
-    input.setError("");
-    input.setLoading(true);
-    try {
+    await runHomeBusyAction(input, async () => {
       const projects = await clearProjectHistory();
       input.setHistoryProjects(projects);
       input.setHomePanel("history");
-    } catch (err) {
-      input.setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      input.setLoading(false);
-    }
+    });
   };
 
   const deleteHistoryProject = async (projectId: string) => {
-    input.setError("");
-    input.setLoading(true);
-    try {
+    await runHomeBusyAction(input, async () => {
       const projects = await deleteProject(projectId);
       input.setHistoryProjects(projects);
-    } catch (err) {
-      input.setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      input.setLoading(false);
-    }
+    });
   };
 
   const loadFixture = async () => {
-    input.setLoading(true);
-    input.setError("");
-    try {
+    await runHomeBusyAction(input, async () => {
       const fixture = await fetchTuttiStudyPlanFixture();
       input.loadHtmlDocument(fixture.html, { source: "fixture", title: fixture.title });
-    } catch (err) {
-      input.setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      input.setLoading(false);
-    }
+    });
   };
 
   return {
