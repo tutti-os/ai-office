@@ -214,6 +214,7 @@ export interface UpdateProjectRequest {
   content?: string;
   type?: DocumentType;
   updatedBy?: "human" | "ai" | "system";
+  expectedUpdatedAt?: string;
 }
 
 export interface ApplyTemplateRequest {

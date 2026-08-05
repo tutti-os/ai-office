@@ -117,7 +117,8 @@ export class RuntimeApplier {
   ) {
     // TipTap can emit an initial onUpdate after setContent; ignore no-op body syncs
     // so opening a history project does not mark dirty and rematerialize the file.
-    if (bodyInnerHTML === state.document.bodyInnerHTML) {
+    // Also treat empty-body variants (<p></p> vs <p><br></p>) as equal.
+    if (bodyInnerHTML === state.document.bodyInnerHTML || htmlBodiesEffectivelyEqual(bodyInnerHTML, state.document.bodyInnerHTML)) {
       return input.selection === undefined
         ? state
         : this.apply(state, { type: "selection-changed", selection: input.selection ?? null });
@@ -146,4 +147,14 @@ export class RuntimeApplier {
 function createRuntimeStateId() {
   runtimeStateSequence += 1;
   return `runtime-${Date.now()}-${runtimeStateSequence}`;
+}
+
+function htmlBodiesEffectivelyEqual(left: string, right: string) {
+  return normalizeEmptyHtmlBody(left) === normalizeEmptyHtmlBody(right);
+}
+
+function normalizeEmptyHtmlBody(html: string) {
+  const trimmed = html.trim().replace(/\s+/g, " ").toLowerCase();
+  if (!trimmed || trimmed === "<p></p>" || trimmed === "<p><br></p>" || trimmed === "<p><br/></p>") return "";
+  return trimmed;
 }
