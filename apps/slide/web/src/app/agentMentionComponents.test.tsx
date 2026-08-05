@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 import React, { act, type ReactNode } from "react";
 import { fireEvent, getByLabelText, render, waitFor } from "@testing-library/react";
-import { TooltipProvider } from "@tutti-os/ui-system/components";
-import { RichTextMentionServiceProvider } from "@tutti-os/ui-rich-text/editor";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n";
+import { AgentMentionProviderRoot } from "./AgentMentionProviderRoot";
 import { AgentPromptRichTextInput } from "./AgentPromptRichTextInput";
 import { AgentUserMessageRichText } from "./AgentUserMessageRichText";
 import { createTuttiExternalMentionService } from "./tuttiMentionService";
@@ -119,11 +118,9 @@ describe("agent mention components", () => {
 
 function TestRoot(props: { children: ReactNode; service: ReturnType<typeof createTuttiExternalMentionService> }) {
   return (
-    <TooltipProvider>
-      <RichTextMentionServiceProvider service={props.service}>
-        <I18nProvider>{props.children}</I18nProvider>
-      </RichTextMentionServiceProvider>
-    </TooltipProvider>
+    <AgentMentionProviderRoot service={props.service}>
+      <I18nProvider>{props.children}</I18nProvider>
+    </AgentMentionProviderRoot>
   );
 }
 
