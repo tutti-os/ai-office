@@ -37,10 +37,12 @@ test("tshAgentRoutingEnv stamps ADR 0017 routing on TSH host", () => {
   assert.deepEqual(
     tshAgentRoutingEnv({
       TSH_WORKSPACE_APP: "1",
+      TUTTI_WORKSPACE_ID: "room-1",
       LD_PRELOAD: "/custom/preload.so",
       BASH_ENV: "/custom/bashenv.sh",
     }),
     {
+      TSH_WORKSPACE_ID: "room-1",
       TSH_AGENT_ROUTING: "1",
       LD_PRELOAD: "/custom/preload.so",
       BASH_ENV: "/custom/bashenv.sh",

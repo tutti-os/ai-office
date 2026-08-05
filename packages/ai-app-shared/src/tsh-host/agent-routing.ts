@@ -14,7 +14,10 @@ export const TSH_CMD_ROUTING_BASH_ENV = "/opt/tsh/bundle/etc/cmd-routing.sh";
 export function tshAgentRoutingEnv(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
   if (env.TSH_WORKSPACE_APP?.trim() !== "1") return {};
   const preload = env.LD_PRELOAD?.trim() || env.TSH_ROUTING_LD_PRELOAD?.trim() || TSH_ROUTING_LD_PRELOAD;
+  const workspaceId =
+    env.TSH_WORKSPACE_ID?.trim() || env.TUTTI_WORKSPACE_ID?.trim() || env.NEXTOP_WORKSPACE_ID?.trim() || "";
   return {
+    ...(workspaceId ? { TSH_WORKSPACE_ID: workspaceId } : {}),
     TSH_AGENT_ROUTING: "1",
     LD_PRELOAD: preload,
     BASH_ENV: env.BASH_ENV?.trim() || TSH_CMD_ROUTING_BASH_ENV,
