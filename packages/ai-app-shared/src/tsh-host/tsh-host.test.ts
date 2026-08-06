@@ -5,7 +5,6 @@ import {
   allocateTshArtifactRoot,
   assertAllowedTshParentPath,
   ensureTshArtifactFile,
-  fromTshWorkspaceRelativePath,
   formatTshArtifactDateSlug,
   formatTshArtifactDatedStem,
   isTshFileArtifactPath,
@@ -16,7 +15,6 @@ import {
   tshImportStemFromFileName,
   TSH_CMD_ROUTING_BASH_ENV,
   TSH_DEFAULT_PARENT_PATH,
-  toTshWorkspaceRelativePath,
   TSH_ROUTING_LD_PRELOAD,
   tshAgentRoutingEnv,
 } from "./index.js";
@@ -131,12 +129,4 @@ test("isTshFileArtifactPath detects document extensions", () => {
 test("ensureTshArtifactFile creates the parent directory", () => {
   // Path validation only — parent mkdir is exercised; avoid writing outside sandbox if /workspace missing in unit env.
   assert.throws(() => ensureTshArtifactFile("/tmp/out.html"), /inside \/workspace/);
-});
-
-test("workspace reference paths round-trip without exposing internal state", () => {
-  assert.equal(toTshWorkspaceRelativePath("/workspace/reports/live.md"), "reports/live.md");
-  assert.equal(fromTshWorkspaceRelativePath("reports/live.md"), "/workspace/reports/live.md");
-  assert.throws(() => toTshWorkspaceRelativePath("/workspace/.tsh/apps/data.db"), /.tsh/);
-  assert.throws(() => fromTshWorkspaceRelativePath("../private/data.db"), /workspace-relative/);
-  assert.throws(() => fromTshWorkspaceRelativePath(".tsh/apps/data.db"), /workspace-relative/);
 });

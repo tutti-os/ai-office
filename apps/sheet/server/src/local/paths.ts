@@ -3,8 +3,9 @@ import {
   ensureBaseDirs as ensureSharedBaseDirs,
   ensureProjectDirs as ensureSharedProjectDirs,
   projectLocalAgentStateRoot as sharedProjectLocalAgentStateRoot,
-  projectPrivateStateRoot as sharedProjectPrivateStateRoot,
+  safePathSegment,
 } from "@ai-app/shared/local-paths";
+import { join } from "node:path";
 
 export const appPaths = createAppPaths({
   homeEnvVar: "AI_SHEET_HOME",
@@ -17,7 +18,7 @@ export function ensureBaseDirs() {
 }
 
 export function projectWorkspaceRoot(projectId: string) {
-  return sharedProjectPrivateStateRoot(appPaths, projectId);
+  return join(appPaths.projectsDir, safePathSegment(projectId));
 }
 
 /** VM-local root for local-agent resume pointers (TUTTI_APP_DATABASE_DIR). */

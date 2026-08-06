@@ -6,7 +6,7 @@ import { listWorkspaceReferenceRecords, workspaceReferenceAbsolutePath } from ".
 
 type ReferenceListRequest = { parentGroupId?: string; filterText?: string; limit?: number; cursor?: string; timeRange?: { fromMs?: number; toMs?: number } };
 type ReferenceSearchRequest = { query?: string; limit?: number; cursor?: string; filters?: string[]; timeRange?: { fromMs?: number; toMs?: number } };
-type ReferenceItem = { type: "reference"; reference: { kind: "file"; displayName: string; description?: string; location: { type: "workspace-relative"; path: string }; sizeBytes?: number; mtimeMs?: number; mimeType?: string; score?: number; parentGroupLabel?: string } };
+type ReferenceItem = { type: "reference"; reference: { kind: "file"; displayName: string; description?: string; location: { type: "app-data-relative"; path: string }; sizeBytes?: number; mtimeMs?: number; mimeType?: string; score?: number; parentGroupLabel?: string } };
 type GroupItem = { type: "group"; id: string; displayName: string; description?: string; referenceCount: number };
 type ProjectMetadata = { title: string; updatedAt: string };
 
@@ -70,7 +70,7 @@ async function listReferencesForProject(projectId: string, timeRange: ReferenceL
     if (!info?.isFile() || extname(record.relativePath).toLowerCase() !== ".xlsx") return null;
     const mtimeMs = Math.trunc(info.mtimeMs);
     if (!matchesTimeRange(mtimeMs, timeRange)) return null;
-    const item: ReferenceItem = { type: "reference", reference: { kind: "file", displayName: record.displayName || basename(record.relativePath), description: record.description || record.relativePath, location: { type: "workspace-relative", path: record.relativePath }, sizeBytes: info.size, mtimeMs, mimeType: record.mimeType, parentGroupLabel } };
+    const item: ReferenceItem = { type: "reference", reference: { kind: "file", displayName: record.displayName || basename(record.relativePath), description: record.description || record.relativePath, location: { type: "app-data-relative", path: record.relativePath }, sizeBytes: info.size, mtimeMs, mimeType: record.mimeType, parentGroupLabel } };
     return item;
   }));
   return live.filter((item): item is ReferenceItem => item !== null).sort((left, right) => (right.reference.mtimeMs ?? 0) - (left.reference.mtimeMs ?? 0));

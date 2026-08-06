@@ -89,8 +89,8 @@ This package runs AI Sheet as a local Tutti workspace app.
 - \`tutti.app.json\` declares the app runtime, localized metadata, CLI surface, and references endpoints.
 - \`tutti.cli.json\` exposes project commands such as \`sheet projects list\`, \`sheet projects get\`, and \`sheet projects create\` for other Tutti apps and agents.
 - Durable app data is stored under \`AI_SHEET_HOME\`.
-- Private app state (SQLite, project files) uses \`TUTTI_APP_DATABASE_DIR\` when provided.
-- Do not persist under \`TUTTI_APP_DATA_DIR\` / \`.tsh\`.
+- Public workbook files live under \`TUTTI_APP_DATA_DIR\` (\`/workspace\` on TSH). Private app state (SQLite and sidecars) uses \`TUTTI_APP_DATABASE_DIR\` when provided.
+- Do not persist private state under \`TUTTI_APP_DATA_DIR\` / \`.tsh\`.
 - Runtime scratch data is stored under \`AI_SHEET_RUNTIME_ROOT\`.
 - Backend logs, if added later, must stay under \`AI_SHEET_LOG_ROOT\`.
 - OfficeCLI auto-install uses the shared AI Office toolchain cache, not \`AI_SHEET_HOME\`; override with \`AI_SHEET_OFFICECLI_PATH\`, \`TUTTI_APP_OFFICECLI_PATH\`, or an \`*_OFFICECLI_INSTALL_ROOT\` env var.
@@ -105,7 +105,7 @@ Endpoints:
 
 - \`GET /api/health\` is the runtime healthcheck.
 - \`POST /tutti/cli/*\` implements the CLI manifest, including resource-style project commands.
-- \`POST /tutti/references/list\` and \`POST /tutti/references/search\` expose workspace-relative user-visible exports remembered by the app.
+- \`POST /tutti/references/list\` and \`POST /tutti/references/search\` expose app-data-relative user-visible exports remembered by the app.
 `;
 }
 

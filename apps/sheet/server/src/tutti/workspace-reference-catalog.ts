@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
-import { basename } from "node:path";
-import { fromTshWorkspaceRelativePath, isTshWorkspaceAppHost, toTshWorkspaceRelativePath } from "@ai-app/shared/tsh-host";
+import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { getDb, rows } from "../db/database.js";
+import { appPaths } from "../local/paths.js";
 
 export type WorkspaceReferenceRecord = {
   id: string;
@@ -23,9 +23,8 @@ type WorkspaceReferenceRow = {
 };
 
 export function recordWorkspaceReference(input: { projectId: string; kind: string; absolutePath: string; displayName?: string; description?: string; mimeType: string }) {
-  if (!isTshWorkspaceAppHost()) return null;
   let relativePath: string;
-  try { relativePath = toTshWorkspaceRelativePath(input.absolutePath); } catch { return null; }
+  try { relativePath = toAppDataRelativePath(input.absolutePath); } catch { return null; }
   const info = statSync(input.absolutePath, { throwIfNoEntry: false });
   if (!info?.isFile()) return null;
   const now = new Date().toISOString();
@@ -47,4 +46,35 @@ export function listWorkspaceReferenceRecords(projectId?: string): WorkspaceRefe
   return rows<WorkspaceReferenceRow>(result).map((row) => ({ id: row.id, projectId: row.project_id, kind: row.kind, relativePath: row.relative_path, displayName: row.display_name, description: row.description, mimeType: row.mime_type, sizeBytes: row.size_bytes, mtimeMs: row.mtime_ms, updatedAt: row.updated_at }));
 }
 
-export function workspaceReferenceAbsolutePath(relativePath: string) { return fromTshWorkspaceRelativePath(relativePath); }
+export function workspaceReferenceAbsolutePath(relativePath: string) { return fromAppDataRelativePath(relativePath); }
+
+function toAppDataRelativePath(absolutePath: string) {
+  const root = resolve(appPaths.root);
+  const candidate = resolve(absolutePath);
+  const relativePath = relative(root, candidate);
+  if (!relativePath || isAbsolute(relativePath) || relativePath === ".." || relativePath.startsWith(`..${sep}`)) {
+    throw new Error("reference is outside the app-data root");
+  }
+  const components = relativePath.split(sep);
+  if (components.includes(".tsh")) throw new Error("reference points to private TSH state");
+  const databaseRoot = resolve(appPaths.databaseDir);
+  if (candidate === databaseRoot || candidate.startsWith(`${databaseRoot}${sep}`)) {
+    throw new Error("reference points to private app database state");
+  }
+  return components.join("/");
+}
+
+function fromAppDataRelativePath(relativePath: string) {
+  const root = resolve(appPaths.root);
+  const candidate = resolve(root, relativePath);
+  const normalizedRelativePath = relative(root, candidate);
+  if (!normalizedRelativePath || isAbsolute(normalizedRelativePath) || normalizedRelativePath === ".." || normalizedRelativePath.startsWith(`..${sep}`)) {
+    throw new Error("reference path escapes the app-data root");
+  }
+  if (normalizedRelativePath.split(sep).includes(".tsh")) throw new Error("reference points to private TSH state");
+  const databaseRoot = resolve(appPaths.databaseDir);
+  if (candidate === databaseRoot || candidate.startsWith(`${databaseRoot}${sep}`)) {
+    throw new Error("reference points to private app database state");
+  }
+  return candidate;
+}

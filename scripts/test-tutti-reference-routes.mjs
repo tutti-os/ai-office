@@ -6,7 +6,7 @@ import { join } from "node:path";
 
 await testDocReferencesUseAppDataRoot();
 await testSlideReferencesUseAppDataRoot();
-await testSheetReferencesIgnorePrivateState();
+await testSheetReferencesUseAppDataRoot();
 
 async function testDocReferencesUseAppDataRoot() {
   const home = mkdtempSync(join(tmpdir(), "ai-doc-references-"));
@@ -81,19 +81,39 @@ async function testSlideReferencesUseAppDataRoot() {
   } finally { rmSync(home, { force: true, recursive: true }); }
 }
 
-async function testSheetReferencesIgnorePrivateState() {
+async function testSheetReferencesUseAppDataRoot() {
   const home = mkdtempSync(join(tmpdir(), "ai-sheet-references-"));
   process.env.AI_SHEET_HOME = home;
   try {
-    const [{ getDb }, { appPaths }, { registerTuttiReferenceRoutes }] = await Promise.all([
+    const [{ getDb }, { appPaths }, { recordWorkspaceReference }, { registerTuttiReferenceRoutes }] = await Promise.all([
       import("../apps/sheet/server/src/db/database.ts"),
       import("../apps/sheet/server/src/local/paths.ts"),
+      import("../apps/sheet/server/src/tutti/workspace-reference-catalog.ts"),
       import("../apps/sheet/server/src/tutti/reference-routes.ts"),
     ]);
     getDb().prepare(`INSERT INTO projects (id, title, active_artifact_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`).run("sheet-private", "Private Workbook", "artifact", new Date().toISOString(), new Date().toISOString());
+    const publicPath = join(appPaths.projectsDir, "sheet-private", "exports", "public.xlsx");
     mkdirSync(join(appPaths.projectsDir, "sheet-private", "exports"), { recursive: true });
-    writeFileSync(join(appPaths.projectsDir, "sheet-private", "exports", "private.xlsx"), "private");
-    await assertNoReferences(registerTuttiReferenceRoutes);
+    writeFileSync(publicPath, "public");
+    assert.equal(recordWorkspaceReference({
+      projectId: "sheet-private",
+      kind: "xlsx",
+      absolutePath: publicPath,
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }), "projects/sheet-private/exports/public.xlsx");
+    const privatePath = join(appPaths.databaseDir, "private.xlsx");
+    writeFileSync(privatePath, "private");
+    assert.equal(recordWorkspaceReference({
+      projectId: "sheet-private",
+      kind: "xlsx",
+      absolutePath: privatePath,
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }), null);
+    const routes = registerRoutes(registerTuttiReferenceRoutes);
+    const listed = await callRoute(routes, "/tutti/references/list", { parentGroupId: "sheet-private" });
+    assert.equal(listed.items.length, 1);
+    assert.equal(listed.items[0].reference.location.type, "app-data-relative");
+    assert.equal(listed.items[0].reference.location.path, "projects/sheet-private/exports/public.xlsx");
   } finally { rmSync(home, { force: true, recursive: true }); }
 }
 
