@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
-import { basename } from "node:path";
-import { fromTshWorkspaceRelativePath, isTshWorkspaceAppHost, toTshWorkspaceRelativePath } from "@ai-app/shared/tsh-host";
+import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { getDb, rows } from "../db/database.js";
+import { appPaths } from "../local/paths.js";
 
 export type WorkspaceReferenceRecord = {
   id: string;
@@ -38,12 +38,11 @@ export function recordWorkspaceReference(input: {
   description?: string;
   mimeType: string;
 }) {
-  if (!isTshWorkspaceAppHost()) return null;
   let relativePath: string;
   try {
-    relativePath = toTshWorkspaceRelativePath(input.absolutePath);
+    relativePath = toAppDataRelativePath(input.absolutePath);
   } catch {
-    // Files under TUTTI_APP_DATABASE_DIR are private implementation details.
+    // Files outside the app-data root and files under private state are not user references.
     return null;
   }
   const info = statSync(input.absolutePath, { throwIfNoEntry: false });
@@ -85,7 +84,42 @@ export function listWorkspaceReferenceRecords(projectId?: string): WorkspaceRefe
 }
 
 export function workspaceReferenceAbsolutePath(relativePath: string) {
-  return fromTshWorkspaceRelativePath(relativePath);
+  return fromAppDataRelativePath(relativePath);
+}
+
+function toAppDataRelativePath(absolutePath: string) {
+  const root = resolve(appPaths.root);
+  const candidate = resolve(absolutePath);
+  const relativePath = relative(root, candidate);
+  if (!relativePath || isAbsolute(relativePath) || relativePath === ".." || relativePath.startsWith(`..${sep}`)) {
+    throw new Error("reference is outside the app-data root");
+  }
+  const components = relativePath.split(sep);
+  if (components.includes(".tsh")) {
+    throw new Error("reference points to private TSH state");
+  }
+  const databaseRoot = resolve(appPaths.databaseDir);
+  if (candidate === databaseRoot || candidate.startsWith(`${databaseRoot}${sep}`)) {
+    throw new Error("reference points to private app database state");
+  }
+  return components.join("/");
+}
+
+function fromAppDataRelativePath(relativePath: string) {
+  const root = resolve(appPaths.root);
+  const candidate = resolve(root, relativePath);
+  const normalizedRelativePath = relative(root, candidate);
+  if (!normalizedRelativePath || isAbsolute(normalizedRelativePath) || normalizedRelativePath === ".." || normalizedRelativePath.startsWith(`..${sep}`)) {
+    throw new Error("reference path escapes the app-data root");
+  }
+  if (normalizedRelativePath.split(sep).includes(".tsh")) {
+    throw new Error("reference points to private TSH state");
+  }
+  const databaseRoot = resolve(appPaths.databaseDir);
+  if (candidate === databaseRoot || candidate.startsWith(`${databaseRoot}${sep}`)) {
+    throw new Error("reference points to private app database state");
+  }
+  return candidate;
 }
 
 function rowToWorkspaceReference(row: WorkspaceReferenceRow): WorkspaceReferenceRecord {

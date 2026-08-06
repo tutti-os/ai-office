@@ -4,24 +4,44 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-await testDocReferencesIgnorePrivateState();
+await testDocReferencesUseAppDataRoot();
 await testSlideReferencesIgnorePrivateState();
 await testSheetReferencesIgnorePrivateState();
 
-async function testDocReferencesIgnorePrivateState() {
+async function testDocReferencesUseAppDataRoot() {
   const home = mkdtempSync(join(tmpdir(), "ai-doc-references-"));
   process.env.AI_DOC_HOME = home;
   process.env.TSH_WORKSPACE_APP = "1";
   try {
-    const [{ getDb }, { appPaths }, { registerTuttiReferenceRoutes }] = await Promise.all([
+    const [{ getDb }, { appPaths }, { recordWorkspaceReference }, { registerTuttiReferenceRoutes }] = await Promise.all([
       import("../apps/doc/server/src/db/database.ts"),
       import("../apps/doc/server/src/local/paths.ts"),
+      import("../apps/doc/server/src/tutti/workspace-reference-catalog.ts"),
       import("../apps/doc/server/src/tutti/reference-routes.ts"),
     ]);
     getDb().prepare(`INSERT INTO projects (id, title, type, content, created_at, updated_at) VALUES (?, ?, 'html', '<p>private</p>', ?, ?)`).run("doc-private", "Private Doc", new Date().toISOString(), new Date().toISOString());
+    const publicPath = join(appPaths.projectsDir, "doc-private", "exports", "public.html");
     mkdirSync(join(appPaths.projectsDir, "doc-private", "exports"), { recursive: true });
-    writeFileSync(join(appPaths.projectsDir, "doc-private", "exports", "private.html"), "private");
-    await assertNoReferences(registerTuttiReferenceRoutes);
+    writeFileSync(publicPath, "public");
+    assert.equal(recordWorkspaceReference({
+      projectId: "doc-private",
+      kind: "html",
+      absolutePath: publicPath,
+      mimeType: "text/html",
+    }), "projects/doc-private/exports/public.html");
+    const privatePath = join(appPaths.databaseDir, "private.html");
+    writeFileSync(privatePath, "private");
+    assert.equal(recordWorkspaceReference({
+      projectId: "doc-private",
+      kind: "html",
+      absolutePath: privatePath,
+      mimeType: "text/html",
+    }), null);
+    const routes = registerRoutes(registerTuttiReferenceRoutes);
+    const listed = await callRoute(routes, "/tutti/references/list", { parentGroupId: "doc-private" });
+    assert.equal(listed.items.length, 1);
+    assert.equal(listed.items[0].reference.location.type, "app-data-relative");
+    assert.equal(listed.items[0].reference.location.path, "projects/doc-private/exports/public.html");
   } finally { rmSync(home, { force: true, recursive: true }); }
 }
 
