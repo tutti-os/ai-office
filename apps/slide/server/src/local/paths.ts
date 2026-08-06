@@ -3,6 +3,7 @@ import {
   ensureBaseDirs as ensureSharedBaseDirs,
   projectLocalAgentStateRoot as sharedProjectLocalAgentStateRoot,
   projectPrivateStateRoot as sharedProjectPrivateStateRoot,
+  safePathSegment,
 } from "@ai-app/shared/local-paths";
 import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -39,7 +40,7 @@ export function isTshDirectoryArtifactProject(projectId: string): boolean {
 }
 
 export function projectWorkspaceRoot(projectId: string) {
-  return boundWorkspaceRoot(projectId) ?? projectPrivateRoot(projectId);
+  return boundWorkspaceRoot(projectId) ?? join(appPaths.projectsDir, safePathSegment(projectId));
 }
 
 export function bindProjectWorkspaceRoot(projectId: string, root: string) {

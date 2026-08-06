@@ -84,7 +84,7 @@ This package runs AI Slide as a local Tutti workspace app.
 - \`tutti.app.json\` declares the app runtime, localized metadata, CLI surface, and references endpoints.
 - \`tutti.cli.json\` exposes project commands such as \`slide projects list\`, \`slide projects get\`, and \`slide projects create\` for other Tutti apps and agents.
 - Private app state (SQLite, sidecars) uses \`TUTTI_APP_DATABASE_DIR\` when provided.
-- Public deck files live under the bound \`/workspace\` project directory. Do not persist under \`TUTTI_APP_DATA_DIR\` / \`.tsh\`.
+- Public deck files live under \`TUTTI_APP_DATA_DIR\` (\`/workspace\` on TSH). Do not persist private state under \`TUTTI_APP_DATA_DIR\` / \`.tsh\`.
 - Runtime scratch data is stored under \`AI_SLIDE_RUNTIME_ROOT\`.
 - Backend logs, if added later, must stay under \`AI_SLIDE_LOG_ROOT\`.
 - Templates load from CloudFront by default at \`/office-templates/slide/template.json\`; set \`AI_SLIDE_TEMPLATE_PROVIDER=local\` to use \`AI_SLIDE_TEMPLATE_ROOT\` and \`AI_SLIDE_TEMPLATE_ASSET_ROOT\`.
@@ -102,7 +102,7 @@ Endpoints:
 
 - \`GET /api/health\` is the runtime healthcheck.
 - \`POST /tutti/cli/*\` implements the CLI manifest, including resource-style project commands.
-- \`POST /tutti/references/list\` and \`POST /tutti/references/search\` expose workspace-relative user-visible exports remembered by the app.
+- \`POST /tutti/references/list\` and \`POST /tutti/references/search\` expose app-data-relative user-visible exports remembered by the app.
 `;
 }
 

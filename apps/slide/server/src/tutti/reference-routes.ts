@@ -13,7 +13,7 @@ type ReferenceItem = {
     kind: "file";
     displayName: string;
     description?: string;
-    location: { type: "workspace-relative"; path: string };
+    location: { type: "app-data-relative"; path: string };
     sizeBytes?: number;
     mtimeMs?: number;
     mimeType?: string;
@@ -95,7 +95,7 @@ async function listReferencesForProject(projectId: string, timeRange: ReferenceL
         kind: "file",
         displayName: record.displayName || basename(record.relativePath),
         description: record.description || record.relativePath,
-        location: { type: "workspace-relative", path: record.relativePath },
+        location: { type: "app-data-relative", path: record.relativePath },
         sizeBytes: info.size,
         mtimeMs,
         mimeType: record.mimeType,

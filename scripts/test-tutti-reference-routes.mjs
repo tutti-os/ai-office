@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 await testDocReferencesUseAppDataRoot();
-await testSlideReferencesIgnorePrivateState();
+await testSlideReferencesUseAppDataRoot();
 await testSheetReferencesIgnorePrivateState();
 
 async function testDocReferencesUseAppDataRoot() {
@@ -45,19 +45,39 @@ async function testDocReferencesUseAppDataRoot() {
   } finally { rmSync(home, { force: true, recursive: true }); }
 }
 
-async function testSlideReferencesIgnorePrivateState() {
+async function testSlideReferencesUseAppDataRoot() {
   const home = mkdtempSync(join(tmpdir(), "ai-slide-references-"));
   process.env.AI_SLIDE_HOME = home;
   try {
-    const [{ getDb }, { appPaths }, { registerTuttiReferenceRoutes }] = await Promise.all([
+    const [{ getDb }, { appPaths }, { recordWorkspaceReference }, { registerTuttiReferenceRoutes }] = await Promise.all([
       import("../apps/slide/server/src/db/database.ts"),
       import("../apps/slide/server/src/local/paths.ts"),
+      import("../apps/slide/server/src/tutti/workspace-reference-catalog.ts"),
       import("../apps/slide/server/src/tutti/reference-routes.ts"),
     ]);
     getDb().prepare(`INSERT INTO projects (id, title, active_artifact_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`).run("slide-private", "Private Deck", "artifact", new Date().toISOString(), new Date().toISOString());
+    const publicPath = join(appPaths.projectsDir, "slide-private", "exports", "public.pdf");
     mkdirSync(join(appPaths.projectsDir, "slide-private", "exports"), { recursive: true });
-    writeFileSync(join(appPaths.projectsDir, "slide-private", "exports", "private.pdf"), "private");
-    await assertNoReferences(registerTuttiReferenceRoutes);
+    writeFileSync(publicPath, "public");
+    assert.equal(recordWorkspaceReference({
+      projectId: "slide-private",
+      kind: "pdf",
+      absolutePath: publicPath,
+      mimeType: "application/pdf",
+    }), "projects/slide-private/exports/public.pdf");
+    const privatePath = join(appPaths.databaseDir, "private.pdf");
+    writeFileSync(privatePath, "private");
+    assert.equal(recordWorkspaceReference({
+      projectId: "slide-private",
+      kind: "pdf",
+      absolutePath: privatePath,
+      mimeType: "application/pdf",
+    }), null);
+    const routes = registerRoutes(registerTuttiReferenceRoutes);
+    const listed = await callRoute(routes, "/tutti/references/list", { parentGroupId: "slide-private" });
+    assert.equal(listed.items.length, 1);
+    assert.equal(listed.items[0].reference.location.type, "app-data-relative");
+    assert.equal(listed.items[0].reference.location.path, "projects/slide-private/exports/public.pdf");
   } finally { rmSync(home, { force: true, recursive: true }); }
 }
 
