@@ -6,7 +6,7 @@ import {
   safePathSegment,
 } from "@ai-app/shared/local-paths";
 import { isTshFileArtifactPath } from "@ai-app/shared/tsh-host";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { DocumentProject } from "@ai-doc/shared";
 
@@ -78,25 +78,6 @@ export function ensureProjectDirs(projectId: string) {
   mkdirSync(join(root, "exports"), { recursive: true });
   mkdirSync(join(root, "snapshots"), { recursive: true });
   return root;
-}
-
-export function removeProjectWorkspaceFiles(projectId: string) {
-  const bound = boundWorkspaceRoot(projectId);
-  const privateRoot = projectPrivateRoot(projectId);
-  if (bound && isTshFileArtifactPath(bound)) {
-    rmSync(bound, { force: true });
-    // Remove empty parent only if it is not /workspace itself — skip aggressive rmdir.
-    rmSync(privateRoot, { force: true, recursive: true });
-    return;
-  }
-  if (bound) {
-    rmSync(bound, { force: true, recursive: true });
-    if (resolve(bound) !== resolve(privateRoot)) {
-      rmSync(privateRoot, { force: true, recursive: true });
-    }
-    return;
-  }
-  rmSync(privateRoot, { force: true, recursive: true });
 }
 
 export function focusedProjectFileName(type: DocumentProject["type"]) {

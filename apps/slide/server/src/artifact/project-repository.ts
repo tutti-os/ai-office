@@ -1,4 +1,4 @@
-import { existsSync, rmSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, extname, join, resolve } from "node:path";
@@ -17,7 +17,6 @@ import {
   type SlideProject,
   type UpdateProjectRequest,
 } from "@ai-slide/shared";
-import { privateProjectsParentDir } from "@ai-app/shared/local-paths";
 import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
 import { asProjectPreparationError } from "@ai-app/shared/project-preparation";
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
@@ -30,11 +29,9 @@ import {
 } from "@ai-app/shared/tsh-host";
 import { getDb, rowOrNull, rows } from "../db/database.js";
 import {
-  appPaths,
   bindProjectWorkspaceRoot,
   boundWorkspaceRoot,
   clearProjectWorkspaceRootBindings,
-  ensureBaseDirs,
   ensureProjectDirs,
   projectWorkspaceRoot,
   unbindProjectWorkspaceRoot,
@@ -327,11 +324,7 @@ export class ProjectRepository {
   }
 
   clearProjectHistory() {
-    const db = getDb();
-    const workspaceRoots = rows<{ id: string; workspace_root: string | null }>(
-      db.prepare(`SELECT id, workspace_root FROM projects`).all(),
-    );
-    db.exec(`
+    getDb().exec(`
       DELETE FROM slide_run_events;
       DELETE FROM slide_runs;
       DELETE FROM agent_conversation_messages;
@@ -340,21 +333,13 @@ export class ProjectRepository {
       DELETE FROM artifacts;
       DELETE FROM projects;
     `);
-    for (const row of workspaceRoots) {
-      if (row.workspace_root) rmSync(row.workspace_root, { force: true, recursive: true });
-      unbindProjectWorkspaceRoot(row.id);
-    }
     clearProjectWorkspaceRootBindings();
-    rmSync(privateProjectsParentDir(appPaths), { force: true, recursive: true });
-    rmSync(appPaths.projectsDir, { force: true, recursive: true });
-    ensureBaseDirs();
     return { projects: [] as SlideProject[] };
   }
 
   deleteProject(projectId: string) {
     const project = this.getProject(projectId);
     if (!project) return null;
-    const root = projectWorkspaceRoot(projectId);
     const db = getDb();
     db.exec("BEGIN");
     try {
@@ -370,7 +355,6 @@ export class ProjectRepository {
       db.exec("ROLLBACK");
       throw error;
     }
-    rmSync(root, { force: true, recursive: true });
     unbindProjectWorkspaceRoot(projectId);
     return { projects: this.listProjects() };
   }

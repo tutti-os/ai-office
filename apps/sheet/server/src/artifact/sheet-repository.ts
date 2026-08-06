@@ -1,7 +1,7 @@
 import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { basename, extname, join, resolve } from "node:path";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync } from "node:fs";
 import {
   createEmptyXlsxManifest,
   type CreateProjectRequest,
@@ -14,12 +14,11 @@ import {
   xlsxArtifactFileRef,
   xlsxMimeType,
 } from "@ai-sheet/shared";
-import { privateProjectsParentDir } from "@ai-app/shared/local-paths";
 import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
 import { retryProjectPreparationOperation, SqliteProjectPreparationCoordinator } from "@ai-app/shared/project-preparation";
 import { getDb, rowOrNull, rows } from "../db/database.js";
-import { appPaths, ensureBaseDirs, ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
+import { ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
 import { withProjectImportCleanup } from "./project-import.js";
 
 export class SheetRepository {
@@ -225,9 +224,6 @@ export class SheetRepository {
       DELETE FROM artifacts;
       DELETE FROM projects;
     `);
-    rmSync(privateProjectsParentDir(appPaths), { force: true, recursive: true });
-    rmSync(appPaths.projectsDir, { force: true, recursive: true });
-    ensureBaseDirs();
     return { projects: [] as SheetProject[] };
   }
 
@@ -247,7 +243,6 @@ export class SheetRepository {
       db.exec("ROLLBACK");
       throw error;
     }
-    rmSync(projectWorkspaceRoot(projectId), { force: true, recursive: true });
     return { projects: this.listProjects() };
   }
 
