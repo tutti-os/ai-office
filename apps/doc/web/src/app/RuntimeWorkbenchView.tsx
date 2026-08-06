@@ -184,8 +184,8 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             onSelectionChange={updateMarkdownSelection}
             onSendAgentPrompt={sendAgentPrompt}
             onTableCellCommitterChange={setMarkdownTableCellCommitter}
-            onTitleChange={renameCurrentProjectTitle}
             onUndo={undoMarkdown}
+            onTitleChange={renameCurrentProjectTitle}
           />
         </ArtifactErrorBoundary>
       ) : currentDocumentType === "docx" && docxRuntime ? (
@@ -266,7 +266,6 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             linkDraft={linkDraft}
             linkEditorOpen={linkEditorOpen}
             onBackHome={requestHomeRoute}
-            onTitleChange={renameCurrentProjectTitle}
             onTiptapBodyChange={syncHtmlEditorBody}
             onTiptapSelectionChange={updateHtmlEditorSelection}
             onToolbarInteractionStart={() => undefined}
@@ -304,6 +303,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             onCancelAgentRun={cancelAgentRun}
             onRedo={() => undefined}
             onUndo={() => undefined}
+            onTitleChange={renameCurrentProjectTitle}
           />
         </ArtifactErrorBoundary>
       ) : (

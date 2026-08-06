@@ -14,7 +14,7 @@ import { reportUserActive } from "./app/tuttiActivity";
 import { pushHomeRoute, pushSlideRoute, readCurrentRoute, routePath, type AppRoute } from "./app/slideRoutes";
 import { useAgentConversation } from "./app/useAgentConversation";
 import { useHomeAttachments, type HomeAttachment } from "./app/useHomeAttachments";
-import { cancelRun, clearProjectHistory, createProject, deleteProject, fetchBootstrapSnapshot, fetchLocalAgentTargets, fetchOfficeCliStatus, getProject, importProjectFile, installOfficeCli, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml } from "./api/projects";
+import { cancelRun, clearProjectHistory, createProject, deleteProject, fetchBootstrapSnapshot, fetchLocalAgentTargets, fetchOfficeCliStatus, getProject, importProjectFile, installOfficeCli, listProjects, listTemplates, startAiEdit, updateDeckSlideHtml, updateProject } from "./api/projects";
 import { DeckArtifactRuntimeAdapter, type DeckAgentRuntimeProvider } from "./artifact/deckArtifactAdapter";
 import { PptxArtifactRuntimeAdapter } from "./artifact/pptxArtifactAdapter";
 import { usePptxArtifactRuntime } from "./artifact/usePptxArtifactRuntime";
@@ -470,6 +470,33 @@ export function App() {
     [agentBusy],
   );
 
+  const renameCurrentProjectTitle = async (title: string) => {
+    const projectId = currentProjectId;
+    if (!projectId) return;
+    const nextTitle = title.trim();
+    if (!nextTitle) return;
+    const previous = projectDetail;
+    setProjectDetail((current) =>
+      current ? { ...current, project: { ...current.project, title: nextTitle } } : current,
+    );
+    setHistoryProjects((projects) =>
+      projects.map((project) => (project.id === projectId ? { ...project, title: nextTitle } : project)),
+    );
+    try {
+      const result = await updateProject(projectId, { title: nextTitle, updatedBy: "human" });
+      setProjectDetail((current) =>
+        current && current.project.id === result.project.id
+          ? { ...current, project: result.project, artifact: result.artifact }
+          : current,
+      );
+      setHistoryProjects((projects) => [result.project, ...projects.filter((project) => project.id !== result.project.id)]);
+    } catch (err) {
+      if (previous) setProjectDetail(previous);
+      setError(err instanceof Error ? err.message : String(err));
+      throw err;
+    }
+  };
+
   if (route.name === "slide") {
     return (
       <SlideEditorScreen
@@ -499,6 +526,7 @@ export function App() {
         onDeckSelectionPreviewChange={setDeckActiveSelectionPreview}
         onSelectedAgentChange={setSelectedAgent}
         onSend={sendAgentPrompt}
+        onTitleChange={renameCurrentProjectTitle}
       />
     );
   }

@@ -1,7 +1,7 @@
-import { existsSync } from "node:fs";
-import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { basename, extname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import {
   deckArtifactFileRef,
   deckMimeType,
@@ -21,11 +21,11 @@ import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationSto
 import { asProjectPreparationError } from "@ai-app/shared/project-preparation";
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
 import {
-  allocateRenamedTshArtifactRoot,
   allocateTshArtifactRoot,
   assertAllowedTshParentPath,
   ensureTshArtifactRoot,
   resolveTshParentPath,
+  tshImportStemFromFileName,
 } from "@ai-app/shared/tsh-host";
 import { getDb, rowOrNull, rows } from "../db/database.js";
 import {
@@ -96,7 +96,9 @@ export class ProjectRepository {
   }
 
   listProjects() {
-    return rows<ProjectRowWithArtifactType>(getDb().prepare(projectsWithArtifactTypeSql({ orderByUpdatedAt: true })).all()).map(rowToProject);
+    return rows<ProjectRowWithArtifactType>(getDb().prepare(projectsWithArtifactTypeSql({ orderByUpdatedAt: true })).all())
+      .map(rowToProject)
+      .map(syncTshDirectoryArtifactBinding);
   }
 
   interruptActiveRuns(reason: string) {
@@ -105,7 +107,7 @@ export class ProjectRepository {
 
   getProject(projectId: string) {
     const row = rowOrNull<ProjectRowWithArtifactType>(getDb().prepare(projectsWithArtifactTypeSql({ whereProjectId: true })).get(projectId));
-    return row ? rowToProject(row) : null;
+    return row ? syncTshDirectoryArtifactBinding(rowToProject(row)) : null;
   }
 
   getArtifact(artifactId: string) {
@@ -143,15 +145,19 @@ export class ProjectRepository {
     this.runtimeProfiles.syncLocalAgentRuntimeProfiles(agents);
   }
 
-  async createProject(input: CreateProjectRequest) {
+  async createProject(input: CreateProjectRequest & { importFileName?: string | null }) {
     const id = randomUUID();
     const artifactType = input.artifactType ?? "deck";
     const templateSource = artifactType === "deck" && input.templateId ? await requireTemplateDeckSource(input.templateId) : null;
     const now = new Date().toISOString();
-    const title = input.title?.trim() || input.templateName?.trim() || "Untitled Presentation";
     const parentPath = resolveTshParentPath(input.parentPath);
-    const workspaceRoot = parentPath ? ensureTshArtifactRoot(allocateTshArtifactRoot(parentPath, title, id)) : null;
+    const preferredStem = input.importFileName ? tshImportStemFromFileName(input.importFileName) : null;
+    const workspaceRoot = parentPath
+      ? ensureTshArtifactRoot(allocateTshArtifactRoot(parentPath, { preferredStem }))
+      : null;
     if (workspaceRoot) bindProjectWorkspaceRoot(id, workspaceRoot);
+    // Display title is independent of the on-disk directory name.
+    const title = input.title?.trim() || input.templateName?.trim() || "Untitled Presentation";
     const artifact = defaultArtifactInput({ projectId: id, type: artifactType, now });
     const db = getDb();
 
@@ -173,6 +179,7 @@ export class ProjectRepository {
     if (!project || !createdArtifact) throw new Error("Unable to create project");
     try {
       await materializeSlideProjectCore(project, createdArtifact, templateSource);
+      if (workspaceRoot) await writeTshProjectIdMarker(workspaceRoot, id);
       this.preparation.markCore(project.id, "ready");
     } catch (error) {
       const failure = asProjectPreparationError(error, "core_materialization", createdArtifact.fileRef);
@@ -183,14 +190,20 @@ export class ProjectRepository {
     return { project, artifact: createdArtifact, preparation: this.getProjectPreparation(project.id) };
   }
 
-  async importPptxProjectFromFile(input: { sourcePath: string; title?: string }) {
+  async importPptxProjectFromFile(input: { sourcePath: string; title?: string; parentPath?: string | null }) {
     const sourcePath = resolve(input.sourcePath);
     const sourceStat = await stat(sourcePath);
     if (!sourceStat.isFile()) throw new Error("PPTX source is not a file");
     if (extname(sourcePath).toLowerCase() !== ".pptx") throw new Error("PPTX source must end with .pptx");
 
-    const title = input.title?.trim() || basename(sourcePath, extname(sourcePath));
-    const created = await this.createProject({ title, artifactType: "pptx" });
+    const fileName = basename(sourcePath);
+    const title = input.title?.trim() || importedProjectTitle(fileName);
+    const created = await this.createProject({
+      title,
+      artifactType: "pptx",
+      parentPath: input.parentPath,
+      importFileName: fileName,
+    });
     await copyFile(sourcePath, pptxFilePath(created.project.id, created.artifact));
     const refresh = await this.refreshPptxArtifactFromFile(created.project.id, "human");
     const project = this.getProject(created.project.id);
@@ -203,10 +216,12 @@ export class ProjectRepository {
     };
   }
 
-  async importPptxProjectFromBytes(input: { fileName: string; bytes: Buffer; title?: string }) {
+  async importPptxProjectFromBytes(input: { fileName: string; bytes: Buffer; title?: string; parentPath?: string | null }) {
     const created = await this.createProject({
       title: input.title?.trim() || importedProjectTitle(input.fileName),
       artifactType: "pptx",
+      parentPath: input.parentPath,
+      importFileName: input.fileName,
     });
     await writeFile(pptxFilePath(created.project.id, created.artifact), input.bytes);
     const refresh = await this.refreshPptxArtifactFromFile(created.project.id, "human");
@@ -228,38 +243,19 @@ export class ProjectRepository {
     if (activeArtifactId !== current.activeArtifactId && !this.getArtifact(activeArtifactId)) {
       throw new Error("Artifact not found");
     }
+    const title = input.title?.trim() || current.title;
     getDb()
       .prepare(
         `UPDATE projects
          SET title = ?, active_artifact_id = ?, updated_by = ?, updated_at = ?
          WHERE id = ?`,
       )
-      .run(input.title?.trim() || current.title, activeArtifactId, input.updatedBy ?? "human", now, projectId);
+      .run(title, activeArtifactId, input.updatedBy ?? "human", now, projectId);
     return this.getProject(projectId);
   }
 
   updateProjectSessionTitle(projectId: string, title: string) {
     return this.conversations.updateProjectSessionTitle(projectId, title);
-  }
-
-  /**
-   * TSH directory artifacts keep a stable short id suffix. When the AI/human
-   * sets a real title, rename `/workspace/Untitled_…-<id>` to match.
-   */
-  async renameTshArtifactRootForTitle(projectId: string, title: string) {
-    const currentPath = boundWorkspaceRoot(projectId);
-    if (!currentPath) return;
-    if (!existsSync(currentPath)) {
-      throw new Error(`Deck directory is missing at ${currentPath}: no such file or directory`);
-    }
-    const nextPath = allocateRenamedTshArtifactRoot(currentPath, title);
-    if (nextPath === currentPath) return;
-    if (existsSync(nextPath)) {
-      throw new Error(`A directory already exists at ${nextPath}`);
-    }
-    await rename(currentPath, nextPath);
-    bindProjectWorkspaceRoot(projectId, nextPath);
-    getDb().prepare(`UPDATE projects SET workspace_root = ? WHERE id = ?`).run(nextPath, projectId);
   }
 
   async updateDeckManifestTitle(projectId: string, title: string, updatedBy: SlideProject["updatedBy"] = "ai") {
@@ -681,4 +677,69 @@ function defaultArtifactInput(input: { projectId: string; type: SlideArtifactTyp
     fileRef: deckArtifactFileRef,
     mimeType: deckMimeType,
   };
+}
+
+const TSH_PROJECT_ID_MARKER = join(".ai-slide", "project-id");
+
+async function writeTshProjectIdMarker(workspaceRoot: string, projectId: string) {
+  const markerPath = join(workspaceRoot, TSH_PROJECT_ID_MARKER);
+  await mkdir(dirname(markerPath), { recursive: true });
+  await writeFile(markerPath, `${projectId}\n`, "utf8");
+}
+
+/** Rebind workspace_root after an external FS rename; never overwrite display title. */
+function syncTshDirectoryArtifactBinding(project: SlideProject): SlideProject {
+  let bound = boundWorkspaceRoot(project.id) || project.workspaceRoot || null;
+  if (!bound) return project;
+
+  if (!existsSync(bound)) {
+    const recovered = recoverTshDirectoryArtifactPath(project.id, bound);
+    if (!recovered) return project;
+    bound = recovered;
+    bindProjectWorkspaceRoot(project.id, bound);
+    getDb().prepare(`UPDATE projects SET workspace_root = ? WHERE id = ?`).run(bound, project.id);
+    return { ...project, workspaceRoot: bound };
+  }
+
+  // Ensure older TSH projects get a recoverable marker.
+  const markerPath = join(bound, TSH_PROJECT_ID_MARKER);
+  if (!existsSync(markerPath)) {
+    try {
+      mkdirSync(dirname(markerPath), { recursive: true });
+      writeFileSync(markerPath, `${project.id}\n`, "utf8");
+    } catch {
+      // best-effort
+    }
+  }
+
+  if (project.workspaceRoot === bound) return project;
+  getDb().prepare(`UPDATE projects SET workspace_root = ? WHERE id = ?`).run(bound, project.id);
+  return { ...project, workspaceRoot: bound };
+}
+
+function recoverTshDirectoryArtifactPath(projectId: string, missingPath: string): string | null {
+  const parent = dirname(missingPath);
+  if (!existsSync(parent)) return null;
+  let entries: string[];
+  try {
+    entries = readdirSync(parent, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    return null;
+  }
+
+  const matches: string[] = [];
+  for (const name of entries) {
+    const candidate = join(parent, name);
+    const markerPath = join(candidate, TSH_PROJECT_ID_MARKER);
+    if (!existsSync(markerPath)) continue;
+    try {
+      const markedId = readFileSync(markerPath, "utf8").trim();
+      if (markedId === projectId) matches.push(candidate);
+    } catch {
+      // ignore
+    }
+  }
+  return matches.length === 1 ? matches[0]! : null;
 }
