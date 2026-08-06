@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { basename, dirname, extname, join, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 
 export {
   TSH_CMD_ROUTING_BASH_ENV,
@@ -146,4 +146,31 @@ export function assertAllowedTshParentPath(pathValue: string): string {
     throw new Error("Parent path cannot use /workspace/.tsh");
   }
   return resolved;
+}
+
+/**
+ * Convert a visible TSH workspace path into the stable path carried by a
+ * workspace-relative reference. Internal app/database state is deliberately
+ * not addressable through this helper.
+ */
+export function toTshWorkspaceRelativePath(pathValue: string): string {
+  const root = resolve(TSH_DEFAULT_PARENT_PATH);
+  const resolved = resolve(pathValue.trim());
+  if (resolved !== root && !resolved.startsWith(root + sep)) {
+    throw new Error("Reference path must be inside /workspace");
+  }
+  const relativePath = relative(root, resolved).split(sep).join("/");
+  if (!relativePath || relativePath.split("/").some((part) => part === ".tsh")) {
+    throw new Error("Reference path cannot use /workspace/.tsh");
+  }
+  return relativePath;
+}
+
+/** Resolve a previously validated workspace-relative reference path. */
+export function fromTshWorkspaceRelativePath(relativePath: string): string {
+  const normalized = relativePath.trim().replaceAll("\\", "/");
+  if (!normalized || normalized.startsWith("/") || normalized.split("/").some((part) => !part || part === "." || part === ".." || part === ".tsh")) {
+    throw new Error("Reference path must be a non-empty workspace-relative path");
+  }
+  return join(TSH_DEFAULT_PARENT_PATH, normalized);
 }

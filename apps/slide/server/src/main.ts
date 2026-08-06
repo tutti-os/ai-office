@@ -11,7 +11,6 @@ import { registerSlideAgentToolRoutes } from "./agent-tools.js";
 import { projectWorkspaceRoot } from "./local/paths.js";
 import { ProjectRepository } from "./artifact/project-repository.js";
 import { ProjectService } from "./artifact/project-service.js";
-import { publishSlideReferenceExports } from "./artifact/reference-exports.js";
 import { ensureTemplateDirs, listTemplates, safeTemplateAssetPath, templateAssetRoot } from "./templates/template-service.js";
 import { getOfficeCliStatus, installOfficeCli } from "./toolchains/officecli.js";
 import { registerTuttiCliRoutes } from "./tutti/cli-routes.js";
@@ -37,13 +36,7 @@ addArtifactBufferContentTypeParsers(server, {
 await server.register(fastifyWebsocket);
 await ensureTemplateDirs();
 registerTuttiCliRoutes(server, projects);
-registerTuttiReferenceRoutes(server, {
-  ensureProjectReferences: (projectId) => {
-    const project = repo.getProject(projectId);
-    const artifact = project ? repo.getArtifact(project.activeArtifactId) : null;
-    return project && artifact ? publishSlideReferenceExports(project, artifact) : [];
-  },
-});
+registerTuttiReferenceRoutes(server);
 
 if (existsSync(webDist)) {
   await server.register(fastifyStatic, {

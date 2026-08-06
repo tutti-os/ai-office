@@ -19,6 +19,7 @@ import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
 import { retryProjectPreparationOperation, SqliteProjectPreparationCoordinator } from "@ai-app/shared/project-preparation";
 import { getDb, rowOrNull, rows } from "../db/database.js";
 import { ensureProjectDirs, projectWorkspaceRoot } from "../local/paths.js";
+import { assertAllowedTshParentPath, isTshWorkspaceAppHost } from "@ai-app/shared/tsh-host";
 import { withProjectImportCleanup } from "./project-import.js";
 
 export class SheetRepository {
@@ -300,13 +301,15 @@ export class SheetRepository {
     return this.getArtifact(artifactId);
   }
 
-  async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
+  async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer; targetDirectory?: string | null }) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
     if (input.mimeType !== xlsxMimeType) throw new Error("Only XLSX exports are supported");
     if (input.bytes.byteLength === 0) throw new Error("Export file is empty");
     if (input.bytes.byteLength > maxXlsxImportBytes) throw new Error("Export file is too large");
-    const exportsDir = join(projectWorkspaceRoot(projectId), "exports");
+    const targetDirectory = input.targetDirectory?.trim() || null;
+    if (targetDirectory && !isTshWorkspaceAppHost()) throw new Error("Custom export directories are only supported on TSH");
+    const exportsDir = targetDirectory ? assertAllowedTshParentPath(targetDirectory) : join(projectWorkspaceRoot(projectId), "exports");
     await mkdir(exportsDir, { recursive: true });
     const fileName = uniqueXlsxFileName(exportsDir, input.fileName || `${project.title}.xlsx`);
     const absolutePath = join(exportsDir, fileName);

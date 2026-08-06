@@ -99,7 +99,7 @@ Endpoints:
 
 - \`GET /api/health\` is the runtime healthcheck.
 - \`POST /tutti/cli/*\` implements the CLI manifest, including resource-style project commands.
-- \`POST /tutti/references/list\` and \`POST /tutti/references/search\` expose app-data-relative project files and exports.
+- \`POST /tutti/references/list\` and \`POST /tutti/references/search\` expose workspace-relative user-visible exports remembered by the app.
 
 Runtime composition:
 
