@@ -316,7 +316,7 @@ function AgentMenu(props: {
         aria-label={props.selectAgentLabel}
         onChange={(event) => props.onChange(event.currentTarget.value)}
       >
-        <option disabled value={placeholderValue}>
+        <option disabled hidden value={placeholderValue}>
           {props.selectAgentLabel}
         </option>
         {menuProfiles.map((profile) => {
