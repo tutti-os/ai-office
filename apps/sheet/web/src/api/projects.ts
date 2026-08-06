@@ -123,12 +123,8 @@ export type ProjectExportWriteResponse = {
   sizeBytes: number;
 };
 
-export async function exportProjectXlsxFile(projectId: string, input: { targetDirectory?: string | null } = {}) {
-  const targetDirectory = input.targetDirectory?.trim() || "";
-  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/exports/xlsx`, {
-    method: "POST",
-    headers: targetDirectory ? { "x-export-directory": encodeURIComponent(targetDirectory) } : undefined,
-  });
+export async function exportProjectXlsxFile(projectId: string) {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/exports/xlsx`, { method: "POST" });
   const data = (await response.json().catch(() => null)) as ProjectExportWriteResponse | { error?: string } | null;
   if (!response.ok) throw new Error(data && "error" in data && data.error ? data.error : `Export failed: ${response.status}`);
   if (!data || !("path" in data)) throw new Error("Export response is missing export path");

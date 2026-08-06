@@ -140,11 +140,7 @@ server.post<{ Params: { projectId: string }; Body: Buffer }>("/api/projects/:pro
 
 server.post<{ Params: { projectId: string } }>("/api/projects/:projectId/exports/xlsx", async (request, reply) => {
   try {
-    const exportRequest = readArtifactExportRequest(request, {
-      defaultFileName: "workbook.xlsx",
-      defaultMimeType: xlsxMimeType,
-    });
-    return await sheets.exportXlsxFile(request.params.projectId, { targetDirectory: exportRequest.targetDirectory });
+    return await sheets.exportXlsxFile(request.params.projectId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to export XLSX file";
     return reply.code(message.toLowerCase().includes("not found") ? 404 : 400).send({ error: message });

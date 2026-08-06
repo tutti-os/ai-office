@@ -21,23 +21,6 @@ export function migrate(database: DatabaseSync) {
       updated_at TEXT NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS workspace_references (
-      id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL,
-      kind TEXT NOT NULL,
-      relative_path TEXT NOT NULL,
-      display_name TEXT NOT NULL,
-      description TEXT NOT NULL DEFAULT '',
-      mime_type TEXT NOT NULL,
-      size_bytes INTEGER NOT NULL,
-      mtime_ms INTEGER NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-      UNIQUE (project_id, relative_path)
-    );
-    CREATE INDEX IF NOT EXISTS idx_workspace_references_project ON workspace_references(project_id, mtime_ms DESC);
-
     CREATE TABLE IF NOT EXISTS artifacts (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,

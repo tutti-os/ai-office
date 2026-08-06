@@ -2,12 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hasActiveAgentRun } from "@ai-app/agent/conversation";
 import type { LocalAgentTargetStatus, OfficeCliStatus, ProjectDetailResponse, RuntimeProfile, SheetProject } from "@ai-sheet/shared";
 import { isAvailableLocalAgentRuntimeProfileId, mergeLocalAgentRuntimeProfiles, resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
-import {
-  canSelectTuttiExternalUserProjectDirectory,
-  openExportLocation,
-  resolveTshExportBaseDirectory,
-  selectTuttiExternalUserProjectDirectory,
-} from "@ai-app/shared/host-files";
+import { openExportLocation } from "@ai-app/shared/host-files";
 import {
   applyProjectCommands,
   cancelRun,
@@ -79,7 +74,6 @@ export function App() {
   const [exportMessage, setExportMessage] = useState("");
   const [exportRevealPath, setExportRevealPath] = useState("");
   const [xlsxExporting, setXlsxExporting] = useState(false);
-  const [tshWorkspaceApp, setTshWorkspaceApp] = useState(false);
   const [xlsxSelectionRestoreKey, setXlsxSelectionRestoreKey] = useState(0);
   const routeRef = useRef(route);
   const xlsxSelectionRef = useRef<XlsxSelection | null>(null);
@@ -162,7 +156,6 @@ export function App() {
     ])
       .then(([snapshot, officeCli]) => {
         setHistoryProjects(snapshot.projects);
-        setTshWorkspaceApp(Boolean(snapshot.tshWorkspaceApp));
         const enabledProfiles = snapshot.runtimeProfiles.filter((profile) => profile.enabled && profile.kind === "local-agent");
         const mergedProfiles = mergeLocalAgentRuntimeProfiles(enabledProfiles, localAgentTargetsRef.current);
         setRuntimeProfiles(mergedProfiles);
@@ -427,13 +420,7 @@ export function App() {
     setError("");
     setXlsxExporting(true);
     try {
-      let targetDirectory: string | null | undefined;
-      if (tshWorkspaceApp) {
-        if (!canSelectTuttiExternalUserProjectDirectory()) throw new Error(t("editor.exportPickerUnavailable"));
-        targetDirectory = await selectTuttiExternalUserProjectDirectory({ initialPath: resolveTshExportBaseDirectory() });
-        if (targetDirectory === null) return;
-      }
-      const exported = await exportProjectXlsxFile(projectDetail.project.id, { targetDirectory });
+      const exported = await exportProjectXlsxFile(projectDetail.project.id);
       setExportRevealPath(exported.path);
       setExportMessage(t("editor.exported", { fileName: exported.fileName }));
     } catch (err) {
@@ -441,7 +428,7 @@ export function App() {
     } finally {
       setXlsxExporting(false);
     }
-  }, [projectDetail, t, tshWorkspaceApp, xlsxExporting]);
+  }, [projectDetail, t, xlsxExporting]);
 
   const openExports = useCallback(async () => {
     if (!projectDetail) return;

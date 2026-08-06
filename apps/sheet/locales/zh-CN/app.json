@@ -71,7 +71,6 @@
   "editor.xlsxExporting": "正在导出 XLSX...",
   "editor.xlsxCopy": "XLSX 副本",
   "editor.exported": "已导出 {{fileName}}",
-  "editor.exportPickerUnavailable": "导出目录选择器不可用。",
   "preview.loadingTitle": "正在加载工作簿",
   "preview.loadingBody": "正在准备电子表格预览。",
   "preview.errorTitle": "无法预览工作簿",

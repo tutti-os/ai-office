@@ -26,8 +26,6 @@ import { XlsxStorageAdapter } from "./xlsx-storage-adapter.js";
 import { materializeInitialWorkbook } from "./workbook-preparation.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
 import type { XlsxDirtyCell, XlsxFormulaCalcResult } from "./xlsx-formula-calculator.js";
-import { recordWorkspaceReference } from "../tutti/workspace-reference-catalog.js";
-import { isTshWorkspaceAppHost, TSH_DEFAULT_PARENT_PATH } from "@ai-app/shared/tsh-host";
 
 export class SheetService {
   private readonly runtimes = createRuntimeProviderRegistry();
@@ -49,12 +47,7 @@ export class SheetService {
   }
 
   bootstrap() {
-    const tshWorkspaceApp = isTshWorkspaceAppHost();
-    return {
-      ...this.repo.snapshot(),
-      tshWorkspaceApp,
-      defaultParentPath: tshWorkspaceApp ? TSH_DEFAULT_PARENT_PATH : null,
-    };
+    return this.repo.snapshot();
   }
 
   async listLocalAgentTargets() {
@@ -328,10 +321,8 @@ export class SheetService {
     return session;
   }
 
-  async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer; targetDirectory?: string | null }) {
-    const exported = await this.repo.writeProjectExport(projectId, input);
-    recordWorkspaceReference({ projectId, kind: "xlsx", absolutePath: exported.absolutePath, displayName: exported.fileName, mimeType: exported.mimeType });
-    return exported;
+  async writeProjectExport(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }) {
+    return this.repo.writeProjectExport(projectId, input);
   }
 
   async uploadContextAttachment(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }): Promise<ContextAttachmentUploadResponse> {
@@ -341,14 +332,13 @@ export class SheetService {
     return this.repo.writeContextAttachment(projectId, input);
   }
 
-  async exportXlsxFile(projectId: string, input: { targetDirectory?: string | null } = {}) {
+  async exportXlsxFile(projectId: string) {
     const detail = await this.getProject(projectId);
     const file = await this.repo.readXlsxFile(projectId);
     return this.writeProjectExport(projectId, {
       fileName: `${detail.project.title || "workbook"}.xlsx`,
       mimeType: file.mimeType,
       bytes: file.bytes,
-      targetDirectory: input.targetDirectory,
     });
   }
 

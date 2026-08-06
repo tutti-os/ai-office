@@ -71,7 +71,6 @@
   "editor.xlsxExporting": "XLSX exporting...",
   "editor.xlsxCopy": "XLSX copy",
   "editor.exported": "Exported {{fileName}}",
-  "editor.exportPickerUnavailable": "Export directory picker is unavailable.",
   "preview.loadingTitle": "Loading workbook",
   "preview.loadingBody": "Preparing the spreadsheet preview.",
   "preview.errorTitle": "Unable to preview workbook",
