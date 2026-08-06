@@ -100,7 +100,8 @@ export function registerAgentToolGatewayRoutes(server: any, gateway: AgentToolGa
 export function createProjectTitleTool(input: { setTitle: (projectId: string, title: string, context: AgentToolContext) => unknown | Promise<unknown> }): AgentTool {
   return {
     name: "set_project_title",
-    description: "Set the current app project's title. The current project is inferred from the active run; do not pass a project id.",
+    description:
+      "Set the current app project's human-readable display title. This does not rename on-disk files or directories. The current project is inferred from the active run; do not pass a project id.",
     inputSchema: {
       type: "object",
       properties: {

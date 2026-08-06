@@ -1,7 +1,7 @@
-import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
-import { basename, extname, join } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, join } from "node:path";
 import {
   type DocumentProject,
   type DocumentRun,
@@ -13,12 +13,13 @@ import { asProjectPreparationError, SqliteProjectPreparationCoordinator } from "
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
 import { getDb } from "../db/database.js";
 import {
-  allocateRenamedTshArtifactFile,
   allocateTshArtifactFile,
   assertAllowedTshParentPath,
   ensureTshArtifactFile,
+  extensionForDocumentType,
   isTshFileArtifactPath,
   resolveTshParentPath,
+  tshImportStemFromFileName,
 } from "@ai-app/shared/tsh-host";
 import {
   bindProjectWorkspaceRoot,
@@ -85,16 +86,19 @@ export class DocumentRepository {
     templateId: string | null;
     templateName: string | null;
     parentPath?: string | null;
+    /** When set on TSH, name the file from this import source instead of doc-YYYY-MM-DD-n. */
+    importFileName?: string | null;
   }) {
     const id = randomUUID();
     const now = new Date().toISOString();
     const parentPath = resolveTshParentPath(input.parentPath);
+    const preferredStem = input.importFileName ? tshImportStemFromFileName(input.importFileName) : null;
     const workspaceRoot = parentPath
-      ? ensureTshArtifactFile(allocateTshArtifactFile(parentPath, input.title, id, input.type))
+      ? ensureTshArtifactFile(allocateTshArtifactFile(parentPath, input.type, { preferredStem }))
       : null;
     if (workspaceRoot) bindProjectWorkspaceRoot(id, workspaceRoot);
-    // TSH single-file products: project title is the on-disk filename.
-    const title = workspaceRoot ? basename(workspaceRoot) : input.title;
+    // Display title is independent of the on-disk artifact name.
+    const title = input.title.trim() || "Untitled Doc";
     insertDocumentProject(getDb(), {
       id,
       title,
@@ -122,7 +126,7 @@ export class DocumentRepository {
   listProjects() {
     return rows<ProjectRow>(getDb().prepare(`SELECT * FROM projects ORDER BY updated_at DESC`).all())
       .map(rowToProject)
-      .map(syncTshFileArtifactTitle);
+      .map(syncTshFileArtifactBinding);
   }
 
   clearProjectHistory() {
@@ -164,7 +168,7 @@ export class DocumentRepository {
   getProject(projectId: string) {
     const row = rowOrNull<ProjectRow>(getDb().prepare(`SELECT * FROM projects WHERE id = ?`).get(projectId));
     if (!row) return null;
-    return syncTshFileArtifactTitle(rowToProject(row));
+    return syncTshFileArtifactBinding(rowToProject(row));
   }
 
   /** Align DB content with disk without rematerializing the artifact file. */
@@ -199,13 +203,13 @@ export class DocumentRepository {
       }
     }
     const now = new Date().toISOString();
+    // Display title is independent of the on-disk path; never rename the artifact here.
     const next = {
       title: input.title === undefined ? current.title : input.title.trim() || current.title,
       type: input.type ?? current.type,
       content: input.content ?? current.content,
       updatedBy: input.updatedBy ?? "human",
     };
-    const titleChanged = next.title !== current.title;
     getDb()
       .prepare(
         `UPDATE projects
@@ -213,9 +217,6 @@ export class DocumentRepository {
          WHERE id = ?`,
       )
       .run(next.title, next.type, next.content, next.updatedBy, now, projectId);
-    if (titleChanged) {
-      await this.renameTshArtifactFileForTitle(projectId, next.title);
-    }
     const updated = this.getProject(projectId);
     const coreNeedsRepair = this.preparation.getStatus(projectId)?.coreState !== "ready";
     if (updated && (next.content !== current.content || next.type !== current.type || coreNeedsRepair)) {
@@ -240,29 +241,6 @@ export class DocumentRepository {
       this.startAgentContextPreparation(updated);
     }
     return updated;
-  }
-
-  private async renameTshArtifactFileForTitle(projectId: string, title: string) {
-    const currentPath = boundWorkspaceRoot(projectId);
-    if (!currentPath || !isTshFileArtifactPath(currentPath)) return;
-    if (!existsSync(currentPath)) {
-      throw new Error(`Document file is missing at ${currentPath}`);
-    }
-    const nextPath = allocateRenamedTshArtifactFile(currentPath, title);
-    const fileName = basename(nextPath);
-    if (nextPath === currentPath) {
-      // Canonical title is always the on-disk filename (including short id + extension).
-      getDb().prepare(`UPDATE projects SET title = ? WHERE id = ?`).run(fileName, projectId);
-      return;
-    }
-    if (existsSync(nextPath)) {
-      throw new Error(`A file already exists at ${nextPath}`);
-    }
-    await rename(currentPath, nextPath);
-    bindProjectWorkspaceRoot(projectId, nextPath);
-    getDb()
-      .prepare(`UPDATE projects SET workspace_root = ?, title = ? WHERE id = ?`)
-      .run(nextPath, fileName, projectId);
   }
 
   updateProjectSessionTitle(projectId: string, title: string) {
@@ -523,13 +501,76 @@ interface ProjectRow {
   updated_at: string;
 }
 
-function syncTshFileArtifactTitle(project: DocumentProject): DocumentProject {
-  const bound = boundWorkspaceRoot(project.id);
+/** Rebind workspace_root after an external FS rename; never overwrite display title. */
+function syncTshFileArtifactBinding(project: DocumentProject): DocumentProject {
+  let bound = boundWorkspaceRoot(project.id) || project.workspaceRoot || null;
   if (!bound || !isTshFileArtifactPath(bound)) return project;
-  const fileName = basename(bound);
-  if (project.title === fileName) return project;
-  getDb().prepare(`UPDATE projects SET title = ? WHERE id = ?`).run(fileName, project.id);
-  return { ...project, title: fileName };
+
+  if (!existsSync(bound)) {
+    const recovered = recoverTshFileArtifactPath(project, bound);
+    if (!recovered) return project;
+    bound = recovered;
+    bindProjectWorkspaceRoot(project.id, bound);
+    getDb()
+      .prepare(`UPDATE projects SET workspace_root = ? WHERE id = ?`)
+      .run(bound, project.id);
+    return { ...project, workspaceRoot: bound };
+  }
+
+  if (project.workspaceRoot === bound) return project;
+  getDb()
+    .prepare(`UPDATE projects SET workspace_root = ? WHERE id = ?`)
+    .run(bound, project.id);
+  return { ...project, workspaceRoot: bound };
+}
+
+/**
+ * When a TSH file was renamed on disk, recover by matching content (text) or
+ * sha256 (docx) among same-extension siblings in the former parent directory.
+ */
+function recoverTshFileArtifactPath(project: DocumentProject, missingPath: string): string | null {
+  const parent = dirname(missingPath);
+  if (!existsSync(parent)) return null;
+  const extension = extensionForDocumentType(project.type);
+  let entries: string[];
+  try {
+    entries = readdirSync(parent);
+  } catch {
+    return null;
+  }
+
+  const candidates = entries
+    .filter((name) => name.toLowerCase().endsWith(extension))
+    .map((name) => join(parent, name))
+    .filter((path) => isTshFileArtifactPath(path) && existsSync(path));
+
+  const matches: string[] = [];
+  for (const candidate of candidates) {
+    try {
+      if (project.type === "docx") {
+        const expectedSha = readDocxSha256FromContent(project.content);
+        if (!expectedSha) continue;
+        const bytes = readFileSync(candidate);
+        const sha = createHash("sha256").update(bytes).digest("hex");
+        if (sha === expectedSha) matches.push(candidate);
+      } else {
+        const diskContent = readFileSync(candidate, "utf8");
+        if (diskContent === project.content) matches.push(candidate);
+      }
+    } catch {
+      // ignore unreadable candidates
+    }
+  }
+  return matches.length === 1 ? matches[0]! : null;
+}
+
+function readDocxSha256FromContent(content: string): string | null {
+  try {
+    const parsed = JSON.parse(content) as { sha256?: unknown };
+    return typeof parsed.sha256 === "string" && parsed.sha256 ? parsed.sha256 : null;
+  } catch {
+    return null;
+  }
 }
 
 function rowToProject(row: ProjectRow): DocumentProject {

@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 
 export {
@@ -14,6 +14,12 @@ const TSH_FILE_ARTIFACT_EXTENSIONS = new Set([".html", ".htm", ".md", ".markdown
 
 export type TshDocumentArtifactType = "html" | "markdown" | "docx";
 
+export type AllocateTshArtifactOptions = {
+  now?: Date;
+  /** Import/source stem. When set, allocate `{stem}{ext}` with `-2`, `-3`, … on conflict. */
+  preferredStem?: string | null;
+};
+
 export function isTshWorkspaceAppHost(env: NodeJS.ProcessEnv = process.env): boolean {
   return env[TSH_WORKSPACE_APP_ENV]?.trim() === "1";
 }
@@ -24,27 +30,17 @@ export function resolveTshParentPath(input?: string | null, env: NodeJS.ProcessE
   return assertAllowedTshParentPath(raw);
 }
 
-/** Legacy directory artifact root (still used by slide). */
-export function allocateTshArtifactRoot(parentPath: string, title: string, projectId: string): string {
+/**
+ * Directory artifact root (slide). Default: `slide-YYYY-MM-DD-<n>/`.
+ * Import: `{preferredStem}/` with `-2`, `-3`, … on conflict.
+ */
+export function allocateTshArtifactRoot(parentPath: string, options: AllocateTshArtifactOptions = {}): string {
   const parent = assertAllowedTshParentPath(parentPath);
-  // Keep Unicode letters (e.g. Chinese titles) — do not use ASCII-only safePathSegment.
-  const slug = safeTshFileStem(title.trim() || "untitled").slice(0, 48);
-  const shortId = projectId.replace(/-/g, "").slice(0, 8) || "project";
-  return join(parent, `${slug}-${shortId}`);
-}
-
-/** Rename a TSH directory artifact root while preserving the trailing short id. */
-export function allocateRenamedTshArtifactRoot(currentRoot: string, title: string): string {
-  const resolved = resolve(currentRoot.trim());
-  const parent = dirname(resolved);
-  assertAllowedTshParentPath(parent);
-  const base = basename(resolved);
-  const shortIdMatch = base.match(/-([a-f0-9]{8})$/i);
-  const shortId = shortIdMatch?.[1] || "project";
-  let stem = title.trim();
-  stem = stem.replace(new RegExp(`-${shortId}$`, "i"), "");
-  const slug = safeTshFileStem(stem);
-  return join(parent, `${slug}-${shortId}`);
+  const preferred = options.preferredStem?.trim();
+  if (preferred) {
+    return allocateUniquePath(parent, safeTshFileStem(preferred), "");
+  }
+  return allocateDatedPath(parent, formatTshArtifactDatedStem("slide", options.now), "");
 }
 
 export function ensureTshArtifactRoot(root: string): string {
@@ -53,18 +49,22 @@ export function ensureTshArtifactRoot(root: string): string {
   return resolved;
 }
 
-/** Single-file artifact path for TSH doc products: `YYYY-MM-DD-<id8>.ext`. */
+/**
+ * Single-file artifact (doc). Default: `doc-YYYY-MM-DD-<n>.ext`.
+ * Import: `{preferredStem}.ext` with `-2`, `-3`, … on conflict.
+ */
 export function allocateTshArtifactFile(
   parentPath: string,
-  _title: string,
-  projectId: string,
   type: TshDocumentArtifactType,
-  now: Date = new Date(),
+  options: AllocateTshArtifactOptions = {},
 ): string {
   const parent = assertAllowedTshParentPath(parentPath);
-  const dateSlug = formatTshArtifactDateSlug(now);
-  const shortId = projectId.replace(/-/g, "").slice(0, 8) || "project";
-  return join(parent, `${dateSlug}-${shortId}${extensionForDocumentType(type)}`);
+  const extension = extensionForDocumentType(type);
+  const preferred = options.preferredStem?.trim();
+  if (preferred) {
+    return allocateUniquePath(parent, safeTshFileStem(preferred), extension);
+  }
+  return allocateDatedPath(parent, formatTshArtifactDatedStem("doc", options.now), extension);
 }
 
 export function formatTshArtifactDateSlug(date: Date = new Date()): string {
@@ -72,6 +72,11 @@ export function formatTshArtifactDateSlug(date: Date = new Date()): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+/** `doc-YYYY-MM-DD` / `slide-YYYY-MM-DD` stem before the conflict index. */
+export function formatTshArtifactDatedStem(prefix: "doc" | "slide", date: Date = new Date()): string {
+  return `${prefix}-${formatTshArtifactDateSlug(date)}`;
 }
 
 /**
@@ -88,25 +93,21 @@ export function safeTshFileStem(value: string, fallback = formatTshArtifactDateS
   return cleaned || fallback;
 }
 
-/** Rename a TSH file artifact while preserving the trailing short id and extension. */
-export function allocateRenamedTshArtifactFile(currentFilePath: string, title: string): string {
-  const resolved = resolve(currentFilePath.trim());
-  if (!isTshFileArtifactPath(resolved)) {
-    throw new Error("Current path is not a TSH file artifact");
+/** Display title for a TSH artifact path: basename without file extension. */
+export function tshArtifactDisplayTitle(pathValue: string): string {
+  const resolved = resolve(pathValue.trim());
+  const base = basename(resolved);
+  if (isTshFileArtifactPath(resolved)) {
+    return basename(base, extname(base)) || base;
   }
-  const parent = dirname(resolved);
-  assertAllowedTshParentPath(parent);
-  const extension = extname(resolved);
-  const base = basename(resolved, extension);
-  const shortIdMatch = base.match(/-([a-f0-9]{8})$/i);
-  const shortId = shortIdMatch?.[1] || "project";
-  let stem = title.trim();
-  if (stem.toLowerCase().endsWith(extension.toLowerCase())) {
-    stem = stem.slice(0, -extension.length);
-  }
-  stem = stem.replace(new RegExp(`-${shortId}$`, "i"), "");
-  const slug = safeTshFileStem(stem);
-  return join(parent, `${slug}-${shortId}${extension}`);
+  return base;
+}
+
+/** Stem taken from an import source filename (extension stripped, then sanitized). */
+export function tshImportStemFromFileName(fileName: string, fallback = "imported"): string {
+  const raw = basename(safeDecodeURIComponent(fileName || fallback));
+  const stem = basename(raw, extname(raw)).trim() || fallback;
+  return safeTshFileStem(stem, fallback);
 }
 
 export function ensureTshArtifactFile(filePath: string): string {
@@ -173,4 +174,34 @@ export function fromTshWorkspaceRelativePath(relativePath: string): string {
     throw new Error("Reference path must be a non-empty workspace-relative path");
   }
   return join(TSH_DEFAULT_PARENT_PATH, normalized);
+}
+
+/** `{prefix-YYYY-MM-DD}-1`, `-2`, … (+ optional file extension). */
+function allocateDatedPath(parent: string, datedStem: string, extension: string): string {
+  let index = 1;
+  while (true) {
+    const candidate = join(parent, `${datedStem}-${index}${extension}`);
+    if (!existsSync(candidate)) return candidate;
+    index += 1;
+  }
+}
+
+/** `{stem}`, `{stem}-2`, `{stem}-3`, … (+ optional file extension). */
+function allocateUniquePath(parent: string, stem: string, extension: string): string {
+  let candidate = join(parent, `${stem}${extension}`);
+  if (!existsSync(candidate)) return candidate;
+  let index = 2;
+  while (true) {
+    candidate = join(parent, `${stem}-${index}${extension}`);
+    if (!existsSync(candidate)) return candidate;
+    index += 1;
+  }
+}
+
+function safeDecodeURIComponent(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }

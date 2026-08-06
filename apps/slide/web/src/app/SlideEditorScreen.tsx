@@ -48,6 +48,7 @@ export function SlideEditorScreen(props: {
   onDeckSelectionPreviewChange: (preview: { label: string; text: string; visible: boolean }) => void;
   onPptxSelectionChange: ReturnType<typeof usePptxArtifactRuntime>["updateSelection"];
   onSelectedAgentChange: (value: string) => void;
+  onTitleChange?: (title: string) => void | Promise<void>;
   onSend: (prompt: string) => Promise<void>;
 }) {
   const { t } = useI18n();
@@ -166,6 +167,7 @@ export function SlideEditorScreen(props: {
   return (
     <ArtifactEditorWorkspace
       title={props.detail?.project.title ?? t("editor.untitledPresentation")}
+      onTitleChange={props.onTitleChange}
       saveState={headerSaveState}
       agentWorking={agentProcessing}
       exportItems={slideExportItems({

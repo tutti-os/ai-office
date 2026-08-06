@@ -133,6 +133,9 @@ export class ProjectService {
   updateProject(projectId: string, input: UpdateProjectRequest) {
     const project = this.repo.updateProject(projectId, input);
     if (!project) return null;
+    if (input.title !== undefined) {
+      this.repo.updateProjectSessionTitle(projectId, project.title);
+    }
     const artifact = this.repo.getArtifact(project.activeArtifactId);
     if (!artifact) throw new Error("Active artifact not found");
     const result = { project, artifact };
@@ -145,7 +148,6 @@ export class ProjectService {
     if (!cleanTitle) throw new Error("Project title is required");
     const project = this.repo.updateProject(projectId, { title: cleanTitle, updatedBy });
     if (!project) throw new Error("Project not found");
-    await this.repo.renameTshArtifactRootForTitle(projectId, cleanTitle);
     this.repo.updateProjectSessionTitle(projectId, cleanTitle);
     await this.repo.updateDeckManifestTitle(projectId, cleanTitle, updatedBy);
     const detail = await this.getProject(projectId);
