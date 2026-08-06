@@ -240,8 +240,6 @@ function buildSystemPrompt(context: RuntimeEditContext, _projectCwd: string, ski
         "Use the officecli command-line tool to inspect, create, edit, and validate the focused PPTX file. If an office skill is available in the agent environment, follow it.",
         "Prefer officecli L1/L2 operations such as view, get, query, add, set, remove, and validate. Do not hand-edit OOXML unless officecli high-level commands cannot solve the task.",
         "When the current request calls for creating or editing this presentation, write the final PPTX result to the focused file.",
-        "When starting a new presentation from a user request, choose a concise human title and call `set_project_title`; do not leave the raw instruction as the project title.",
-        "To rename the project directory, call the `set_project_title` app tool instead of renaming folders by hand.",
         "Do not convert the presentation to Markdown or a single HTML document unless explicitly asked for a separate export.",
         noBrowserRenderVerification,
         "After editing files, respond with a brief task summary only. Do not include extracted PPTX content in the final response.",
@@ -282,7 +280,7 @@ function buildSystemPrompt(context: RuntimeEditContext, _projectCwd: string, ski
         "- When adding, deleting, renaming, or reordering slides, call the `reorder_slides` app tool instead of manually editing the manifest slides list.",
         "- Before finishing, review every slide you changed against the fixed canvas contract: no browser scrolling, no meaningful content outside the canvas, no clipped text, and no overlapping body content.",
         "- If the content does not fit comfortably, split it into additional indexed slides instead of shrinking text below readable size or hiding overflow.",
-        "- To rename the project, call the `set_project_title` app tool instead of editing database or session files.",
+        "- To set the project display name, call `set_project_title`. To rename the on-disk project directory, use filesystem tools; display title and directory name are independent.",
         "- Do not edit generated previews or thumbnails as the source of truth.",
       ].join("\n"),
       deckSystemAuthoringPrompt,
@@ -311,7 +309,8 @@ function joinPromptParts(...parts: Array<string | undefined>) {
 function appToolPrompt() {
   return [
     "App-owned tools:",
-    "- Use MCP app tools `mcp__app_tools__set_project_title` and `mcp__app_tools__reorder_slides`.",
+    "- Use MCP app tool `mcp__app_tools__set_project_title` to set the human-readable project display name. This does not rename the project directory.",
+    "- Use MCP app tool `mcp__app_tools__reorder_slides` when adding, deleting, renaming, or reordering slide HTML files.",
     "- If MCP app tools are unavailable, report that app tools are unavailable instead of editing app databases, session files, or manifest playlists by hand.",
   ].join("\n");
 }
@@ -319,7 +318,9 @@ function appToolPrompt() {
 function pptxAppToolPrompt() {
   return [
     "App-owned tools:",
-    "- Use MCP app tool `mcp__app_tools__set_project_title` to set a human title (this also renames the project directory on TSH).",
+    "- Use MCP app tool `mcp__app_tools__set_project_title` to set the human-readable project display name. This does not rename the project directory.",
+    "- When starting a new presentation, choose a concise human title and call `set_project_title`; do not leave the raw instruction as the project title.",
+    "- To rename the on-disk project directory, use filesystem tools. Display title and directory name are independent.",
     "- If MCP app tools are unavailable, report that app tools are unavailable instead of editing app databases or session files by hand.",
   ].join("\n");
 }

@@ -167,6 +167,7 @@ export class DocumentService {
       templateId: null,
       templateName: null,
       parentPath: input.parentPath,
+      importFileName: input.fileName,
     });
     if (type === "docx") {
       await writeFile(docxFilePath(project.id), input.bytes);

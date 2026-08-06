@@ -1,17 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  allocateRenamedTshArtifactFile,
-  allocateRenamedTshArtifactRoot,
   allocateTshArtifactFile,
   allocateTshArtifactRoot,
   assertAllowedTshParentPath,
   ensureTshArtifactFile,
   formatTshArtifactDateSlug,
+  formatTshArtifactDatedStem,
   isTshFileArtifactPath,
   isTshWorkspaceAppHost,
   resolveTshParentPath,
   safeTshFileStem,
+  tshArtifactDisplayTitle,
+  tshImportStemFromFileName,
   TSH_CMD_ROUTING_BASH_ENV,
   TSH_DEFAULT_PARENT_PATH,
   TSH_ROUTING_LD_PRELOAD,
@@ -66,41 +67,42 @@ test("assertAllowedTshParentPath rejects escapes and .tsh", () => {
   assert.throws(() => assertAllowedTshParentPath("/workspace/.tsh/apps/data"), /\.tsh/);
 });
 
-test("allocateTshArtifactRoot nests under the parent path", () => {
-  const root = allocateTshArtifactRoot("/workspace/docs", "Quarterly Plan", "abcd1234-ef56-7890-abcd-ef1234567890");
-  assert.equal(root, "/workspace/docs/Quarterly_Plan-abcd1234");
-});
-
-test("allocateTshArtifactRoot keeps unicode titles", () => {
-  const root = allocateTshArtifactRoot("/workspace", "把无聊变成实验", "af139ff9-ef56-7890-abcd-ef1234567890");
-  assert.equal(root, "/workspace/把无聊变成实验-af139ff9");
-});
-
-test("allocateRenamedTshArtifactRoot keeps short id", () => {
+test("allocateTshArtifactFile uses doc-YYYY-MM-DD-n and extension", () => {
+  const now = new Date("2026-08-06T12:00:00.000Z");
+  const stem = formatTshArtifactDatedStem("doc", now);
+  assert.equal(stem, `doc-${formatTshArtifactDateSlug(now)}`);
   assert.equal(
-    allocateRenamedTshArtifactRoot("/workspace/Untitled_Presentation-af139ff9", "把无聊变成实验"),
-    "/workspace/把无聊变成实验-af139ff9",
+    allocateTshArtifactFile("/workspace/docs", "html", { now }),
+    `/workspace/docs/${stem}-1.html`,
   );
   assert.equal(
-    allocateRenamedTshArtifactRoot("/workspace/把无聊变成实验-af139ff9", "把无聊变成实验"),
-    "/workspace/把无聊变成实验-af139ff9",
+    allocateTshArtifactFile("/workspace/docs", "markdown", { now }),
+    `/workspace/docs/${stem}-1.md`,
+  );
+  assert.equal(
+    allocateTshArtifactFile("/workspace/docs", "docx", { now }),
+    `/workspace/docs/${stem}-1.docx`,
   );
 });
 
-test("allocateTshArtifactFile uses date slug and file extension", () => {
-  const id = "abcd1234-ef56-7890-abcd-ef1234567890";
-  const now = new Date("2026-08-04T12:00:00.000Z");
+test("allocateTshArtifactRoot uses slide-YYYY-MM-DD-n", () => {
+  const now = new Date("2026-08-06T12:00:00.000Z");
+  const stem = formatTshArtifactDatedStem("slide", now);
   assert.equal(
-    allocateTshArtifactFile("/workspace/docs", "Untitled Document", id, "html", now),
-    `/workspace/docs/${formatTshArtifactDateSlug(now)}-abcd1234.html`,
+    allocateTshArtifactRoot("/workspace/docs", { now }),
+    `/workspace/docs/${stem}-1`,
+  );
+});
+
+test("allocate preferredStem uses sanitized import stem", () => {
+  assert.equal(tshImportStemFromFileName("Quarterly Plan.docx"), "Quarterly_Plan");
+  assert.equal(
+    allocateTshArtifactFile("/workspace/docs", "html", { preferredStem: "Quarterly_Plan" }),
+    "/workspace/docs/Quarterly_Plan.html",
   );
   assert.equal(
-    allocateTshArtifactFile("/workspace/docs", "Notes", id, "markdown", now),
-    `/workspace/docs/${formatTshArtifactDateSlug(now)}-abcd1234.md`,
-  );
-  assert.equal(
-    allocateTshArtifactFile("/workspace/docs", "Letter", id, "docx", now),
-    `/workspace/docs/${formatTshArtifactDateSlug(now)}-abcd1234.docx`,
+    allocateTshArtifactRoot("/workspace/docs", { preferredStem: "Quarterly_Plan" }),
+    "/workspace/docs/Quarterly_Plan",
   );
 });
 
@@ -110,19 +112,10 @@ test("safeTshFileStem keeps unicode letters and date digits", () => {
   assert.equal(safeTshFileStem("My Notes!"), "My_Notes");
 });
 
-test("allocateRenamedTshArtifactFile keeps short id and extension", () => {
-  assert.equal(
-    allocateRenamedTshArtifactFile("/workspace/docs/2026-08-04-abcd1234.html", "Quarterly Plan"),
-    "/workspace/docs/Quarterly_Plan-abcd1234.html",
-  );
-  assert.equal(
-    allocateRenamedTshArtifactFile("/workspace/docs/2026-08-04-abcd1234.md", "季度计划.md"),
-    "/workspace/docs/季度计划-abcd1234.md",
-  );
-  assert.equal(
-    allocateRenamedTshArtifactFile("/workspace/docs/2026-08-04-abcd1234.md", "2026-08-04-abcd1234.md"),
-    "/workspace/docs/2026-08-04-abcd1234.md",
-  );
+test("tshArtifactDisplayTitle strips file extensions only", () => {
+  assert.equal(tshArtifactDisplayTitle("/workspace/docs/报告.html"), "报告");
+  assert.equal(tshArtifactDisplayTitle("/workspace/docs/2026-08-06-1.md"), "2026-08-06-1");
+  assert.equal(tshArtifactDisplayTitle("/workspace/docs/My_Deck"), "My_Deck");
 });
 
 test("isTshFileArtifactPath detects document extensions", () => {

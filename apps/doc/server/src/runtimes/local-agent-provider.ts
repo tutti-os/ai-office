@@ -191,9 +191,10 @@ function joinPromptParts(...parts: Array<string | undefined>) {
 function appToolPrompt() {
   return [
     "App-owned tools:",
-    "- Use the MCP app tool `mcp__app_tools__set_project_title` for project titles.",
-    "- When the request starts a new document artifact in this app, choose a concise human title and call `set_project_title`; do not leave the raw instruction as the project title.",
-    "- If the MCP app tool is unavailable, report that app tools are unavailable instead of editing app databases, session files, or manifests by hand.",
+    "- Use the MCP app tool `mcp__app_tools__set_project_title` to set the human-readable project display name. This does not rename the focused document file.",
+    "- When starting a new document, choose a concise human title and call `set_project_title`; do not leave the raw instruction as the project title.",
+    "- To rename the on-disk document file, use filesystem tools. Display title and file name are independent.",
+    "- If the MCP app tool is unavailable, report that app tools are unavailable instead of editing app databases or session files by hand.",
   ].join("\n");
 }
 
