@@ -1,4 +1,4 @@
-import { existsSync, rmSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, extname, join } from "node:path";
@@ -8,7 +8,6 @@ import {
   type DocumentRunEvent,
   type UpdateProjectRequest,
 } from "@ai-doc/shared";
-import { privateProjectsParentDir } from "@ai-app/shared/local-paths";
 import { defaultRuntimeProfiles, RuntimeProfileStore, SqliteAgentConversationStore, SqliteRunStore } from "@ai-app/shared/project-store";
 import { asProjectPreparationError, SqliteProjectPreparationCoordinator } from "@ai-app/shared/project-preparation";
 import { writeContextAttachmentFile } from "@ai-app/shared/server-files";
@@ -22,17 +21,14 @@ import {
   resolveTshParentPath,
 } from "@ai-app/shared/tsh-host";
 import {
-  appPaths,
   bindProjectWorkspaceRoot,
   boundWorkspaceRoot,
   clearProjectWorkspaceRootBindings,
-  ensureBaseDirs,
   ensureProjectDirs,
   isTshFileArtifactProject,
   projectFocusedArtifactPath,
   projectPrivateRoot,
   projectWorkspaceRoot,
-  removeProjectWorkspaceFiles,
   unbindProjectWorkspaceRoot,
 } from "../local/paths.js";
 import { invalidateProjectAssetCache, mimeTypeForAssetFileName, projectAssetRelativePath } from "./project-assets.js";
@@ -129,11 +125,7 @@ export class DocumentRepository {
   }
 
   clearProjectHistory() {
-    const db = getDb();
-    const workspaceRoots = rows<{ id: string; workspace_root: string | null }>(
-      db.prepare(`SELECT id, workspace_root FROM projects`).all(),
-    );
-    db.exec(`
+    getDb().exec(`
       DELETE FROM document_run_events;
       DELETE FROM document_runs;
       DELETE FROM agent_conversation_messages;
@@ -141,18 +133,8 @@ export class DocumentRepository {
       DELETE FROM stream_events;
       DELETE FROM projects;
     `);
-    for (const row of workspaceRoots) {
-      if (row.workspace_root) {
-        bindProjectWorkspaceRoot(row.id, row.workspace_root);
-        removeProjectWorkspaceFiles(row.id);
-      }
-      unbindProjectWorkspaceRoot(row.id);
-    }
     clearProjectWorkspaceRootBindings();
-    rmSync(privateProjectsParentDir(appPaths), { force: true, recursive: true });
-    rmSync(appPaths.projectsDir, { force: true, recursive: true });
     invalidateProjectAssetCache();
-    ensureBaseDirs();
     return { projects: [] as DocumentProject[] };
   }
 
@@ -173,7 +155,6 @@ export class DocumentRepository {
       db.exec("ROLLBACK");
       throw error;
     }
-    removeProjectWorkspaceFiles(projectId);
     unbindProjectWorkspaceRoot(projectId);
     invalidateProjectAssetCache(projectId);
     return { projects: this.listProjects() };
