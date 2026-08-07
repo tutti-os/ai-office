@@ -28,6 +28,7 @@ import type { SlideRuntimeProject } from "../runtimes/runtime-provider.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
 import { EventHub } from "../ws/event-hub.js";
 import { ProjectRepository } from "./project-repository.js";
+import { recordWorkspaceReference } from "../tutti/workspace-reference-catalog.js";
 export class ProjectService {
   private readonly runtimes = createRuntimeProviderRegistry();
   private readonly cancelledRunIds = new Set<string>();
@@ -219,7 +220,15 @@ export class ProjectService {
     if (targetDirectory && !isTshWorkspaceAppHost()) {
       throw new Error("Custom export directories are only supported on TSH");
     }
-    return this.repo.writeProjectExport(projectId, { ...input, targetDirectory });
+    const exported = await this.repo.writeProjectExport(projectId, { ...input, targetDirectory });
+    recordWorkspaceReference({
+      projectId,
+      kind: input.mimeType.toLowerCase().includes("ppt") ? "pptx" : "pdf",
+      absolutePath: exported.absolutePath,
+      displayName: exported.fileName,
+      mimeType: exported.mimeType,
+    });
+    return exported;
   }
 
   async exportPptxFile(projectId: string, input: { targetDirectory?: string | null } = {}) {
@@ -239,7 +248,15 @@ export class ProjectService {
     if (targetDirectory && !isTshWorkspaceAppHost()) {
       throw new Error("Custom export directories are only supported on TSH");
     }
-    return this.repo.writeDeckHtmlExport(projectId, { targetDirectory });
+    const exported = await this.repo.writeDeckHtmlExport(projectId, { targetDirectory });
+    recordWorkspaceReference({
+      projectId,
+      kind: "html",
+      absolutePath: exported.absolutePath,
+      displayName: exported.fileName,
+      mimeType: "text/html",
+    });
+    return exported;
   }
 
   async openProjectExportsDir(projectId: string) {

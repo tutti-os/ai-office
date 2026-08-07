@@ -1,10 +1,11 @@
-import { readdir, stat } from "node:fs/promises";
-import { basename, extname, join, relative } from "node:path";
+import { stat } from "node:fs/promises";
+import { basename, extname } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { privateProjectsParentDir } from "@ai-app/shared/local-paths";
-import { readPublishedReferenceExports } from "@ai-app/shared/reference-exports";
 import { getDb, rows } from "../db/database.js";
-import { appPaths } from "../local/paths.js";
+import {
+  listWorkspaceReferenceRecords,
+  workspaceReferenceAbsolutePath,
+} from "./workspace-reference-catalog.js";
 
 type ReferenceListRequest = {
   parentGroupId?: string;
@@ -51,26 +52,19 @@ type ProjectMetadata = {
   updatedAt: string;
 };
 
-export function registerTuttiReferenceRoutes(
-  server: FastifyInstance,
-  options: { ensureProjectReferences?: (projectId: string) => unknown | Promise<unknown> } = {},
-) {
+export function registerTuttiReferenceRoutes(server: FastifyInstance) {
   server.post<{ Body: ReferenceListRequest }>("/tutti/references/list", async (request) => {
     const body = request.body ?? {};
     const limit = clampLimit(body.limit);
     const offset = cursorOffset(body.cursor);
     const filter = normalizeSearchText(body.filterText);
-    const timeRange = body.timeRange;
     const parentGroupId = sanitizeGroupId(body.parentGroupId);
-
-    if (!parentGroupId) {
-      const groups = await listProjectGroups(timeRange, options.ensureProjectReferences);
-      const filtered = filter ? groups.filter((group) => matchesGroupSearch(group, filter)) : groups;
-      return paged(filtered, offset, limit);
-    }
-
-    const references = await listReferencesForProject(parentGroupId, timeRange, undefined, undefined, options.ensureProjectReferences);
-    const filtered = filter ? references.filter((item) => item.reference.displayName.toLowerCase().includes(filter)) : references;
+    const items = parentGroupId
+      ? await listReferencesForProject(parentGroupId, body.timeRange)
+      : await listProjectGroups(body.timeRange);
+    const filtered = filter
+      ? items.filter((item) => item.type === "group" ? matchesGroupSearch(item, filter) : item.reference.displayName.toLowerCase().includes(filter))
+      : items;
     return paged(filtered, offset, limit);
   });
 
@@ -80,7 +74,7 @@ export function registerTuttiReferenceRoutes(
     const filters = new Set((body.filters ?? []).filter((filter): filter is string => typeof filter === "string"));
     const limit = clampLimit(body.limit);
     const offset = cursorOffset(body.cursor);
-    const references = await listAllReferences(body.timeRange, options.ensureProjectReferences);
+    const references = await listAllReferences(body.timeRange);
     const filtered = references
       .filter((item) => matchesFilter(item.reference.displayName, filters))
       .filter((item) => !query || matchesReferenceSearch(item, query))
@@ -96,138 +90,70 @@ export function registerTuttiReferenceRoutes(
   });
 }
 
-async function listProjectGroups(
-  timeRange: ReferenceListRequest["timeRange"],
-  ensureProjectReferences?: (projectId: string) => unknown | Promise<unknown>,
-) {
-  const entries = await safeReaddir(privateProjectsParentDir(appPaths));
-  const projectMetadata = loadProjectMetadata();
-  const groups = (await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
-    const projectId = entry.name;
-    const metadata = projectMetadata.get(projectId);
-    if (!metadata) return null;
-    const displayName = projectDisplayName(projectId, projectMetadata);
-    const references = await listReferencesForProject(projectId, timeRange, displayName, metadata, ensureProjectReferences);
-    return {
+async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]): Promise<GroupItem[]> {
+  const metadata = loadProjectMetadata();
+  const projectIds = [...new Set(listWorkspaceReferenceRecords().map((record) => record.projectId))];
+  const groups: Array<GroupItem & { updatedAt: string }> = [];
+  for (const projectId of projectIds) {
+    const project = metadata.get(projectId);
+    if (!project) continue;
+    const references = await listReferencesForProject(projectId, timeRange);
+    if (references.length === 0) continue;
+    groups.push({
       type: "group",
       id: projectId,
-      displayName,
+      displayName: project.title.trim() || projectId,
       description: `${references.length} files`,
       referenceCount: references.length,
-      updatedAt: projectUpdatedAt(projectId, projectMetadata),
-    } satisfies GroupItem & { updatedAt: string };
-  }))).filter((group) => group !== null);
+      updatedAt: project.updatedAt,
+    });
+  }
   return groups
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id))
     .map(({ updatedAt: _updatedAt, ...group }) => group);
 }
 
-async function listAllReferences(
-  timeRange: ReferenceSearchRequest["timeRange"],
-  ensureProjectReferences?: (projectId: string) => unknown | Promise<unknown>,
-) {
-  const groups = await safeReaddir(privateProjectsParentDir(appPaths));
-  const projectMetadata = loadProjectMetadata();
-  const nested = await Promise.all(
-    groups
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => {
-        const metadata = projectMetadata.get(entry.name);
-        if (!metadata) return [];
-        return listReferencesForProject(entry.name, timeRange, projectDisplayName(entry.name, projectMetadata), metadata, ensureProjectReferences);
-      }),
-  );
+async function listAllReferences(timeRange: ReferenceSearchRequest["timeRange"]) {
+  const projectIds = [...new Set(listWorkspaceReferenceRecords().map((record) => record.projectId))];
+  const nested = await Promise.all(projectIds.map((projectId) => listReferencesForProject(projectId, timeRange)));
   return nested.flat();
 }
 
-async function listReferencesForProject(
-  projectId: string,
-  timeRange: ReferenceListRequest["timeRange"],
-  projectDisplayNameValue?: string,
-  projectMetadataValue?: ProjectMetadata,
-  ensureProjectReferences?: (projectId: string) => unknown | Promise<unknown>,
-) {
-  const root = join(privateProjectsParentDir(appPaths), projectId);
-  const projectMetadata = projectMetadataValue ?? loadProjectMetadata().get(projectId);
-  if (!projectMetadata) return [];
-  await ensureProjectReferences?.(projectId);
-  const exportsRoot = join(root, "exports");
-  const latestByKind = new Map<string, ReferenceItem>();
-  const parentGroupLabel = projectDisplayNameValue ?? projectDisplayName(projectId, loadProjectMetadata());
-  for (const published of readPublishedReferenceExports(root, projectMetadata.updatedAt)) {
-    if (!matchesTimeRange(published.mtimeMs, timeRange)) continue;
-    latestByKind.set(published.kind, {
-      type: "reference",
-      reference: {
-        kind: "file",
-        displayName: basename(published.absolutePath),
-        description: published.projectRelativePath,
-        location: {
-          type: "app-data-relative",
-          path: `projects/${projectId}/${published.projectRelativePath}`,
-        },
-        sizeBytes: published.sizeBytes,
-        mtimeMs: published.mtimeMs,
-        mimeType: published.mimeType,
-        parentGroupLabel,
-      },
-    });
-  }
-  const files = (await safeReaddir(exportsRoot))
-    .filter((entry) => entry.isFile())
-    .map((entry) => join(exportsRoot, entry.name));
-  for (const file of files) {
-    const exportKind = documentExportKind(file, projectMetadata.type);
-    if (!exportKind) continue;
-    const info = await stat(file).catch(() => null);
-    if (!info?.isFile()) continue;
+async function listReferencesForProject(projectId: string, timeRange: ReferenceListRequest["timeRange"]): Promise<ReferenceItem[]> {
+  const metadata = loadProjectMetadata().get(projectId);
+  if (!metadata) return [];
+  const parentGroupLabel = metadata.title.trim() || projectId;
+  const records = listWorkspaceReferenceRecords(projectId);
+  const live = await Promise.all(records.map(async (record) => {
+    let absolutePath: string;
+    try {
+      absolutePath = workspaceReferenceAbsolutePath(record.relativePath);
+    } catch {
+      return null;
+    }
+    const info = await stat(absolutePath).catch(() => null);
+    if (!info?.isFile()) return null;
     const mtimeMs = Math.trunc(info.mtimeMs);
-    if (!isExportCurrent(mtimeMs, projectMetadata.updatedAt) || !matchesTimeRange(mtimeMs, timeRange)) continue;
-    const relativeToProject = relative(root, file).split("\\").join("/");
+    if (!matchesTimeRange(mtimeMs, timeRange)) return null;
     const item: ReferenceItem = {
       type: "reference",
       reference: {
         kind: "file",
-        displayName: basename(file),
-        description: relativeToProject,
-        location: {
-          type: "app-data-relative",
-          path: `projects/${projectId}/${relativeToProject}`,
-        },
+        displayName: record.displayName || basename(record.relativePath),
+        description: record.description || record.relativePath,
+        location: { type: "app-data-relative", path: record.relativePath },
         sizeBytes: info.size,
         mtimeMs,
-        mimeType: mimeTypeForFileName(file),
+        mimeType: record.mimeType,
         parentGroupLabel,
       },
     };
-    const current = latestByKind.get(exportKind);
-    if (!current || mtimeMs > (current.reference.mtimeMs ?? 0)) latestByKind.set(exportKind, item);
-  }
-  return [...latestByKind.values()].sort(
+    return item;
+  }));
+  return live.filter((item): item is ReferenceItem => item !== null).sort(
     (left, right) => (right.reference.mtimeMs ?? 0) - (left.reference.mtimeMs ?? 0)
       || left.reference.displayName.localeCompare(right.reference.displayName),
   );
-}
-
-function documentExportKind(fileName: string, type: ProjectMetadata["type"]) {
-  const extension = extname(fileName).toLowerCase();
-  if (extension === ".pdf") return "pdf";
-  if (type === "html" && [".htm", ".html"].includes(extension)) return "html";
-  if (type === "markdown" && [".markdown", ".md"].includes(extension)) return "markdown";
-  return "";
-}
-
-function isExportCurrent(mtimeMs: number, projectUpdatedAt: string) {
-  const projectUpdatedAtMs = Date.parse(projectUpdatedAt);
-  return !Number.isFinite(projectUpdatedAtMs) || mtimeMs >= projectUpdatedAtMs;
-}
-
-async function safeReaddir(root: string) {
-  try {
-    return await readdir(root, { withFileTypes: true });
-  } catch {
-    return [];
-  }
 }
 
 function sanitizeGroupId(value: unknown) {
@@ -248,10 +174,7 @@ function cursorOffset(value: unknown) {
 function paged<T>(items: T[], offset: number, limit: number) {
   const page = items.slice(offset, offset + limit);
   const nextOffset = offset + page.length;
-  return {
-    items: page,
-    nextCursor: nextOffset < items.length ? String(nextOffset) : null,
-  };
+  return { items: page, nextCursor: nextOffset < items.length ? String(nextOffset) : null };
 }
 
 function normalizeSearchText(value: unknown) {
@@ -266,26 +189,12 @@ function loadProjectMetadata() {
   );
 }
 
-function projectDisplayName(projectId: string, projectMetadata: Map<string, ProjectMetadata>) {
-  return projectMetadata.get(projectId)?.title.trim() || projectId;
-}
-
-function projectUpdatedAt(projectId: string, projectMetadata: Map<string, ProjectMetadata>) {
-  return projectMetadata.get(projectId)?.updatedAt ?? "";
-}
-
 function matchesGroupSearch(group: GroupItem, query: string) {
   return [group.id, group.displayName].some((value) => value.toLowerCase().includes(query));
 }
 
 function matchesReferenceSearch(item: ReferenceItem, query: string) {
-  const projectId = projectIdFromReferencePath(item.reference.location.path);
-  return [item.reference.displayName, item.reference.parentGroupLabel ?? "", projectId].some((value) => value.toLowerCase().includes(query));
-}
-
-function projectIdFromReferencePath(pathValue: string) {
-  const match = /^projects\/([^/]+)\//.exec(pathValue);
-  return match?.[1] ?? "";
+  return [item.reference.displayName, item.reference.description ?? "", item.reference.parentGroupLabel ?? ""].some((value) => value.toLowerCase().includes(query));
 }
 
 function matchesTimeRange(mtimeMs: number, timeRange: ReferenceListRequest["timeRange"]) {
@@ -314,18 +223,4 @@ function fileCategory(fileName: string) {
   if (["pdf", "doc", "docx", "txt", "md", "markdown", "rtf", "odt", "pages", "key", "ppt", "pptx", "xls", "xlsx", "csv", "tsv", "numbers"].includes(extension)) return "document";
   if (["html", "htm", "mhtml", "url", "webloc"].includes(extension)) return "webpage";
   return "other";
-}
-
-function mimeTypeForFileName(fileName: string) {
-  const extension = extname(fileName).slice(1).toLowerCase();
-  if (extension === "html" || extension === "htm") return "text/html";
-  if (extension === "md" || extension === "markdown") return "text/markdown";
-  if (extension === "json") return "application/json";
-  if (extension === "docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-  if (extension === "pdf") return "application/pdf";
-  if (extension === "png") return "image/png";
-  if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
-  if (extension === "svg") return "image/svg+xml";
-  if (extension === "webp") return "image/webp";
-  return "application/octet-stream";
 }

@@ -83,7 +83,7 @@ This package runs AI Doc as a local Tutti workspace app.
 - \`tutti.app.json\` declares the app runtime, localized metadata, CLI surface, and references endpoints.
 - \`tutti.cli.json\` exposes project commands such as \`doc projects list\`, \`doc projects get\`, and \`doc projects create\` for other Tutti apps and agents.
 - Private app state (SQLite, sidecars, template cache) uses \`TUTTI_APP_DATABASE_DIR\` when provided.
-- Public user artifacts live under the bound \`/workspace\` path. Do not persist under \`TUTTI_APP_DATA_DIR\` / \`.tsh\`.
+- Public user artifacts live under \`TUTTI_APP_DATA_DIR\` (\`/workspace\` on TSH). Do not persist private state under \`TUTTI_APP_DATA_DIR\` / \`.tsh\`.
 - Runtime scratch data is stored under \`AI_DOC_RUNTIME_ROOT\`, which defaults to \`TUTTI_APP_RUNTIME_DIR\`.
 - Backend logs, if added later, must stay under \`AI_DOC_LOG_ROOT\`, which defaults to \`TUTTI_APP_LOG_DIR\`.
 - OfficeCLI auto-install uses the shared AI Office toolchain cache, not \`AI_DOC_HOME\`; override with \`AI_DOC_OFFICECLI_PATH\`, \`TUTTI_APP_OFFICECLI_PATH\`, or an \`*_OFFICECLI_INSTALL_ROOT\` env var.
@@ -99,7 +99,7 @@ Endpoints:
 
 - \`GET /api/health\` is the runtime healthcheck.
 - \`POST /tutti/cli/*\` implements the CLI manifest, including resource-style project commands.
-- \`POST /tutti/references/list\` and \`POST /tutti/references/search\` expose app-data-relative project files and exports.
+- \`POST /tutti/references/list\` and \`POST /tutti/references/search\` expose app-data-relative user-visible exports remembered by the app.
 
 Runtime composition:
 

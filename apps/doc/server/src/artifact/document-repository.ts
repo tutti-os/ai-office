@@ -29,6 +29,7 @@ import {
   isTshFileArtifactProject,
   projectFocusedArtifactPath,
   projectPrivateRoot,
+  projectExportsRoot,
   projectWorkspaceRoot,
   unbindProjectWorkspaceRoot,
 } from "../local/paths.js";
@@ -281,7 +282,7 @@ export class DocumentRepository {
     if (!project) throw new Error("Project not found");
     const exportsDir = input.targetDirectory?.trim()
       ? assertAllowedTshParentPath(input.targetDirectory)
-      : join(projectWorkspaceRoot(projectId), "exports");
+      : projectExportsRoot(projectId);
     await mkdir(exportsDir, { recursive: true });
     const fileName = uniqueExportFileName(exportsDir, input.fileName, input.mimeType);
     const absolutePath = join(exportsDir, fileName);
@@ -312,7 +313,8 @@ export class DocumentRepository {
   projectExportsDir(projectId: string) {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
-    return join(ensureProjectDirs(projectId), "exports");
+    ensureProjectDirs(projectId);
+    return projectExportsRoot(projectId);
   }
 
   async syncProjectAgentInstructions(projectId: string, options: { force?: boolean } = {}) {

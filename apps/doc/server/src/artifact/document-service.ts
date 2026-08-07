@@ -46,6 +46,7 @@ import { createRuntimeProviderRegistry } from "../runtimes/runtime-registry.js";
 import { requireOfficeCli } from "../toolchains/officecli.js";
 import { EventHub } from "../ws/event-hub.js";
 import { invalidateProjectAssetCache } from "./project-assets.js";
+import { recordWorkspaceReference } from "../tutti/workspace-reference-catalog.js";
 
 export class DocumentService {
   private readonly runtimes = createRuntimeProviderRegistry();
@@ -413,7 +414,15 @@ export class DocumentService {
     if (targetDirectory && !isTshWorkspaceAppHost()) {
       throw new Error("Custom export directories are only supported on TSH");
     }
-    return this.repo.writeProjectExport(projectId, { ...input, targetDirectory });
+    const exported = await this.repo.writeProjectExport(projectId, { ...input, targetDirectory });
+    recordWorkspaceReference({
+      projectId,
+      kind: project.type,
+      absolutePath: exported.absolutePath,
+      displayName: exported.fileName,
+      mimeType: exported.mimeType,
+    });
+    return exported;
   }
 
   async getProjectAsset(projectId: string, fileName: string) {

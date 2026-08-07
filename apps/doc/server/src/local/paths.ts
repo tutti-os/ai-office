@@ -7,7 +7,7 @@ import {
 } from "@ai-app/shared/local-paths";
 import { isTshFileArtifactPath } from "@ai-app/shared/tsh-host";
 import { mkdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { DocumentProject } from "@ai-doc/shared";
 
 export const appPaths = createAppPaths({
@@ -18,7 +18,7 @@ export const appPaths = createAppPaths({
 
 /**
  * Bound workspace_root values:
- * - Tutti: unset → private projects/{id}
+ * - Tutti: unset → app-data projects/{id}
  * - TSH legacy: directory under /workspace → that directory is the workspace root
  * - TSH single-file: .html/.md/.docx under /workspace → private projects/{id} for sidecars;
  *   focused artifact is the file path itself
@@ -51,7 +51,15 @@ export function isTshFileArtifactProject(projectId: string): boolean {
 export function projectWorkspaceRoot(projectId: string) {
   const bound = boundWorkspaceRoot(projectId);
   if (bound && isTshFileArtifactPath(bound)) return projectPrivateRoot(projectId);
-  return bound ?? projectPrivateRoot(projectId);
+  return bound ?? join(appPaths.projectsDir, safePathSegment(projectId));
+}
+
+/** User-visible export directory for generated files. Single-file TSH projects
+ * keep sidecars private but publish exports beside the bound workspace file. */
+export function projectExportsRoot(projectId: string) {
+  const bound = boundWorkspaceRoot(projectId);
+  if (bound && isTshFileArtifactPath(bound)) return join(dirname(bound), "exports");
+  return join(projectWorkspaceRoot(projectId), "exports");
 }
 
 export function projectFocusedArtifactPath(projectId: string, type: DocumentProject["type"]) {
@@ -75,7 +83,7 @@ export function clearProjectWorkspaceRootBindings() {
 export function ensureProjectDirs(projectId: string) {
   const root = projectWorkspaceRoot(projectId);
   mkdirSync(join(root, "assets"), { recursive: true });
-  mkdirSync(join(root, "exports"), { recursive: true });
+  mkdirSync(projectExportsRoot(projectId), { recursive: true });
   mkdirSync(join(root, "snapshots"), { recursive: true });
   return root;
 }
