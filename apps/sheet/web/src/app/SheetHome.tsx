@@ -28,6 +28,7 @@ export function SheetHome(props: {
   prompt: string;
   runtimeProfiles: RuntimeProfile[];
   selectedRuntimeProfileId: string;
+  showImport: boolean;
   onAddFiles: (files: File[]) => void;
   onClearHistory: () => void;
   onCreateWorkbook: () => void;
@@ -49,20 +50,24 @@ export function SheetHome(props: {
 
   return (
     <HomePageShell>
-      <input
-        ref={inputRef}
-        className="hidden"
-        type="file"
-        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = "";
-          if (file) props.onImportFile(file);
-        }}
-      />
-      <HomeTopAction disabled={props.loading || workbookUnavailable} icon={<Upload size={14} />} title={t("home.importTitle")} onClick={openImportPicker}>
-        {t("home.import")}
-      </HomeTopAction>
+      {props.showImport ? (
+        <>
+          <input
+            ref={inputRef}
+            className="hidden"
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) props.onImportFile(file);
+            }}
+          />
+          <HomeTopAction disabled={props.loading || workbookUnavailable} icon={<Upload size={14} />} title={t("home.importTitle")} onClick={openImportPicker}>
+            {t("home.import")}
+          </HomeTopAction>
+        </>
+      ) : null}
       <div className={homeContentClass}>
         <section className={homeHeroSectionClass}>
           <h1 className={homeTitleClass}>{t("home.heading")}</h1>

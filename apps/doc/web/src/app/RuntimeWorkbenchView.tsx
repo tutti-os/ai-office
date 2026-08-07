@@ -110,6 +110,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           selectedCategory={selectedTemplateCategory}
           selectedRuntimeProfileId={selectedRuntimeProfileId}
           runtimeProfiles={runtimeProfiles}
+          showImport={!tshWorkspaceApp}
           showParentPath={tshWorkspaceApp}
           templateCounts={templateCounts}
           templates={filteredTemplates}
@@ -166,6 +167,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             readOnly={artifactReadOnly}
             saveState={activeDirty && markdownSaveState === "saved" ? "saving" : markdownSaveState}
             selectedRuntimeProfileId={selectedRuntimeProfileId}
+            showExport={!tshWorkspaceApp}
             onBackHome={requestHomeRoute}
             onCancelAgentRun={cancelAgentRun}
             onDismissExportNotice={dismissExportNotice}
@@ -214,6 +216,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             pdfExportAvailable={pdfExportAvailable}
             pdfExporting={pdfExporting}
             selectedRuntimeProfileId={selectedRuntimeProfileId}
+            showExport={!tshWorkspaceApp}
             onBackHome={requestHomeRoute}
             onCancelAgentRun={cancelAgentRun}
             onDismissExportNotice={dismissExportNotice}
@@ -261,6 +264,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             pdfExporting={pdfExporting}
             agentProcessing={artifactAgentProcessing}
             readOnly={artifactReadOnly}
+            showExport={!tshWorkspaceApp}
             toolbarDisabled={!htmlToolbarActive || artifactReadOnly}
             toolbarState={toolbarState}
             linkDraft={linkDraft}

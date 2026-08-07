@@ -3,6 +3,7 @@ import { createDebouncedWorkspaceRefresh, RuntimeRunExecutor } from "@ai-app/age
 import { resolvePreferredLocalAgentRuntimeProfileId } from "@ai-app/shared/agent-providers";
 import type { ContextAttachmentUploadResponse } from "@ai-app/shared/context-attachments";
 import { resolveAbsoluteImportSourcePath } from "@ai-app/shared/import-source";
+import { isTshWorkspaceAppHost } from "@ai-app/shared/tsh-host";
 import type { RuntimeProfile } from "@ai-app/shared/types";
 import type {
   AiEditRequest,
@@ -47,7 +48,11 @@ export class SheetService {
   }
 
   bootstrap() {
-    return this.repo.snapshot();
+    const snapshot = this.repo.snapshot();
+    return {
+      ...snapshot,
+      tshWorkspaceApp: isTshWorkspaceAppHost(),
+    };
   }
 
   async listLocalAgentTargets() {
