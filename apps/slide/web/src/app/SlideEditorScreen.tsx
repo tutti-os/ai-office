@@ -40,6 +40,7 @@ export function SlideEditorScreen(props: {
   runtimeProfiles: RuntimeProfile[];
   selectedAgent: string;
   sending: boolean;
+  showExport: boolean;
   tshWorkspaceApp: boolean;
   onArtifactSaveStateChange: (state: ArtifactSaveState) => void;
   onBackHome: () => void;
@@ -170,7 +171,7 @@ export function SlideEditorScreen(props: {
       onTitleChange={props.onTitleChange}
       saveState={headerSaveState}
       agentWorking={agentProcessing}
-      showExport={!props.tshWorkspaceApp}
+      showExport={props.showExport}
       exportItems={slideExportItems({
         artifactType,
         htmlExporting,

@@ -80,6 +80,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     setOutputType,
     setParentPath,
     setPrompt,
+    showImportExport,
     tshWorkspaceApp,
     setSelectedRuntimeProfileId,
     setSelectedTemplateCategory,
@@ -110,7 +111,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
           selectedCategory={selectedTemplateCategory}
           selectedRuntimeProfileId={selectedRuntimeProfileId}
           runtimeProfiles={runtimeProfiles}
-          showImport={!tshWorkspaceApp}
+          showImport={showImportExport}
           showParentPath={tshWorkspaceApp}
           templateCounts={templateCounts}
           templates={filteredTemplates}
@@ -167,7 +168,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             readOnly={artifactReadOnly}
             saveState={activeDirty && markdownSaveState === "saved" ? "saving" : markdownSaveState}
             selectedRuntimeProfileId={selectedRuntimeProfileId}
-            showExport={!tshWorkspaceApp}
+            showExport={showImportExport}
             onBackHome={requestHomeRoute}
             onCancelAgentRun={cancelAgentRun}
             onDismissExportNotice={dismissExportNotice}
@@ -216,7 +217,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             pdfExportAvailable={pdfExportAvailable}
             pdfExporting={pdfExporting}
             selectedRuntimeProfileId={selectedRuntimeProfileId}
-            showExport={!tshWorkspaceApp}
+            showExport={showImportExport}
             onBackHome={requestHomeRoute}
             onCancelAgentRun={cancelAgentRun}
             onDismissExportNotice={dismissExportNotice}
@@ -264,7 +265,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             pdfExporting={pdfExporting}
             agentProcessing={artifactAgentProcessing}
             readOnly={artifactReadOnly}
-            showExport={!tshWorkspaceApp}
+            showExport={showImportExport}
             toolbarDisabled={!htmlToolbarActive || artifactReadOnly}
             toolbarState={toolbarState}
             linkDraft={linkDraft}
