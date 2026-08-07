@@ -68,6 +68,8 @@ export function App() {
   const [officeCliStatus, setOfficeCliStatus] = useState<OfficeCliStatus | null>(null);
   const [officeCliInstalling, setOfficeCliInstalling] = useState(false);
   const [tshWorkspaceApp, setTshWorkspaceApp] = useState(false);
+  /** False until bootstrap reports host mode; avoids Import flashing on TSH before the flag arrives. */
+  const [hostModeReady, setHostModeReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [bootedProjectId, setBootedProjectId] = useState<string | null>(null);
   const [agentSending, setAgentSending] = useState(false);
@@ -158,6 +160,7 @@ export function App() {
       .then(([snapshot, officeCli]) => {
         setHistoryProjects(snapshot.projects);
         setTshWorkspaceApp(snapshot.tshWorkspaceApp === true);
+        setHostModeReady(true);
         const enabledProfiles = snapshot.runtimeProfiles.filter((profile) => profile.enabled && profile.kind === "local-agent");
         const mergedProfiles = mergeLocalAgentRuntimeProfiles(enabledProfiles, localAgentTargetsRef.current);
         setRuntimeProfiles(mergedProfiles);
@@ -170,7 +173,10 @@ export function App() {
         });
         setOfficeCliStatus(officeCli.officecli);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : String(err));
+        setHostModeReady(true);
+      });
   }, [t]);
 
   useEffect(() => {
@@ -504,7 +510,7 @@ export function App() {
           setExportMessage("");
           setExportRevealPath("");
         }}
-        showExport={!tshWorkspaceApp}
+        showExport={hostModeReady && !tshWorkspaceApp}
         onExportXlsx={exportXlsx}
         onOpenExportLocation={openExports}
         onRuntimeProfileChange={setSelectedAgent}
@@ -526,7 +532,7 @@ export function App() {
       prompt={prompt}
       runtimeProfiles={localAgentTargetsLoaded ? runtimeProfiles : []}
       selectedRuntimeProfileId={selectedAgent}
-      showImport={!tshWorkspaceApp}
+      showImport={hostModeReady && !tshWorkspaceApp}
       onAddFiles={homeAttachments.addFiles}
       onClearHistory={clearHistory}
       onCreateWorkbook={createWorkbook}

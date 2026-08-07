@@ -98,6 +98,8 @@ export function useRuntimeWorkbenchModel() {
   const [prompt, setPrompt] = useState("");
   const [outputType, setOutputType] = useState<DocumentType>("html");
   const [tshWorkspaceApp, setTshWorkspaceApp] = useState(false);
+  /** False until bootstrap reports host mode; avoids Import flashing on TSH before the flag arrives. */
+  const [hostModeReady, setHostModeReady] = useState(false);
   const [parentPath, setParentPath] = useState("/workspace");
   const [runtimeProfiles, setRuntimeProfiles] = useState<RuntimeProfile[]>([]);
   const [localAgentTargets, setLocalAgentTargets] = useState<LocalAgentTargetStatus[]>([]);
@@ -144,6 +146,7 @@ export function useRuntimeWorkbenchModel() {
 
   useDocumentWorkbenchBootstrap({
     setError,
+    setHostModeReady,
     setLocalAgentTargets,
     setOfficeCliStatus,
     setParentPath,
@@ -414,6 +417,7 @@ export function useRuntimeWorkbenchModel() {
     pdfExportAvailable: isTuttiPdfExportAvailable(),
     pdfExporting,
     prompt,
+    showImportExport: hostModeReady && !tshWorkspaceApp,
     tshWorkspaceApp,
     redoMarkdown,
     renameCurrentProjectTitle,

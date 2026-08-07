@@ -45,6 +45,8 @@ export function App() {
   const [prompt, setPrompt] = useState("");
   const [outputType, setOutputType] = useState<OutputType>("html");
   const [tshWorkspaceApp, setTshWorkspaceApp] = useState(false);
+  /** False until bootstrap reports host mode; avoids Import flashing on TSH before the flag arrives. */
+  const [hostModeReady, setHostModeReady] = useState(false);
   const [parentPath, setParentPath] = useState("/workspace");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedAgent, setSelectedAgent] = useState("");
@@ -160,6 +162,7 @@ export function App() {
         const mergedProfiles = mergeLocalAgentRuntimeProfiles(enabledProfiles, localAgentTargetsRef.current);
         setRuntimeProfiles(mergedProfiles);
         setTshWorkspaceApp(snapshot.tshWorkspaceApp === true);
+        setHostModeReady(true);
         if (snapshot.tshWorkspaceApp === true) {
           setParentPath(snapshot.defaultParentPath?.trim() || "/workspace");
         }
@@ -171,7 +174,10 @@ export function App() {
           });
         });
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : String(err));
+        setHostModeReady(true);
+      });
   }, []);
 
   useEffect(() => {
@@ -517,6 +523,7 @@ export function App() {
         pptxError={pptxError}
         pptxRuntime={pptxRuntime}
         projectId={route.projectId}
+        showExport={hostModeReady && !tshWorkspaceApp}
         tshWorkspaceApp={tshWorkspaceApp}
         onArtifactSaveStateChange={setArtifactSaveState}
         onBackHome={requestHomeRoute}
@@ -533,7 +540,7 @@ export function App() {
 
   return (
     <HomePageShell className="h-dvh font-sans">
-      {!tshWorkspaceApp ? (
+      {hostModeReady && !tshWorkspaceApp ? (
         <>
           <input
             ref={importInputRef}

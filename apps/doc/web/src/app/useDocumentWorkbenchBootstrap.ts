@@ -14,12 +14,14 @@ type DocumentWorkbenchBootstrapInput = {
   setRuntimeProfiles: StateSetter<RuntimeProfile[]>;
   setSelectedRuntimeProfileId: StateSetter<string>;
   setTemplates: StateSetter<TuttiTemplate[]>;
+  setHostModeReady: StateSetter<boolean>;
   setTshWorkspaceApp: StateSetter<boolean>;
 };
 
 export function useDocumentWorkbenchBootstrap(input: DocumentWorkbenchBootstrapInput) {
   const {
     setError,
+    setHostModeReady,
     setLocalAgentTargets,
     setOfficeCliStatus,
     setParentPath,
@@ -58,6 +60,7 @@ export function useDocumentWorkbenchBootstrap(input: DocumentWorkbenchBootstrapI
         setTemplates(normalizeTemplates(libraryTemplates));
         setOfficeCliStatus(officeCli.officecli);
         setTshWorkspaceApp(snapshot.tshWorkspaceApp === true);
+        setHostModeReady(true);
         if (snapshot.tshWorkspaceApp === true) {
           setParentPath(snapshot.defaultParentPath?.trim() || "/workspace");
         }
@@ -70,10 +73,13 @@ export function useDocumentWorkbenchBootstrap(input: DocumentWorkbenchBootstrapI
         });
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+          setHostModeReady(true);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [setError, setLocalAgentTargets, setOfficeCliStatus, setParentPath, setRuntimeProfiles, setSelectedRuntimeProfileId, setTemplates, setTshWorkspaceApp]);
+  }, [setError, setHostModeReady, setLocalAgentTargets, setOfficeCliStatus, setParentPath, setRuntimeProfiles, setSelectedRuntimeProfileId, setTemplates, setTshWorkspaceApp]);
 }
