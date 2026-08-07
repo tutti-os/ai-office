@@ -173,6 +173,7 @@ export interface AppSnapshot {
   activeRuns: SheetRun[];
   runEvents: SheetRunEvent[];
   lastSeq: number;
+  tshWorkspaceApp?: boolean;
 }
 
 export interface CreateProjectRequest {

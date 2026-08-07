@@ -170,6 +170,7 @@ export function SlideEditorScreen(props: {
       onTitleChange={props.onTitleChange}
       saveState={headerSaveState}
       agentWorking={agentProcessing}
+      showExport={!props.tshWorkspaceApp}
       exportItems={slideExportItems({
         artifactType,
         htmlExporting,

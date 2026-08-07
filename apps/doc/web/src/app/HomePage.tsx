@@ -36,6 +36,7 @@ export function HomePage(props: {
   selectedCategory: string;
   selectedRuntimeProfileId: string;
   runtimeProfiles: RuntimeProfile[];
+  showImport: boolean;
   showParentPath: boolean;
   templateCounts: Record<string, number>;
   templates: TuttiTemplate[];
@@ -64,25 +65,29 @@ export function HomePage(props: {
 
   return (
     <HomePageShell>
-      <input
-        ref={importInputRef}
-        className="hidden"
-        type="file"
-        accept=".html,.htm,.md,.markdown,.docx,text/html,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = "";
-          if (file) props.onImportFile(file);
-        }}
-      />
-      <HomeTopAction
-        disabled={props.loading}
-        icon={<Upload size={14} />}
-        title={t("home.importTitle")}
-        onClick={() => importInputRef.current?.click()}
-      >
-        {t("home.import")}
-      </HomeTopAction>
+      {props.showImport ? (
+        <>
+          <input
+            ref={importInputRef}
+            className="hidden"
+            type="file"
+            accept=".html,.htm,.md,.markdown,.docx,text/html,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) props.onImportFile(file);
+            }}
+          />
+          <HomeTopAction
+            disabled={props.loading}
+            icon={<Upload size={14} />}
+            title={t("home.importTitle")}
+            onClick={() => importInputRef.current?.click()}
+          >
+            {t("home.import")}
+          </HomeTopAction>
+        </>
+      ) : null}
 
       <div className={homeContentClass}>
         <section className={homeHeroSectionClass}>

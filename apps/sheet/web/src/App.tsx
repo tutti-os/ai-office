@@ -67,6 +67,7 @@ export function App() {
   const [selectedAgent, setSelectedAgent] = useState("");
   const [officeCliStatus, setOfficeCliStatus] = useState<OfficeCliStatus | null>(null);
   const [officeCliInstalling, setOfficeCliInstalling] = useState(false);
+  const [tshWorkspaceApp, setTshWorkspaceApp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [bootedProjectId, setBootedProjectId] = useState<string | null>(null);
   const [agentSending, setAgentSending] = useState(false);
@@ -156,6 +157,7 @@ export function App() {
     ])
       .then(([snapshot, officeCli]) => {
         setHistoryProjects(snapshot.projects);
+        setTshWorkspaceApp(snapshot.tshWorkspaceApp === true);
         const enabledProfiles = snapshot.runtimeProfiles.filter((profile) => profile.enabled && profile.kind === "local-agent");
         const mergedProfiles = mergeLocalAgentRuntimeProfiles(enabledProfiles, localAgentTargetsRef.current);
         setRuntimeProfiles(mergedProfiles);
@@ -502,6 +504,7 @@ export function App() {
           setExportMessage("");
           setExportRevealPath("");
         }}
+        showExport={!tshWorkspaceApp}
         onExportXlsx={exportXlsx}
         onOpenExportLocation={openExports}
         onRuntimeProfileChange={setSelectedAgent}
@@ -523,6 +526,7 @@ export function App() {
       prompt={prompt}
       runtimeProfiles={localAgentTargetsLoaded ? runtimeProfiles : []}
       selectedRuntimeProfileId={selectedAgent}
+      showImport={!tshWorkspaceApp}
       onAddFiles={homeAttachments.addFiles}
       onClearHistory={clearHistory}
       onCreateWorkbook={createWorkbook}

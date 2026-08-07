@@ -24,6 +24,7 @@ export function SheetViewerScreen(props: {
   selectedRuntimeProfileId: string;
   selectionRestoreKey: number;
   sending: boolean;
+  showExport?: boolean;
   readOnly: boolean;
   onCommitCellValue: (input: { address: string; input: string; sheetId: string; sheetName: string }) => Promise<void>;
   onBackHome: () => void;
@@ -61,6 +62,7 @@ export function SheetViewerScreen(props: {
       agentWorking={props.sending}
       stats={stats}
       copy={artifactEditorCopy(t)}
+      showExport={props.showExport}
       exportItems={[
         {
           label: props.exporting ? t("editor.xlsxExporting") : t("editor.xlsxCopy"),

@@ -533,25 +533,29 @@ export function App() {
 
   return (
     <HomePageShell className="h-dvh font-sans">
-      <input
-        ref={importInputRef}
-        className="hidden"
-        type="file"
-        accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        onChange={(event) => {
-          const file = event.currentTarget.files?.[0] ?? null;
-          event.currentTarget.value = "";
-          if (file) void importFile(file);
-        }}
-      />
-      <HomeTopAction
-        disabled={creating}
-        icon={<Upload size={14} />}
-        title={t("home.importTitle")}
-        onClick={() => importInputRef.current?.click()}
-      >
-        {t("home.import")}
-      </HomeTopAction>
+      {!tshWorkspaceApp ? (
+        <>
+          <input
+            ref={importInputRef}
+            className="hidden"
+            type="file"
+            accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0] ?? null;
+              event.currentTarget.value = "";
+              if (file) void importFile(file);
+            }}
+          />
+          <HomeTopAction
+            disabled={creating}
+            icon={<Upload size={14} />}
+            title={t("home.importTitle")}
+            onClick={() => importInputRef.current?.click()}
+          >
+            {t("home.import")}
+          </HomeTopAction>
+        </>
+      ) : null}
       <div className={homeContentClass}>
         <section className={homeHeroSectionClass}>
           <h1 className={cn("m-0", homeTitleClass)}>

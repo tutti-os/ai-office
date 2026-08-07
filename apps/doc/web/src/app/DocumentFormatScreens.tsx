@@ -23,6 +23,7 @@ type SharedShellProps = {
   localAgentTargets: LocalAgentTargetStatus[];
   runtimeProfiles: RuntimeProfile[];
   selectedRuntimeProfileId: string;
+  showExport?: boolean;
   onBackHome: () => void;
   onCancelAgentRun: (runId: string) => Promise<void>;
   onDismissExportNotice: () => void;
@@ -61,6 +62,7 @@ export function MarkdownDocumentScreen(props: SharedShellProps & {
         t("editor.blockCount", { count: markdownParagraphCount(props.runtime.content) }),
       ]}
       copy={artifactEditorCopy(t)}
+      showExport={props.showExport}
       exportItems={[
         {
           label: t("editor.docxComingSoon"),
@@ -117,6 +119,7 @@ export function DocxDocumentScreen(props: SharedShellProps & {
       saveState={props.loading ? "loading" : props.dirty ? "saving" : "saved"}
       agentWorking={props.agentProcessing}
       copy={artifactEditorCopy(t)}
+      showExport={props.showExport}
       exportItems={[
         {
           label: props.pdfExporting ? t("editor.pdfExporting") : "PDF",

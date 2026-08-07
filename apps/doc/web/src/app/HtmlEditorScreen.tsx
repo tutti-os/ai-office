@@ -96,6 +96,7 @@ export type HtmlEditorScreenProps = {
   saveState: WorkspaceSaveState;
   agentProcessing: boolean;
   readOnly: boolean;
+  showExport?: boolean;
   toolbarDisabled: boolean;
   toolbarState: ToolbarState;
   onAlignment: (alignment: Alignment) => void;
@@ -317,6 +318,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
         onTitleChange={props.onTitleChange}
         onDismissExportNotice={props.onDismissExportNotice}
         onOpenExportLocation={props.onOpenExportLocation}
+        showExport={props.showExport}
         exportItems={[
           {
             label: t("editor.docxComingSoon"),

@@ -68,6 +68,8 @@ export function ArtifactEditorWorkspace(props: {
   copy?: Partial<ArtifactEditorCopy>;
   exportNotice?: string;
   exportRevealPath?: string;
+  /** When false, the header export control is not rendered. Defaults to true. */
+  showExport?: boolean;
   onBackHome?: () => void;
   onDismissExportNotice?: () => void;
   onOpenExportLocation?: () => void;
@@ -77,7 +79,8 @@ export function ArtifactEditorWorkspace(props: {
   workspaceClassName?: string;
 }) {
   const tone = props.tone ?? "lumen";
-  const exportNotice = props.exportNotice ?? "";
+  const showExport = props.showExport !== false;
+  const exportNotice = showExport ? (props.exportNotice ?? "") : "";
   const copy = { ...defaultArtifactEditorCopy, ...props.copy };
   return (
     <ArtifactEditorFrame
@@ -92,6 +95,7 @@ export function ArtifactEditorWorkspace(props: {
           agentWorking={props.agentWorking}
           stats={props.stats}
           exportItems={props.exportItems}
+          showExport={showExport}
           copy={copy}
           tone={tone}
           onBackHome={props.onBackHome}
@@ -222,6 +226,8 @@ export function ArtifactWorkspaceHeader(props: {
   agentWorking?: boolean;
   stats?: string[];
   exportItems: ArtifactExportItem[];
+  /** When false, the export button/menu is not rendered. Defaults to true. */
+  showExport?: boolean;
   copy?: ArtifactEditorCopy;
   onBackHome?: () => void;
   onTitleChange?: (title: string) => void | Promise<void>;
@@ -235,6 +241,7 @@ export function ArtifactWorkspaceHeader(props: {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const lumen = props.tone === "lumen";
+  const showExport = props.showExport !== false && props.exportItems.length > 0;
   const copy = props.copy ?? defaultArtifactEditorCopy;
   const exportingItem = props.exportItems.find((item) => item.loading || item.label === pendingExportLabel);
   const exporting = Boolean(exportingItem);
@@ -361,66 +368,68 @@ export function ArtifactWorkspaceHeader(props: {
           </div>
         ) : null}
       </div>
-      <div ref={rootRef} className="relative shrink-0">
-        <button
-          className={cx(
-            "inline-flex h-8 items-center gap-2 rounded-[16px] border px-3 text-[12px] font-semibold transition",
-            lumen
-              ? `${lumenHeaderButtonClass} disabled:cursor-wait disabled:border-[#B8A07C]/35 disabled:text-[#8B8275]/65`
-              : `${darkHeaderButtonClass} disabled:cursor-wait disabled:text-white/38`,
-          )}
-          type="button"
-          aria-haspopup="menu"
-          aria-expanded={open}
-          aria-busy={exporting}
-          disabled={exporting}
-          onClick={() => setOpen((current) => !current)}
-        >
-          {exporting ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
-          {exporting ? copy.exporting : copy.export}
-          <ChevronDown size={13} />
-        </button>
-        {open ? (
-          <div
+      {showExport ? (
+        <div ref={rootRef} className="relative shrink-0">
+          <button
             className={cx(
-              "absolute right-0 top-[calc(100%_+_6px)] z-30 w-44 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_18px_46px_rgba(0,0,0,0.16)]",
-              lumen ? "border-[#B8A07C]/55 bg-[#F4EFE6] text-[#2A2620]" : "border-white/10 bg-[#2b2b2b]",
+              "inline-flex h-8 items-center gap-2 rounded-[16px] border px-3 text-[12px] font-semibold transition",
+              lumen
+                ? `${lumenHeaderButtonClass} disabled:cursor-wait disabled:border-[#B8A07C]/35 disabled:text-[#8B8275]/65`
+                : `${darkHeaderButtonClass} disabled:cursor-wait disabled:text-white/38`,
             )}
-            role="menu"
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={open}
+            aria-busy={exporting}
+            disabled={exporting}
+            onClick={() => setOpen((current) => !current)}
           >
-            {props.exportItems.map((item) => {
-              const itemLoading = item.loading || item.label === pendingExportLabel;
-              return (
-              <button
-                className={cx(
-                  "flex h-8 w-full items-center gap-2 border-0 bg-transparent px-3 text-left text-[12px] font-semibold",
-                  lumen
-                    ? "text-[#2A2620]/72 hover:bg-[#E6DDCD]/55 hover:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275]/45"
-                    : "text-white/68 hover:bg-white/8 hover:text-white disabled:cursor-default disabled:text-white/24",
-                )}
-                disabled={item.disabled || exporting}
-                key={item.label}
-                role="menuitem"
-                type="button"
-                onClick={async () => {
-                  setOpen(false);
-                  if (item.disabled || exporting) return;
-                  setPendingExportLabel(item.label);
-                  try {
-                    await item.onSelect();
-                  } finally {
-                    setPendingExportLabel(null);
-                  }
-                }}
-              >
-                {itemLoading ? <Loader2 className="shrink-0 animate-spin" size={13} /> : null}
-                <span className="min-w-0 truncate">{item.label}</span>
-              </button>
-              );
-            })}
-          </div>
-        ) : null}
-      </div>
+            {exporting ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
+            {exporting ? copy.exporting : copy.export}
+            <ChevronDown size={13} />
+          </button>
+          {open ? (
+            <div
+              className={cx(
+                "absolute right-0 top-[calc(100%_+_6px)] z-30 w-44 overflow-hidden rounded-[16px] border py-1.5 shadow-[0_18px_46px_rgba(0,0,0,0.16)]",
+                lumen ? "border-[#B8A07C]/55 bg-[#F4EFE6] text-[#2A2620]" : "border-white/10 bg-[#2b2b2b]",
+              )}
+              role="menu"
+            >
+              {props.exportItems.map((item) => {
+                const itemLoading = item.loading || item.label === pendingExportLabel;
+                return (
+                <button
+                  className={cx(
+                    "flex h-8 w-full items-center gap-2 border-0 bg-transparent px-3 text-left text-[12px] font-semibold",
+                    lumen
+                      ? "text-[#2A2620]/72 hover:bg-[#E6DDCD]/55 hover:text-[#5C6B50] disabled:cursor-default disabled:text-[#8B8275]/45"
+                      : "text-white/68 hover:bg-white/8 hover:text-white disabled:cursor-default disabled:text-white/24",
+                  )}
+                  disabled={item.disabled || exporting}
+                  key={item.label}
+                  role="menuitem"
+                  type="button"
+                  onClick={async () => {
+                    setOpen(false);
+                    if (item.disabled || exporting) return;
+                    setPendingExportLabel(item.label);
+                    try {
+                      await item.onSelect();
+                    } finally {
+                      setPendingExportLabel(null);
+                    }
+                  }}
+                >
+                  {itemLoading ? <Loader2 className="shrink-0 animate-spin" size={13} /> : null}
+                  <span className="min-w-0 truncate">{item.label}</span>
+                </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </header>
   );
 }
