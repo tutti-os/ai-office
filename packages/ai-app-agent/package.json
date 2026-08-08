@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@ai-app/shared": "workspace:*",
-    "@tutti-os/agent-acp-kit": "0.7.9",
+    "@tutti-os/agent-acp-kit": "0.7.11",
     "lucide-react": "^0.562.0",
     "react": "^19.2.3"
   },
