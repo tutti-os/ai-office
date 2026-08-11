@@ -1,7 +1,6 @@
 import {
   canSelectTuttiExternalUserProjectDirectory,
   openExportLocation,
-  resolveTshExportBaseDirectory,
   selectTuttiExternalUserProjectDirectory,
 } from "@ai-app/shared/host-files";
 import type { DocumentProject } from "@ai-doc/shared";
@@ -38,7 +37,7 @@ function rememberExportRevealPath(input: DocumentExportActionsInput, path: strin
 }
 
 /**
- * TSH: pick an export directory (base = current project). null = cancelled.
+ * TSH: pick an export directory (default = /workspace root). null = cancelled.
  * Tutti / non-TSH: undefined → write under the private project exports dir.
  */
 async function resolveExportTargetDirectory(
@@ -48,8 +47,7 @@ async function resolveExportTargetDirectory(
   if (!canSelectTuttiExternalUserProjectDirectory()) {
     throw new Error(input.t("editor.exportPickerUnavailable"));
   }
-  const initialPath = resolveTshExportBaseDirectory(input.currentProject?.workspaceRoot);
-  return selectTuttiExternalUserProjectDirectory({ initialPath });
+  return selectTuttiExternalUserProjectDirectory({ initialPath: "/workspace" });
 }
 
 export function createDocumentExportActions(input: DocumentExportActionsInput) {

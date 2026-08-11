@@ -3,7 +3,7 @@ import { isArtifactAgentRunning } from "@ai-app/shared/artifact-runtime";
 import {
   canSelectTuttiExternalUserProjectDirectory,
   openExportLocation,
-  resolveTshExportBaseDirectory,
+  revealPathInHostFiles,
   selectTuttiExternalUserProjectDirectory,
 } from "@ai-app/shared/host-files";
 import { ArtifactEditorWorkspace, type ArtifactSaveState } from "@ai-app/ui/editor-frame";
@@ -66,7 +66,7 @@ export function SlideEditorScreen(props: {
   const exportInProgress = htmlExporting || pdfExporting || pptxExporting;
 
   /**
-   * TSH: pick an export directory (base = current project root). null = cancelled.
+   * TSH: pick an export directory (default = /workspace root). null = cancelled.
    * Tutti / non-TSH: undefined → write under the private project exports dir.
    */
   const resolveExportTargetDirectory = async (): Promise<string | null | undefined> => {
@@ -74,8 +74,7 @@ export function SlideEditorScreen(props: {
     if (!canSelectTuttiExternalUserProjectDirectory()) {
       throw new Error(t("editor.exportPickerUnavailable"));
     }
-    const initialPath = resolveTshExportBaseDirectory(props.detail?.project.workspaceRoot);
-    return selectTuttiExternalUserProjectDirectory({ initialPath });
+    return selectTuttiExternalUserProjectDirectory({ initialPath: "/workspace" });
   };
 
   const exportDeckHtml = async () => {
@@ -161,6 +160,16 @@ export function SlideEditorScreen(props: {
     }
   };
 
+  const projectLocationPath = resolveSlideProjectLocationPath(props.detail);
+  const openProjectLocation =
+    props.tshWorkspaceApp && projectLocationPath
+      ? () => {
+          void revealPathInHostFiles(projectLocationPath).catch((error) => {
+            console.error(error);
+          });
+        }
+      : undefined;
+
   useEffect(() => {
     props.onArtifactSaveStateChange(artifactType === "deck" ? deckSaveState : "saved");
   }, [artifactType, deckSaveState, props.onArtifactSaveStateChange]);
@@ -175,6 +184,7 @@ export function SlideEditorScreen(props: {
       exportItems={slideExportItems({
         artifactType,
         htmlExporting,
+        htmlOnly: props.tshWorkspaceApp,
         onExportDeckHtml: exportDeckHtml,
         onExportDeckPdf: exportDeckPdf,
         onExportPptxPdf: exportPptxPdf,
@@ -195,6 +205,7 @@ export function SlideEditorScreen(props: {
         setExportRevealPath("");
       }}
       onOpenExportLocation={() => void openExportedLocation()}
+      onOpenProjectLocation={openProjectLocation}
       sidebar={
         <AgentConversationPanel
           activeSelectionLabel={props.activeSelectionLabel}
@@ -252,6 +263,8 @@ export function SlideEditorScreen(props: {
 function slideExportItems(input: {
   artifactType: SlideArtifactType;
   htmlExporting: boolean;
+  /** TSH deck: only HTML is exposed. */
+  htmlOnly?: boolean;
   onExportDeckHtml: () => Promise<void>;
   onExportDeckPdf: () => Promise<void>;
   onExportPptxPdf: () => Promise<void>;
@@ -262,6 +275,7 @@ function slideExportItems(input: {
   t: ReturnType<typeof useI18n>["t"];
 }) {
   if (input.artifactType === "pptx") {
+    if (input.htmlOnly) return [];
     return [
       {
         label: input.pptxExporting ? input.t("editor.pdfExporting") : "PDF",
@@ -279,6 +293,7 @@ function slideExportItems(input: {
       onSelect: () => input.onExportDeckHtml(),
     },
   ];
+  if (input.htmlOnly) return items;
   if (input.pdfExportAvailable) {
     items.push({
       label: input.pdfExporting ? input.t("editor.pdfExporting") : "PDF",
@@ -294,4 +309,12 @@ function slideExportItems(input: {
     onSelect: async () => {},
   });
   return items;
+}
+
+function resolveSlideProjectLocationPath(detail: ProjectDetailResponse | null): string {
+  const root = detail?.project.workspaceRoot?.trim() ?? "";
+  if (!root) return "";
+  const fileRef = detail?.artifact.fileRef?.trim() ?? "";
+  if (!fileRef) return root;
+  return `${root.replace(/\/+$/, "")}/${fileRef.replace(/^\/+/, "")}`;
 }

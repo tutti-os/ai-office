@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, ChevronDown, Download, Loader2, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, Download, FolderOpen, Loader2, X } from "lucide-react";
 
 export type ArtifactEditorKind = "html" | "markdown" | "docx" | "deck" | "pptx" | "xlsx";
 
@@ -11,6 +11,7 @@ export type ArtifactEditorCopy = {
   export: string;
   exporting: string;
   loading: string;
+  openProjectLocation: string;
   renameTitle: string;
   saveError: string;
   saved: string;
@@ -25,6 +26,7 @@ export const defaultArtifactEditorCopy: ArtifactEditorCopy = {
   export: "Export",
   exporting: "Exporting...",
   loading: "Loading",
+  openProjectLocation: "Open project location",
   renameTitle: "Rename",
   saveError: "Save error",
   saved: "Saved",
@@ -73,6 +75,8 @@ export function ArtifactEditorWorkspace(props: {
   onBackHome?: () => void;
   onDismissExportNotice?: () => void;
   onOpenExportLocation?: () => void;
+  /** TSH: reveal the project file/directory in the host Files UI. */
+  onOpenProjectLocation?: () => void;
   onTitleChange?: (title: string) => void | Promise<void>;
   stats?: string[];
   tone?: "dark" | "lumen";
@@ -99,6 +103,7 @@ export function ArtifactEditorWorkspace(props: {
           copy={copy}
           tone={tone}
           onBackHome={props.onBackHome}
+          onOpenProjectLocation={props.onOpenProjectLocation}
           onTitleChange={props.onTitleChange}
         />
         <ArtifactExportToast
@@ -230,6 +235,7 @@ export function ArtifactWorkspaceHeader(props: {
   showExport?: boolean;
   copy?: ArtifactEditorCopy;
   onBackHome?: () => void;
+  onOpenProjectLocation?: () => void;
   onTitleChange?: (title: string) => void | Promise<void>;
   tone?: "dark" | "lumen";
 }) {
@@ -356,6 +362,20 @@ export function ArtifactWorkspaceHeader(props: {
         ) : (
           <div className={cx("flex h-5 min-w-0 items-center truncate text-[13px] font-semibold leading-none", lumen ? "text-[#2A2620]" : "text-white")}>{props.title}</div>
         )}
+        {props.onOpenProjectLocation ? (
+          <button
+            className={cx(
+              "grid size-8 shrink-0 place-items-center rounded-full border transition",
+              lumen ? lumenHeaderButtonClass : darkHeaderButtonClass,
+            )}
+            type="button"
+            aria-label={copy.openProjectLocation}
+            title={copy.openProjectLocation}
+            onClick={props.onOpenProjectLocation}
+          >
+            <FolderOpen size={15} />
+          </button>
+        ) : null}
         <SaveStateBadge agentWorking={props.agentWorking} copy={copy} state={props.saveState} tone={props.tone} />
         {props.stats?.length ? (
           <div className={cx("hidden h-5 min-w-0 items-center gap-1.5 text-[11px] font-semibold leading-none md:flex", lumen ? "text-[#8B8275]" : "text-white/32")}>

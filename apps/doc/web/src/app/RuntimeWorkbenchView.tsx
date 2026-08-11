@@ -1,4 +1,5 @@
 import { HomePage } from "./HomePage";
+import { revealPathInHostFiles } from "@ai-app/shared/host-files";
 import { ArtifactErrorBoundary, ArtifactSurfaceErrorFallback } from "@ai-app/ui/error-boundary";
 import { DocxDocumentScreen, MarkdownDocumentScreen } from "./DocumentFormatScreens";
 import { DocumentLoadingScreen, HtmlEditorScreen } from "./HtmlEditorScreen";
@@ -95,6 +96,15 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
     updateMarkdownSelection,
   } = props.model;
   const artifactAgentProcessing = isArtifactAgentRunning(artifactInteraction);
+  const projectLocationPath = currentProject?.workspaceRoot?.trim() ?? "";
+  const openProjectLocation =
+    tshWorkspaceApp && projectLocationPath
+      ? () => {
+          void revealPathInHostFiles(projectLocationPath).catch((error) => {
+            console.error(error);
+          });
+        }
+      : undefined;
   return (
     <main className="h-dvh min-h-0 overflow-hidden bg-[#EEE8DC] font-sans text-[#2A2620]">
       {!editorOpen ? (
@@ -173,6 +183,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             onCancelAgentRun={cancelAgentRun}
             onDismissExportNotice={dismissExportNotice}
             onOpenExportLocation={openCurrentProjectExportsDir}
+            onOpenProjectLocation={openProjectLocation}
             onChange={(content, selection) => {
               updateMarkdownContent(content, selection);
               setEditorStats({ characterCount: content.length, wordCount: markdownWordCount(content), paragraphCount: markdownParagraphCount(content), elementCount: 0 });
@@ -223,6 +234,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             onDismissExportNotice={dismissExportNotice}
             onExportPdf={exportCurrentDocxPdf}
             onOpenExportLocation={openCurrentProjectExportsDir}
+            onOpenProjectLocation={openProjectLocation}
             onRuntimeProfileChange={setSelectedRuntimeProfileId}
             onSelectionChange={updateDocxSelection}
             onSendAgentPrompt={sendAgentPrompt}
@@ -276,6 +288,7 @@ export function RuntimeWorkbenchView(props: { model: ReturnType<typeof useRuntim
             onToolbarInteractionStart={() => undefined}
             onDismissExportNotice={dismissExportNotice}
             onOpenExportLocation={openCurrentProjectExportsDir}
+            onOpenProjectLocation={openProjectLocation}
             onExportHtml={exportCurrentHtml}
             onExportPdf={exportCurrentHtmlPdf}
             onCloseLinkEditor={() => setLinkEditorOpen(false)}

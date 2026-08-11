@@ -61,6 +61,7 @@
   "editor.dismissExportNotice": "Dismiss export notice",
   "editor.export": "Export",
   "editor.exporting": "Exporting...",
+  "editor.openProjectLocation": "Open project location",
   "editor.loading": "Loading",
   "editor.saveError": "Save error",
   "editor.saved": "Saved",

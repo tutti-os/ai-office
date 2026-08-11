@@ -90,6 +90,7 @@
   "editor.dismissExportNotice": "Dismiss export notice",
   "editor.export": "Export",
   "editor.exporting": "Exporting...",
+  "editor.openProjectLocation": "Open project location",
   "editor.exportedHtml": "Exported HTML to {{path}}",
   "editor.exportedMarkdown": "Exported Markdown to {{path}}",
   "editor.exportedPdf": "Exported PDF to {{path}}",

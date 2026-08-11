@@ -14,6 +14,7 @@ export function artifactEditorCopy(t: TFunction): ArtifactEditorCopy {
     export: t("editor.export"),
     exporting: t("editor.exporting"),
     loading: t("editor.loading"),
+    openProjectLocation: t("editor.openProjectLocation"),
     renameTitle: t("editor.renameTitle"),
     saveError: t("editor.saveError"),
     saved: t("editor.saved"),

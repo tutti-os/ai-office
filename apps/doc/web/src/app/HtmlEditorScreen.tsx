@@ -110,6 +110,7 @@ export type HtmlEditorScreenProps = {
   onExportPdf: () => Promise<void>;
   onDismissExportNotice: () => void;
   onOpenExportLocation: () => void;
+  onOpenProjectLocation?: () => void;
   onCloseLinkEditor: () => void;
   onBackColor: (color: string) => void;
   onForeColor: (color: string) => void;
@@ -318,6 +319,7 @@ export function HtmlEditorScreen(props: HtmlEditorScreenProps) {
         onTitleChange={props.onTitleChange}
         onDismissExportNotice={props.onDismissExportNotice}
         onOpenExportLocation={props.onOpenExportLocation}
+        onOpenProjectLocation={props.onOpenProjectLocation}
         showExport={props.showExport}
         exportItems={[
           {
