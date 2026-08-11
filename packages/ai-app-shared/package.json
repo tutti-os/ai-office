@@ -25,7 +25,8 @@
     "./tutti-cli": "./src/tutti-cli/index.ts",
     "./tutti-cli-client": "./src/tutti-cli-client/index.ts",
     "./toolchains/officecli": "./src/toolchains/officecli/index.ts",
-    "./api-client": "./src/api-client/index.ts"
+    "./api-client": "./src/api-client/index.ts",
+    "./workspace-files": "./src/workspace-files/index.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
