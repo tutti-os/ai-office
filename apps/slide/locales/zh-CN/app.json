@@ -72,6 +72,7 @@
   "editor.dismissExportNotice": "关闭导出提示",
   "editor.export": "导出",
   "editor.exporting": "正在导出...",
+  "editor.openProjectLocation": "打开项目目录",
   "editor.loading": "加载中",
   "editor.saveError": "保存失败",
   "editor.saved": "已保存",

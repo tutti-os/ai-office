@@ -523,7 +523,9 @@ export function App() {
         pptxError={pptxError}
         pptxRuntime={pptxRuntime}
         projectId={route.projectId}
-        showExport={hostModeReady && !tshWorkspaceApp}
+        showExport={
+          hostModeReady && (!tshWorkspaceApp || projectDetail?.artifact.type === "deck")
+        }
         tshWorkspaceApp={tshWorkspaceApp}
         onArtifactSaveStateChange={setArtifactSaveState}
         onBackHome={requestHomeRoute}

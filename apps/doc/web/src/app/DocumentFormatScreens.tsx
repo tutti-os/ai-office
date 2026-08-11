@@ -28,6 +28,7 @@ type SharedShellProps = {
   onCancelAgentRun: (runId: string) => Promise<void>;
   onDismissExportNotice: () => void;
   onOpenExportLocation: () => void;
+  onOpenProjectLocation?: () => void;
   onRuntimeProfileChange: (profileId: string) => void;
   onSendAgentPrompt: (prompt: string) => Promise<void>;
   onTitleChange?: (title: string) => void | Promise<void>;
@@ -83,6 +84,7 @@ export function MarkdownDocumentScreen(props: SharedShellProps & {
       onBackHome={props.onBackHome}
       onDismissExportNotice={props.onDismissExportNotice}
       onOpenExportLocation={props.onOpenExportLocation}
+      onOpenProjectLocation={props.onOpenProjectLocation}
       onTitleChange={props.onTitleChange}
       sidebar={<DocumentAgentSidebar artifactLabel="markdown" {...props} />}
     >
@@ -135,6 +137,7 @@ export function DocxDocumentScreen(props: SharedShellProps & {
       onBackHome={props.onBackHome}
       onDismissExportNotice={props.onDismissExportNotice}
       onOpenExportLocation={props.onOpenExportLocation}
+      onOpenProjectLocation={props.onOpenProjectLocation}
       onTitleChange={props.onTitleChange}
       sidebar={<DocumentAgentSidebar artifactLabel="docx" {...props} />}
     >
