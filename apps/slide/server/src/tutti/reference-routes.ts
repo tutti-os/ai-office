@@ -1,8 +1,9 @@
 import { stat } from "node:fs/promises";
-import { basename, extname } from "node:path";
+import { basename, extname, join, relative, resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
+import { listWorkspaceFiles } from "@ai-app/shared/workspace-files";
 import { getDb, rows } from "../db/database.js";
-import { listWorkspaceReferenceRecords, workspaceReferenceAbsolutePath } from "./workspace-reference-catalog.js";
+import { bindProjectWorkspaceRoot, projectWorkspaceRoot } from "../local/paths.js";
 
 type ReferenceListRequest = { parentGroupId?: string; filterText?: string; limit?: number; cursor?: string; timeRange?: { fromMs?: number; toMs?: number } };
 type ReferenceSearchRequest = { query?: string; limit?: number; cursor?: string; filters?: string[]; timeRange?: { fromMs?: number; toMs?: number } };
@@ -13,7 +14,7 @@ type ReferenceItem = {
     kind: "file";
     displayName: string;
     description?: string;
-    location: { type: "app-data-relative"; path: string };
+    location: { type: "workspace-path"; path: string };
     sizeBytes?: number;
     mtimeMs?: number;
     mimeType?: string;
@@ -23,7 +24,7 @@ type ReferenceItem = {
 };
 
 type GroupItem = { type: "group"; id: string; displayName: string; description?: string; referenceCount: number };
-type ProjectMetadata = { title: string; updatedAt: string };
+type ProjectMetadata = { title: string; artifactType: "deck" | "pptx"; updatedAt: string; workspaceRoot: string | null };
 
 export function registerTuttiReferenceRoutes(server: FastifyInstance) {
   server.post<{ Body: ReferenceListRequest }>("/tutti/references/list", async (request) => {
@@ -57,11 +58,8 @@ export function registerTuttiReferenceRoutes(server: FastifyInstance) {
 
 async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]): Promise<GroupItem[]> {
   const metadata = loadProjectMetadata();
-  const projectIds = [...new Set(listWorkspaceReferenceRecords().map((record) => record.projectId))];
   const groups: Array<GroupItem & { updatedAt: string }> = [];
-  for (const projectId of projectIds) {
-    const project = metadata.get(projectId);
-    if (!project) continue;
+  for (const [projectId, project] of metadata) {
     const references = await listReferencesForProject(projectId, timeRange);
     if (references.length === 0) continue;
     groups.push({ type: "group", id: projectId, displayName: project.title.trim() || projectId, description: `${references.length} files`, referenceCount: references.length, updatedAt: project.updatedAt });
@@ -70,21 +68,19 @@ async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]): 
 }
 
 async function listAllReferences(timeRange: ReferenceSearchRequest["timeRange"]) {
-  const projectIds = [...new Set(listWorkspaceReferenceRecords().map((record) => record.projectId))];
-  return (await Promise.all(projectIds.map((projectId) => listReferencesForProject(projectId, timeRange)))).flat();
+  return (await Promise.all([...loadProjectMetadata().keys()].map((projectId) => listReferencesForProject(projectId, timeRange)))).flat();
 }
 
 async function listReferencesForProject(projectId: string, timeRange: ReferenceListRequest["timeRange"]): Promise<ReferenceItem[]> {
   const metadata = loadProjectMetadata().get(projectId);
   if (!metadata) return [];
+  if (metadata.workspaceRoot) bindProjectWorkspaceRoot(projectId, metadata.workspaceRoot);
   const parentGroupLabel = metadata.title.trim() || projectId;
-  const live = await Promise.all(listWorkspaceReferenceRecords(projectId).map(async (record) => {
-    let absolutePath: string;
-    try {
-      absolutePath = workspaceReferenceAbsolutePath(record.relativePath);
-    } catch {
-      return null;
-    }
+  const root = projectWorkspaceRoot(projectId);
+  const exportsRoot = join(root, "exports");
+  const live = await Promise.all((await listWorkspaceFiles(exportsRoot)).map(async (absolutePath) => {
+    const relativeToExports = relative(exportsRoot, absolutePath).split("\\").join("/");
+    if (!slideExportKind(relativeToExports, metadata.artifactType)) return null;
     const info = await stat(absolutePath).catch(() => null);
     if (!info?.isFile()) return null;
     const mtimeMs = Math.trunc(info.mtimeMs);
@@ -93,12 +89,12 @@ async function listReferencesForProject(projectId: string, timeRange: ReferenceL
       type: "reference",
       reference: {
         kind: "file",
-        displayName: record.displayName || basename(record.relativePath),
-        description: record.description || record.relativePath,
-        location: { type: "app-data-relative", path: record.relativePath },
+        displayName: basename(absolutePath),
+        description: relative(root, absolutePath).split("\\").join("/"),
+        location: { type: "workspace-path", path: resolve(absolutePath) },
         sizeBytes: info.size,
         mtimeMs,
-        mimeType: record.mimeType,
+        mimeType: mimeTypeForFileName(absolutePath),
         parentGroupLabel,
       },
     };
@@ -110,8 +106,22 @@ async function listReferencesForProject(projectId: string, timeRange: ReferenceL
 }
 
 function loadProjectMetadata() {
-  return new Map(rows<{ id: string; title: string; updated_at: string }>(getDb().prepare(`SELECT id, title, updated_at FROM projects`).all())
-    .map((project) => [project.id, { title: project.title, updatedAt: project.updated_at }] as const));
+  return new Map(rows<{
+    id: string;
+    title: string;
+    artifact_type: "deck" | "pptx" | null;
+    updated_at: string;
+    workspace_root: string | null;
+  }>(getDb().prepare(`
+    SELECT projects.id, projects.title, artifacts.type AS artifact_type, projects.updated_at, projects.workspace_root
+    FROM projects
+    LEFT JOIN artifacts ON artifacts.id = projects.active_artifact_id
+  `).all()).map((project) => [project.id, {
+    title: project.title,
+    artifactType: project.artifact_type === "pptx" ? "pptx" : "deck",
+    updatedAt: project.updated_at,
+    workspaceRoot: project.workspace_root,
+  }] as const));
 }
 
 function sanitizeGroupId(value: unknown) { return typeof value === "string" && /^[\w.-]+$/.test(value) ? value : ""; }
@@ -125,3 +135,20 @@ function matchesTimeRange(mtimeMs: number, timeRange: ReferenceListRequest["time
 function scoreFileName(fileName: string, query: string) { const normalized = fileName.toLowerCase(); if (normalized === query) return 1; if (normalized.startsWith(query)) return 0.92; return normalized.includes(query) ? 0.78 : 0; }
 function matchesFilter(fileName: string, filters: Set<string>) { return filters.size === 0 || filters.has(fileCategory(fileName)); }
 function fileCategory(fileName: string) { const extension = extname(fileName).slice(1).toLowerCase(); if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "heic"].includes(extension)) return "image"; if (["mp4", "mov", "avi", "mkv", "webm"].includes(extension)) return "video"; if (["pdf", "doc", "docx", "txt", "md", "markdown", "rtf", "odt", "pages", "key", "ppt", "pptx", "xls", "xlsx", "csv", "tsv", "numbers"].includes(extension)) return "document"; if (["html", "htm", "mhtml", "url", "webloc"].includes(extension)) return "webpage"; return "other"; }
+
+function slideExportKind(fileName: string, artifactType: ProjectMetadata["artifactType"]) {
+  const segments = fileName.split("/");
+  const extension = extname(fileName).toLowerCase();
+  if (segments.length === 1 && extension === ".pdf") return "pdf";
+  if (artifactType === "deck" && segments.length === 2 && segments[1] === "index.html") return "html";
+  if (artifactType === "pptx" && segments.length === 1 && extension === ".pptx") return "pptx";
+  return "";
+}
+
+function mimeTypeForFileName(fileName: string) {
+  const extension = extname(fileName).slice(1).toLowerCase();
+  if (extension === "html" || extension === "htm") return "text/html";
+  if (extension === "pptx") return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+  if (extension === "pdf") return "application/pdf";
+  return "application/octet-stream";
+}

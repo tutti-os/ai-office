@@ -1,11 +1,13 @@
 import { stat } from "node:fs/promises";
-import { basename, extname } from "node:path";
+import { basename, extname, join, relative, resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
+import { listWorkspaceFiles } from "@ai-app/shared/workspace-files";
 import { getDb, rows } from "../db/database.js";
 import {
-  listWorkspaceReferenceRecords,
-  workspaceReferenceAbsolutePath,
-} from "./workspace-reference-catalog.js";
+  bindProjectWorkspaceRoot,
+  projectExportsRoot,
+  projectFocusedArtifactPath,
+} from "../local/paths.js";
 
 type ReferenceListRequest = {
   parentGroupId?: string;
@@ -29,7 +31,7 @@ type ReferenceItem = {
     kind: "file";
     displayName: string;
     description?: string;
-    location: { type: "app-data-relative"; path: string };
+    location: { type: "workspace-path"; path: string };
     sizeBytes?: number;
     mtimeMs?: number;
     mimeType?: string;
@@ -50,6 +52,7 @@ type ProjectMetadata = {
   title: string;
   type: "html" | "markdown" | "docx";
   updatedAt: string;
+  workspaceRoot: string | null;
 };
 
 export function registerTuttiReferenceRoutes(server: FastifyInstance) {
@@ -92,11 +95,8 @@ export function registerTuttiReferenceRoutes(server: FastifyInstance) {
 
 async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]): Promise<GroupItem[]> {
   const metadata = loadProjectMetadata();
-  const projectIds = [...new Set(listWorkspaceReferenceRecords().map((record) => record.projectId))];
   const groups: Array<GroupItem & { updatedAt: string }> = [];
-  for (const projectId of projectIds) {
-    const project = metadata.get(projectId);
-    if (!project) continue;
+  for (const [projectId, project] of metadata) {
     const references = await listReferencesForProject(projectId, timeRange);
     if (references.length === 0) continue;
     groups.push({
@@ -114,37 +114,37 @@ async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]): 
 }
 
 async function listAllReferences(timeRange: ReferenceSearchRequest["timeRange"]) {
-  const projectIds = [...new Set(listWorkspaceReferenceRecords().map((record) => record.projectId))];
-  const nested = await Promise.all(projectIds.map((projectId) => listReferencesForProject(projectId, timeRange)));
+  const nested = await Promise.all([...loadProjectMetadata().keys()].map((projectId) => listReferencesForProject(projectId, timeRange)));
   return nested.flat();
 }
 
 async function listReferencesForProject(projectId: string, timeRange: ReferenceListRequest["timeRange"]): Promise<ReferenceItem[]> {
   const metadata = loadProjectMetadata().get(projectId);
   if (!metadata) return [];
+  if (metadata.workspaceRoot) bindProjectWorkspaceRoot(projectId, metadata.workspaceRoot);
   const parentGroupLabel = metadata.title.trim() || projectId;
-  const records = listWorkspaceReferenceRecords(projectId);
-  const live = await Promise.all(records.map(async (record) => {
-    let absolutePath: string;
-    try {
-      absolutePath = workspaceReferenceAbsolutePath(record.relativePath);
-    } catch {
-      return null;
-    }
+  const exportsRoot = projectExportsRoot(projectId);
+  const focusedPath = projectFocusedArtifactPath(projectId, metadata.type);
+  const files = [...new Set([focusedPath, ...await listWorkspaceFiles(exportsRoot)])];
+  const live = await Promise.all(files.map(async (absolutePath) => {
+    if (!documentReferenceKind(absolutePath, metadata.type)) return null;
     const info = await stat(absolutePath).catch(() => null);
     if (!info?.isFile()) return null;
     const mtimeMs = Math.trunc(info.mtimeMs);
     if (!matchesTimeRange(mtimeMs, timeRange)) return null;
+    const description = absolutePath === focusedPath
+      ? basename(absolutePath)
+      : join("exports", relative(exportsRoot, absolutePath)).split("\\").join("/");
     const item: ReferenceItem = {
       type: "reference",
       reference: {
         kind: "file",
-        displayName: record.displayName || basename(record.relativePath),
-        description: record.description || record.relativePath,
-        location: { type: "app-data-relative", path: record.relativePath },
+        displayName: basename(absolutePath),
+        description,
+        location: { type: "workspace-path", path: resolve(absolutePath) },
         sizeBytes: info.size,
         mtimeMs,
-        mimeType: record.mimeType,
+        mimeType: mimeTypeForFileName(absolutePath),
         parentGroupLabel,
       },
     };
@@ -183,9 +183,14 @@ function normalizeSearchText(value: unknown) {
 
 function loadProjectMetadata() {
   return new Map(
-    rows<{ id: string; title: string; type: ProjectMetadata["type"]; updated_at: string }>(
-      getDb().prepare(`SELECT id, title, type, updated_at FROM projects`).all(),
-    ).map((project) => [project.id, { title: project.title, type: project.type, updatedAt: project.updated_at }] as const),
+    rows<{ id: string; title: string; type: ProjectMetadata["type"]; updated_at: string; workspace_root: string | null }>(
+      getDb().prepare(`SELECT id, title, type, updated_at, workspace_root FROM projects`).all(),
+    ).map((project) => [project.id, {
+      title: project.title,
+      type: project.type,
+      updatedAt: project.updated_at,
+      workspaceRoot: project.workspace_root,
+    }] as const),
   );
 }
 
@@ -223,4 +228,23 @@ function fileCategory(fileName: string) {
   if (["pdf", "doc", "docx", "txt", "md", "markdown", "rtf", "odt", "pages", "key", "ppt", "pptx", "xls", "xlsx", "csv", "tsv", "numbers"].includes(extension)) return "document";
   if (["html", "htm", "mhtml", "url", "webloc"].includes(extension)) return "webpage";
   return "other";
+}
+
+function documentReferenceKind(fileName: string, type: ProjectMetadata["type"]) {
+  const extension = extname(fileName).toLowerCase();
+  if (extension === ".pdf") return "pdf";
+  if (type === "html" && [".htm", ".html"].includes(extension)) return "html";
+  if (type === "markdown" && [".markdown", ".md"].includes(extension)) return "markdown";
+  if (type === "docx" && extension === ".docx") return "docx";
+  return "";
+}
+
+function mimeTypeForFileName(fileName: string) {
+  const extension = extname(fileName).slice(1).toLowerCase();
+  if (extension === "html" || extension === "htm") return "text/html";
+  if (extension === "md" || extension === "markdown") return "text/markdown";
+  if (extension === "pdf") return "application/pdf";
+  if (extension === "docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (extension === "json") return "application/json";
+  return "application/octet-stream";
 }

@@ -1,10 +1,9 @@
 import { readdir, stat } from "node:fs/promises";
-import { basename, extname, join, relative } from "node:path";
+import { basename, extname, join, relative, resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { privateProjectsParentDir } from "@ai-app/shared/local-paths";
 import { xlsxMimeType } from "@ai-sheet/shared";
 import { getDb, rows } from "../db/database.js";
-import { appPaths } from "../local/paths.js";
+import { projectWorkspaceRoot } from "../local/paths.js";
 
 type ReferenceListRequest = {
   parentGroupId?: string;
@@ -28,7 +27,7 @@ type ReferenceItem = {
     kind: "file";
     displayName: string;
     description?: string;
-    location: { type: "app-data-relative"; path: string };
+    location: { type: "workspace-path"; path: string };
     sizeBytes?: number;
     mtimeMs?: number;
     mimeType?: string;
@@ -88,10 +87,8 @@ export function registerTuttiReferenceRoutes(server: FastifyInstance) {
 }
 
 async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]) {
-  const entries = await safeReaddir(privateProjectsParentDir(appPaths));
   const projectMetadata = loadProjectMetadata();
-  const groups = (await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
-    const projectId = entry.name;
+  const groups = (await Promise.all([...projectMetadata.keys()].map(async (projectId) => {
     const displayName = projectDisplayName(projectId, projectMetadata);
     const references = await listReferencesForProject(projectId, timeRange, displayName);
     if (references.length === 0) return null;
@@ -110,18 +107,15 @@ async function listProjectGroups(timeRange: ReferenceListRequest["timeRange"]) {
 }
 
 async function listAllReferences(timeRange: ReferenceSearchRequest["timeRange"]) {
-  const groups = await safeReaddir(privateProjectsParentDir(appPaths));
   const projectMetadata = loadProjectMetadata();
   const nested = await Promise.all(
-    groups
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => listReferencesForProject(entry.name, timeRange, projectDisplayName(entry.name, projectMetadata))),
+    [...projectMetadata.keys()].map((projectId) => listReferencesForProject(projectId, timeRange, projectDisplayName(projectId, projectMetadata))),
   );
   return nested.flat();
 }
 
 async function listReferencesForProject(projectId: string, timeRange: ReferenceListRequest["timeRange"], projectDisplayNameValue?: string) {
-  const root = join(privateProjectsParentDir(appPaths), projectId);
+  const root = projectWorkspaceRoot(projectId);
   const exportsRoot = join(root, "exports");
   const exportEntries = await safeReaddir(exportsRoot);
   const files = [
@@ -145,8 +139,8 @@ async function listReferencesForProject(projectId: string, timeRange: ReferenceL
         displayName: basename(file),
         description: relativeToProject,
         location: {
-          type: "app-data-relative",
-          path: `projects/${projectId}/${relativeToProject}`,
+          type: "workspace-path",
+          path: resolve(file),
         },
         sizeBytes: info.size,
         mtimeMs,
@@ -216,13 +210,7 @@ function matchesGroupSearch(group: GroupItem, query: string) {
 }
 
 function matchesReferenceSearch(item: ReferenceItem, query: string) {
-  const projectId = projectIdFromReferencePath(item.reference.location.path);
-  return [item.reference.displayName, item.reference.parentGroupLabel ?? "", projectId].some((value) => value.toLowerCase().includes(query));
-}
-
-function projectIdFromReferencePath(pathValue: string) {
-  const match = /^projects\/([^/]+)\//.exec(pathValue);
-  return match?.[1] ?? "";
+  return [item.reference.displayName, item.reference.description ?? "", item.reference.parentGroupLabel ?? ""].some((value) => value.toLowerCase().includes(query));
 }
 
 function matchesTimeRange(mtimeMs: number, timeRange: ReferenceListRequest["timeRange"]) {
