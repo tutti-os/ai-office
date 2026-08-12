@@ -37,7 +37,10 @@ import {
   unbindProjectWorkspaceRoot,
 } from "../local/paths.js";
 import { loadTemplateDeckSource } from "../templates/template-service.js";
-import { writeDeckHtmlExportBundle } from "./deck-html-export.js";
+import {
+  writeDeckHtmlExportBundle,
+  writeDeckHtmlExportToDirectory,
+} from "./deck-html-export.js";
 import {
   assertIndexedSlideNames,
   assertSameSlideSet,
@@ -565,6 +568,33 @@ export class ProjectRepository {
       manifest,
       targetDirectory: input.targetDirectory,
     });
+  }
+
+  async writePublishedDeckHtmlReference(projectId: string) {
+    const project = this.getProject(projectId);
+    if (!project) throw new Error("Project not found");
+    const artifact = this.getArtifact(project.activeArtifactId);
+    if (!artifact || artifact.type !== "deck") return null;
+    this.assertFocusedArtifactPresent(project, artifact);
+    await this.ensureTemplateDeckMaterialized(project, artifact);
+    const manifest = await this.readDeckManifest(projectId, artifact);
+    if (!manifest) throw new Error("Deck manifest not found");
+
+    const exportDir = join(projectWorkspaceRoot(projectId), "exports", "tutti-reference");
+    const exported = writeDeckHtmlExportToDirectory(
+      {
+        projectId,
+        projectTitle: project.title,
+        artifact,
+        manifest,
+      },
+      exportDir,
+    );
+    return {
+      ...exported,
+      fileName: "tutti-reference/index.html",
+      mimeType: "text/html",
+    };
   }
 
   /**
