@@ -6,6 +6,7 @@ import { cancelRun, startAiEdit } from "../api/projects";
 import type { DocxRuntimeState } from "../artifact/docxArtifactAdapter";
 import type { MarkdownRuntimeState } from "../artifact/markdownArtifactAdapter";
 import type { RuntimeState } from "../artifact/runtime/types";
+import { shouldApplyAgentProjectUpdate } from "./shouldApplyAgentProjectUpdate";
 import { reportUserActive } from "./tuttiActivity";
 import { useAgentConversation } from "./useAgentConversation";
 
@@ -53,15 +54,18 @@ export function useDocumentAgentRuntime(input: DocumentAgentRuntimeInput) {
   const agentConversation = useAgentConversation({
     projectId: input.currentProjectId,
     onProjectUpdated: (project) => {
-      if (project.id !== input.currentProjectId || project.updatedBy !== "ai") return;
-      if (!isNewerDocumentProject(project, input.currentProject)) return;
+      if (project.id !== input.currentProjectId) return;
+      if (!shouldApplyAgentProjectUpdate(project, input.currentProject)) return;
+      const contentChanged = !input.currentProject || project.content !== input.currentProject.content;
       input.setCurrentProject(project);
-      if (project.type === "markdown") {
-        input.loadMarkdownDocument(project.content, { title: project.title, source: "imported-html" });
-      } else if (project.type === "docx") {
-        void input.loadDocxDocument(project).catch((err) => input.setError(err instanceof Error ? err.message : String(err)));
-      } else {
-        input.loadHtmlDocument(project.content, { projectId: project.id, title: project.title, source: "imported-html" });
+      if (contentChanged) {
+        if (project.type === "markdown") {
+          input.loadMarkdownDocument(project.content, { title: project.title, source: "imported-html" });
+        } else if (project.type === "docx") {
+          void input.loadDocxDocument(project).catch((err) => input.setError(err instanceof Error ? err.message : String(err)));
+        } else {
+          input.loadHtmlDocument(project.content, { projectId: project.id, title: project.title, source: "imported-html" });
+        }
       }
       input.setHistoryProjects((projects) => [project, ...projects.filter((item) => item.id !== project.id)]);
     },
@@ -139,12 +143,3 @@ export function useDocumentAgentRuntime(input: DocumentAgentRuntimeInput) {
   };
 }
 
-function isNewerDocumentProject(next: DocumentProject, current: DocumentProject | null) {
-  if (!current || current.id !== next.id) return true;
-  return timestampMs(next.updatedAt) > timestampMs(current.updatedAt);
-}
-
-function timestampMs(value: string | null | undefined) {
-  const time = value ? Date.parse(value) : Number.NaN;
-  return Number.isFinite(time) ? time : 0;
-}

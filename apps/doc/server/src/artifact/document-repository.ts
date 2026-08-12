@@ -173,9 +173,11 @@ export class DocumentRepository {
 
   /** Align DB content with disk without rematerializing the artifact file. */
   syncProjectContentQuiet(projectId: string, content: string) {
+    // Preserve updated_by. Demoting an in-flight "ai" write to "system" made the web
+    // client ignore project.updated hydrations and leave the editor blank.
     getDb()
-      .prepare(`UPDATE projects SET content = ?, updated_by = ?, updated_at = ? WHERE id = ?`)
-      .run(content, "system", new Date().toISOString(), projectId);
+      .prepare(`UPDATE projects SET content = ?, updated_at = ? WHERE id = ?`)
+      .run(content, new Date().toISOString(), projectId);
   }
 
   getProjectPreparation(projectId: string) {
