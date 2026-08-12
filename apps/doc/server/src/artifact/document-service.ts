@@ -254,7 +254,8 @@ export class DocumentService {
     if (content === project.content) return project;
 
     this.repo.syncProjectContentQuiet(project.id, content);
-    return { ...project, content, updatedBy: "system" };
+    // Re-read so updatedAt matches the quiet sync and updatedBy stays intact (e.g. "ai").
+    return this.repo.getProject(project.id) ?? { ...project, content };
   }
 
   async getDocxFile(projectId: string) {
@@ -610,6 +611,12 @@ export class DocumentService {
     }
 
     if (runtimeProfile.kind === "local-agent") {
+      const project = this.repo.getProject(initialProject.id);
+      // Quiet getProject sync during the run can absorb the final bytes without another
+      // refresh emit. Re-broadcast so the editor always reloads completed workspace HTML.
+      if (project && refreshedFromWorkspace) {
+        this.events.emit({ type: "project.updated", projectId: project.id, runId, payload: { project } });
+      }
       const preview =
         previewText(generatedText) ||
         (refreshedFromWorkspace ? "Workspace file changes were applied." : "Run completed. No workspace file changes were detected.");
