@@ -246,6 +246,15 @@ server.setNotFoundHandler((request, reply) => {
 
 try {
   projects.interruptActiveRuns();
+  if (process.env.TSH_WORKSPACE_APP?.trim() === "1") {
+    const publication = await projects.publishDeckReferences();
+    if (publication.failures.length > 0) {
+      server.log.warn(
+        { failures: publication.failures },
+        "failed to publish one or more existing slide references",
+      );
+    }
+  }
   await server.listen({ port, host });
   server.log.info(`ai-slide server listening on http://${host}:${port}`);
 } catch (error) {

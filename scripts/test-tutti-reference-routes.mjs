@@ -95,11 +95,24 @@ async function testSlideReferencesUseBoundAndLegacyRoots() {
   process.env.AI_SLIDE_HOME = home;
   delete process.env.TUTTI_APP_DATABASE_DIR;
   try {
-    const [{ getDb }, { appPaths, clearProjectWorkspaceRootBindings }, { recordWorkspaceReference }, { registerTuttiReferenceRoutes }] = await Promise.all([
+    const [
+      { getDb },
+      { appPaths, clearProjectWorkspaceRootBindings },
+      { materializeDeckProject },
+      { ProjectRepository },
+      { ProjectService },
+      { recordWorkspaceReference },
+      { registerTuttiReferenceRoutes },
+      { EventHub },
+    ] = await Promise.all([
       import("../apps/slide/server/src/db/database.ts"),
       import("../apps/slide/server/src/local/paths.ts"),
+      import("../apps/slide/server/src/artifact/project-materialization.ts"),
+      import("../apps/slide/server/src/artifact/project-repository.ts"),
+      import("../apps/slide/server/src/artifact/project-service.ts"),
       import("../apps/slide/server/src/tutti/workspace-reference-catalog.ts"),
       import("../apps/slide/server/src/tutti/reference-routes.ts"),
+      import("../apps/slide/server/src/ws/event-hub.ts"),
     ]);
     const now = new Date().toISOString();
     const boundRoot = join(home, "slide-bound-root");
@@ -135,6 +148,25 @@ async function testSlideReferencesUseBoundAndLegacyRoots() {
       INSERT INTO artifacts (id, project_id, type, file_ref, mime_type, created_at, updated_at)
       VALUES (?, ?, 'deck', 'deck.slides', 'text/html', ?, ?)
     `).run("slide-no-export-artifact", "slide-no-export", now, now);
+    const repo = new ProjectRepository();
+    const noExportProject = repo.getProject("slide-no-export");
+    const noExportArtifact = repo.getArtifact("slide-no-export-artifact");
+    assert.ok(noExportProject);
+    assert.ok(noExportArtifact);
+    await materializeDeckProject(
+      join(appPaths.projectsDir, "slide-no-export"),
+      noExportProject,
+      noExportArtifact,
+    );
+    const service = new ProjectService(repo, new EventHub());
+    const firstPublication = await service.publishDeckReferences();
+    const secondPublication = await service.publishDeckReferences();
+    assert.ok(firstPublication.published.includes("slide-no-export"));
+    assert.ok(secondPublication.published.includes("slide-no-export"));
+    await service.updateProject("slide-no-export", {
+      title: "Renamed Deck",
+      updatedBy: "human",
+    });
     getDb().prepare(`
       INSERT INTO projects (id, title, workspace_root, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?)
@@ -154,17 +186,25 @@ async function testSlideReferencesUseBoundAndLegacyRoots() {
     const routes = registerRoutes(registerTuttiReferenceRoutes);
     const bound = await callRoute(routes, "/tutti/references/list", { parentGroupId: "slide-bound" });
     const legacy = await callRoute(routes, "/tutti/references/list", { parentGroupId: "slide-legacy" });
+    const published = await callRoute(routes, "/tutti/references/list", { parentGroupId: "slide-no-export" });
     const invalid = await callRoute(routes, "/tutti/references/list", { parentGroupId: "slide-invalid-root" });
     assert.deepEqual(bound.items.map((item) => item.reference.displayName).sort(), ["Named slide export", "bound.pptx"]);
     assert.ok(bound.items.some((item) => resolve(appPaths.root, item.reference.location.path) === resolve(boundPath)));
     assert.ok(bound.items.some((item) => resolve(appPaths.root, item.reference.location.path) === resolve(catalogPath)));
     assertReferencePath(legacy.items[0], appPaths.root, fallbackPath);
+    assert.equal(published.items.length, 1);
+    assert.equal(published.items[0].reference.displayName, "Renamed Deck.html");
+    assertReferencePath(
+      published.items[0],
+      appPaths.root,
+      join(appPaths.projectsDir, "slide-no-export", "exports", "tutti-reference", "index.html"),
+    );
     assert.deepEqual(invalid.items, []);
-    assertLocatorsStayWithinAppData([...bound.items, ...legacy.items]);
+    assertLocatorsStayWithinAppData([...bound.items, ...legacy.items, ...published.items]);
     const roots = await callRoute(routes, "/tutti/references/list", {});
     assert.deepEqual(roots.items.map((item) => item.id).sort(), ["slide-bound", "slide-invalid-root", "slide-legacy", "slide-no-export"]);
     assert.equal(roots.items.find((item) => item.id === "slide-invalid-root").referenceCount, 0);
-    assert.equal(roots.items.find((item) => item.id === "slide-no-export").referenceCount, 0);
+    assert.equal(roots.items.find((item) => item.id === "slide-no-export").referenceCount, 1);
     clearProjectWorkspaceRootBindings();
   } finally {
     rmSync(home, { force: true, recursive: true });

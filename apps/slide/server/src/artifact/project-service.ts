@@ -130,7 +130,7 @@ export class ProjectService {
     };
   }
 
-  updateProject(projectId: string, input: UpdateProjectRequest) {
+  async updateProject(projectId: string, input: UpdateProjectRequest) {
     const project = this.repo.updateProject(projectId, input);
     if (!project) return null;
     if (input.title !== undefined) {
@@ -139,6 +139,7 @@ export class ProjectService {
     const artifact = this.repo.getArtifact(project.activeArtifactId);
     if (!artifact) throw new Error("Active artifact not found");
     const result = { project, artifact };
+    await this.publishDeckReferenceAfterChange(projectId);
     this.events.emit({ type: "project.updated", projectId, payload: result });
     return result;
   }
@@ -151,6 +152,7 @@ export class ProjectService {
     this.repo.updateProjectSessionTitle(projectId, cleanTitle);
     await this.repo.updateDeckManifestTitle(projectId, cleanTitle, updatedBy);
     const detail = await this.getProject(projectId);
+    await this.publishDeckReferenceAfterChange(projectId);
     this.events.emit({ type: "project.updated", projectId, payload: detail });
     return detail;
   }
@@ -158,6 +160,7 @@ export class ProjectService {
   async reorderDeckSlides(projectId: string, input: { slides?: string[] }, updatedBy: "human" | "ai" | "system" = "ai") {
     await this.repo.reorderDeckSlides(projectId, input, updatedBy);
     const detail = await this.getProject(projectId);
+    await this.publishDeckReferenceAfterChange(projectId);
     this.events.emit({ type: "project.updated", projectId, payload: detail });
     return {
       project: detail.project,
@@ -170,15 +173,17 @@ export class ProjectService {
     return this.repo.readDeckSlideHtml(projectId, slideId);
   }
 
-  writeDeckSlideHtml(projectId: string, slideId: string, input: UpdateDeckSlideHtmlRequest) {
+  async writeDeckSlideHtml(projectId: string, slideId: string, input: UpdateDeckSlideHtmlRequest) {
     if (typeof input.html !== "string" || !input.html.trim()) throw new Error("Slide HTML is required");
-    return this.repo.writeDeckSlideHtml(
+    const result = await this.repo.writeDeckSlideHtml(
       projectId,
       slideId,
       input.html,
       "human",
       input.expectedArtifactRevision,
     );
+    await this.publishDeckReferenceAfterChange(projectId);
+    return result;
   }
 
   async uploadDeckAsset(projectId: string, input: { fileName: string; mimeType: string; bytes: Buffer }): Promise<DeckAssetUploadResponse> {
@@ -257,6 +262,44 @@ export class ProjectService {
       mimeType: "text/html",
     });
     return exported;
+  }
+
+  async publishDeckReferences() {
+    const published: string[] = [];
+    const failures: Array<{ projectId: string; error: string }> = [];
+    for (const project of this.repo.listProjects()) {
+      if (project.artifactType !== "deck") continue;
+      try {
+        if (await this.publishDeckReference(project.id)) published.push(project.id);
+      } catch (error) {
+        failures.push({
+          projectId: project.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return { published, failures };
+  }
+
+  private async publishDeckReference(projectId: string) {
+    const exported = await this.repo.writePublishedDeckHtmlReference(projectId);
+    if (!exported) return null;
+    const project = this.repo.getProject(projectId);
+    recordWorkspaceReference({
+      projectId,
+      kind: "html",
+      absolutePath: exported.absolutePath,
+      displayName: `${project?.title.trim() || "slides"}.html`,
+      mimeType: exported.mimeType,
+    });
+    return exported;
+  }
+
+  private async publishDeckReferenceAfterChange(projectId: string) {
+    return this.publishDeckReference(projectId).catch((error) => {
+      console.error("[ai-slide] Failed to publish deck reference", error);
+      return null;
+    });
   }
 
   async openProjectExportsDir(projectId: string) {
@@ -474,6 +517,7 @@ export class ProjectService {
       complete: async ({ generatedText }) => {
         await flushTerminalWorkspace();
         const detail = await this.getProject(runtimeProject.id);
+        await this.publishDeckReferenceAfterChange(runtimeProject.id);
         const currentRun = this.repo.getRun(runId);
         if (currentRun && !["accepted", "running"].includes(currentRun.status)) return;
         const finalRun = this.repo.updateRun(runId, {
