@@ -34,7 +34,9 @@ export const defaultArtifactEditorCopy: ArtifactEditorCopy = {
 };
 
 export const artifactEditorGridClass =
-  "grid h-dvh min-h-0 grid-cols-[400px_minmax(0,1fr)] overflow-hidden bg-[#1f1f1f] font-sans text-white";
+  "grid h-full min-h-0 min-w-[1120px] grid-cols-[400px_minmax(0,1fr)] overflow-hidden bg-[#1f1f1f] font-sans text-white";
+
+const artifactEditorViewportClass = "h-dvh min-h-0 w-full overflow-x-auto overflow-y-hidden bg-[#1f1f1f]";
 
 const lumenHeaderButtonClass =
   "border-[#B8A07C]/55 bg-[#F4EFE6]/70 text-[#2A2620]/72 hover:border-[#5C6B50]/50 hover:text-[#5C6B50]";
@@ -47,11 +49,13 @@ export function ArtifactEditorFrame(props: {
   contentClassName?: string;
 }) {
   return (
-    <section className={cx(artifactEditorGridClass, props.className)}>
-      {props.sidebar}
-      <section className={cx("grid h-full min-h-0 min-w-0 grid-rows-[minmax(0,1fr)] overflow-hidden", props.contentClassName)}>
-        {props.children}
-      </section>
+    <section className={artifactEditorViewportClass}>
+      <div className={cx(artifactEditorGridClass, props.className)}>
+        {props.sidebar}
+        <section className={cx("grid h-full min-h-0 min-w-0 grid-rows-[minmax(0,1fr)] overflow-hidden", props.contentClassName)}>
+          {props.children}
+        </section>
+      </div>
     </section>
   );
 }
