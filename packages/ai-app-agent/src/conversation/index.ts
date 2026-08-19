@@ -144,7 +144,9 @@ function eventsToBlocks<TEvent extends BaseRunEvent, TRun extends BaseRun>(event
       if (!pairedResultEventIds.has(event.id)) appendToolResultOnlyBlock(blocks, event);
     } else if (event.type === "file_write") {
       appendTextLikeBlock(blocks, "status", event.content || "File written");
-    } else if (event.type === "stderr" || event.type === "error") {
+    } else if (event.type === "stderr") {
+      continue;
+    } else if (event.type === "error") {
       appendTextLikeBlock(blocks, "error", event.content);
     } else if (event.content.trim()) {
       appendTextLikeBlock(blocks, "status", event.content);
